@@ -57,21 +57,28 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
 
   // SM-2 Simulator State
   const [simGrade, setSimGrade] = useState<number>(4);
-  const [simState, setSimState] = useState<SM2State>({
+  const [simState, setSimState] = useState<SM2State>(() => ({
     repetitions: 1,
     interval: 1,
     easeFactor: 2.5,
     nextReviewTimestamp: Date.now() + 86400000,
-  });
+  }));
 
-  useEffect(() => {
-    if (isOpen) {
-      const extracted = extractAnkiCardsFromSchema(schema, report);
-      setCards(extracted);
-      const title = report?.topic || schema?.topicSummary || 'Cognitive_Schema';
-      setDeckName(`DeepEncode::${title.replace(/[^a-zA-Z0-9_]/g, '_')}`);
-    }
-  }, [isOpen, schema, report]);
+  const [prevIsOpen, setPrevIsOpen] = useState(false);
+  const [prevReport, setPrevReport] = useState<SegregationReport | null | undefined>(undefined);
+  const [prevSchema, setPrevSchema] = useState<Partial<SavedSchema> | null | undefined>(undefined);
+
+  if (isOpen && (!prevIsOpen || prevReport !== report || prevSchema !== schema)) {
+    setPrevIsOpen(true);
+    setPrevReport(report);
+    setPrevSchema(schema);
+    const extracted = extractAnkiCardsFromSchema(schema, report);
+    setCards(extracted);
+    const title = report?.topic || schema?.topicSummary || 'Cognitive_Schema';
+    setDeckName(`DeepEncode::${title.replace(/[^a-zA-Z0-9_]/g, '_')}`);
+  } else if (!isOpen && prevIsOpen) {
+    setPrevIsOpen(false);
+  }
 
   if (!isOpen) return null;
 
