@@ -93,6 +93,9 @@ import { ConceptPrerequisitesModal } from '@/components/ConceptPrerequisitesModa
 import { PretestModal } from '@/components/PretestModal';
 import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
+import { AnkiExportModal } from '@/components/AnkiExportModal';
+import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
+import { GitCompare } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
 type AppState = 'input' | 'loading' | 'encoding' | 'completed';
@@ -309,6 +312,12 @@ export default function DeepEncodeApp() {
   const [isSegregateModalOpen, setIsSegregateModalOpen] = useState(false);
   const [isSegregating, setIsSegregating] = useState(false);
   const [segregationReport, setSegregationReport] = useState<SegregationReport | null>(null);
+
+  // Anki Export & Webhook SM-2 Sync State
+  const [isAnkiExportOpen, setIsAnkiExportOpen] = useState(false);
+
+  // Multi-Document Comparative 4-Quadrant Synthesis State
+  const [isComparativeModalOpen, setIsComparativeModalOpen] = useState(false);
 
   // Roast My Notes Mode state
   const [isRoastModalOpen, setIsRoastModalOpen] = useState(false);
@@ -1068,6 +1077,28 @@ export default function DeepEncodeApp() {
 
             {/* PWA Local-First Offline & Install Indicator */}
             <PWAInstallHeader />
+
+            {/* Multi-Doc Comparative Synthesis Button */}
+            <button
+              type="button"
+              onClick={() => setIsComparativeModalOpen(true)}
+              className="p-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/40 text-purple-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Compare two documents (e.g. Lecture Slides vs Textbook Chapter)"
+            >
+              <GitCompare className="w-4 h-4 text-purple-400" />
+              <span className="text-[11px] font-bold hidden md:inline">Compare 2 Docs</span>
+            </button>
+
+            {/* Anki & SM-2 Exporter Button */}
+            <button
+              type="button"
+              onClick={() => setIsAnkiExportOpen(true)}
+              className="p-2 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 hover:from-cyan-600/30 hover:to-blue-600/30 border border-cyan-500/40 text-cyan-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Export .apkg Anki package or sync via SM-2 Webhooks"
+            >
+              <Zap className="w-4 h-4 text-amber-300" />
+              <span className="text-[11px] font-bold hidden md:inline">Anki / SM-2</span>
+            </button>
 
             {/* Interleaving Multi-Domain Drill Button */}
             <button
@@ -2377,6 +2408,29 @@ export default function DeepEncodeApp() {
           mode: encodingMode,
         }}
         settings={aiSettings}
+      />
+
+      {/* Feature: Direct Anki .apkg Export & SM-2 Spaced Repetition Webhook Sync */}
+      <AnkiExportModal
+        isOpen={isAnkiExportOpen}
+        onClose={() => setIsAnkiExportOpen(false)}
+        schema={{
+          topicSummary,
+          activities,
+          userResponses,
+        }}
+        report={segregationReport}
+      />
+
+      {/* Feature: Multi-Document Comparative 4-Quadrant Synthesis */}
+      <ComparativeSynthesisModal
+        isOpen={isComparativeModalOpen}
+        onClose={() => setIsComparativeModalOpen(false)}
+        settings={aiSettings}
+        onOpenAnkiExport={(compReport) => {
+          setIsComparativeModalOpen(false);
+          setIsAnkiExportOpen(true);
+        }}
       />
 
     </main>

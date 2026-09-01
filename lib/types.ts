@@ -248,4 +248,38 @@ export interface SegregationReport {
   compressionRatio?: string;
 }
 
+export interface ComparativeDocumentAsset {
+  id: string;
+  name: string;
+  contentSnippet?: string;
+  fileAsset?: UploadedFileAsset;
+}
+
+export interface ComparativeContradiction {
+  id: string;
+  topicOrConcept: string;
+  docAClaim: string;
+  docBClaim: string;
+  resolutionOrNuance: string;
+  examTrapWarning: string;
+}
+
+export interface ComparativeComplement {
+  id: string;
+  conceptName: string;
+  uniqueInDocA?: string;
+  uniqueInDocB?: string;
+  synthesizedTakeaway: string;
+}
+
+export interface ComparativeSchemaReport {
+  synthesisTitle: string;
+  docAName: string;
+  docBName: string;
+  agreedCorePrinciples: string[];
+  contradictions: ComparativeContradiction[];
+  complements: ComparativeComplement[];
+  unifiedMatrix: ConceptualMechanismItem[];
+}
+
 
