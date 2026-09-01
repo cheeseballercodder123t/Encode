@@ -1,0 +1,6 @@
+{
+  "name": "DeepEncode",
+  "description": "A science-based cognitive encoding tool that transforms raw notes into deep semantic schema using active recall frameworks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile and cumulative stats",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "totalXp": { "type": "integer" },
+        "schemasCompleted": { "type": "integer" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["userId", "totalXp", "schemasCompleted", "createdAt"]
+    },
+    "SavedSchema": {
+      "title": "SavedSchema",
+      "description": "A generated cognitive encoding schema and user responses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "integer" },
+        "topicSummary": { "type": "string" },
+        "mode": { "type": "string" },
+        "xpEarned": { "type": "integer" },
+        "activities": { "type": "array" },
+        "userResponses": { "type": "object" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["id", "userId", "timestamp", "topicSummary", "mode", "xpEarned", "activities", "userResponses"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/schemas/{schemaId}": {
+      "schema": "SavedSchema",
+      "description": "User saved cognitive schemas"
+    }
+  }
+}
