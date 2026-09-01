@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0181455979",
-  "appId": "1:903650407806:web:be04e558d25ecb0c206f2f",
-  "apiKey": "AIzaSyC269FM9Xn6Da5mbu5JPviwjtemBU0NDAs",
-  "authDomain": "gen-lang-client-0181455979.firebaseapp.com",
-  "storageBucket": "gen-lang-client-0181455979.firebasestorage.app",
-  "messagingSenderId": "903650407806",
+  "projectId": "deepencode-app",
+  "appId": "1:575333444753:web:4e6f851e6eefe35d8d2330",
+  "apiKey": "AIzaSyCBsyWw9pVreqrhKbDFMEYS0i2m_LKIIWE",
+  "authDomain": "deepencode-app.firebaseapp.com",
+  "storageBucket": "deepencode-app.firebasestorage.app",
+  "messagingSenderId": "575333444753",
   "measurementId": "",
   "oAuthClientId": "903650407806-20p14pk11pairkospotoeis63fce5dqa.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
