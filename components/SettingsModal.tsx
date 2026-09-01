@@ -159,30 +159,41 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                     <label className="text-slate-400 block mb-1 font-semibold text-[11px]">
                       Main Schema Generator:
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      list="gemini-models-list"
                       value={settings.geminiModel || 'gemini-3.7-flash'}
                       onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
-                      className="w-full p-2 bg-[#0B0D14] border border-slate-700 rounded-lg text-slate-200 outline-none focus:border-indigo-500"
-                    >
-                      <option value="gemini-3.7-flash">gemini-3.7-flash (Default & Multimodal)</option>
-                      <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                      <option value="gemini-2.5-pro">gemini-2.5-pro (Deepest Quality)</option>
-                    </select>
+                      placeholder="e.g. gemini-3.7-flash or gemini-2.5-pro"
+                      className="w-full p-2 bg-[#0B0D14] border border-slate-700 rounded-lg text-slate-200 outline-none focus:border-indigo-500 font-mono text-xs"
+                    />
+                    <datalist id="gemini-models-list">
+                      <option value="gemini-3.7-flash" />
+                      <option value="gemini-2.5-flash" />
+                      <option value="gemini-2.5-pro" />
+                      <option value="gemini-1.5-pro" />
+                      <option value="gemini-1.5-flash" />
+                    </datalist>
                   </div>
 
                   <div>
                     <label className="text-slate-400 block mb-1 font-semibold text-[11px]">
                       Lightweight Feynman Answer Checker:
                     </label>
-                    <select
+                    <input
+                      type="text"
+                      list="gemini-checker-models-list"
                       value={settings.geminiCheckerModel || 'gemini-3.5-flash-lite'}
                       onChange={(e) => setSettings({ ...settings, geminiCheckerModel: e.target.value })}
-                      className="w-full p-2 bg-[#0B0D14] border border-slate-700 rounded-lg text-slate-200 outline-none focus:border-indigo-500"
-                    >
-                      <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Default & Ultra Fast)</option>
-                      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
-                      <option value="gemini-3.7-flash">gemini-3.7-flash</option>
-                    </select>
+                      placeholder="e.g. gemini-3.5-flash-lite or gemini-2.5-flash-lite"
+                      className="w-full p-2 bg-[#0B0D14] border border-slate-700 rounded-lg text-slate-200 outline-none focus:border-indigo-500 font-mono text-xs"
+                    />
+                    <datalist id="gemini-checker-models-list">
+                      <option value="gemini-3.5-flash-lite" />
+                      <option value="gemini-2.5-flash-lite" />
+                      <option value="gemini-3.7-flash" />
+                      <option value="gemini-2.5-flash" />
+                    </datalist>
                   </div>
                 </div>
               </div>
