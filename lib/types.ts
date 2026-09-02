@@ -58,41 +58,9 @@ export interface ActivityScaffold {
   exampleAnswer: string;
 }
 
-export interface ActivityVisualData {
-  // Flowchart & Causal nodes
-  nodes?: { id: string; label: string; subtext?: string; type?: 'input' | 'mechanism' | 'outcome' | 'danger' }[];
-  
-  // Analogy cross-mappings
-  analogyMappings?: { sourceElement: string; targetElement: string; explanation?: string }[];
-  
-  // 2x2 Contrast Grid / Disambiguation Matrix
-  contrastMatrix?: {
-    axisX?: string;
-    axisY?: string;
-    quadrants?: { title: string; items: string[]; trapWarning?: string }[];
-  };
+export * from './templates/types';
+import { ActivityVisualData, GenerationChallenge, VisualTemplateType } from './templates/types';
 
-  // Method of Loci / Memory Palace
-  palaceRooms?: { roomName: string; itemPlaced: string; vividSensoryHook: string; locusNumber: number }[];
-
-  // Taxonomic Chunking Buckets (Miller's Law)
-  chunkBuckets?: { bucketName: string; items: string[]; colorHint?: string }[];
-
-  // Acronym & Phonetic Pegs
-  acronymLetters?: { letter: string; word: string; mnemonicCue?: string }[];
-
-  // Process / Cycle / State Machine steps
-  flowSteps?: { stepNumber: number; title: string; mechanism?: string; visualIcon?: string }[];
-
-  // Concept Mind Tree / Hierarchy
-  hierarchyTree?: { rootNode: string; branches: { branchName: string; subItems: string[] }[] };
-
-  // Boundary condition gauges & failure envelopes
-  boundaryGauges?: { variable: string; normalRange: string; extremeCase: string; breakdownResult: string }[];
-
-  // Formula & Spatial decomposition
-  formulaComponents?: { symbol: string; meaning: string; role: 'variable' | 'constant' | 'operator' | 'state' }[];
-}
 
 export interface Activity {
   id: string;
@@ -121,7 +89,24 @@ export interface StageResponse {
     feedback: string;
     xpBonus: number;
     depthAlert?: string;
+    errorAnalysis?: string;
   };
+  confidenceScore?: number;        // 0–100 slider value
+  reflection?: string;             // one-sentence takeaway
+  checkCount?: number;             // how many times re-checked by AI
+  errorAnalysis?: string;          // targeted diff feedback from checker
+  readinessConfirmed?: boolean;    // readiness modal confirmed
+  readinessLatencyMs?: number;     // ms from modal open to confirm
+  difficultyLevel?: 'easy' | 'medium' | 'hard';
+}
+
+export interface SessionMetacognition {
+  preSessionConfidence: number;    // 1–5 star rating
+  finalAIScore?: number;           // 0–100 from end-of-session checker
+  finalAIAnalysis?: string;        // written analysis
+  totalCheckCalls?: number;
+  sessionId?: string;
+  timestamp?: number;
 }
 
 export interface FeynmanCheckpoint {

@@ -103,3 +103,47 @@ export function clearAllSchemas(): void {
   }
 }
 
+export interface UsageStats {
+  date: string;
+  callsByModel: Record<string, number>;
+  weeklyCallsByModel: Record<string, number>;
+}
+
+export function loadUsageStats(): UsageStats {
+  if (typeof window === 'undefined') return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} };
+  try {
+    const raw = localStorage.getItem('deepencode_usage_stats_v1');
+    if (!raw) return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} };
+    const parsed: UsageStats = JSON.parse(raw);
+    if (parsed.date !== new Date().toDateString()) {
+      const reset: UsageStats = { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: parsed.weeklyCallsByModel || {} };
+      localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(reset));
+      return reset;
+    }
+    return parsed;
+  } catch { return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} }; }
+}
+
+export function incrementModelCall(modelName: string): void {
+  if (typeof window === 'undefined') return;
+  const stats = loadUsageStats();
+  stats.callsByModel[modelName] = (stats.callsByModel[modelName] || 0) + 1;
+  stats.weeklyCallsByModel[modelName] = (stats.weeklyCallsByModel[modelName] || 0) + 1;
+  localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(stats));
+}
+
+export function loadSessionMeta(): import('./types').SessionMetacognition | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem('deepencode_session_meta_v1');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function saveSessionMeta(meta: import('./types').SessionMetacognition): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('deepencode_session_meta_v1', JSON.stringify(meta));
+  } catch { console.error('Failed to save session meta'); }
+}
+

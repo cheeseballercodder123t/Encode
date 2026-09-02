@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Activity, ActivityVisualData } from '@/lib/types';
-import { RotateCw, ArrowRight, CheckCircle2, Play, Sparkles } from 'lucide-react';
+import { Activity, StateTransitionVisualData } from '@/lib/types';
+import { RefreshCw, ArrowRight, Sparkles, HelpCircle, Play, CheckCircle2 } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -12,100 +12,147 @@ interface Props {
 }
 
 export function StateTransitionVisual({ activity, field1, field2, field3 }: Props) {
-  const visualData: ActivityVisualData = activity.visualData || {};
-  const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const visualData = activity.visualData || {};
+  const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
+  const [showClue, setShowClue] = useState(false);
 
   const defaultSteps = [
-    { stepNumber: 1, title: 'State A: Baseline / Initial State', mechanism: 'System at rest or awaiting stimulus' },
-    { stepNumber: 2, title: 'Transition: Catalyst / Active Trigger', mechanism: 'Threshold reached, enzymatic activation or signal packet' },
-    { stepNumber: 3, title: 'State B: Transformed / Excited State', mechanism: 'Depolarized membrane, product released, or connection established' },
-    { stepNumber: 4, title: 'Reset: Feedback / Return Loop', mechanism: 'Hyperpolarization, refractory period, or resource reclamation' }
+    { stepNumber: 1, title: 'State Alpha: Initiation / Priming', mechanism: 'Signal binds or baseline threshold reached' },
+    { stepNumber: 2, title: 'State Beta: Peak Activation / Transformation', mechanism: 'Substrate converted or peak voltage discharge' },
+    { stepNumber: 3, title: 'State Gamma: Refractory / Reset Phase', mechanism: 'System resets back to baseline state for next cycle' }
   ];
 
-  const steps = visualData.flowSteps && visualData.flowSteps.length > 0 
-    ? visualData.flowSteps 
+  const steps = visualData.flowSteps && visualData.flowSteps.length > 0
+    ? visualData.flowSteps
     : defaultSteps;
 
+  const challenge = visualData.generationChallenge || {
+    premisePrompt: "What exact event or biochemical threshold triggers the transition from State 1 to State 2, and what resets the cycle?",
+    clue: "Look for the rate-limiting step or negative feedback threshold.",
+    missingRoleOrTarget: "State Transition Trigger",
+    expertCompletion: activity.scaffold.exampleAnswer
+  };
+
+  const hasUserGenerated = Boolean(field1.trim() || field2.trim());
+
   return (
-    <div className="rounded-xl border border-sky-500/30 bg-gradient-to-br from-sky-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md">
-      <div className="flex items-center justify-between border-b border-sky-500/20 pb-2.5 mb-3.5">
+    <div className="rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between border-b border-blue-500/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-sky-500/20 text-sky-400">
-            <RotateCw className="w-3.5 h-3.5" />
+          <div className="p-1 rounded bg-blue-500/20 text-blue-400">
+            <RefreshCw className="w-3.5 h-3.5" />
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-sky-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-blue-300">
             Cyclic State Machine & Feedback Loop
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-mono font-bold text-sky-300 bg-sky-950/40 border border-sky-500/30 px-2 py-0.5 rounded">
-            State {activeStepIndex + 1} of {steps.length}
-          </span>
-        </div>
+        <span className="text-[9px] font-mono font-bold text-blue-300 bg-blue-950/40 border border-blue-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+          <Play className="w-2.5 h-2.5" /> Interactive Cycle Stepper
+        </span>
       </div>
 
-      {/* Cyclic Step Carousel / Selector */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+      {/* Generation Effect: State Transition Challenge Card */}
+      <div className="mb-3.5 p-3 rounded-xl bg-blue-950/30 border border-blue-500/30">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2">
+            <HelpCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase text-blue-300 block">
+                Cyclic State Transition Challenge
+              </span>
+              <p className="text-xs text-blue-100 font-medium mt-0.5">
+                {challenge.premisePrompt}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowClue(!showClue)}
+            className="text-[10px] font-mono font-semibold text-blue-400 hover:text-blue-300 bg-blue-900/30 px-2 py-1 rounded border border-blue-500/20 shrink-0 transition-colors"
+          >
+            {showClue ? 'Hide Hint' : 'Get State Clue'}
+          </button>
+        </div>
+
+        {showClue && challenge.clue && (
+          <div className="mt-2.5 pt-2 border-t border-blue-500/20 text-[11px] text-blue-200/90 italic font-serif">
+            💡 <strong>State Transition Clue:</strong> {challenge.clue}
+          </div>
+        )}
+      </div>
+
+      {/* Interactive State Cycle Steps */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {steps.map((step, idx) => {
-          const isSelected = idx === activeStepIndex;
+          const isSelected = activeStepIndex === idx;
+
           return (
-            <button
+            <div
               key={idx}
-              type="button"
               onClick={() => setActiveStepIndex(idx)}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
-                  ? 'bg-sky-600/20 border-sky-400 shadow-md shadow-sky-500/20 text-white'
-                  : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                  ? 'border-blue-400/80 bg-blue-950/40 ring-1 ring-blue-400/50 shadow-md'
+                  : 'border-slate-700/60 bg-slate-900/60 hover:border-blue-500/40'
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-sky-400">
-                  Step {step.stepNumber || idx + 1}
-                </span>
-                {isSelected && <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-mono font-bold uppercase text-blue-300 bg-blue-950/60 border border-blue-500/30 px-1.5 py-0.5 rounded">
+                    State 0{step.stepNumber || idx + 1}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    {isSelected ? 'Active Focus' : 'Click to inspect'}
+                  </span>
+                </div>
+
+                <h4 className="text-xs font-bold text-white mb-1">
+                  {step.title}
+                </h4>
+
+                {step.mechanism && (
+                  <p className="text-[11px] text-slate-300 font-serif leading-relaxed">
+                    {step.mechanism}
+                  </p>
+                )}
               </div>
-              <div className="font-bold text-xs line-clamp-1">
-                {step.title}
-              </div>
-              {step.mechanism && (
-                <p className="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-tight">
-                  {step.mechanism}
-                </p>
+
+              {idx < steps.length - 1 && (
+                <div className="hidden md:flex items-center justify-center text-blue-400 mt-2">
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
               )}
-            </button>
+            </div>
           );
         })}
       </div>
 
-      {/* Active State Deep-Dive Card */}
-      <div className="p-3 rounded-xl bg-sky-950/30 border border-sky-500/30 flex items-start justify-between gap-3 text-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold uppercase text-sky-300">
-              Active State Breakdown: {steps[activeStepIndex]?.title}
+      {/* User Generated State Synthesis */}
+      {hasUserGenerated && (
+        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-blue-950/40 via-cyan-950/30 to-slate-900/50 border border-blue-500/40 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-blue-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+              Your State Machine Model
+            </span>
+            <span className="text-[9px] font-mono text-blue-400 bg-blue-950/60 border border-blue-500/30 px-1.5 py-0.5 rounded">
+              Cycle Mapped
             </span>
           </div>
-          <p className="text-slate-300 text-xs font-serif mt-1">
-            {steps[activeStepIndex]?.mechanism || 'Continuous dynamic state transition ensuring homeostasis.'}
-          </p>
+          {field1 && (
+            <p className="text-slate-200 font-serif italic text-xs">
+              <strong>1. Transition Trigger:</strong> &ldquo;{field1}&rdquo;
+            </p>
+          )}
           {field2 && (
-            <div className="mt-1.5 pt-1.5 border-t border-sky-500/20 text-[10px] text-sky-200 italic font-serif">
-              <strong className="not-italic font-mono text-[9px] text-sky-400 block">Your Transition Mechanism: </strong>
-              &ldquo;{field2}&rdquo;
-            </div>
+            <p className="text-slate-300 text-[11px] mt-1">
+              <strong className="text-blue-300">2. Feedback / Reset: </strong>
+              {field2}
+            </p>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={() => setActiveStepIndex((prev) => (prev + 1) % steps.length)}
-          className="p-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold shrink-0 flex items-center gap-1 shadow-md shadow-sky-600/20 cursor-pointer"
-        >
-          <span>Cycle Next</span>
-          <ArrowRight className="w-3 h-3" />
-        </button>
-      </div>
+      )}
     </div>
   );
 }

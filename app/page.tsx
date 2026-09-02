@@ -44,7 +44,8 @@ import {
   CheckCircle2,
   Tv,
   Share2,
-  PenTool
+  PenTool,
+  Star
 } from 'lucide-react';
 import { sound, playSound } from '@/lib/audio';
 import { 
@@ -96,8 +97,16 @@ import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
 import { AnkiExportModal } from '@/components/AnkiExportModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
-import { GitCompare } from 'lucide-react';
+import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
+import { GitCompare, WifiOff, BarChart2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { PreSessionConfidenceModal } from '@/components/PreSessionConfidenceModal';
+import { ReadinessModal } from '@/components/ReadinessModal';
+import { MetaReflectionPrompt } from '@/components/MetaReflectionPrompt';
+import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
+import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
+import { computeSuccessRate, getDifficultyLevel, getDifficultyLabel } from '@/lib/services/adaptiveDifficulty';
+import { incrementModelCall } from '@/lib/storage';
 
 type AppState = 'input' | 'loading' | 'encoding' | 'completed';
 type InputSourceTab = 'text' | 'file' | 'youtube';
@@ -329,6 +338,34 @@ export default function DeepEncodeApp() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [schemaToShare, setSchemaToShare] = useState<SavedSchema | null>(null);
   const [importedShareBanner, setImportedShareBanner] = useState<string | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
+
+  // New Metacognition & Science States
+  const [isConfidenceModalOpen, setIsConfidenceModalOpen] = useState(false);
+  const [preSessionConfidence, setPreSessionConfidence] = useState<number>(3);
+  const [isReadinessModalOpen, setIsReadinessModalOpen] = useState(false);
+  const [isEndSessionReviewOpen, setIsEndSessionReviewOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const [endSessionReviewData, setEndSessionReviewData] = useState<EndSessionReviewData | null>(null);
+  const [isLoadingEndSessionReview, setIsLoadingEndSessionReview] = useState(false);
+  const [interleaveMode, setInterleaveMode] = useState(false);
+  const [stageConfidence, setStageConfidence] = useState<number>(75);
+  const [stageReflection, setStageReflection] = useState<string>('');
+  const [stageCheckCount, setStageCheckCount] = useState<number>(0);
+  const [stageErrorAnalysis, setStageErrorAnalysis] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOffline(!navigator.onLine);
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const field1Ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
@@ -341,12 +378,24 @@ export default function DeepEncodeApp() {
       setField3(saved.field3 || '');
       setSelectedPreset(saved.selectedPreset || '');
       setFeynmanResult(saved.feynmanReview || null);
+      setStageConfidence(saved.confidenceScore ?? 75);
+      setStageReflection(saved.reflection || '');
+      setStageCheckCount(saved.checkCount || 0);
+      setStageErrorAnalysis(saved.errorAnalysis || null);
+      if (!saved.readinessConfirmed) {
+        setIsReadinessModalOpen(true);
+      }
     } else {
       setField1('');
       setField2('');
       setField3('');
       setSelectedPreset('');
       setFeynmanResult(null);
+      setStageConfidence(75);
+      setStageReflection('');
+      setStageCheckCount(0);
+      setStageErrorAnalysis(null);
+      setIsReadinessModalOpen(true);
     }
     setShowExample(false);
   };
@@ -646,13 +695,28 @@ export default function DeepEncodeApp() {
     }
   }, [appState, currentActivityIndex]);
 
+  // Initiate Generation with Pre-Session Confidence Gate
+  const handleInitiateGenerate = () => {
+    if (activeTab === 'youtube') {
+      if (!youtubeUrl.trim()) return;
+      handleGenerate();
+      return;
+    }
+    if (!rawNotes.trim() && !uploadedFile) return;
+    setIsConfidenceModalOpen(true);
+  };
+
   // Main Generation Handler (Text / File / YouTube)
-  const handleGenerate = async () => {
+  const handleGenerate = async (confirmedConfidence?: number) => {
+    const userConfidenceVal = confirmedConfidence || preSessionConfidence;
+    setIsConfidenceModalOpen(false);
+
     if (activeTab === 'youtube') {
       if (!youtubeUrl.trim()) return;
 
       setAppState('loading');
       sound.playBeep(440, 'sine', 0.15);
+      incrementModelCall(aiSettings.geminiModel || 'gemini-3.7-flash');
 
       try {
         const response = await fetch('/api/youtube', {
@@ -701,8 +765,33 @@ export default function DeepEncodeApp() {
 
     setAppState('loading');
     sound.playBeep(440, 'sine', 0.15);
+    incrementModelCall(aiSettings.geminiModel || 'gemini-3.7-flash');
+
+    // If device is offline, immediately use deterministic client-side cognitive generator
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      try {
+        const offlineData = generateOfflineWorkout(rawNotes, encodingMode);
+        setIsGuidedPathMode(false);
+        setGuidedModules([]);
+        setActivities(offlineData.activities);
+        setTopicSummary(offlineData.topicSummary);
+        setResearchContexts([]);
+        setYoutubeData(null);
+        setCurrentActivityIndex(0);
+        setUserResponses({});
+        loadStageInputs(0, offlineData.activities, {});
+        setXp(100);
+        addXP(100);
+        sound.playSuccess();
+        setAppState('encoding');
+        return;
+      } catch (offErr) {
+        console.error('Offline generator fallback error:', offErr);
+      }
+    }
 
     try {
+      const sRate = computeSuccessRate(userResponses);
       const response = await fetch('/api/encode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -712,7 +801,10 @@ export default function DeepEncodeApp() {
           settings: aiSettings,
           file: uploadedFile,
           enableDeepResearch,
-          enableGuidedPath: enableGuidedPath || wordCount > 900
+          enableGuidedPath: enableGuidedPath || wordCount > 900,
+          userConfidence: userConfidenceVal,
+          successRate: sRate,
+          interleaveMode
         }),
       });
 
@@ -758,9 +850,27 @@ export default function DeepEncodeApp() {
         throw new Error('Invalid schema format returned from server');
       }
     } catch (error: any) {
-      console.error(error);
-      alert(error?.message || 'Something went wrong preparing your schema. Please check your API key / settings or try again.');
-      setAppState('input');
+      console.warn('Network or API generation failed, falling back to local offline cognitive generator...', error);
+      try {
+        const offlineData = generateOfflineWorkout(rawNotes, encodingMode);
+        setIsGuidedPathMode(false);
+        setGuidedModules([]);
+        setActivities(offlineData.activities);
+        setTopicSummary(`${offlineData.topicSummary} (Offline Backup)`);
+        setResearchContexts([]);
+        setYoutubeData(null);
+        setCurrentActivityIndex(0);
+        setUserResponses({});
+        loadStageInputs(0, offlineData.activities, {});
+        setXp(100);
+        addXP(100);
+        sound.playSuccess();
+        setAppState('encoding');
+      } catch (fallbackErr) {
+        console.error('Offline fallback also failed:', fallbackErr);
+        alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');
+        setAppState('input');
+      }
     }
   };
 
@@ -812,12 +922,16 @@ export default function DeepEncodeApp() {
     sound.playBeep(600, 'triangle', 0.1);
   };
 
-  // Feynman AI Answer Checker for individual stage
+  // Feynman AI Answer Checker for individual stage (Supports Infinite Checks & Error Analysis)
   const handleCheckAnswer = async () => {
     if (!field1.trim() && !field2.trim()) return;
 
     setIsEvaluating(true);
     sound.playBeep(580, 'sine', 0.1);
+    incrementModelCall(aiSettings.geminiCheckerModel || 'gemini-3.5-flash-lite');
+
+    const nextCount = stageCheckCount + 1;
+    setStageCheckCount(nextCount);
 
     try {
       const response = await fetch('/api/evaluate', {
@@ -834,6 +948,8 @@ export default function DeepEncodeApp() {
           field2Value: field2,
           field3Label: currentActivity.scaffold.field3Label,
           field3Value: field3,
+          expertCompletion: currentActivity.visualData?.generationChallenge?.expertCompletion || currentActivity.scaffold.exampleAnswer,
+          premisePrompt: currentActivity.visualData?.generationChallenge?.premisePrompt,
           settings: aiSettings,
         }),
       });
@@ -845,6 +961,20 @@ export default function DeepEncodeApp() {
 
       const evalData = await response.json();
       setFeynmanResult(evalData);
+      if (evalData.errorAnalysis) {
+        setStageErrorAnalysis(evalData.errorAnalysis);
+      }
+
+      // Update response record with checkCount and errorAnalysis
+      setUserResponses(prev => ({
+        ...prev,
+        [currentActivity.id]: {
+          ...(prev[currentActivity.id] || { field1, field2 }),
+          checkCount: nextCount,
+          errorAnalysis: evalData.errorAnalysis || undefined,
+          feynmanReview: evalData,
+        }
+      }));
 
       if (evalData.xpBonus) {
         addXP(evalData.xpBonus);
@@ -855,6 +985,67 @@ export default function DeepEncodeApp() {
       alert(e?.message || 'Feynman evaluator unavailable. Please check settings.');
     } finally {
       setIsEvaluating(false);
+    }
+  };
+
+  // End Session Batch Metacognitive Performance Review
+  const handleEndSessionReview = async (customResponses?: Record<string, StageResponse>, customActivities?: Activity[]) => {
+    const acts = customActivities || activities;
+    const resps = customResponses || userResponses;
+    if (!acts || acts.length === 0) return;
+
+    setIsLoadingEndSessionReview(true);
+    setIsEndSessionReviewOpen(true);
+    incrementModelCall(aiSettings.geminiCheckerModel || 'gemini-3.5-flash-lite');
+
+    try {
+      const stagesPayload = acts.map(act => {
+        const r = resps[act.id] || { field1: '', field2: '', field3: '' };
+        return {
+          title: act.title,
+          framework: act.framework,
+          field1Label: act.scaffold.field1Label,
+          field1Value: r.field1,
+          field2Label: act.scaffold.field2Label,
+          field2Value: r.field2,
+          field3Label: act.scaffold.field3Label,
+          field3Value: r.field3,
+          reflection: r.reflection,
+        };
+      });
+
+      const response = await fetch('/api/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchMode: true,
+          stages: stagesPayload,
+          preSessionConfidence,
+          topicSummary,
+          settings: aiSettings,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Batch assessment failed');
+      const data = await response.json();
+      setEndSessionReviewData(data);
+    } catch (err) {
+      console.warn('End session review batch call fallback:', err);
+      // Fallback local score calculation
+      const scored = Object.values(resps).filter(r => r.feynmanReview);
+      const avgScore = scored.length ? Math.round(scored.reduce((a, r) => a + (r.feynmanReview?.score || 75), 0) / scored.length) : 82;
+      setEndSessionReviewData({
+        overallScore: avgScore,
+        analysis: 'Solid completion across the active generation stages. You systematically converted passive notes into intuitive first-principles mechanisms.',
+        perStageGrades: acts.map(a => ({
+          stageTitle: a.title,
+          grade: resps[a.id]?.feynmanReview?.grade || 'good',
+          score: resps[a.id]?.feynmanReview?.score || 80,
+          feedback: resps[a.id]?.feynmanReview?.feedback || 'Active schema constructed.'
+        }))
+      });
+    } finally {
+      setIsLoadingEndSessionReview(false);
     }
   };
 
@@ -876,7 +1067,12 @@ export default function DeepEncodeApp() {
         field2,
         field3,
         selectedPreset,
-        feynmanReview: feynmanResult || undefined
+        feynmanReview: feynmanResult || undefined,
+        confidenceScore: stageConfidence,
+        reflection: stageReflection,
+        checkCount: stageCheckCount,
+        errorAnalysis: stageErrorAnalysis || undefined,
+        readinessConfirmed: true,
       }
     };
     setUserResponses(updatedResponses);
@@ -913,6 +1109,9 @@ export default function DeepEncodeApp() {
         const updatedList = saveSchemaToHistory(newSavedSchema);
         setSavedSchemas(updatedList);
         await saveSchemaToCloud(newSavedSchema);
+
+        // Auto-trigger End Session Review Modal
+        handleEndSessionReview(updatedResponses, activities);
       }
     }
   };
@@ -1077,6 +1276,12 @@ export default function DeepEncodeApp() {
             )}
 
             {/* PWA Local-First Offline & Install Indicator */}
+            {isOffline && (
+              <div className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl text-[11px] font-mono font-semibold flex items-center gap-1.5 shadow-sm">
+                <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Offline Mode</span>
+              </div>
+            )}
             <PWAInstallHeader />
 
             {/* Multi-Doc Comparative Synthesis Button */}
@@ -1139,6 +1344,30 @@ export default function DeepEncodeApp() {
               <span className="text-[11px] font-bold hidden sm:inline">
                 {user ? (user.displayName?.split(' ')[0] || 'Synced') : 'Cloud'}
               </span>
+            </button>
+
+            {/* Metacognitive Performance Review Button (when completed) */}
+            {appState === 'completed' && (
+              <button
+                type="button"
+                onClick={() => handleEndSessionReview()}
+                className="p-2 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 hover:from-emerald-600/30 hover:to-teal-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                title="View Metacognitive Performance Review"
+              >
+                <Award className="w-4 h-4 text-emerald-400" />
+                <span className="text-[11px] font-bold hidden sm:inline">AI Review</span>
+              </button>
+            )}
+
+            {/* Analytics Dashboard Button */}
+            <button
+              type="button"
+              onClick={() => setIsAnalyticsOpen(true)}
+              className="p-2 bg-[#0F111A] hover:bg-[#151824] border border-violet-500/40 text-violet-300 hover:text-violet-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="Metacognitive Analytics & Model Quota Dashboard"
+            >
+              <BarChart2 className="w-4 h-4 text-violet-400" />
+              <span className="text-[11px] font-bold hidden md:inline">Analytics</span>
             </button>
 
             {/* Saved Schemas History Button */}
@@ -1388,6 +1617,28 @@ export default function DeepEncodeApp() {
                   </p>
                 </div>
               </label>
+
+              {/* Interleaved Template Switching Toggle */}
+              <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-4">
+                <input
+                  type="checkbox"
+                  checked={interleaveMode}
+                  onChange={(e) => setInterleaveMode(e.target.checked)}
+                  className="mt-0.5 sm:mt-0 w-4 h-4 accent-violet-500 rounded cursor-pointer"
+                />
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                    <Shuffle className="w-3.5 h-3.5 text-violet-400" />
+                    <span>Interleaved Template Switching</span>
+                    <span className="px-1.5 py-0.2 bg-violet-500/20 text-violet-300 text-[9px] font-mono rounded">
+                      Science
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Alternates conceptual & memorization templates across stages for stronger cognitive transfer.
+                  </p>
+                </div>
+              </label>
             </div>
 
             {/* TAB CONTENT: 1. FILE UPLOAD */}
@@ -1431,7 +1682,7 @@ export default function DeepEncodeApp() {
                     />
                     <button
                       type="button"
-                      onClick={handleGenerate}
+                      onClick={() => handleGenerate()}
                       disabled={!youtubeUrl.trim()}
                       className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shrink-0 cursor-pointer"
                     >
@@ -1602,7 +1853,7 @@ export default function DeepEncodeApp() {
 
                       {/* Primary Encode Button */}
                       <button
-                        onClick={handleGenerate}
+                        onClick={handleInitiateGenerate}
                         disabled={!rawNotes.trim() && !uploadedFile}
                         className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider rounded-lg border border-indigo-500/50 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
                       >
@@ -1775,6 +2026,10 @@ export default function DeepEncodeApp() {
                         <span>{currentActivity.templateType.replace(/_/g, ' ')}</span>
                       </span>
                     )}
+                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-400" />
+                      <span>Generation Effect</span>
+                    </span>
                     <span className="text-xs text-slate-400 font-mono">
                       Goal: {currentActivity.cognitiveGoal}
                     </span>
@@ -1946,13 +2201,13 @@ export default function DeepEncodeApp() {
 
                 </div>
 
-                {/* Socratic Feynman AI Review Section */}
-                <div className="pt-2">
+                {/* Socratic Feynman AI Review Section (Infinite Checks + Error Analysis) */}
+                <div className="pt-2 space-y-3">
                   {feynmanResult ? (
                     <motion.div
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`p-4 rounded-xl border ${
+                      className={`p-4 rounded-xl border space-y-2.5 ${
                         feynmanResult.grade === 'mastered'
                           ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
                           : feynmanResult.grade === 'good'
@@ -1960,27 +2215,58 @@ export default function DeepEncodeApp() {
                           : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Brain className="w-4 h-4" />
+                          <Brain className="w-4 h-4 text-indigo-400" />
                           <span className="font-bold text-xs uppercase tracking-wider">
                             Feynman AI Evaluation ({feynmanResult.score}/100)
                           </span>
                           <span className="px-2 py-0.2 text-[9px] font-black rounded uppercase bg-black/40">
                             {feynmanResult.grade.replace('_', ' ')}
                           </span>
+                          {stageCheckCount > 0 && (
+                            <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 text-[9px] font-mono rounded">
+                              Check #{stageCheckCount}
+                            </span>
+                          )}
                         </div>
-                        <span className="text-xs font-mono font-bold text-amber-400">
-                          +{feynmanResult.xpBonus} XP Awarded
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-amber-400">
+                            +{feynmanResult.xpBonus} XP
+                          </span>
+                          {/* Infinite Re-check Button */}
+                          <button
+                            type="button"
+                            onClick={handleCheckAnswer}
+                            disabled={isEvaluating || (!field1.trim() && !field2.trim())}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 text-[11px] font-bold rounded-lg transition-all disabled:opacity-40 cursor-pointer"
+                            title="Re-check this stage with Feynman AI (unlimited)"
+                          >
+                            {isEvaluating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                            <span>Re-Check</span>
+                          </button>
+                        </div>
                       </div>
+
                       <p className="text-xs leading-relaxed font-serif">
                         {feynmanResult.feedback}
                       </p>
+
                       {feynmanResult.depthAlert && (
-                        <div className="mt-2 text-[11px] text-amber-300 font-sans flex items-center gap-1.5">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <div className="text-[11px] text-amber-300 font-sans flex items-center gap-1.5 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
                           <span>{feynmanResult.depthAlert}</span>
+                        </div>
+                      )}
+
+                      {/* Targeted Error Analysis Callout */}
+                      {(feynmanResult.errorAnalysis || stageErrorAnalysis) && (
+                        <div className="text-[11px] text-rose-300 font-sans flex items-start gap-2 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/30">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-rose-200 uppercase tracking-wider text-[10px] block">Error-Based Learning Gap:</span>
+                            <p>{feynmanResult.errorAnalysis || stageErrorAnalysis}</p>
+                          </div>
                         </div>
                       )}
                     </motion.div>
@@ -2000,6 +2286,37 @@ export default function DeepEncodeApp() {
                         {isEvaluating ? 'Assessing Depth...' : 'Check with Feynman AI'}
                       </button>
                     </div>
+                  )}
+
+                  {/* Confidence-Weighted Response Slider */}
+                  {(field1.trim() || field2.trim()) && (
+                    <div className="p-3 bg-[#0B0D14] border border-slate-800/80 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                          <Star className="w-3 h-3 text-amber-400" />
+                          <span>Confidence in this Deduction:</span>
+                        </span>
+                        <span className="font-mono font-bold text-amber-300 text-xs">{stageConfidence}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="100"
+                        step="5"
+                        value={stageConfidence}
+                        onChange={e => setStageConfidence(Number(e.target.value))}
+                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                      />
+                    </div>
+                  )}
+
+                  {/* Meta-Reflection Prompt (Consolidation) */}
+                  {(field1.trim() || field2.trim()) && (
+                    <MetaReflectionPrompt
+                      stageTitle={currentActivity.title}
+                      savedReflection={stageReflection}
+                      onSave={refl => setStageReflection(refl)}
+                    />
                   )}
                 </div>
 
@@ -2447,6 +2764,62 @@ export default function DeepEncodeApp() {
           setIsComparativeModalOpen(false);
           setIsAnkiExportOpen(true);
         }}
+      />
+
+      {/* Science Feature: Pre-Session Metacognitive Confidence Rating Modal */}
+      <PreSessionConfidenceModal
+        isOpen={isConfidenceModalOpen}
+        topicPreview={rawNotes.slice(0, 120) || (uploadedFile ? uploadedFile.name : '')}
+        onConfirm={(stars) => {
+          setPreSessionConfidence(stars);
+          handleGenerate(stars);
+        }}
+        onSkip={() => {
+          setPreSessionConfidence(3);
+          handleGenerate(3);
+        }}
+      />
+
+      {/* Science Feature: Stage Readiness & Premise Retrieval Modal */}
+      {currentActivity && (
+        <ReadinessModal
+          isOpen={isReadinessModalOpen}
+          stageNumber={currentActivity.stageNumber || currentActivityIndex + 1}
+          stageTitle={currentActivity.title}
+          previousPremise={
+            currentActivityIndex > 0 && activities[currentActivityIndex - 1]
+              ? activities[currentActivityIndex - 1].visualData?.generationChallenge?.premisePrompt || activities[currentActivityIndex - 1].title
+              : undefined
+          }
+          onConfirm={(latencyMs, summary) => {
+            setIsReadinessModalOpen(false);
+            setUserResponses(prev => ({
+              ...prev,
+              [currentActivity.id]: {
+                ...(prev[currentActivity.id] || { field1: '', field2: '' }),
+                readinessConfirmed: true,
+                readinessLatencyMs: latencyMs,
+              }
+            }));
+          }}
+        />
+      )}
+
+      {/* Science Feature: End Session Metacognitive Performance Review Modal */}
+      <EndSessionReviewModal
+        isOpen={isEndSessionReviewOpen}
+        onClose={() => setIsEndSessionReviewOpen(false)}
+        preSessionConfidence={preSessionConfidence}
+        sessionData={endSessionReviewData}
+        isLoading={isLoadingEndSessionReview}
+        topicSummary={topicSummary || 'Cognitive Schema'}
+      />
+
+      {/* Science Feature: Metacognitive Analytics & Model Quota Dashboard */}
+      <AnalyticsDashboard
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
+        savedSchemas={savedSchemas}
       />
 
     </main>

@@ -1,12 +1,24 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 
 // Structured visual configurations per template type
 const visualDataSchema = {
   type: Type.OBJECT,
-  description: "Rich visual diagrams, nodes, and spatial configurations matching the chosen templateType",
+  description: "Visual and structural diagram data customized for the stage's templateType",
   properties: {
+    generationChallenge: {
+      type: Type.OBJECT,
+      description: "Generation Effect: Partial schema premise prompting the learner to deduce the missing half",
+      properties: {
+        premisePrompt: { type: Type.STRING, description: "e.g. 'If the cell is an industrial factory, what is the mitochondria?'" },
+        clue: { type: Type.STRING, description: "Socratic hint to guide generation without giving the answer away" },
+        missingRoleOrTarget: { type: Type.STRING, description: "The missing target/mechanism the user should generate" },
+        expertCompletion: { type: Type.STRING, description: "Full expert schema completion" }
+      },
+      required: ["premisePrompt", "missingRoleOrTarget"]
+    },
     nodes: {
       type: Type.ARRAY,
       description: "Causal or flowchart nodes for first_principles and cause_effect",
@@ -344,8 +356,17 @@ export async function POST(req: NextRequest) {
       settings, 
       file, 
       enableDeepResearch = true, 
-      enableGuidedPath = false 
+      enableGuidedPath = false,
+      userConfidence,
+      successRate,
+      interleaveMode = false
     } = await req.json();
+
+    const diffLevel = getDifficultyLevel(typeof successRate === 'number' ? successRate : 0.6);
+    const difficultyInstruction = getDifficultyPromptModifier(diffLevel);
+    const confidenceContext = typeof userConfidence === 'number' 
+      ? `\nLEARNER PRE-ASSESSMENT CONFIDENCE: ${userConfidence}/5. ${userConfidence <= 2 ? 'The student reports low confidence; provide intuitive, crystal-clear analogies.' : userConfidence >= 4 ? 'The student reports high familiarity; push for rigorous mechanistic precision and edge cases.' : 'Calibrate for standard balanced difficulty.'}` 
+      : '';
 
     const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
     const hasFile = file && file.base64Data && file.type;
@@ -431,11 +452,21 @@ AVAILABLE CONCEPTUAL TEMPLATES CATALOG:
 8. 'personal_schema' (Self-Reference & Spaced Repetition Synthesis):
    - Best for: Linking the theory to personal intuition, everyday decisions, or clinical intuition.
 
+THE GENERATION EFFECT (CRITICAL):
+Information that the user deduces and generates themselves is remembered far better than information passively read.
+For EVERY stage, you MUST populate 'visualData.generationChallenge' with:
+1. 'premisePrompt': The setup/premise (e.g., "If the cell is an industrial factory, what is the mitochondria?").
+2. 'clue': A Socratic hint guiding the learner's deduction.
+3. 'missingRoleOrTarget': The missing counterpart or mechanism to be deduced.
+4. 'expertCompletion': The completed expert synthesis.
+
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting potential, compounding frequency). Fetch 1-2 missing background concepts into 'researchContexts' and link to relevant stages.` : ''}
 
-CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges, and provide clear scaffold labels, domain presets, and concrete example answers.`;
+CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges and 'generationChallenge', and provide clear scaffold labels, domain presets, and concrete example answers.`;
     }
+
+    systemPrompt += `\n\n${difficultyInstruction}${confidenceContext}`;
 
     let userPrompt = '';
     if (hasNotes) {

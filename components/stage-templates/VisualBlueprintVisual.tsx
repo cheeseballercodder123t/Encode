@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
-import { Activity, ActivityVisualData } from '@/lib/types';
-import { Eye, Compass, MoveRight, Sparkles, Image as ImageIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, VisualBlueprintVisualData, VisualBlueprintAnchor } from '@/lib/types';
+import { Compass, Sparkles, HelpCircle, Eye, Layers } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -12,104 +12,134 @@ interface Props {
 }
 
 export function VisualBlueprintVisual({ activity, field1, field2, field3 }: Props) {
-  const visualData: ActivityVisualData = activity.visualData || {};
+  const visualData = activity.visualData || {};
+  const [selectedAnchor, setSelectedAnchor] = useState<string | null>(null);
+  const [showClue, setShowClue] = useState(false);
+
+  const defaultAnchors: VisualBlueprintAnchor[] = [
+    { id: 'top', label: 'Top / Anterior Zone', spatialPosition: 'top', sensoryDetail: 'Primary driving intake / signal receptor' },
+    { id: 'center', label: 'Center Core Engine', spatialPosition: 'center', sensoryDetail: 'Central transformative reaction mechanism' },
+    { id: 'bottom', label: 'Bottom / Posterior Vent', spatialPosition: 'bottom', sensoryDetail: 'Output conduit / equilibrium discharge' }
+  ];
+
+  const anchors = visualData.anchors && visualData.anchors.length > 0
+    ? visualData.anchors
+    : defaultAnchors;
+
+  const challenge = visualData.generationChallenge || {
+    premisePrompt: "If you had to sketch this process on a blank whiteboard, where is the center of motion and which direction does energy/matter travel?",
+    clue: "Anchor the primary actor in the center, assign vivid colors to inputs vs outputs, and trace the directional arrow.",
+    missingRoleOrTarget: "Spatial Mental Blueprint",
+    expertCompletion: activity.scaffold.exampleAnswer
+  };
+
+  const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md">
-      <div className="flex items-center justify-between border-b border-purple-500/20 pb-2.5 mb-3.5">
+    <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between border-b border-violet-500/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-purple-500/20 text-purple-400">
-            <Eye className="w-3.5 h-3.5" />
+          <div className="p-1 rounded bg-violet-500/20 text-violet-400">
+            <Compass className="w-3.5 h-3.5" />
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-purple-300">
-            Paivio Dual-Coding Mental Blueprint (1986)
+          <span className="text-[11px] font-black uppercase tracking-wider text-violet-300">
+            Paivio Dual-Coding & Mental Spatial Blueprint
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2 py-0.5 rounded">
-          Verbal + Spatial Imagery
+        <span className="text-[9px] font-mono font-bold text-violet-300 bg-violet-950/40 border border-violet-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+          <Layers className="w-2.5 h-2.5" /> Spatial Anchors
         </span>
       </div>
 
-      {/* 3-Component Dual-Coding Mental Anchor Board */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* Component 1: Foreground Actor */}
-        <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/40 relative flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-[9px] font-mono font-bold text-purple-400 uppercase tracking-wider mb-1">
-              <span>Anchor 1: Focal Actor</span>
-              <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300">Subject</span>
+      {/* Generation Effect: Dual-Coding Challenge Card */}
+      <div className="mb-3.5 p-3 rounded-xl bg-violet-950/30 border border-violet-500/30">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2">
+            <HelpCircle className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase text-violet-300 block">
+                Dual-Coding Mental Sketch Challenge
+              </span>
+              <p className="text-xs text-violet-100 font-medium mt-0.5">
+                {challenge.premisePrompt}
+              </p>
             </div>
-            <h4 className="text-xs font-bold text-white mb-1 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>Primary Visual Subject</span>
-            </h4>
-            <p className="text-[10px] text-slate-300 font-sans leading-relaxed">
-              Vivid foreground entity performing the action.
-            </p>
           </div>
-          {field1 ? (
-            <div className="mt-2.5 pt-2 border-t border-purple-500/20 text-[10px] text-purple-200 font-serif italic">
-              &ldquo;{field1}&rdquo;
-            </div>
-          ) : (
-            <div className="mt-2.5 pt-2 border-t border-purple-500/10 text-[10px] text-slate-500 italic font-mono">
-              Waiting for Actor in Step 1...
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => setShowClue(!showClue)}
+            className="text-[10px] font-mono font-semibold text-violet-400 hover:text-violet-300 bg-violet-900/30 px-2 py-1 rounded border border-violet-500/20 shrink-0 transition-colors"
+          >
+            {showClue ? 'Hide Hint' : 'Get Spatial Clue'}
+          </button>
         </div>
 
-        {/* Component 2: Dynamic Kinetic Vector */}
-        <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/40 relative flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-[9px] font-mono font-bold text-indigo-400 uppercase tracking-wider mb-1">
-              <span>Anchor 2: Kinetic Vector</span>
-              <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">Action</span>
-            </div>
-            <h4 className="text-xs font-bold text-white mb-1 flex items-center gap-1.5">
-              <MoveRight className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Dynamic Motion Vector</span>
-            </h4>
-            <p className="text-[10px] text-slate-300 font-sans leading-relaxed">
-              The directional flow, force, chemical binding, or electrical transfer.
-            </p>
+        {showClue && challenge.clue && (
+          <div className="mt-2.5 pt-2 border-t border-violet-500/20 text-[11px] text-violet-200/90 italic font-serif">
+            💡 <strong>Spatial Clue:</strong> {challenge.clue}
           </div>
-          {field2 ? (
-            <div className="mt-2.5 pt-2 border-t border-indigo-500/20 text-[10px] text-indigo-200 font-serif italic">
-              &ldquo;{field2}&rdquo;
-            </div>
-          ) : (
-            <div className="mt-2.5 pt-2 border-t border-indigo-500/10 text-[10px] text-slate-500 italic font-mono">
-              Waiting for Motion in Step 2...
-            </div>
-          )}
-        </div>
-
-        {/* Component 3: Spatial Canvas */}
-        <div className="p-3.5 rounded-xl bg-blue-950/30 border border-blue-500/40 relative flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between text-[9px] font-mono font-bold text-blue-400 uppercase tracking-wider mb-1">
-              <span>Anchor 3: Spatial Canvas</span>
-              <span className="px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">Environment</span>
-            </div>
-            <h4 className="text-xs font-bold text-white mb-1 flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-blue-400" />
-              <span>Physical Spatial Boundary</span>
-            </h4>
-            <p className="text-[10px] text-slate-300 font-sans leading-relaxed">
-              Cell membrane, axon terminal, network cable, or ledger ledger.
-            </p>
-          </div>
-          {field3 ? (
-            <div className="mt-2.5 pt-2 border-t border-blue-500/20 text-[10px] text-blue-200 font-serif italic">
-              &ldquo;{field3}&rdquo;
-            </div>
-          ) : (
-            <div className="mt-2.5 pt-2 border-t border-blue-500/10 text-[10px] text-slate-500 italic font-mono">
-              Spatial anchor coordinates
-            </div>
-          )}
-        </div>
+        )}
       </div>
+
+      {/* Interactive Spatial Mental Canvas */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {anchors.map((anchor, idx) => {
+          const isSelected = selectedAnchor === anchor.id;
+
+          return (
+            <div
+              key={idx}
+              onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
+              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                isSelected
+                  ? 'border-violet-400/80 bg-violet-950/50 ring-1 ring-violet-400/50 shadow-md'
+                  : 'border-slate-700/60 bg-slate-900/60 hover:border-violet-500/40'
+              }`}
+            >
+              <div>
+                <span className="text-[9px] font-mono font-bold uppercase text-violet-300 bg-violet-950/60 border border-violet-500/30 px-1.5 py-0.5 rounded block w-fit mb-1.5">
+                  Spatial Anchor: {anchor.spatialPosition}
+                </span>
+
+                <h4 className="text-xs font-bold text-white mb-1">
+                  {anchor.label}
+                </h4>
+
+                <p className="text-[11px] text-slate-300 font-serif leading-relaxed">
+                  {anchor.sensoryDetail}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* User Generated Dual-Coding Synthesis */}
+      {hasUserGenerated && (
+        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-violet-950/40 via-purple-950/30 to-slate-900/50 border border-violet-500/40 text-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-mono font-bold uppercase text-violet-300 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+              Your Mental Spatial Blueprint
+            </span>
+            <span className="text-[9px] font-mono text-violet-400 bg-violet-950/60 border border-violet-500/30 px-1.5 py-0.5 rounded">
+              Image Encoded
+            </span>
+          </div>
+          {field1 && (
+            <p className="text-slate-200 font-serif italic text-xs">
+              <strong>1. Foreground Spatial Focus:</strong> &ldquo;{field1}&rdquo;
+            </p>
+          )}
+          {field2 && (
+            <p className="text-slate-300 text-[11px] mt-1">
+              <strong className="text-violet-300">2. Motion Vector & Dynamic: </strong>
+              {field2}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
