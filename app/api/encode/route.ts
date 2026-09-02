@@ -167,6 +167,56 @@ const visualDataSchema = {
         },
         required: ["symbol", "meaning", "role"]
       }
+    },
+    brokenModel: {
+      type: Type.OBJECT,
+      description: "Sabotaged causal diagram with 1-2 intentional conceptual bugs for broken_model_debug",
+      properties: {
+        scenarioTitle: { type: Type.STRING, description: "e.g. 'Flawed Depolarization Model'" },
+        flawCount: { type: Type.INTEGER, description: "Number of flawed nodes (typically 1 or 2)" },
+        studentMisconceptionPremise: { type: Type.STRING, description: "The plausible misconception statement" },
+        expertCorrection: { type: Type.STRING, description: "Full expert first-principles correction" },
+        sabotagedNodes: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              label: { type: Type.STRING },
+              subtext: { type: Type.STRING },
+              isFlawed: { type: Type.BOOLEAN, description: "True if this node contains an intentional bug" },
+              flawExplanation: { type: Type.STRING, description: "Why this step is wrong physically/biologically" },
+              studentCorrectionHint: { type: Type.STRING, description: "Socratic hint to help learner spot the bug" }
+            },
+            required: ["id", "label", "isFlawed"]
+          }
+        }
+      },
+      required: ["scenarioTitle", "flawCount", "studentMisconceptionPremise", "sabotagedNodes", "expertCorrection"]
+    },
+    mnemonicStoryboard: {
+      type: Type.OBJECT,
+      description: "Interactive visual element grid with absurd narrative stories for mnemonic_storyboard",
+      properties: {
+        questTitle: { type: Type.STRING, description: "e.g. 'Quest 1: The First 10 Elements'" },
+        narrativeStory: { type: Type.STRING, description: "A hilarious, vivid, connected story linking all items in order" },
+        tiles: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              symbol: { type: Type.STRING, description: "e.g. 'H', 'He', 'Li'" },
+              name: { type: Type.STRING, description: "e.g. 'Hydrogen'" },
+              numberOrOrder: { type: Type.INTEGER, description: "Atomic number or list sequence (1, 2, 3...)" },
+              categoryTag: { type: Type.STRING, description: "e.g. 'Alkali Metal', 'Noble Gas'" },
+              mnemonicHook: { type: Type.STRING, description: "Absurd sensory imagery anchor" },
+              color: { type: Type.STRING, description: "e.g. 'emerald', 'cyan', 'amber', 'purple', 'rose'" }
+            },
+            required: ["symbol", "name", "mnemonicHook"]
+          }
+        }
+      },
+      required: ["questTitle", "narrativeStory", "tiles"]
     }
   }
 };
@@ -394,13 +444,19 @@ Decompose this material into 2 to 4 sequential "GUIDED PATH MODULES":
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 Identify if any vital foundational definitions or causal steps were omitted or rushed in the source text. Synthesize 1-2 missing background concepts into 'researchContexts'.` : ''}`;
     } else if (mode === 'memorization') {
-      systemPrompt = `You are a world-class Cognitive Science & Mnemonic Architect specializing in ROTE & TAXONOMIC MEMORIZATION (e.g. Periodic Table trends, Strong/Weak Acids & Bases, 20 Amino Acids, Cranial Nerves, Pharmacological Drug Classes, Anatomy, Historical Classifications).
+      systemPrompt = `You are a world-class Grandmaster of Memory & Mnemonic Architect (channeling Joshua Foer, Dominic O'Brien, and Harry Lorayne) specializing in ROTE & TAXONOMIC MEMORIZATION (e.g. Periodic Table of Elements, Amino Acids, Cranial Nerves, Strong/Weak Acids, Pharmacological Drug Classes, Anatomy).
 
-Your mission is to construct a 5-Stage High-Yield Visual Mnemonic & Spatial Workout.
-You have access to a rich catalog of VISUAL MEMORIZATION TEMPLATES. Choose 5 complementary, highly visual templates that best fit the exact nature of the items:
+CRITICAL RULE FOR LISTS & PERIODIC TABLE:
+Do NOT be clinical, boring, or overly theoretical. Memory champions memorize tables and long sequences through ABSURD, BIZARRE, HILARIOUS, and SENSORY NARRATIVE STORIES connecting symbols in sequence.
 
-AVAILABLE MEMORIZATION TEMPLATES CATALOG:
-1. 'taxonomic_chunking' (Miller's 7±2 Semantic Cluster Buckets):
+AVAILABLE MEMORIZATION TEMPLATES:
+1. 'mnemonic_storyboard' (RECOMMENDED for Periodic Table, Sequential Lists, Amino Acids, Nerves):
+   - Best for: 5 to 15 items in sequence (e.g. Elements 1-10, Elements 11-20, Cranial Nerves I-XII).
+   - visualData: Provide 'mnemonicStoryboard' with:
+     * 'questTitle': e.g. "Quest 1: Elements 1 to 10 (The Genesis Block)"
+     * 'narrativeStory': A vivid, ridiculous, unforgettable story where the symbols are characters acting out actions.
+     * 'tiles': Array of items with 'symbol', 'name', 'numberOrOrder', 'categoryTag', and 'mnemonicHook'.
+2. 'taxonomic_chunking' (Miller's 7±2 Semantic Cluster Buckets):
    - Best for: Grouping 10-30 items into 3-5 logical categorical buckets (e.g., Polar vs Non-polar, Strong vs Weak, Acid vs Base).
    - visualData: Provide 'chunkBuckets' with bucket names, items, and color hints.
 2. 'mnemonic_peg' (Phonetic Pegs & Acronym/Acrostic Letter Matrix):
@@ -454,6 +510,9 @@ AVAILABLE CONCEPTUAL TEMPLATES CATALOG:
    - visualData: Provide 'boundaryGauges' with variables, normal ranges, extreme cases, and breakdown results.
 8. 'personal_schema' (Self-Reference & Spaced Repetition Synthesis):
    - Best for: Linking the theory to personal intuition, everyday decisions, or clinical intuition.
+9. 'broken_model_debug' (Socratic Sabotage & Causal Bug Hunt - HIGHLY RECOMMENDED):
+   - Best for: Complex causal mechanisms where students fall for common exam traps or inverted logic.
+   - visualData: Populate 'brokenModel' with 3-5 sequential nodes, where 1-2 nodes are INTENTIONALLY SABOTAGED with common misconceptions (set 'isFlawed: true'). Provide 'flawExplanation' explaining what is broken.
 
 THE GENERATION EFFECT (CRITICAL):
 Information that the user deduces and generates themselves is remembered far better than information passively read.

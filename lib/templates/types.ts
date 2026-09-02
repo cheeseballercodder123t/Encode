@@ -15,7 +15,26 @@ export type VisualTemplateType =
   | 'formula_spatial_grid'
   | 'personal_schema'
   | 'interleaved_srs'
-  | 'shape_association';
+  | 'shape_association'
+  | 'mnemonic_storyboard'
+  | 'broken_model_debug';
+
+// 14. Mnemonic Storyboard & Interactive Element Grid
+export interface StoryboardTile {
+  symbol: string;         // e.g. "H", "He", "Li", "Be"
+  name: string;           // e.g. "Hydrogen", "Helium"
+  numberOrOrder?: number; // e.g. 1, 2, 3
+  categoryTag?: string;   // e.g. "Nonmetal", "Alkali Metal", "Noble Gas"
+  mnemonicHook: string;   // Bizarre mental image, e.g. "Harry the Helicopter drinking hydrogen gas"
+  color?: string;         // e.g. "emerald", "cyan", "amber", "purple", "rose"
+}
+
+export interface MnemonicStoryboardVisualData {
+  questTitle: string;     // e.g. "Quest 1: The First 10 Elements (The Genesis Block)"
+  narrativeStory: string; // The full hilarious story connecting the items in sequence
+  tiles: StoryboardTile[];
+  generationChallenge?: GenerationChallenge;
+}
 
 // Generation Effect: Partial Schema / Incomplete Mental Model Challenge
 export interface GenerationChallenge {
@@ -246,6 +265,25 @@ export interface ActivityVisualData {
   formulaComponents?: FormulaComponentItem[];
   anchors?: VisualBlueprintAnchor[];
   
+  // Mnemonic Storyboard
+  mnemonicStoryboard?: MnemonicStoryboardVisualData;
+
+  // 15. Socratic Sabotage / Broken Model Debugging
+  brokenModel?: {
+    scenarioTitle: string;
+    flawCount: number;
+    studentMisconceptionPremise: string;
+    expertCorrection: string;
+    sabotagedNodes: {
+      id: string;
+      label: string;
+      subtext?: string;
+      isFlawed: boolean;
+      flawExplanation?: string;
+      studentCorrectionHint?: string;
+    }[];
+  };
+
   // Personal schema & SRS
   selfReferenceQuestion?: string;
   realWorldScenario?: string;

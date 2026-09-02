@@ -28,6 +28,14 @@ const evaluationSchema = {
     errorAnalysis: {
       type: Type.STRING,
       description: "Targeted error analysis: 1 concise sentence highlighting the exact missing logical step or causal bridge compared to expert understanding."
+    },
+    jargonBuzzer: {
+      type: Type.STRING,
+      description: "Jargon Parroting Buzzer: Triggered when the student uses textbook buzzwords without articulating the physical/mechanical causality."
+    },
+    vivaCrossExamination: {
+      type: Type.STRING,
+      description: "Oxford Oral Defense: A lethal probing counter-question testing why the opposite, edge-case, or failure state does not occur."
     }
   },
   required: ["grade", "score", "xpBonus", "feedback"]
@@ -110,23 +118,43 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       field3Label,
       field3Value,
       expertCompletion,
-      premisePrompt
+      premisePrompt,
+      strictnessLevel = 'feynman' // 'sherpa' | 'feynman' | 'viva'
     } = body;
 
     if (!field1Value && !field2Value) {
       return NextResponse.json({ error: "No answers provided to evaluate." }, { status: 400 });
     }
 
+    let strictnessDirective = '';
+    if (strictnessLevel === 'sherpa') {
+      strictnessDirective = `STRICTNESS MODE: 🟢 SOCRATIC SHERPA (Supportive Learning)
+- Grade generously (score 70-95).
+- Forgive scientific jargon and focus on whether their general intuition is pointed in the right direction.
+- Provide encouraging guidance and fill in small missing steps.`;
+    } else if (strictnessLevel === 'viva') {
+      strictnessDirective = `STRICTNESS MODE: 🔴 OXFORD ORAL DEFENSE / RUTHLESS VIVA (Exam Readiness)
+- Zero tolerance for hand-waving, buzzwords, or skipping causal transitions.
+- If they omit the underlying physical mechanism, FAIL THEM (grade: 'needs_elaboration', score: 35-60).
+- Populate 'vivaCrossExamination' with a sharp, rigorous counter-question challenging their causal direction or asking: "Why doesn't the reverse happen?"
+- Challenge every assumption as an elite thesis examiner.`;
+    } else {
+      strictnessDirective = `STRICTNESS MODE: 🟡 FEYNMAN STANDARD (True Understanding)
+- THE JARGON BUZZER: If the student uses textbook terms (e.g. "depolarization", "AIMD", "mitosis") WITHOUT explaining the physical mechanical motion (e.g. ions rushing in, window halving), trigger 'jargonBuzzer'.
+- Reward simple, visual, plain-English mechanical explanations.`;
+    }
+
     const systemPrompt = `You are the Feynman Cognitive Coach & Socratic Evaluator.
-Your job is to rapidly assess a student's active cognitive encoding response.
+Your job is to assess a student's active cognitive encoding response to ensure their understanding is deep enough to create high-yield RemNote flashcards.
+
+${strictnessDirective}
 
 EVALUATION CRITERIA:
 1. Did the student explain the concept in genuine, clear first-principles language, or did they just copy-paste/parrot textbook buzzwords?
 2. Did they articulate the core mechanism/causality or mnemonic connection?
 3. Check for the 'Illusion of Explanatory Depth' (feeling like they understand because they recognize terms, but unable to explain the inner moving parts).
-4. In 'errorAnalysis', provide 1 targeted sentence highlighting what exact mechanistic link was missed (e.g. "You identified X but omitted the trigger mechanism that causes Y").
+4. In 'errorAnalysis', provide 1 targeted sentence highlighting what exact mechanistic link was missed.
 
-Be encouraging, academic, and hyper-concise.
 Output strictly JSON matching the evaluation schema.`;
 
     const userPrompt = `STAGE: ${stageTitle} (${framework})

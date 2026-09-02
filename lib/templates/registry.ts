@@ -153,6 +153,28 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     systemPromptDirective:
       'Generate a personal_schema with selfReferenceQuestion, realWorldScenario, flashcardFront, and flashcardBack.',
   },
+  mnemonic_storyboard: {
+    id: 'mnemonic_storyboard',
+    title: 'Mnemonic Storyboard & Element Grid',
+    category: 'memorization',
+    cognitiveFramework: 'Narrative Linking Technique & Method of Loci (Lorayne & Lucas, 1974)',
+    description: 'Interactive tile grid with absurd, vivid narrative story chains for rapid table memorization.',
+    icon: '🧪',
+    accentColor: 'emerald',
+    systemPromptDirective:
+      'Generate a mnemonic_storyboard with questTitle, narrativeStory connecting elements, and interactive tiles (symbol, name, numberOrOrder, mnemonicHook, categoryTag).',
+  },
+  broken_model_debug: {
+    id: 'broken_model_debug',
+    title: 'Socratic Sabotage (Debug Broken Model)',
+    category: 'conceptual',
+    cognitiveFramework: 'Error-Based Learning & Misconception Pruning (Kapur, 2016)',
+    description: 'Spot and correct intentionally planted misconceptions in a sabotaged causal diagram.',
+    icon: '🐛',
+    accentColor: 'rose',
+    systemPromptDirective:
+      'Generate a broken_model_debug schema with brokenModel (scenarioTitle, flawCount, studentMisconceptionPremise, sabotagedNodes with isFlawed, expertCorrection).',
+  },
 };
 
 export function getTemplateDefinition(id: string): TemplateDefinition | undefined {

@@ -30,6 +30,8 @@ const COMPONENT_MAP: Record<string, React.LazyExoticComponent<React.ComponentTyp
   formula_spatial_grid: lazy(() => import('./FormulaSpatialVisual').then(m => ({ default: m.FormulaSpatialVisual }))),
   personal_schema: lazy(() => import('./PersonalSchemaVisual').then(m => ({ default: m.PersonalSchemaVisual }))),
   interleaved_srs: lazy(() => import('./PersonalSchemaVisual').then(m => ({ default: m.PersonalSchemaVisual }))),
+  mnemonic_storyboard: lazy(() => import('./MnemonicStoryboardVisual').then(m => ({ default: m.MnemonicStoryboardVisual }))),
+  broken_model_debug: lazy(() => import('./BrokenModelVisual').then(m => ({ default: m.BrokenModelVisual }))),
 };
 
 interface Props extends VisualComponentProps {}
@@ -62,7 +64,9 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
 
   // Legacy fallback: detect payload shape if templateType not set
   if (!resolvedKey) {
-    if (visualData?.analogyMappings) resolvedKey = 'analogy_matrix';
+    if (visualData?.brokenModel) resolvedKey = 'broken_model_debug';
+    else if (visualData?.mnemonicStoryboard) resolvedKey = 'mnemonic_storyboard';
+    else if (visualData?.analogyMappings) resolvedKey = 'analogy_matrix';
     else if (visualData?.hierarchyTree) resolvedKey = 'concept_hierarchy';
     else if (visualData?.flowSteps) resolvedKey = 'state_transition';
     else if (visualData?.boundaryGauges) resolvedKey = 'boundary_stress_test';
