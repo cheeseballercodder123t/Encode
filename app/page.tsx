@@ -1224,10 +1224,10 @@ export default function DeepEncodeApp() {
         <div className="absolute top-1/2 -left-40 w-[400px] h-[400px] bg-purple-600/5 rounded-full blur-3xl" />
       </div>
 
-      <div className="w-full max-w-4xl relative z-10 flex-1 flex flex-col">
+      <div className="w-full max-w-5xl relative z-10 flex-1 flex flex-col">
         
         {/* Top Control Bar */}
-        <header className="mb-8 flex items-center justify-between border-b border-slate-800/80 pb-5">
+        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl shadow-inner shadow-indigo-500/20">
               <Brain className="w-6 h-6 animate-pulse" />
@@ -1244,7 +1244,7 @@ export default function DeepEncodeApp() {
           </div>
 
           {/* Gamification Bar & Top Buttons */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
             {appState !== 'input' && (
               <div className="flex items-center gap-2.5 bg-[#0F111A] border border-slate-800 px-3 py-1.5 rounded-xl shadow-lg relative">
                 <div className="flex items-center gap-1 text-amber-400">
@@ -1479,7 +1479,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => setActiveTab('text')}
-                className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                   activeTab === 'text'
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
@@ -1492,7 +1492,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => setActiveTab('file')}
-                className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                   activeTab === 'file'
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
@@ -1508,7 +1508,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => setActiveTab('youtube')}
-                className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                   activeTab === 'youtube'
                     ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
@@ -1523,14 +1523,14 @@ export default function DeepEncodeApp() {
             </div>
 
             {/* Cognitive Mode Switcher: Conceptual vs Memorization Heavy */}
-            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-2 flex flex-col sm:flex-row gap-2 shadow-xl">
+            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-3 flex flex-col sm:flex-row gap-3 shadow-xl">
               <button
                 type="button"
                 onClick={() => {
                   setEncodingMode('conceptual');
                   sound.playBeep(520, 'sine', 0.08);
                 }}
-                className={`flex-1 p-3.5 rounded-lg border text-left transition-all ${
+                className={`flex-1 p-4 rounded-lg border text-left transition-all ${
                   encodingMode === 'conceptual'
                     ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
                     : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
@@ -1551,7 +1551,7 @@ export default function DeepEncodeApp() {
                   setEncodingMode('memorization');
                   sound.playBeep(650, 'sine', 0.08);
                 }}
-                className={`flex-1 p-3.5 rounded-lg border text-left transition-all ${
+                className={`flex-1 p-4 rounded-lg border text-left transition-all ${
                   encodingMode === 'memorization'
                     ? 'bg-amber-600/20 border-amber-500 text-white shadow-lg shadow-amber-500/10'
                     : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
@@ -1571,7 +1571,7 @@ export default function DeepEncodeApp() {
             </div>
 
             {/* Cognitive Features Bar: Deep Research Context Fetcher & Miller's Law Guided Path */}
-            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-4 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               {/* Deep Research Toggle */}
               <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none">
                 <input
@@ -1697,7 +1697,7 @@ export default function DeepEncodeApp() {
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
                     Or Test Popular Educational Lectures (1-Click):
                   </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {YOUTUBE_PRESETS.map((preset, idx) => (
                       <button
                         key={idx}
@@ -1706,7 +1706,7 @@ export default function DeepEncodeApp() {
                           setYoutubeUrl(preset.url);
                           sound.playBeep(550 + idx * 60, 'triangle', 0.08);
                         }}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-red-500/40 text-left transition-all group"
+                        className="flex items-center gap-3 p-4 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-red-500/40 text-left transition-all group"
                       >
                         <span className="text-xl">{preset.icon}</span>
                         <div className="min-w-0">
@@ -1729,14 +1729,14 @@ export default function DeepEncodeApp() {
               <>
                 {/* Presets Grid */}
                 <div className="bg-[#0F111A] rounded-xl border border-slate-800/90 p-5 shadow-xl">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
                       <Flame className="w-4 h-4 text-amber-400" />
                       {encodingMode === 'memorization' ? 'Memorization & Chemistry Presets (1-Click Test):' : 'Conceptual Presets (1-Click Test):'}
                     </div>
                     <span className="text-[10px] text-slate-500 font-mono">Cognitive Science Validated</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {(encodingMode === 'memorization' ? MEMORIZATION_PRESETS : CONCEPTUAL_PRESETS).map((preset, idx) => (
                       <button
                         key={idx}
@@ -1744,9 +1744,9 @@ export default function DeepEncodeApp() {
                           setRawNotes(preset.notes);
                           sound.playBeep(500 + idx * 70, 'triangle', 0.08);
                         }}
-                        className="flex flex-col text-left p-3 rounded-lg bg-[#141724] hover:bg-[#1B1F2E] border border-slate-800 hover:border-indigo-500/40 transition-all group"
+                        className="flex flex-col text-left p-4 rounded-lg bg-[#141724] hover:bg-[#1B1F2E] border border-slate-800 hover:border-indigo-500/40 transition-all group"
                       >
-                        <span className="text-base mb-1">{preset.icon}</span>
+                        <span className="text-lg mb-1">{preset.icon}</span>
                         <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">
                           {preset.title}
                         </span>
@@ -1758,12 +1758,12 @@ export default function DeepEncodeApp() {
 
                 {/* Input Card */}
                 <div className="bg-[#0F111A] rounded-xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col">
-                  <div className="p-5 border-b border-slate-800 bg-[#131622] flex items-center justify-between">
+                  <div className="p-6 border-b border-slate-800 bg-[#131622] flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
                       <BookOpen className="w-5 h-5 text-indigo-400" />
                       <h2 className="font-bold text-white text-base">
-                        {encodingMode === 'memorization' 
-                          ? 'Paste Memorization Material or Supplemental Notes' 
+                        {encodingMode === 'memorization'
+                          ? 'Paste Memorization Material or Supplemental Notes'
                           : 'Paste Raw Study Notes, Textbook Chapter, or Lecture Summary'}
                       </h2>
                     </div>
@@ -1777,7 +1777,7 @@ export default function DeepEncodeApp() {
                       value={rawNotes}
                       onChange={(e) => setRawNotes(e.target.value)}
                       placeholder={
-                        uploadedFile 
+                        uploadedFile
                           ? `[File attached: ${uploadedFile.name}] Add any specific focus instructions, focus chapters, or supplemental notes here...`
                           : encodingMode === 'memorization'
                             ? "Paste list of acids, periodic table groups, drug classifications, amino acids, or cranial nerves..."
@@ -1788,7 +1788,7 @@ export default function DeepEncodeApp() {
                   </div>
 
                   {/* Card Footer */}
-                  <div className="p-5 bg-[#0B0D14] border-t border-slate-800/90 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                  <div className="p-6 bg-[#0B0D14] border-t border-slate-800/90 flex flex-col sm:flex-row gap-4 items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                       <Sparkles className="w-4 h-4 text-emerald-400" />
                       <span>
