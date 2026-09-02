@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function BoundaryStressTestVisual({ activity, field1, field2, field3 }: Props) {
+export function BoundaryStressTestVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [sliderValues, setSliderValues] = useState<Record<number, number>>({ 0: 85, 1: 95 });
   const [showClue, setShowClue] = useState(false);

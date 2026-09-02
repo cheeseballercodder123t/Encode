@@ -7,6 +7,13 @@ const STORAGE_KEYS = {
   STATS: 'deepencode_user_stats_v2',
 };
 
+// In-memory cache for synchronous read performance
+const schemaCache = new Map<string, SavedSchema[]>();
+let cacheInitialized = false;
+
+// Debounce timer for autosaves
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const DEFAULT_SETTINGS: AISettings = {
   provider: 'gemini',
   geminiModel: 'gemini-3.7-flash',
@@ -42,10 +49,23 @@ export function saveAISettings(settings: AISettings): void {
 
 export function loadSavedSchemas(): SavedSchema[] {
   if (typeof window === 'undefined') return [];
+  
+  // Return from cache if available and initialized
+  if (cacheInitialized && schemaCache.has('schemas')) {
+    return schemaCache.get('schemas') || [];
+  }
+  
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    if (!raw) {
+      schemaCache.set('schemas', []);
+      cacheInitialized = true;
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    schemaCache.set('schemas', parsed);
+    cacheInitialized = true;
+    return parsed;
   } catch (e) {
     console.error('Failed to load schemas history', e);
     return [];
@@ -69,6 +89,9 @@ export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
     const capped = updated.slice(0, 50);
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(capped));
     
+    // Update cache
+    schemaCache.set('schemas', capped);
+    
     // Asynchronously persist to IndexedDB
     saveSchemaToIDB(schema).catch(e => console.warn('IDB write failed:', e));
     
@@ -79,12 +102,30 @@ export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
   }
 }
 
+// Debounced autosave for performance during typing
+export function debouncedSaveSchema(schema: SavedSchema, delay: number = 1000): void {
+  if (typeof window === 'undefined') return;
+  
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer);
+  }
+  
+  autosaveTimer = setTimeout(() => {
+    saveSchemaToHistory(schema);
+    autosaveTimer = null;
+  }, delay);
+}
+
 export function deleteSchemaFromHistory(id: string): SavedSchema[] {
   if (typeof window === 'undefined') return [];
   try {
     const current = loadSavedSchemas();
     const updated = current.filter(s => s.id !== id);
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(updated));
+    
+    // Update cache
+    schemaCache.set('schemas', updated);
+    
     deleteSchemaFromIDB(id).catch(e => console.warn('IDB delete failed:', e));
     return updated;
   } catch (e) {
@@ -97,10 +138,21 @@ export function clearAllSchemas(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(STORAGE_KEYS.HISTORY);
+    
+    // Clear cache
+    schemaCache.delete('schemas');
+    cacheInitialized = false;
+    
     clearAllSchemasFromIDB().catch(e => console.warn('IDB clear failed:', e));
   } catch (e) {
     console.error('Failed to clear schemas', e);
   }
+}
+
+// Invalidate cache for external updates
+export function invalidateSchemaCache(): void {
+  schemaCache.delete('schemas');
+  cacheInitialized = false;
 }
 
 export interface UsageStats {

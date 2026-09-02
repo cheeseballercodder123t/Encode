@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function FormulaSpatialVisual({ activity, field1, field2, field3 }: Props) {
+export function FormulaSpatialVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [selectedComp, setSelectedComp] = useState<number | null>(0);
   const [showClue, setShowClue] = useState(false);

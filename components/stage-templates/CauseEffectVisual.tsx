@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function CauseEffectVisual({ activity, field1, field2, field3 }: Props) {
+export function CauseEffectVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [isPerturbed, setIsPerturbed] = useState(true);
   const [showClue, setShowClue] = useState(false);

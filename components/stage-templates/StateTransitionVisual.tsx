@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function StateTransitionVisual({ activity, field1, field2, field3 }: Props) {
+export function StateTransitionVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [showClue, setShowClue] = useState(false);

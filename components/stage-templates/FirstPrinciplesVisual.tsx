@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function FirstPrinciplesVisual({ activity, field1, field2, field3 }: Props) {
+export function FirstPrinciplesVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [showClue, setShowClue] = useState(false);

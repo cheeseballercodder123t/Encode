@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function PersonalSchemaVisual({ activity, field1, field2, field3 }: Props) {
+export function PersonalSchemaVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [isFlipped, setIsFlipped] = useState(false);
   const [showClue, setShowClue] = useState(false);

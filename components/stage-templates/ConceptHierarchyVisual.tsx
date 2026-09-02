@@ -9,9 +9,10 @@ interface Props {
   field1: string;
   field2: string;
   field3?: string;
+  selectedPreset?: string;
 }
 
-export function ConceptHierarchyVisual({ activity, field1, field2, field3 }: Props) {
+export function ConceptHierarchyVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
 
   const [expandedBranches, setExpandedBranches] = useState<Record<number, boolean>>({ 0: true, 1: true, 2: true });

@@ -1,10 +1,11 @@
 ﻿'use client';
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'motion/react';
 import {
-  X, BarChart2, Download, Cpu, Calendar, TrendingUp,
-  Brain, Star, Award, RefreshCcw, ChevronDown, ChevronUp
+  X, BarChart2, Download, Cpu, TrendingUp,
+  Brain, Star, Award, RefreshCcw, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import { Button, Card, CardContent, Badge, Input } from './ui/index';
 
 interface UsageStats {
   date: string;
@@ -76,21 +77,48 @@ function computeAllStats(schemas: import('@/lib/types').SavedSchema[]): SessionS
 export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   const [usage, setUsage] = useState<UsageStats>({ date: '', callsByModel: {}, weeklyCallsByModel: {} });
   const [showTemplates, setShowTemplates] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     if (isOpen) setUsage(loadUsageStats());
   }, [isOpen]);
 
+  // Filter schemas based on search query
+  const filteredSchemas = useMemo(() => {
+    if (!searchQuery.trim()) return savedSchemas;
+    const query = searchQuery.toLowerCase();
+    return savedSchemas.filter(schema => 
+      schema.topicSummary?.toLowerCase().includes(query) ||
+      schema.mode?.toLowerCase().includes(query) ||
+      schema.id?.toLowerCase().includes(query)
+    );
+  }, [savedSchemas, searchQuery]);
+
+  // Pagination
+  const totalPages = Math.ceil(filteredSchemas.length / itemsPerPage);
+  const paginatedSchemas = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredSchemas.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredSchemas, currentPage]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   if (!isOpen) return null;
 
   const stats = computeAllStats(savedSchemas);
   const totalSessions = savedSchemas.length;
+  const filteredCount = filteredSchemas.length;
   const totalCalls = Object.values(usage.callsByModel).reduce((a, b) => a + b, 0);
   const weeklyTotal = Object.values(usage.weeklyCallsByModel).reduce((a, b) => a + b, 0);
 
   const handleExportCSV = () => {
     const rows: string[] = ['session_id,timestamp,topic,mode,stage,template,confidence,check_count,grade,score,reflection'];
-    for (const s of savedSchemas) {
+    for (const s of filteredSchemas) {
       for (const act of s.activities || []) {
         const r = s.userResponses?.[act.id];
         if (!r) continue;
@@ -113,7 +141,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   };
 
   const handleExportJSON = () => {
-    const data = savedSchemas.map(s => ({
+    const data = filteredSchemas.map(s => ({
       id: s.id, timestamp: s.timestamp, topic: s.topicSummary, mode: s.mode, xpEarned: s.xpEarned,
       stages: (s.activities || []).map(act => ({
         stage: act.stageNumber, title: act.title, template: act.templateType,
@@ -130,7 +158,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
     <div className="fixed inset-0 z-50 bg-[#07080D] overflow-y-auto">
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-violet-500/10 border border-violet-500/30 rounded-xl">
               <BarChart2 className="w-6 h-6 text-violet-400" />
@@ -140,9 +168,24 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
               <p className="text-xs text-slate-400">Metacognitive insights · All data is stored locally</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors border border-slate-800">
-            <X className="w-5 h-5" />
-          </button>
+          <Button variant="ghost" size="sm" onClick={onClose} leftIcon={<X className="w-5 h-5" />}>
+            Close
+          </Button>
+        </div>
+
+        {/* Search and Filter */}
+        <div className="mb-6">
+          <Input
+            placeholder="Search sessions by topic, mode, or ID..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            leftIcon={<Search className="w-4 h-4" />}
+          />
+          {searchQuery && (
+            <p className="text-xs text-slate-400 mt-2">
+              Found {filteredCount} of {totalSessions} sessions
+            </p>
+          )}
         </div>
 
         {/* Session Stats Grid */}
@@ -153,123 +196,195 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
             { label: 'Avg Confidence', value: stats.avgConfidence ? `${stats.avgConfidence}/100` : '—', icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
             { label: 'Reflections', value: stats.reflectionsWritten, icon: Award, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
           ].map(({ label, value, icon: Icon, color, bg }) => (
-            <div key={label} className={`border rounded-2xl p-4 ${bg}`}>
-              <Icon className={`w-5 h-5 ${color} mb-2`} />
-              <p className="text-2xl font-black text-white">{value}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
-            </div>
+            <Card key={label} glass={true} hoverEffect={false} className={bg}>
+              <CardContent className="p-4">
+                <Icon className={`w-5 h-5 ${color} mb-2`} />
+                <p className="text-2xl font-black text-white">{value}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         {/* Success Rate Bar */}
         {stats.successRate > 0 && (
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 mb-4">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3">Overall Success Rate</p>
-            <div className="w-full bg-slate-700/50 rounded-full h-3">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.successRate}%` }}
-                transition={{ duration: 1.2, ease: 'easeOut' }}
-                className={`h-3 rounded-full ${stats.successRate >= 80 ? 'bg-emerald-500' : stats.successRate >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
-              />
-            </div>
-            <p className="text-right text-xs text-slate-400 mt-1">{stats.successRate}%</p>
-          </div>
+          <Card glass={true} hoverEffect={false} className="mb-4">
+            <CardContent className="p-4">
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3">Overall Success Rate</p>
+              <div className="w-full bg-slate-700/50 rounded-full h-3">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.successRate}%` }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  className={`h-3 rounded-full ${stats.successRate >= 80 ? 'bg-emerald-500' : stats.successRate >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                />
+              </div>
+              <p className="text-right text-xs text-slate-400 mt-1">{stats.successRate}%</p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Template Breakdown */}
         {Object.keys(stats.templateBreakdown).length > 0 && (
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 mb-4">
-            <button
-              onClick={() => setShowTemplates(t => !t)}
-              className="w-full flex items-center justify-between"
-            >
-              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Templates Used</p>
-              {showTemplates ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
-            </button>
-            {showTemplates && (
-              <div className="mt-3 space-y-2">
-                {Object.entries(stats.templateBreakdown).sort((a,b) => b[1]-a[1]).map(([tmpl, count]) => (
-                  <div key={tmpl} className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400 w-40 truncate font-mono">{tmpl}</span>
-                    <div className="flex-1 bg-slate-700/40 rounded-full h-2">
-                      <div
-                        className="bg-indigo-500 h-2 rounded-full"
-                        style={{ width: `${Math.min(100, (count / Math.max(...Object.values(stats.templateBreakdown))) * 100)}%` }}
-                      />
+          <Card glass={true} hoverEffect={false} className="mb-4">
+            <CardContent className="p-4">
+              <button
+                onClick={() => setShowTemplates(t => !t)}
+                className="w-full flex items-center justify-between"
+              >
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Templates Used</p>
+                {showTemplates ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+              </button>
+              {showTemplates && (
+                <div className="mt-3 space-y-2">
+                  {Object.entries(stats.templateBreakdown).sort((a,b) => b[1]-a[1]).map(([tmpl, count]) => (
+                    <div key={tmpl} className="flex items-center gap-3">
+                      <span className="text-xs text-slate-400 w-40 truncate font-mono">{tmpl}</span>
+                      <div className="flex-1 bg-slate-700/40 rounded-full h-2">
+                        <div
+                          className="bg-indigo-500 h-2 rounded-full"
+                          style={{ width: `${Math.min(100, (count / Math.max(...Object.values(stats.templateBreakdown))) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-slate-300 font-mono w-6 text-right">{count}</span>
                     </div>
-                    <span className="text-xs text-slate-300 font-mono w-6 text-right">{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Model Usage */}
-        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 mb-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Model Usage</p>
-            <button
-              onClick={() => setUsage(loadUsageStats())}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
-              title="Refresh"
-            >
-              <RefreshCcw className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div className="bg-slate-800/60 rounded-xl p-3">
-              <p className="text-xs text-slate-500 mb-1">Today</p>
-              <p className="text-xl font-black text-white">{totalCalls}<span className="text-xs text-slate-500 font-normal ml-1">calls</span></p>
+        <Card glass={true} hoverEffect={false} className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Model Usage</p>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setUsage(loadUsageStats())}
+                leftIcon={<RefreshCcw className="w-3.5 h-3.5" />}
+              >
+                Refresh
+              </Button>
             </div>
-            <div className="bg-slate-800/60 rounded-xl p-3">
-              <p className="text-xs text-slate-500 mb-1">This week</p>
-              <p className="text-xl font-black text-white">{weeklyTotal}<span className="text-xs text-slate-500 font-normal ml-1">calls</span></p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">Today</p>
+                <p className="text-xl font-black text-white">{totalCalls}<span className="text-xs text-slate-500 font-normal ml-1">calls</span></p>
+              </div>
+              <div className="bg-slate-800/60 rounded-xl p-3">
+                <p className="text-xs text-slate-500 mb-1">This week</p>
+                <p className="text-xl font-black text-white">{weeklyTotal}<span className="text-xs text-slate-500 font-normal ml-1">calls</span></p>
+              </div>
             </div>
-          </div>
-          {Object.keys(usage.callsByModel).length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-[11px] text-slate-500 uppercase tracking-wider">Breakdown by model (today)</p>
-              {Object.entries(usage.callsByModel).sort((a,b) => b[1]-a[1]).map(([model, count]) => (
-                <div key={model} className="flex items-center gap-3 bg-slate-800/60 rounded-xl px-3 py-2">
-                  <Cpu className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="text-xs text-slate-300 font-mono flex-1 truncate">{model}</span>
-                  <span className="text-xs font-black text-white">{count}</span>
-                  <span className="text-[10px] text-slate-500">calls</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 italic">No calls tracked today yet — usage counters update on each API call.</p>
-          )}
-        </div>
+            {Object.keys(usage.callsByModel).length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-500 uppercase tracking-wider">Breakdown by model (today)</p>
+                {Object.entries(usage.callsByModel).sort((a,b) => b[1]-a[1]).map(([model, count]) => (
+                  <div key={model} className="flex items-center gap-3 bg-slate-800/60 rounded-xl px-3 py-2">
+                    <Cpu className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span className="text-xs text-slate-300 font-mono flex-1 truncate">{model}</span>
+                    <Badge variant="slate" size="xs">{count}</Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 italic">No calls tracked today yet — usage counters update on each API call.</p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Export */}
-        <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
-          <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3">Export Data</p>
-          <div className="flex gap-3">
-            <button
-              onClick={handleExportCSV}
-              disabled={savedSchemas.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Download className="w-4 h-4" />
-              Export CSV
-            </button>
-            <button
-              onClick={handleExportJSON}
-              disabled={savedSchemas.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Download className="w-4 h-4" />
-              Export JSON
-            </button>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-2">
-            Exports include all sessions: stage responses, confidence scores, check counts, reflections, and timestamps. Self-monitoring correlates with higher achievement (Zimmerman, 2002).
-          </p>
-        </div>
+        <Card glass={true} hoverEffect={false}>
+          <CardContent className="p-4">
+            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3">Export Data</p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportCSV}
+                disabled={filteredSchemas.length === 0}
+                leftIcon={<Download className="w-4 h-4" />}
+              >
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportJSON}
+                disabled={filteredSchemas.length === 0}
+                leftIcon={<Download className="w-4 h-4" />}
+              >
+                Export JSON
+              </Button>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">
+              Exports include all sessions: stage responses, confidence scores, check counts, reflections, and timestamps. Self-monitoring correlates with higher achievement (Zimmerman, 2002).
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Session History with Pagination */}
+        {filteredSchemas.length > 0 && (
+          <Card glass={true} hoverEffect={false} className="mt-4">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                  Session History
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      leftIcon={<ChevronLeft className="w-3 h-3" />}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      leftIcon={<ChevronRight className="w-3 h-3" />}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {paginatedSchemas.map((schema) => (
+                  <div
+                    key={schema.id}
+                    className="flex items-center justify-between p-3 bg-slate-800/40 border border-slate-700/50 rounded-xl hover:bg-slate-800/60 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="indigo" size="xs">
+                          {schema.mode || 'standard'}
+                        </Badge>
+                        <span className="text-xs text-slate-500 font-mono">
+                          {new Date(schema.timestamp).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-200 font-medium truncate">
+                        {schema.topicSummary || 'Untitled Session'}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {schema.activities?.length || 0} stages · {schema.xpEarned || 0} XP
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

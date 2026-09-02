@@ -10,7 +10,12 @@ export interface SessionStats {
   templateBreakdown: Record<string, number>;
 }
 
+// Memoization cache for session stats — prevents re-computation on every dashboard render
+const statsCache = new Map<string, SessionStats>();
+
 export function computeSessionStats(schema: SavedSchema): SessionStats {
+  const cacheKey = `${schema.id}_${schema.timestamp}`;
+  if (statsCache.has(cacheKey)) return statsCache.get(cacheKey)!;
   const responses = Object.values(schema.userResponses || {});
   const answered = responses.filter(r => r.field1?.trim());
   const withConfidence = responses.filter(r => r.confidenceScore != null);
@@ -33,7 +38,7 @@ export function computeSessionStats(schema: SavedSchema): SessionStats {
     templateBreakdown[act.templateType] = (templateBreakdown[act.templateType] || 0) + 1;
   });
 
-  return {
+  const result: SessionStats = {
     totalStages: schema.activities?.length || 0,
     answeredStages: answered.length,
     avgConfidence,
@@ -42,6 +47,18 @@ export function computeSessionStats(schema: SavedSchema): SessionStats {
     reflectionsWritten,
     templateBreakdown,
   };
+  statsCache.set(cacheKey, result);
+  return result;
+}
+
+export function invalidateSessionCache(schemaId?: string): void {
+  if (schemaId) {
+    for (const key of statsCache.keys()) {
+      if (key.startsWith(schemaId)) statsCache.delete(key);
+    }
+  } else {
+    statsCache.clear();
+  }
 }
 
 export function exportToCSV(schemas: SavedSchema[]): string {
