@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
     let oEmbedTitle = '';
     let oEmbedAuthor = '';
     let thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    let transcriptSnippet = '';
 
     try {
       const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
@@ -129,8 +130,41 @@ export async function POST(req: NextRequest) {
       console.warn("Could not fetch YouTube oEmbed info:", e);
     }
 
+    // Attempt to extract real transcript timed text from YouTube watch page
+    try {
+      const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: { 'Accept-Language': 'en-US,en;q=0.9', 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (pageRes.ok) {
+        const pageHtml = await pageRes.text();
+        const captionMatch = pageHtml.match(/"captionTracks":\s*(\[.*?\])/);
+        if (captionMatch && captionMatch[1]) {
+          const tracks = JSON.parse(captionMatch[1]);
+          const track = tracks.find((t: any) => t.languageCode === 'en') || tracks[0];
+          if (track && track.baseUrl) {
+            const transcriptRes = await fetch(track.baseUrl);
+            if (transcriptRes.ok) {
+              const xml = await transcriptRes.text();
+              const lines = Array.from(xml.matchAll(/<text start="([\d.]+)" dur="[\d.]+">(.*?)<\/text>/g))
+                .slice(0, 120)
+                .map((m: any) => {
+                  const sec = Math.floor(parseFloat(m[1]));
+                  const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+                  const ss = String(sec % 60).padStart(2, '0');
+                  const cleanText = m[2].replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+                  return `[${mm}:${ss}] ${cleanText}`;
+                });
+              transcriptSnippet = lines.join('\n');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not extract YouTube transcript, falling back to title cues:", e);
+    }
+
     const systemPrompt = `You are a world-class Video Pedagogy & Cognitive Science Architect.
-You transform YouTube educational lectures, university courses (e.g., 3Blue1Brown, Khan Academy, MIT OCW, CrashCourse, Huberman Lab, Stanford), science breakdowns, and tutorials into active cognitive schemas with timestamped reviews.
+You transform YouTube educational lectures, university courses, and tutorials into active cognitive schemas with timestamped reviews.
 
 Target Video:
 - URL: https://www.youtube.com/watch?v=${videoId}
@@ -140,15 +174,17 @@ ${oEmbedAuthor ? `- Channel/Author: "${oEmbedAuthor}"` : ''}
 
 Your tasks:
 1. Deconstruct the lecture into its core progression.
-2. Identify 4-6 key timestamp inflection points (with realistic minute:second marks e.g. 01:20, 04:45, 08:30) where the presenter introduces pivotal definitions, visual diagrams, mathematical proofs, or counter-intuitive examples.
-3. Generate exactly 5 scaffolded active cognitive exercises. Each exercise MUST include a 'videoTimestamp' object so the student can click and review that exact section of the video (e.g. "Review at 04:15 for the animated membrane diagram").
+2. Identify 4-6 key timestamp inflection points where the presenter introduces pivotal definitions, visual diagrams, mathematical proofs, or counter-intuitive examples.
+3. Generate exactly 5 scaffolded active cognitive exercises. Each exercise MUST include a 'videoTimestamp' object tied to a genuine milestone in the video.
 4. Provide structured scaffold fields, domain options, and crystal-clear example responses.`;
 
     const userPrompt = `Generate a comprehensive timestamped cognitive schema for the YouTube lecture:
 URL: https://www.youtube.com/watch?v=${videoId}
 ${oEmbedTitle ? `Title: ${oEmbedTitle}` : ''}
 ${oEmbedAuthor ? `Author: ${oEmbedAuthor}` : ''}
-Mode: ${mode}`;
+Mode: ${mode}
+
+${transcriptSnippet ? `VERIFIED VIDEO TRANSCRIPT:\n${transcriptSnippet}` : ''}`;
 
     const parsedResult = await generateJSONWithProvider({
       systemPrompt,
