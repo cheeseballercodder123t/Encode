@@ -1,4 +1,5 @@
 import { UploadedFileAsset } from './types';
+import firebaseConfig from '../firebase-applet-config.json';
 
 export interface DriveFileItem {
   id: string;
@@ -46,7 +47,11 @@ export async function requestDriveAccessToken(clientId?: string): Promise<string
   await loadGsiScript();
 
   return new Promise((resolve, reject) => {
-    const effectiveClientId = clientId || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+    const effectiveClientId = 
+      clientId || 
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 
+      (firebaseConfig as any).oAuthClientId || 
+      '';
     
     if (!effectiveClientId) {
       // Prompt user for token or manual client ID if not hardcoded

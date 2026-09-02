@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 
+// Allow up to 60s for multi-stage schema generation on Vercel
+export const maxDuration = 60;
+
 // Structured visual configurations per template type
 const visualDataSchema = {
   type: Type.OBJECT,

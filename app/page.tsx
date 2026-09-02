@@ -98,6 +98,7 @@ import { AnkiExportModal } from '@/components/AnkiExportModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
+import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { GitCompare, WifiOff, BarChart2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { PreSessionConfidenceModal } from '@/components/PreSessionConfidenceModal';
@@ -1465,7 +1466,7 @@ export default function DeepEncodeApp() {
         )}
 
         {/* ------------------------------------------------------------- */}
-        {/* STATE 1: RAW NOTES INPUT + MULTIMODAL UPLOADER + YOUTUBE      */}
+        {/* STATE 1: ZEN LAUNCHPAD (COMMAND CENTER)                      */}
         {/* ------------------------------------------------------------- */}
         {appState === 'input' && (
           <motion.div
@@ -1474,397 +1475,77 @@ export default function DeepEncodeApp() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full flex flex-col gap-6"
           >
-            {/* Top Source Tabs: Text Notes vs PDF/Image vs YouTube Lecture */}
-            <div className="flex bg-[#0F111A] p-1.5 rounded-xl border border-slate-800 shadow-xl">
+            {/* Unified Zen Launchpad (Inputs, Mode, Studio Tuning & Inspiration Chips) */}
+            <ZenLaunchpad
+              notes={rawNotes}
+              setNotes={setRawNotes}
+              mode={encodingMode}
+              setMode={setEncodingMode}
+              sourceType={activeTab}
+              setSourceType={setActiveTab}
+              selectedFile={uploadedFile}
+              onFileLoaded={(file) => setUploadedFile(file)}
+              youtubeUrl={youtubeUrl}
+              setYoutubeUrl={setYoutubeUrl}
+              enableDeepResearch={enableDeepResearch}
+              setEnableDeepResearch={setEnableDeepResearch}
+              enableGuidedPath={enableGuidedPath}
+              setEnableGuidedPath={setEnableGuidedPath}
+              interleaveMode={interleaveMode}
+              setInterleaveMode={setInterleaveMode}
+              onGenerate={handleInitiateGenerate}
+              isLoading={false}
+            />
+
+            {/* Quick Diagnostic Power Tools */}
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <span className="text-[11px] font-semibold text-slate-500 mr-1">
+                Deep Diagnostics:
+              </span>
               <button
                 type="button"
-                onClick={() => setActiveTab('text')}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                  activeTab === 'text'
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
-                }`}
+                onClick={handleAuditPrerequisites}
+                disabled={(!rawNotes.trim() && !uploadedFile) || isAuditingPrereq}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                title="Concept Prerequisites Check: Diagnoses background fundamentals you need before tackling this topic"
               >
-                <BookOpen className="w-4 h-4" />
-                <span>Text Notes / Chapter</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>{isAuditingPrereq ? 'Auditing...' : 'Check Prerequisites'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setActiveTab('file')}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                  activeTab === 'file'
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
-                }`}
+                onClick={handleLaunchPretest}
+                disabled={(!rawNotes.trim() && !uploadedFile) || isLoadingPretest}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-rose-500/40 text-rose-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                title="Pre-Testing Effect (Productive Failure): 3-question diagnostic failure drill before learning"
               >
-                <FileText className="w-4 h-4" />
-                <span>PDF Slides & Notes</span>
-                {uploadedFile && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                )}
+                <Zap className="w-3.5 h-3.5 text-rose-400" />
+                <span>{isLoadingPretest ? 'Generating...' : 'Pre-Test Drill'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setActiveTab('youtube')}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                  activeTab === 'youtube'
-                    ? 'bg-red-600 text-white shadow-md shadow-red-600/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
-                }`}
+                onClick={handleSegregateNotes}
+                disabled={(!rawNotes.trim() && !uploadedFile) || isSegregating}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                title="Concept vs Fact Segregator & RemNote: 4-Quadrant Matrix + Cloze Optimizer"
               >
-                <Video className="w-4 h-4" />
-                <span>YouTube Lecture URL</span>
-                <span className="px-1.5 py-0.2 bg-red-500/30 text-red-200 text-[9px] font-black rounded uppercase">
-                  Timestamped
-                </span>
-              </button>
-            </div>
-
-            {/* Cognitive Mode Switcher: Conceptual vs Memorization Heavy */}
-            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-3 flex flex-col sm:flex-row gap-3 shadow-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setEncodingMode('conceptual');
-                  sound.playBeep(520, 'sine', 0.08);
-                }}
-                className={`flex-1 p-4 rounded-lg border text-left transition-all ${
-                  encodingMode === 'conceptual'
-                    ? 'bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
-                    : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Brain className="w-4 h-4 text-indigo-400" />
-                  <span className="font-bold text-xs">Deep Conceptual & Mechanism Mode</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  First Principles, Elaborative Interrogation, Paivio Dual Coding & Analogical Transfer for complex theories.
-                </p>
+                <SplitSquareVertical className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{isSegregating ? 'Segregating...' : 'Segregate & RemNote'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  setEncodingMode('memorization');
-                  sound.playBeep(650, 'sine', 0.08);
-                }}
-                className={`flex-1 p-4 rounded-lg border text-left transition-all ${
-                  encodingMode === 'memorization'
-                    ? 'bg-amber-600/20 border-amber-500 text-white shadow-lg shadow-amber-500/10'
-                    : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#141724]'
-                }`}
+                onClick={handleRoastNotes}
+                disabled={(!rawNotes.trim() && !uploadedFile) || isRoasting}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-orange-500/40 text-orange-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                title="Strict Professor Audit: Call out fallacies, hand-waving, and missing gaps before encoding"
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <Hash className="w-4 h-4 text-amber-400" />
-                  <span className="font-bold text-xs">Rote & Mnemonic Memorization Mode</span>
-                  <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 text-[9px] font-black rounded uppercase">
-                    High-Yield
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  Miller&apos;s Chunking, Phonetic Pegs, Memory Palace & 2x2 Contrast Grids for Periodic Table, Acids, Drugs & Anatomy.
-                </p>
+                <Flame className="w-3.5 h-3.5 text-orange-400" />
+                <span>{isRoasting ? 'Auditing...' : 'Roast Notes'}</span>
               </button>
             </div>
-
-            {/* Cognitive Features Bar: Deep Research Context Fetcher & Miller's Law Guided Path */}
-            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              {/* Deep Research Toggle */}
-              <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={enableDeepResearch}
-                  onChange={(e) => setEnableDeepResearch(e.target.checked)}
-                  className="mt-0.5 sm:mt-0 w-4 h-4 accent-amber-500 rounded cursor-pointer"
-                />
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
-                    <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Deep Research / Prerequisite Context Grounding</span>
-                    <span className="px-1.5 py-0.2 bg-amber-500/20 text-amber-300 text-[9px] font-mono rounded">
-                      Google Grounded
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Detects omitted foundational mechanisms in raw notes and integrates prerequisite context.
-                  </p>
-                </div>
-              </label>
-
-              {/* Guided Path Adaptive Chunking Toggle */}
-              <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-4">
-                <input
-                  type="checkbox"
-                  checked={enableGuidedPath || wordCount > 900}
-                  onChange={(e) => setEnableGuidedPath(e.target.checked)}
-                  className="mt-0.5 sm:mt-0 w-4 h-4 accent-indigo-500 rounded cursor-pointer"
-                />
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
-                    <Compass className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Miller&apos;s Law Guided Path (Adaptive Chunking)</span>
-                    {wordCount > 900 && (
-                      <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 text-[9px] font-mono rounded">
-                        Auto-Suggested ({wordCount} words)
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Decomposes massive textbook chapters into unlocked modules gated by Feynman checkpoints.
-                  </p>
-                </div>
-              </label>
-
-              {/* Interleaved Template Switching Toggle */}
-              <label className="flex items-start sm:items-center gap-3 cursor-pointer select-none border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-4">
-                <input
-                  type="checkbox"
-                  checked={interleaveMode}
-                  onChange={(e) => setInterleaveMode(e.target.checked)}
-                  className="mt-0.5 sm:mt-0 w-4 h-4 accent-violet-500 rounded cursor-pointer"
-                />
-                <div>
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
-                    <Shuffle className="w-3.5 h-3.5 text-violet-400" />
-                    <span>Interleaved Template Switching</span>
-                    <span className="px-1.5 py-0.2 bg-violet-500/20 text-violet-300 text-[9px] font-mono rounded">
-                      Science
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    Alternates conceptual & memorization templates across stages for stronger cognitive transfer.
-                  </p>
-                </div>
-              </label>
-            </div>
-
-            {/* TAB CONTENT: 1. FILE UPLOAD */}
-            {activeTab === 'file' && (
-              <FileUploader
-                selectedFile={uploadedFile}
-                onFileLoaded={(file) => setUploadedFile(file)}
-              />
-            )}
-
-            {/* TAB CONTENT: 2. YOUTUBE URL INPUT */}
-            {activeTab === 'youtube' && (
-              <div className="bg-[#0F111A] rounded-xl shadow-2xl border border-red-500/30 overflow-hidden flex flex-col p-6 space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30">
-                      <Tv className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h2 className="font-bold text-white text-base">
-                        YouTube Video to Cognitive Schema Pipeline
-                      </h2>
-                      <p className="text-xs text-slate-400">
-                        Paste any lecture or video URL. Gemini will extract core timestamps and build interactive review checkpoints.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    YouTube Video URL:
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      value={youtubeUrl}
-                      onChange={(e) => setYoutubeUrl(e.target.value)}
-                      placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
-                      className="flex-1 rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleGenerate()}
-                      disabled={!youtubeUrl.trim()}
-                      className="px-6 py-3 bg-red-600 hover:bg-red-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-                    >
-                      <Play className="w-4 h-4 fill-white" />
-                      <span>Encode Video (+120 XP)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 1-Click Video Presets */}
-                <div className="space-y-2 pt-2">
-                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Or Test Popular Educational Lectures (1-Click):
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {YOUTUBE_PRESETS.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setYoutubeUrl(preset.url);
-                          sound.playBeep(550 + idx * 60, 'triangle', 0.08);
-                        }}
-                        className="flex items-center gap-3 p-4 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 hover:border-red-500/40 text-left transition-all group"
-                      >
-                        <span className="text-xl">{preset.icon}</span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-200 group-hover:text-red-300 truncate">
-                            {preset.title}
-                          </p>
-                          <span className="text-[10px] text-slate-500 font-mono">
-                            {preset.channel}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* TAB CONTENT: 3. TEXT NOTES INPUT */}
-            {activeTab !== 'youtube' && (
-              <>
-                {/* Presets Grid */}
-                <div className="bg-[#0F111A] rounded-xl border border-slate-800/90 p-5 shadow-xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
-                      <Flame className="w-4 h-4 text-amber-400" />
-                      {encodingMode === 'memorization' ? 'Memorization & Chemistry Presets (1-Click Test):' : 'Conceptual Presets (1-Click Test):'}
-                    </div>
-                    <span className="text-[10px] text-slate-500 font-mono">Cognitive Science Validated</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {(encodingMode === 'memorization' ? MEMORIZATION_PRESETS : CONCEPTUAL_PRESETS).map((preset, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => {
-                          setRawNotes(preset.notes);
-                          sound.playBeep(500 + idx * 70, 'triangle', 0.08);
-                        }}
-                        className="flex flex-col text-left p-4 rounded-lg bg-[#141724] hover:bg-[#1B1F2E] border border-slate-800 hover:border-indigo-500/40 transition-all group"
-                      >
-                        <span className="text-lg mb-1">{preset.icon}</span>
-                        <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors">
-                          {preset.title}
-                        </span>
-                        <span className="text-[10px] text-slate-500 mt-1 line-clamp-1">Click to auto-populate</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Input Card */}
-                <div className="bg-[#0F111A] rounded-xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col">
-                  <div className="p-6 border-b border-slate-800 bg-[#131622] flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <BookOpen className="w-5 h-5 text-indigo-400" />
-                      <h2 className="font-bold text-white text-base">
-                        {encodingMode === 'memorization'
-                          ? 'Paste Memorization Material or Supplemental Notes'
-                          : 'Paste Raw Study Notes, Textbook Chapter, or Lecture Summary'}
-                      </h2>
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-800/80 px-2.5 py-1 rounded">
-                      {wordCount > 0 ? `${wordCount} words` : 'Empty'}
-                    </span>
-                  </div>
-
-                  <div className="p-6 flex-1">
-                    <textarea
-                      value={rawNotes}
-                      onChange={(e) => setRawNotes(e.target.value)}
-                      placeholder={
-                        uploadedFile
-                          ? `[File attached: ${uploadedFile.name}] Add any specific focus instructions, focus chapters, or supplemental notes here...`
-                          : encodingMode === 'memorization'
-                            ? "Paste list of acids, periodic table groups, drug classifications, amino acids, or cranial nerves..."
-                            : "Paste raw lecture notes, medical mechanisms, algorithms, legal cases, or multi-thousand-word textbook chapter..."
-                      }
-                      className="w-full h-44 resize-none outline-none bg-transparent text-slate-200 placeholder:text-slate-600 text-base leading-relaxed font-serif"
-                    />
-                  </div>
-
-                  {/* Card Footer */}
-                  <div className="p-6 bg-[#0B0D14] border-t border-slate-800/90 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <Sparkles className="w-4 h-4 text-emerald-400" />
-                      <span>
-                        {uploadedFile 
-                          ? `Gemini 3.7 Flash will extract visual and textual data from ${uploadedFile.name}`
-                          : enableGuidedPath || wordCount > 900
-                            ? "Miller's Law Adaptive Guided Path will break this into chapter milestones"
-                            : encodingMode === 'memorization'
-                              ? 'AI generates chunking clusters, mnemonic pegs, and memory palace anchors'
-                              : 'AI generates 5 scaffolded active-encoding stages'}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
-                      {/* Concept Prerequisites Audit Button */}
-                      <button
-                        type="button"
-                        onClick={handleAuditPrerequisites}
-                        disabled={(!rawNotes.trim() && !uploadedFile) || isAuditingPrereq}
-                        className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-amber-300 text-xs font-bold rounded-lg border border-amber-500/40 shadow-sm transition-all cursor-pointer"
-                        title="Concept Prerequisites Check: Diagnoses background fundamentals you need before tackling this topic"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{isAuditingPrereq ? 'Auditing...' : 'Check Prerequisites'}</span>
-                      </button>
-
-                      {/* Pre-Testing Effect Button */}
-                      <button
-                        type="button"
-                        onClick={handleLaunchPretest}
-                        disabled={(!rawNotes.trim() && !uploadedFile) || isLoadingPretest}
-                        className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-rose-300 text-xs font-bold rounded-lg border border-rose-500/40 shadow-sm transition-all cursor-pointer"
-                        title="Pre-Testing Effect (Productive Failure): 3-question diagnostic failure drill before learning"
-                      >
-                        <Zap className="w-3.5 h-3.5 text-rose-400" />
-                        <span>{isLoadingPretest ? 'Generating...' : 'Pre-Test Drill'}</span>
-                      </button>
-
-                      {/* Concept vs Fact Segregator Button */}
-                      <button
-                        type="button"
-                        onClick={handleSegregateNotes}
-                        disabled={(!rawNotes.trim() && !uploadedFile) || isSegregating}
-                        className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-300 text-xs font-bold rounded-lg border border-cyan-500/40 shadow-sm transition-all cursor-pointer"
-                        title="Concept vs Fact Segregator & RemNote: 4-Quadrant Matrix + Cloze Optimizer"
-                      >
-                        <SplitSquareVertical className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>{isSegregating ? 'Segregating...' : 'Segregate & RemNote'}</span>
-                      </button>
-
-                      {/* Roast My Notes Button */}
-                      <button
-                        type="button"
-                        onClick={handleRoastNotes}
-                        disabled={(!rawNotes.trim() && !uploadedFile) || isRoasting}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 hover:from-amber-500 hover:to-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider rounded-lg border border-orange-500/50 shadow-md shadow-orange-600/20 transition-all cursor-pointer group"
-                        title="Strict Professor Audit: Call out fallacies, hand-waving, and missing gaps before encoding"
-                      >
-                        <Flame className="w-3.5 h-3.5 text-amber-200 group-hover:scale-110 transition-transform" />
-                        <span>{isRoasting ? 'Auditing...' : 'Roast Notes'}</span>
-                      </button>
-
-                      {/* Primary Encode Button */}
-                      <button
-                        onClick={handleInitiateGenerate}
-                        disabled={!rawNotes.trim() && !uploadedFile}
-                        className="flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider rounded-lg border border-indigo-500/50 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
-                      >
-                        {enableGuidedPath || wordCount > 900 ? 'Architect Guided Path (+150 XP)' : 'Architect Schema (+100 XP)'}
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
 
             {/* Cognitive framework explanations */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">

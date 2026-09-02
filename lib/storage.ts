@@ -97,8 +97,8 @@ export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
     
     return capped;
   } catch (e) {
-    console.error('Failed to save schema', e);
-    return [];
+    console.error('Failed to save schema to localStorage, keeping in-memory state', e);
+    return schemaCache.get('schemas') || [schema];
   }
 }
 
