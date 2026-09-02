@@ -95,6 +95,7 @@ import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
 import { AnkiExportModal } from '@/components/AnkiExportModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
+import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { GitCompare } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -1764,10 +1765,16 @@ export default function DeepEncodeApp() {
               {/* Stage Header */}
               <div className="p-6 border-b border-slate-800 bg-[#131622] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded">
                       {currentActivity.framework}
                     </span>
+                    {currentActivity.templateType && (
+                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded flex items-center gap-1">
+                        <Eye className="w-3 h-3 text-purple-400" />
+                        <span>{currentActivity.templateType.replace(/_/g, ' ')}</span>
+                      </span>
+                    )}
                     <span className="text-xs text-slate-400 font-mono">
                       Goal: {currentActivity.cognitiveGoal}
                     </span>
@@ -1830,6 +1837,15 @@ export default function DeepEncodeApp() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+
+                {/* Dynamic Visual Template Model */}
+                <StageVisualRenderer
+                  activity={currentActivity}
+                  field1={field1}
+                  field2={field2}
+                  field3={field3}
+                  selectedPreset={selectedPreset}
+                />
 
                 {/* Optional Preset Pills (e.g. Analogy Domain choices, Chunk categories) */}
                 {currentActivity.scaffold.presetOptions && currentActivity.scaffold.presetOptions.length > 0 && (

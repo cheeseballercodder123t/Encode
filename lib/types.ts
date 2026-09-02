@@ -58,6 +58,42 @@ export interface ActivityScaffold {
   exampleAnswer: string;
 }
 
+export interface ActivityVisualData {
+  // Flowchart & Causal nodes
+  nodes?: { id: string; label: string; subtext?: string; type?: 'input' | 'mechanism' | 'outcome' | 'danger' }[];
+  
+  // Analogy cross-mappings
+  analogyMappings?: { sourceElement: string; targetElement: string; explanation?: string }[];
+  
+  // 2x2 Contrast Grid / Disambiguation Matrix
+  contrastMatrix?: {
+    axisX?: string;
+    axisY?: string;
+    quadrants?: { title: string; items: string[]; trapWarning?: string }[];
+  };
+
+  // Method of Loci / Memory Palace
+  palaceRooms?: { roomName: string; itemPlaced: string; vividSensoryHook: string; locusNumber: number }[];
+
+  // Taxonomic Chunking Buckets (Miller's Law)
+  chunkBuckets?: { bucketName: string; items: string[]; colorHint?: string }[];
+
+  // Acronym & Phonetic Pegs
+  acronymLetters?: { letter: string; word: string; mnemonicCue?: string }[];
+
+  // Process / Cycle / State Machine steps
+  flowSteps?: { stepNumber: number; title: string; mechanism?: string; visualIcon?: string }[];
+
+  // Concept Mind Tree / Hierarchy
+  hierarchyTree?: { rootNode: string; branches: { branchName: string; subItems: string[] }[] };
+
+  // Boundary condition gauges & failure envelopes
+  boundaryGauges?: { variable: string; normalRange: string; extremeCase: string; breakdownResult: string }[];
+
+  // Formula & Spatial decomposition
+  formulaComponents?: { symbol: string; meaning: string; role: 'variable' | 'constant' | 'operator' | 'state' }[];
+}
+
 export interface Activity {
   id: string;
   stageNumber: number;
@@ -69,6 +105,7 @@ export interface Activity {
   templateType: string;
   prompt: string;
   scaffold: ActivityScaffold;
+  visualData?: ActivityVisualData;
   researchContext?: ResearchContextItem;
   videoTimestamp?: VideoTimestamp;
 }
