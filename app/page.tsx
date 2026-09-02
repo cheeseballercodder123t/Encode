@@ -99,6 +99,7 @@ import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModa
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
+import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { GitCompare, WifiOff, BarChart2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { PreSessionConfidenceModal } from '@/components/PreSessionConfidenceModal';
@@ -259,6 +260,7 @@ export default function DeepEncodeApp() {
   // Feature Toggles
   const [enableDeepResearch, setEnableDeepResearch] = useState(true);
   const [enableGuidedPath, setEnableGuidedPath] = useState(false);
+  const [strictnessLevel, setStrictnessLevel] = useState<'sherpa' | 'feynman' | 'viva'>('feynman');
 
   // Schema state
   const [topicSummary, setTopicSummary] = useState('');
@@ -427,7 +429,7 @@ export default function DeepEncodeApp() {
             sound.playSuccess();
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to parse share parameter on load:', err);
       }
     }, 0);
@@ -951,6 +953,7 @@ export default function DeepEncodeApp() {
           field3Value: field3,
           expertCompletion: currentActivity.visualData?.generationChallenge?.expertCompletion || currentActivity.scaffold.exampleAnswer,
           premisePrompt: currentActivity.visualData?.generationChallenge?.premisePrompt,
+          strictnessLevel,
           settings: aiSettings,
         }),
       });
@@ -1619,16 +1622,16 @@ export default function DeepEncodeApp() {
           </motion.div>
         )}
 
-        {/* ------------------------------------------------------------- */}
-        {/* STATE 3: INTERACTIVE GAMIFIED ENCODING WORKOUT               */}
+{/* ------------------------------------------------------------- */}
+        {/* STATE 3: THE 3-ZONE STUDIO WORKBENCH (CRUCIBLE)              */}
         {/* ------------------------------------------------------------- */}
         {appState === 'encoding' && currentActivity && (
           <motion.div
             key={`stage-${currentActivity.id}`}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="w-full flex flex-col gap-6"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="w-full flex flex-col gap-4"
           >
             {/* Guided Path Roadmap (if Guided Path mode is active) */}
             {isGuidedPathMode && guidedModules.length > 0 && (
@@ -1642,428 +1645,37 @@ export default function DeepEncodeApp() {
               />
             )}
 
-            {/* Embedded YouTube Player with clickable timestamp anchors (if YouTube mode) */}
-            {youtubeData && (
-              <YouTubePlayerEmbed
-                youtubeData={youtubeData}
-                activeTimestamp={currentActivity.videoTimestamp}
-              />
-            )}
-
-            {/* Stage Progress Bar & Combo Header */}
-            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-4 shadow-xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  {activities.map((act, index) => {
-                    const isCompleted = index < currentActivityIndex;
-                    const isCurrent = index === currentActivityIndex;
-                    return (
-                      <div
-                        key={act.id}
-                        className={`h-2.5 rounded-full transition-all duration-300 ${
-                          isCompleted
-                            ? 'w-6 bg-emerald-500 shadow-sm shadow-emerald-500/50'
-                            : isCurrent
-                            ? 'w-10 bg-indigo-500 shadow-md shadow-indigo-500/50'
-                            : 'w-4 bg-slate-800'
-                        }`}
-                        title={`Stage ${index + 1}: ${act.title}`}
-                      />
-                    );
-                  })}
-                </div>
-                <span className="text-xs font-bold text-slate-400 ml-2">
-                  Stage {currentActivityIndex + 1} of {activities.length}
-                </span>
-              </div>
-
-              {/* Combo multiplier indicator */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-lg text-xs font-bold font-mono">
-                  <Flame className="w-3.5 h-3.5 fill-amber-400" />
-                  {combo}x STREAK
-                </div>
-              </div>
-            </div>
-
-            {/* Deep Research Badge (if prerequisite context was added for this stage or topic) */}
+            {/* Deep Research Badge (if prerequisite context was added) */}
             {currentActivity.researchContext && (
               <DeepResearchBadge context={currentActivity.researchContext} />
             )}
 
-            {/* Stage Main Scaffold Workspace Card */}
-            <div className="bg-[#0F111A] rounded-xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col">
-              
-              {/* Stage Header */}
-              <div className="p-6 border-b border-slate-800 bg-[#131622] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded">
-                      {currentActivity.framework}
-                    </span>
-                    {currentActivity.templateType && (
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded flex items-center gap-1">
-                        <Eye className="w-3 h-3 text-purple-400" />
-                        <span>{currentActivity.templateType.replace(/_/g, ' ')}</span>
-                      </span>
-                    )}
-                    <span className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-emerald-400" />
-                      <span>Generation Effect</span>
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">
-                      Goal: {currentActivity.cognitiveGoal}
-                    </span>
-                  </div>
-                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    <span>{currentActivity.stageNumber}. {currentActivity.title}</span>
-                    {currentActivity.videoTimestamp && (
-                      <span className="px-2 py-0.5 bg-red-600/20 border border-red-500/30 text-red-300 text-xs font-mono font-bold rounded-md">
-                        ▶ {currentActivity.videoTimestamp.formatted}
-                      </span>
-                    )}
-                  </h2>
-                </div>
-
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <button
-                    onClick={() => setShowExample(!showExample)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-[#1A1D2B] hover:bg-[#23273A] border border-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                  >
-                    <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
-                    {showExample ? 'Hide AI Example' : 'See AI Example'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                
-                {/* Target Source Fact / Context Snippet */}
-                <div className="p-4 bg-[#141724] border-l-4 border-indigo-500 rounded-r-xl text-slate-300 text-xs font-serif leading-relaxed italic">
-                  <span className="font-sans font-bold text-[10px] text-indigo-400 uppercase not-italic block mb-1">
-                    Target Concept Extract:
-                  </span>
-                  &ldquo;{currentActivity.contextSnippet}&rdquo;
-                </div>
-
-                {/* Overarching Guiding Prompt */}
-                <div className="text-slate-200 text-sm font-medium leading-relaxed bg-indigo-950/20 p-4 rounded-xl border border-indigo-800/40">
-                  <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider mb-1">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Encoding Challenge
-                  </div>
-                  {currentActivity.prompt}
-                </div>
-
-                {/* AI Example Preview Accordion */}
-                <AnimatePresence>
-                  {showExample && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="p-4 bg-amber-500/5 border border-amber-500/30 rounded-xl text-amber-200 text-xs font-serif leading-relaxed">
-                        <span className="font-sans font-bold text-[10px] text-amber-400 uppercase block mb-1">
-                          Exemplary Encoding Archetype:
-                        </span>
-                        {currentActivity.scaffold.exampleAnswer}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Dynamic Visual Template Model */}
-                <StageVisualRenderer
-                  activity={currentActivity}
-                  field1={field1}
-                  field2={field2}
-                  field3={field3}
-                  selectedPreset={selectedPreset}
-                />
-
-                {/* Optional Preset Pills (e.g. Analogy Domain choices, Chunk categories) */}
-                {currentActivity.scaffold.presetOptions && currentActivity.scaffold.presetOptions.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                      Choose or Adapt a Domain Anchor:
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {currentActivity.scaffold.presetOptions.map((opt, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setSelectedPreset(opt);
-                            if (!field1) setField1(opt);
-                            sound.playBeep(600 + idx * 50, 'triangle', 0.08);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                            selectedPreset === opt
-                              ? 'bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-500/20'
-                              : 'bg-[#141724] border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
-                          }`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Interactive Scaffold Fields */}
-                <div className="space-y-5 pt-2">
-                  
-                  {/* Field 1 */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center justify-between">
-                      <span>{currentActivity.scaffold.field1Label}</span>
-                      <span className="text-[10px] text-slate-500 font-mono">Step 1 of 2</span>
-                    </label>
-                    <div className="relative">
-                      {currentActivity.scaffold.field1Prefix && (
-                        <span className="absolute left-3.5 top-3.5 text-xs text-slate-500 font-mono select-none">
-                          {currentActivity.scaffold.field1Prefix}
-                        </span>
-                      )}
-                      <textarea
-                        ref={field1Ref as any}
-                        value={field1}
-                        onChange={(e) => setField1(e.target.value)}
-                        placeholder={currentActivity.scaffold.field1Placeholder}
-                        rows={2}
-                        className={`w-full p-3 bg-[#141724] border border-slate-800 rounded-xl text-slate-200 placeholder:text-slate-600 text-sm leading-relaxed outline-none focus:border-indigo-500 transition-colors font-serif resize-none ${
-                          currentActivity.scaffold.field1Prefix ? 'pl-24' : ''
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Field 2 */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center justify-between">
-                      <span>{currentActivity.scaffold.field2Label}</span>
-                      <span className="text-[10px] text-slate-500 font-mono">Step 2 of 2</span>
-                    </label>
-                    <div className="relative">
-                      {currentActivity.scaffold.field2Prefix && (
-                        <span className="absolute left-3.5 top-3.5 text-xs text-slate-500 font-mono select-none">
-                          {currentActivity.scaffold.field2Prefix}
-                        </span>
-                      )}
-                      <textarea
-                        value={field2}
-                        onChange={(e) => setField2(e.target.value)}
-                        placeholder={currentActivity.scaffold.field2Placeholder}
-                        rows={3}
-                        className={`w-full p-3 bg-[#141724] border border-slate-800 rounded-xl text-slate-200 placeholder:text-slate-600 text-sm leading-relaxed outline-none focus:border-purple-500 transition-colors font-serif resize-none ${
-                          currentActivity.scaffold.field2Prefix ? 'pl-24' : ''
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Optional Field 3 */}
-                  {currentActivity.scaffold.field3Label && (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-emerald-300 uppercase tracking-wider block">
-                        {currentActivity.scaffold.field3Label}
-                      </label>
-                      <input
-                        type="text"
-                        value={field3}
-                        onChange={(e) => setField3(e.target.value)}
-                        placeholder={currentActivity.scaffold.field3Placeholder || ''}
-                        className="w-full p-3 bg-[#141724] border border-slate-800 rounded-xl text-slate-200 placeholder:text-slate-600 text-sm outline-none focus:border-emerald-500 transition-colors font-serif"
-                      />
-                    </div>
-                  )}
-
-                </div>
-
-                {/* Socratic Feynman AI Review Section (Infinite Checks + Error Analysis) */}
-                <div className="pt-2 space-y-3">
-                  {feynmanResult ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`p-4 rounded-xl border space-y-2.5 ${
-                        feynmanResult.grade === 'mastered'
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                          : feynmanResult.grade === 'good'
-                          ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-200'
-                          : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Brain className="w-4 h-4 text-indigo-400" />
-                          <span className="font-bold text-xs uppercase tracking-wider">
-                            Feynman AI Evaluation ({feynmanResult.score}/100)
-                          </span>
-                          <span className="px-2 py-0.2 text-[9px] font-black rounded uppercase bg-black/40">
-                            {feynmanResult.grade.replace('_', ' ')}
-                          </span>
-                          {stageCheckCount > 0 && (
-                            <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 text-[9px] font-mono rounded">
-                              Check #{stageCheckCount}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-amber-400">
-                            +{feynmanResult.xpBonus} XP
-                          </span>
-                          {/* Infinite Re-check Button */}
-                          <button
-                            type="button"
-                            onClick={handleCheckAnswer}
-                            disabled={isEvaluating || (!field1.trim() && !field2.trim())}
-                            className="flex items-center gap-1 px-2.5 py-1 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-200 text-[11px] font-bold rounded-lg transition-all disabled:opacity-40 cursor-pointer"
-                            title="Re-check this stage with Feynman AI (unlimited)"
-                          >
-                            {isEvaluating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                            <span>Re-Check</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <p className="text-xs leading-relaxed font-serif">
-                        {feynmanResult.feedback}
-                      </p>
-
-                      {feynmanResult.depthAlert && (
-                        <div className="text-[11px] text-amber-300 font-sans flex items-center gap-1.5 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                          <span>{feynmanResult.depthAlert}</span>
-                        </div>
-                      )}
-
-                      {/* Targeted Error Analysis Callout */}
-                      {(feynmanResult.errorAnalysis || stageErrorAnalysis) && (
-                        <div className="text-[11px] text-rose-300 font-sans flex items-start gap-2 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/30">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-400 mt-0.5" />
-                          <div>
-                            <span className="font-bold text-rose-200 uppercase tracking-wider text-[10px] block">Error-Based Learning Gap:</span>
-                            <p>{feynmanResult.errorAnalysis || stageErrorAnalysis}</p>
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  ) : (
-                    <div className="flex items-center justify-between p-3 bg-[#121522] border border-slate-800 rounded-xl">
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <Brain className="w-4 h-4 text-purple-400" />
-                        <span>Test your answer for the <em>Illusion of Explanatory Depth</em></span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCheckAnswer}
-                        disabled={isEvaluating || (!field1.trim() && !field2.trim())}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 text-xs font-bold rounded-lg transition-all disabled:opacity-40 cursor-pointer"
-                      >
-                        {isEvaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                        {isEvaluating ? 'Assessing Depth...' : 'Check with Feynman AI'}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Confidence-Weighted Response Slider */}
-                  {(field1.trim() || field2.trim()) && (
-                    <div className="p-3 bg-[#0B0D14] border border-slate-800/80 rounded-xl space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-                          <Star className="w-3 h-3 text-amber-400" />
-                          <span>Confidence in this Deduction:</span>
-                        </span>
-                        <span className="font-mono font-bold text-amber-300 text-xs">{stageConfidence}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        step="5"
-                        value={stageConfidence}
-                        onChange={e => setStageConfidence(Number(e.target.value))}
-                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
-                      />
-                    </div>
-                  )}
-
-                  {/* Meta-Reflection Prompt (Consolidation) */}
-                  {(field1.trim() || field2.trim()) && (
-                    <MetaReflectionPrompt
-                      stageTitle={currentActivity.title}
-                      savedReflection={stageReflection}
-                      onSave={refl => setStageReflection(refl)}
-                    />
-                  )}
-                </div>
-
-                {/* Real-time Semantic Depth & Keyword Match Meters */}
-                <div className="p-4 bg-[#0B0D14] border border-slate-800/80 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="w-full sm:w-1/2">
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        Semantic Encoding Depth
-                      </span>
-                      <span className="font-mono font-bold text-indigo-400 text-xs">{semanticDepth}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300"
-                        style={{ width: `${semanticDepth}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="w-full sm:w-1/2">
-                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] block mb-1.5">
-                      Active Keyword Coverage ({matchedKeywords.length}/{currentActivity.keywords.length})
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {currentActivity.keywords.map((kw, i) => {
-                        const isMatched = matchedKeywords.some(m => m.toLowerCase() === kw.toLowerCase());
-                        return (
-                          <span
-                            key={i}
-                            className={`px-2 py-0.5 text-[10px] rounded font-mono transition-colors ${
-                              isMatched
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold'
-                                : 'bg-slate-800/60 text-slate-500 border border-slate-800'
-                            }`}
-                          >
-                            {isMatched ? '✓ ' : ''}{kw}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Stage Footer Controls */}
-              <div className="p-5 bg-[#0B0D14] border-t border-slate-800/90 flex items-center justify-between">
-                <button
-                  onClick={handlePreviousActivity}
-                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                >
-                  {currentActivityIndex === 0 ? 'Back to Input' : 'Previous Stage'}
-                </button>
-
-                <button
-                  onClick={handleNextActivity}
-                  disabled={!field1.trim() || !field2.trim()}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider rounded-lg border border-indigo-500/50 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
-                >
-                  {currentActivityIndex === activities.length - 1 ? 'Lock In & Synthesize (+200 XP)' : 'Next Stage (+150 XP)'}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-
-            </div>
+            {/* 3-Zone Workbench: Zone 1 (Source), Zone 2 (Forge), Zone 3 (RemNote & Strictness) */}
+            <StudioWorkbench
+              activities={activities}
+              currentActivityIndex={currentActivityIndex}
+              setCurrentActivityIndex={setCurrentActivityIndex}
+              userResponses={userResponses}
+              field1={field1}
+              setField1={setField1}
+              field2={field2}
+              setField2={setField2}
+              field3={field3}
+              setField3={setField3}
+              selectedPreset={selectedPreset}
+              rawNotes={rawNotes}
+              uploadedFile={uploadedFile}
+              youtubeData={youtubeData}
+              topicSummary={topicSummary}
+              combo={combo}
+              strictnessLevel={strictnessLevel}
+              setStrictnessLevel={setStrictnessLevel}
+              onCheckAnswer={handleCheckAnswer}
+              isEvaluating={isEvaluating}
+              feynmanResult={feynmanResult}
+              onNextActivity={handleNextActivity}
+              onPreviousActivity={handlePreviousActivity}
+            />
           </motion.div>
         )}
 
@@ -2317,7 +1929,7 @@ export default function DeepEncodeApp() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        onSaved={(newSettings) => setAiSettings(newSettings)}
+        onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
       />
 
       {/* Saved Schemas History Drawer */}
@@ -2326,8 +1938,8 @@ export default function DeepEncodeApp() {
         onClose={() => setIsHistoryOpen(false)}
         schemas={savedSchemas}
         onSelectSchemaToResume={handleResumeSchema}
-        onStartDrill={(schema) => setActiveDrillSchema(schema)}
-        onShareSchema={(schema) => handleOpenStatelessShare(schema)}
+        onStartDrill={(schema: SavedSchema) => setActiveDrillSchema(schema)}
+        onShareSchema={(schema: SavedSchema) => handleOpenStatelessShare(schema)}
         onDeleteSchema={handleDeleteSchema}
         onClearAll={handleClearAllHistory}
         onOpenAuth={() => {
@@ -2341,7 +1953,7 @@ export default function DeepEncodeApp() {
         isOpen={!!activeDrillSchema}
         schema={activeDrillSchema}
         onClose={() => setActiveDrillSchema(null)}
-        onDrillComplete={(score) => {
+        onDrillComplete={(score: number) => {
           addXP(score >= 80 ? 100 : 50);
         }}
       />
@@ -2351,7 +1963,7 @@ export default function DeepEncodeApp() {
         isOpen={isInterleavingOpen}
         onClose={() => setIsInterleavingOpen(false)}
         savedSchemas={savedSchemas}
-        onAwardXP={(earnedXp) => addXP(earnedXp)}
+        onAwardXP={(earnedXp: number) => addXP(earnedXp)}
       />
 
       {/* Roast My Notes Strict Professor Modal */}
@@ -2441,7 +2053,7 @@ export default function DeepEncodeApp() {
         isOpen={isComparativeModalOpen}
         onClose={() => setIsComparativeModalOpen(false)}
         settings={aiSettings}
-        onOpenAnkiExport={(compReport) => {
+        onOpenAnkiExport={(compReport: any) => {
           setIsComparativeModalOpen(false);
           setIsAnkiExportOpen(true);
         }}
@@ -2451,7 +2063,7 @@ export default function DeepEncodeApp() {
       <PreSessionConfidenceModal
         isOpen={isConfidenceModalOpen}
         topicPreview={rawNotes.slice(0, 120) || (uploadedFile ? uploadedFile.name : '')}
-        onConfirm={(stars) => {
+        onConfirm={(stars: number) => {
           setPreSessionConfidence(stars);
           handleGenerate(stars);
         }}
@@ -2472,7 +2084,7 @@ export default function DeepEncodeApp() {
               ? activities[currentActivityIndex - 1].visualData?.generationChallenge?.premisePrompt || activities[currentActivityIndex - 1].title
               : undefined
           }
-          onConfirm={(latencyMs, summary) => {
+          onConfirm={(latencyMs: number, summary: string) => {
             setIsReadinessModalOpen(false);
             setUserResponses(prev => ({
               ...prev,
