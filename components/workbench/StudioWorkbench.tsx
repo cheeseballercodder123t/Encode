@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   BookOpen, 
@@ -22,8 +22,14 @@ import {
   Video, 
   CheckCircle2,
   SlidersHorizontal,
-  ExternalLink
+  ExternalLink,
+  Mic,
+  MicOff,
+  Eye,
+  EyeOff,
+  Palette
 } from 'lucide-react';
+import { SketchCanvas } from './SketchCanvas';
 import { Activity, StageResponse, UploadedFileAsset, YouTubeMetadata } from '@/lib/types';
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { YouTubePlayerEmbed } from '@/components/YouTubePlayerEmbed';
@@ -41,11 +47,11 @@ interface StudioWorkbenchProps {
   setCurrentActivityIndex: (idx: number) => void;
   userResponses: Record<string, StageResponse>;
   field1: string;
-  setField1: (v: string) => void;
+  setField1: (v: string | ((prev: string) => string)) => void;
   field2: string;
-  setField2: (v: string) => void;
+  setField2: (v: string | ((prev: string) => string)) => void;
   field3: string;
-  setField3: (v: string) => void;
+  setField3: (v: string | ((prev: string) => string)) => void;
   selectedPreset: string;
   rawNotes: string;
   uploadedFile: UploadedFileAsset | null;
@@ -88,8 +94,71 @@ export function StudioWorkbench({
   const [fluffStripperActive, setFluffStripperActive] = useState(false);
   const [copiedRemNote, setCopiedRemNote] = useState(false);
   const [mobileTab, setMobileTab] = useState<'source' | 'forge' | 'remnote'>('forge');
+  
+  // Hands-Free Spoken Feynman State
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Card Smoke Test (Cloze masking preview)
+  const [smokeTestActive, setSmokeTestActive] = useState(false);
+  const [revealedSmokeClozes, setRevealedSmokeClozes] = useState<Record<string, boolean>>({});
+
+  // Canvas Toggle
+  const [showSketchpad, setShowSketchpad] = useState(false);
 
   const currentActivity = activities[currentActivityIndex];
+
+  // Native Speech-to-Text handler
+  const toggleSpeechRecognition = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      playSound('pop');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Try Chrome or Safari.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        playSound('success');
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript.trim()) {
+          setField2((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.warn('Speech recognition start failed:', err);
+      setIsListening(false);
+    }
+  };
 
   // Live compiled RemNote Markdown for Zone 3
   const liveRemNote = useMemo(() => {
@@ -295,6 +364,20 @@ export function StudioWorkbench({
               selectedPreset={selectedPreset}
             />
 
+            {/* Optional Dual-Coding Sketchpad Toggle */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowSketchpad(!showSketchpad)}
+                className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span>{showSketchpad ? 'Hide Sketchpad' : 'Open Sketchpad (Dual Coding)'}</span>
+              </button>
+            </div>
+
+            {showSketchpad && <SketchCanvas />}
+
             {/* Scaffold Input 1 */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-indigo-300 uppercase tracking-wider block">
@@ -309,17 +392,37 @@ export function StudioWorkbench({
               />
             </div>
 
-            {/* Scaffold Input 2 */}
+            {/* Scaffold Input 2 with Mic Button */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-purple-300 uppercase tracking-wider block">
-                {currentActivity.scaffold.field2Label}
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-purple-300 uppercase tracking-wider block">
+                  {currentActivity.scaffold.field2Label}
+                </label>
+                
+                {/* Spoken Feynman Mic Button */}
+                <button
+                  type="button"
+                  onClick={toggleSpeechRecognition}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                    isListening
+                      ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-purple-300'
+                  }`}
+                  title="Speak your explanation out loud"
+                >
+                  {isListening ? <MicOff className="w-3 h-3 text-rose-400" /> : <Mic className="w-3 h-3 text-purple-400" />}
+                  <span>{isListening ? 'Listening (Tap to Stop)' : 'Spoken Feynman'}</span>
+                </button>
+              </div>
+
               <textarea
                 value={field2}
                 onChange={e => setField2(e.target.value)}
                 placeholder={currentActivity.scaffold.field2Placeholder}
                 rows={2}
-                className="w-full p-3 bg-[#141724] border border-slate-800 rounded-xl text-slate-200 placeholder:text-slate-600 text-xs leading-relaxed outline-none focus:border-purple-500 font-serif resize-none"
+                className={`w-full p-3 bg-[#141724] border rounded-xl text-slate-200 placeholder:text-slate-600 text-xs leading-relaxed outline-none font-serif resize-none transition-colors ${
+                  isListening ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-800 focus:border-purple-500'
+                }`}
               />
             </div>
 
@@ -473,21 +576,63 @@ export function StudioWorkbench({
               </div>
             )}
 
-            {/* Live RemNote Output Preview */}
+            {/* Live RemNote Output Preview & Card Smoke Test */}
             <div className="flex-1 flex flex-col space-y-2 overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-cyan-300 flex items-center gap-1">
                   <Layers className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Live RemNote Staging</span>
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono">
-                  {liveRemNote.cardCount} cards forged
-                </span>
+                
+                {/* Smoke Test Cloze Masking Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSmokeTestActive(!smokeTestActive);
+                    setRevealedSmokeClozes({});
+                    playSound('click');
+                  }}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors ${
+                    smokeTestActive
+                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Hide clozes to smoke-test your cards before copying"
+                >
+                  {smokeTestActive ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{smokeTestActive ? 'Clozes: Masked' : 'Smoke Test'}</span>
+                </button>
               </div>
 
-              {/* Live Markdown Code Box */}
+              {/* Live Preview Box with Cloze Masking Support */}
               <div className="flex-1 overflow-y-auto bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 font-mono text-[10px] text-cyan-200 leading-relaxed whitespace-pre-wrap select-all">
-                {liveRemNote.markdown || '// Start deducing stages to see your live RemNote hierarchy compile here...'}
+                {smokeTestActive && liveRemNote.markdown ? (
+                  liveRemNote.markdown.split(/(\{\{.*?\}\})/).map((part, i) => {
+                    if (part.startsWith('{{') && part.endsWith('}}')) {
+                      const inner = part.slice(2, -2);
+                      const isRevealed = revealedSmokeClozes[i];
+                      return (
+                        <span
+                          key={i}
+                          onClick={() => {
+                            setRevealedSmokeClozes(prev => ({ ...prev, [i]: !prev[i] }));
+                            playSound('pop');
+                          }}
+                          className={`cursor-pointer px-1 py-0.5 rounded border transition-colors ${
+                            isRevealed
+                              ? 'bg-emerald-950 border-emerald-500/40 text-emerald-300'
+                              : 'bg-amber-950/80 border-amber-500/50 text-amber-300 font-bold'
+                          }`}
+                        >
+                          {isRevealed ? inner : '[ ? ]'}
+                        </span>
+                      );
+                    }
+                    return <span key={i}>{part}</span>;
+                  })
+                ) : (
+                  liveRemNote.markdown || '// Start deducing stages to see your live RemNote hierarchy compile here...'
+                )}
               </div>
 
               {/* 1-Click Copy RemNote Button */}

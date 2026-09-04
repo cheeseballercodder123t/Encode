@@ -409,6 +409,15 @@ export default function DeepEncodeApp() {
     const timer = setTimeout(() => {
       try {
         const searchParams = new URLSearchParams(window.location.search);
+        
+        // Check for 1-Click Bookmarklet text input (?notes=... or ?text=...)
+        const rawNotesParam = searchParams.get('notes') || searchParams.get('text');
+        if (rawNotesParam) {
+          setRawNotes(decodeURIComponent(rawNotesParam));
+          setActiveTab('text');
+          sound.playSuccess();
+        }
+
         const shareParam = searchParams.get('share') || searchParams.get('data');
         if (shareParam) {
           const decoded = decompressSchemaFromUrl(shareParam);
