@@ -5,86 +5,42 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Brain,
   Sparkles,
-  ArrowRight,
-  CheckCircle,
-  BookOpen,
-  Loader2,
-  RefreshCcw,
-  Save,
   Volume2,
   VolumeX,
   Award,
   Zap,
   Layers,
-  Lightbulb,
   Eye,
-  GitMerge,
-  Copy,
-  Check,
-  FileText,
   Flame,
   Settings,
   History as HistoryIcon,
-  Play,
-  RotateCcw,
-  HelpCircle,
-  CheckCheck,
-  AlertCircle,
-  Hash,
-  Database,
-  Cloud,
-  User as UserIcon,
-  Video,
   Shuffle,
-  Compass,
-  Clock,
-  ExternalLink,
   ShieldCheck,
   SplitSquareVertical,
-  CheckCircle2,
-  Tv,
   Share2,
-  PenTool,
-  Star
+  Cloud,
+  GitCompare,
+  WifiOff,
+  BarChart2
 } from 'lucide-react';
-import { sound, playSound } from '@/lib/audio';
-import { 
-  Activity, 
-  ActivityScaffold, 
-  StageResponse, 
-  EncodingMode, 
+import { sound } from '@/lib/audio';
+import {
+  Activity,
+  StageResponse,
   SavedSchema,
   AISettings,
-  UploadedFileAsset,
-  GuidedPathModule,
-  YouTubeMetadata,
-  ResearchContextItem,
-  VideoTimestamp,
+  PrerequisitesReport,
+  PretestSession,
+  SegregationReport,
   RoastReport
 } from '@/lib/types';
-import { 
-  loadAISettings, 
-  loadSavedSchemas, 
-  saveSchemaToHistory, 
-  deleteSchemaFromHistory, 
-  clearAllSchemas,
-  DEFAULT_SETTINGS 
-} from '@/lib/storage';
-import { 
-  PrerequisitesReport, 
-  PretestSession, 
-  BlurtingEvaluation, 
-  SegregationReport 
-} from '@/lib/types';
-import { initIndexedDB, getAllSchemasFromIDB } from '@/lib/db';
+import { incrementModelCall } from '@/lib/storage';
 import { decompressSchemaFromUrl } from '@/lib/url-share';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { DrillModal } from '@/components/DrillModal';
-import { FileUploader } from '@/components/FileUploader';
 import { AuthModal } from '@/components/AuthModal';
 import { DeepResearchBadge } from '@/components/DeepResearchBadge';
-import { YouTubePlayerEmbed } from '@/components/YouTubePlayerEmbed';
 import { GuidedPathRoadmap } from '@/components/GuidedPathRoadmap';
 import { InterleavingDrillModal } from '@/components/InterleavingDrillModal';
 import RoastNotesModal from '@/components/RoastNotesModal';
@@ -96,216 +52,94 @@ import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
 import { AnkiExportModal } from '@/components/AnkiExportModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
-import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
-import { GitCompare, WifiOff, BarChart2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { PreSessionConfidenceModal } from '@/components/PreSessionConfidenceModal';
 import { ReadinessModal } from '@/components/ReadinessModal';
-import { MetaReflectionPrompt } from '@/components/MetaReflectionPrompt';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
-import { computeSuccessRate, getDifficultyLevel, getDifficultyLabel } from '@/lib/services/adaptiveDifficulty';
-import { incrementModelCall } from '@/lib/storage';
-
-type AppState = 'input' | 'loading' | 'encoding' | 'completed';
-type InputSourceTab = 'text' | 'file' | 'youtube';
-
-// Concept Presets
-const CONCEPTUAL_PRESETS = [
-  {
-    title: 'Biology: Action Potentials',
-    icon: '⚡',
-    notes: `Action potentials are rapid electrical signals used by neurons. 
-At resting potential (-70mV), Na+/K+ pumps maintain high K+ inside and high Na+ outside. 
-When a stimulus depolarizes the membrane to threshold (-55mV), voltage-gated Na+ channels open rapidly, causing Na+ influx (depolarization up to +40mV). 
-Next, Na+ channels inactivate and voltage-gated K+ channels open, allowing K+ efflux (repolarization). 
-The slow closure of K+ channels causes hyperpolarization before returning to resting state. Myelin sheaths enable saltatory conduction between Nodes of Ranvier.`
-  },
-  {
-    title: 'CS: TCP 3-Way Handshake & AIMD',
-    icon: '🌐',
-    notes: `TCP uses a 3-way handshake to establish a reliable connection between client and server before data transfer begins.
-Step 1: Client sends a SYN (Synchronize) packet with a random initial sequence number (ISN_c) to the server. Client enters SYN-SENT state.
-Step 2: Server receives SYN, allocates buffers, and replies with SYN-ACK packet containing its own sequence number (ISN_s) and ACK = ISN_c + 1. Server enters SYN-RECEIVED state.
-Step 3: Client sends an ACK packet with ACK = ISN_s + 1. Both endpoints are now in ESTABLISHED state.
-For Congestion Control, TCP uses AIMD (Additive Increase / Multiplicative Decrease). It increases congestion window by 1 MSS per RTT, but cuts the window in half upon packet loss.`
-  },
-  {
-    title: 'Psychology: Cognitive Dissonance',
-    icon: '🧠',
-    notes: `Leon Festinger's Cognitive Dissonance Theory states that when a person holds two contradictory beliefs, or their behavior conflicts with their belief, they experience an uncomfortable psychological tension called dissonance.
-Because dissonance is unpleasant, individuals are motivated to reduce it through three strategies:
-1. Changing the behavior (e.g. quit smoking).
-2. Changing the cognition/attitude (e.g. "smoking isn't actually that dangerous").
-3. Adding new consonant cognitions to justify the behavior (e.g. "smoking relieves my stress which keeps me healthy").`
-  },
-  {
-    title: 'Finance: Compound Interest & Risk',
-    icon: '📈',
-    notes: `Compound interest is the addition of interest to the principal sum of a loan or deposit, or in other words, 'interest on interest'. 
-The mathematical formula is A = P(1 + r/n)^(nt), where A is final amount, P is principal, r is annual interest rate, n is compounding frequency, and t is time.
-Over short horizons, linear growth dominates, but over long horizons, exponential compounding causes exponential acceleration. As n approaches infinity, A = P * e^(rt).`
-  }
-];
-
-// Memorization Presets
-const MEMORIZATION_PRESETS = [
-  {
-    title: 'Chemistry: 7 Strong Acids vs Weak Acids',
-    icon: '🧪',
-    notes: `The 7 Strong Acids dissociate completely in water (Ka >> 1):
-1. Hydrochloric Acid (HCl)
-2. Hydrobromic Acid (HBr)
-3. Hydroiodic Acid (HI)
-4. Nitric Acid (HNO3)
-5. Sulfuric Acid (H2SO4 - 1st proton)
-6. Perchloric Acid (HClO4)
-7. Chloric Acid (HClO3)
-
-Common Weak Acids that only partially dissociate:
-- Hydrofluoric acid (HF - despite being a halogen, strong H-F bond and high hydration enthalpy make it weak)
-- Acetic acid (CH3COOH)
-- Phosphoric acid (H3PO4)
-- Carbonic acid (H2CO3)`
-  },
-  {
-    title: 'Chemistry: Periodic Table Group 1 & 17 Trends',
-    icon: '⚛️',
-    notes: `Group 1 (Alkali Metals): Lithium (Li), Sodium (Na), Potassium (K), Rubidium (Rb), Cesium (Cs), Francium (Fr).
-- Valence: 1 electron in s-orbital (ns1).
-- Reactivity: Increases down the group as ionization energy decreases (larger atomic radius, shielding). React violently with water producing H2 gas and alkaline MOH.
-- Stored under mineral oil to prevent oxidation.
-
-Group 17 (Halogens): Fluorine (F), Chlorine (Cl), Bromine (Br), Iodine (I), Astatine (At).
-- Valence: 7 electrons (ns2 np5), highly electronegative oxidizers.
-- Physical state down group: F2 (pale yellow gas), Cl2 (green gas), Br2 (red-brown liquid), I2 (dark purple solid).
-- Reactivity decreases down the group.`
-  },
-  {
-    title: 'Biochemistry: 9 Essential Amino Acids',
-    icon: '🧬',
-    notes: `The 9 Essential Amino Acids that cannot be synthesized de novo by the human body:
-1. Phenylalanine (Phe / F) - Aromatic, precursor to Tyrosine, Dopamine, Epinephrine.
-2. Valine (Val / V) - Branched-Chain Amino Acid (BCAA), non-polar hydrophobic.
-3. Threonine (Thr / T) - Polar uncharged, hydroxyl group.
-4. Tryptophan (Trp / W) - Aromatic indole ring, precursor to Serotonin & Melatonin.
-5. Isoleucine (Ile / I) - Branched-Chain Amino Acid (BCAA).
-6. Methionine (Met / M) - Non-polar, contains sulfur, start codon (AUG).
-7. Histidine (His / H) - Positively charged basic, imidazole ring, buffer.
-8. Leucine (Leu / L) - Branched-Chain Amino Acid (BCAA), key trigger for mTOR protein synthesis.
-9. Lysine (Lys / K) - Positively charged basic, amine side chain.`
-  },
-  {
-    title: 'Medicine: 12 Cranial Nerves',
-    icon: '🩻',
-    notes: `The 12 Cranial Nerves and their primary functions:
-CN I: Olfactory (Sensory - Smell)
-CN II: Optic (Sensory - Vision)
-CN III: Oculomotor (Motor - Eye movement, pupil constriction)
-CN IV: Trochlear (Motor - Superior oblique eye muscle / down-and-in)
-CN V: Trigeminal (Both - Facial sensation, chewing/mastication muscles)
-CN VI: Abducens (Motor - Lateral rectus eye muscle / lateral gaze)
-CN VII: Facial (Both - Facial expression muscles, taste anterior 2/3 tongue)
-CN VIII: Vestibulocochlear (Sensory - Hearing & balance/vestibular)
-CN IX: Glossopharyngeal (Both - Taste posterior 1/3, swallowing, carotid baroreceptors)
-CN X: Vagus (Both - Parasympathetic innervation to heart, lungs, GI tract)
-CN XI: Accessory (Motor - Sternocleidomastoid & Trapezius / shoulder shrug)
-CN XII: Hypoglossal (Motor - Tongue movement)`
-  }
-];
-
-// YouTube Video Lecture Presets (1-Click Test)
-const YOUTUBE_PRESETS = [
-  {
-    title: '3Blue1Brown: Neural Networks & Backprop',
-    url: 'https://www.youtube.com/watch?v=aircAruvnKk',
-    channel: '3Blue1Brown',
-    icon: '🤖'
-  },
-  {
-    title: 'Khan Academy: Action Potentials & Gating',
-    url: 'https://www.youtube.com/watch?v=7EyhsOewnH4',
-    channel: 'Khan Academy',
-    icon: '⚡'
-  },
-  {
-    title: 'MIT OCW: TCP Congestion & Networking',
-    url: 'https://www.youtube.com/watch?v=kZX169bNn4M',
-    channel: 'MIT OpenCourseWare',
-    icon: '🌐'
-  },
-  {
-    title: 'Huberman Lab: Dopamine & Neuroplasticity',
-    url: 'https://www.youtube.com/watch?v=QmOF0crdyRU',
-    channel: 'Huberman Lab',
-    icon: '🧠'
-  }
-];
-
+import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
+import { useSession } from '@/hooks/useSession';
+import { useSettings } from '@/hooks/useSettings';
+import { useInputSource } from '@/hooks/useInputSource';
+import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
+import { CompletedSessionView } from '@/components/CompletedSessionView';
 export default function DeepEncodeApp() {
   const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud } = useAuth();
 
-  const [appState, setAppState] = useState<AppState>('input');
-  const [activeTab, setActiveTab] = useState<InputSourceTab>('text');
-  const [encodingMode, setEncodingMode] = useState<EncodingMode>('conceptual');
-  
-  // Input sources
-  const [rawNotes, setRawNotes] = useState('');
-  const [uploadedFile, setUploadedFile] = useState<UploadedFileAsset | null>(null);
-  const [youtubeUrl, setYoutubeUrl] = useState('');
+  // ─── Extracted state hooks ─────────────────────────────────────────────────
+  // Input sources & generation toggles (useInputSource)
+  const {
+    activeTab, setActiveTab,
+    rawNotes, setRawNotes,
+    uploadedFile, setUploadedFile,
+    youtubeUrl, setYoutubeUrl,
+    enableDeepResearch, setEnableDeepResearch,
+    enableGuidedPath, setEnableGuidedPath,
+    interleaveMode, setInterleaveMode,
+    strictnessLevel, setStrictnessLevel,
+    wordCount,
+  } = useInputSource();
 
-  // Feature Toggles
-  const [enableDeepResearch, setEnableDeepResearch] = useState(true);
-  const [enableGuidedPath, setEnableGuidedPath] = useState(false);
-  const [strictnessLevel, setStrictnessLevel] = useState<'sherpa' | 'feynman' | 'viva'>('feynman');
+  // AI settings, audio & connectivity (useSettings)
+  const {
+    aiSettings, setAiSettings,
+    soundMuted, toggleSound,
+    isOffline,
+  } = useSettings();
 
-  // Schema state
-  const [topicSummary, setTopicSummary] = useState('');
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [currentActivityIndex, setCurrentActivityIndex] = useState(0);
+  // The whole session flow — schema, progress, stage inputs & gamification
+  // (useSession: reducer-backed state hub)
+  const {
+    appState, setAppState,
+    encodingMode, setEncodingMode,
+    topicSummary, setTopicSummary,
+    activities, setActivities,
+    currentActivityIndex, setCurrentActivityIndex,
+    userResponses, setUserResponses,
+    isGuidedPathMode, setIsGuidedPathMode,
+    guidedModules, setGuidedModules,
+    currentModuleIndex, setCurrentModuleIndex,
+    youtubeData, setYoutubeData,
+    researchContexts, setResearchContexts,
+    field1, setField1,
+    field2, setField2,
+    field3, setField3,
+    selectedPreset,
+    feynmanResult, setFeynmanResult,
+    stageConfidence,
+    stageReflection,
+    stageCheckCount, setStageCheckCount,
+    stageErrorAnalysis, setStageErrorAnalysis,
+    xp, setXp,
+    combo, setCombo,
+    currentActivity,
+    matchedKeywords,
+    semanticDepth,
+    xpGainAnimation,
+    addXP,
+    loadStageInputs: applyStageInputs,
+    resetSession,
+    resumeSchema,
+    selectModule,
+    feynmanPass,
+  } = useSession();
 
-  // Guided Path Multi-Module state
-  const [isGuidedPathMode, setIsGuidedPathMode] = useState(false);
-  const [guidedModules, setGuidedModules] = useState<GuidedPathModule[]>([]);
-  const [currentModuleIndex, setCurrentModuleIndex] = useState(0);
+  // Saved schema history: localStorage + IndexedDB + cloud sync (useSchemaLibrary)
+  const {
+    savedSchemas,
+    saveSchema: saveSchemaToLibrary,
+    deleteSchema: deleteSchemaFromLibrary,
+    clearAll: clearAllSchemaLibrary,
+  } = useSchemaLibrary(saveSchemaToCloud, deleteSchemaFromCloud);
 
-  // YouTube pipeline state
-  const [youtubeData, setYoutubeData] = useState<YouTubeMetadata | null>(null);
-
-  // Deep Research Grounded Contexts
-  const [researchContexts, setResearchContexts] = useState<ResearchContextItem[]>([]);
-
-  // User input responses per stage
-  const [userResponses, setUserResponses] = useState<Record<string, StageResponse>>({});
-  
-  // Current active inputs
-  const [field1, setField1] = useState('');
-  const [field2, setField2] = useState('');
-  const [field3, setField3] = useState('');
-  const [selectedPreset, setSelectedPreset] = useState<string>('');
-
-  // Feynman Evaluator checking state
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [feynmanResult, setFeynmanResult] = useState<StageResponse['feynmanReview'] | null>(null);
-
-  // Gamification state
-  const [xp, setXp] = useState(0);
-  const [xpGainAnimation, setXpGainAnimation] = useState<number | null>(null);
-  const [combo, setCombo] = useState(1);
-  const [showExample, setShowExample] = useState(false);
-  const [soundMuted, setSoundMuted] = useState(false);
-  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
-
-  // Modals & Storage
-  const [aiSettings, setAiSettings] = useState<AISettings>(() => loadAISettings());
+  // Modal & transient UI state (kept local to the shell)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isInterleavingOpen, setIsInterleavingOpen] = useState(false);
-  const [savedSchemas, setSavedSchemas] = useState<SavedSchema[]>(() => loadSavedSchemas());
   const [activeDrillSchema, setActiveDrillSchema] = useState<SavedSchema | null>(null);
 
   // Concept Prerequisites (You Are Not Ready) State
@@ -341,7 +175,6 @@ export default function DeepEncodeApp() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [schemaToShare, setSchemaToShare] = useState<SavedSchema | null>(null);
   const [importedShareBanner, setImportedShareBanner] = useState<string | null>(null);
-  const [isOffline, setIsOffline] = useState(false);
 
   // New Metacognition & Science States
   const [isConfidenceModalOpen, setIsConfidenceModalOpen] = useState(false);
@@ -351,56 +184,20 @@ export default function DeepEncodeApp() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [endSessionReviewData, setEndSessionReviewData] = useState<EndSessionReviewData | null>(null);
   const [isLoadingEndSessionReview, setIsLoadingEndSessionReview] = useState(false);
-  const [interleaveMode, setInterleaveMode] = useState(false);
-  const [stageConfidence, setStageConfidence] = useState<number>(75);
-  const [stageReflection, setStageReflection] = useState<string>('');
-  const [stageCheckCount, setStageCheckCount] = useState<number>(0);
-  const [stageErrorAnalysis, setStageErrorAnalysis] = useState<string | null>(null);
+  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setIsOffline(!navigator.onLine);
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+
+  // Feynman Evaluator checking state
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   const field1Ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
+  // Load stage inputs into the active editor; opens the Readiness modal when
+  // the stage hasn't been confirmed yet (UI side effect stays in the shell).
   const loadStageInputs = (activityIndex: number, acts: Activity[], responses: Record<string, StageResponse>) => {
-    const act = acts[activityIndex];
-    if (act && responses[act.id]) {
-      const saved = responses[act.id];
-      setField1(saved.field1 || '');
-      setField2(saved.field2 || '');
-      setField3(saved.field3 || '');
-      setSelectedPreset(saved.selectedPreset || '');
-      setFeynmanResult(saved.feynmanReview || null);
-      setStageConfidence(saved.confidenceScore ?? 75);
-      setStageReflection(saved.reflection || '');
-      setStageCheckCount(saved.checkCount || 0);
-      setStageErrorAnalysis(saved.errorAnalysis || null);
-      if (!saved.readinessConfirmed) {
-        setIsReadinessModalOpen(true);
-      }
-    } else {
-      setField1('');
-      setField2('');
-      setField3('');
-      setSelectedPreset('');
-      setFeynmanResult(null);
-      setStageConfidence(75);
-      setStageReflection('');
-      setStageCheckCount(0);
-      setStageErrorAnalysis(null);
+    if (applyStageInputs(activityIndex, acts, responses)) {
       setIsReadinessModalOpen(true);
     }
-    setShowExample(false);
   };
 
   // Parse Stateless Shared Schema from URL query on Mount
@@ -444,22 +241,11 @@ export default function DeepEncodeApp() {
     }, 0);
 
     return () => clearTimeout(timer);
+    // All setters below are stable reducer/useState references; the effect
+    // intentionally runs once on mount to parse the share URL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Hydrate local-first Offline IndexedDB schemas on mount
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    initIndexedDB().then(async () => {
-      try {
-        const idbSchemas = await getAllSchemasFromIDB();
-        if (idbSchemas && idbSchemas.length > 0) {
-          setSavedSchemas(idbSchemas);
-        }
-      } catch (e) {
-        console.warn('IDB schemas load warning:', e);
-      }
-    }).catch(err => console.warn('IDB init error:', err));
-  }, []);
 
   // Concept Prerequisites (You Are Not Ready) Audit
   const handleAuditPrerequisites = async () => {
@@ -566,14 +352,6 @@ export default function DeepEncodeApp() {
     }
   };
 
-  // Toggle sound
-  const toggleSound = () => {
-    const nextState = !soundMuted;
-    setSoundMuted(nextState);
-    sound.enabled = !nextState;
-    if (!nextState) sound.playBeep(600, 'sine', 0.1);
-  };
-
   // Open Stateless Share Modal helper
   const handleOpenStatelessShare = (schema?: SavedSchema) => {
     const target: SavedSchema = schema || {
@@ -660,46 +438,6 @@ export default function DeepEncodeApp() {
     return { title: 'Passive Reader', level: 1, color: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' };
   }, [xp, cloudStats]);
 
-  const currentActivity = activities[currentActivityIndex];
-
-  // Auto-detect massive text for Guided Path hint
-  const wordCount = useMemo(() => {
-    return rawNotes.trim() ? rawNotes.trim().split(/\s+/).length : 0;
-  }, [rawNotes]);
-
-  // Check matched keywords in real-time
-  const matchedKeywords = useMemo(() => {
-    if (!currentActivity?.keywords) return [];
-    const combinedText = `${field1} ${field2} ${field3}`.toLowerCase();
-    return currentActivity.keywords.filter(kw => {
-      const cleanKw = kw.toLowerCase().trim();
-      return cleanKw.length > 1 && combinedText.includes(cleanKw);
-    });
-  }, [currentActivity, field1, field2, field3]);
-
-  // Real-time Semantic Depth score (0 to 100)
-  const semanticDepth = useMemo(() => {
-    let score = 0;
-    const len1 = field1.trim().length;
-    const len2 = field2.trim().length;
-    const len3 = field3.trim().length;
-
-    if (len1 > 10) score += 30;
-    if (len1 > 30) score += 15;
-    if (len2 > 10) score += 30;
-    if (len2 > 30) score += 10;
-    if (len3 > 5) score += 15;
-
-    const kwBonus = (matchedKeywords.length / (currentActivity?.keywords?.length || 1)) * 20;
-    return Math.min(100, Math.round(score + kwBonus));
-  }, [field1, field2, field3, matchedKeywords, currentActivity]);
-
-  // Award XP helper
-  const addXP = (amount: number) => {
-    setXp(prev => prev + amount);
-    setXpGainAnimation(amount);
-    setTimeout(() => setXpGainAnimation(null), 1800);
-  };
 
   useEffect(() => {
     if (appState === 'encoding') {
@@ -898,39 +636,12 @@ export default function DeepEncodeApp() {
   // Handle Feynman Checkpoint Pass in Guided Path
   const handleFeynmanPass = (modIdx: number, score: number, xpBonus: number, feedback: string) => {
     addXP(xpBonus);
-    setGuidedModules(prev => {
-      const updated = [...prev];
-      if (updated[modIdx]) {
-        updated[modIdx] = {
-          ...updated[modIdx],
-          completed: true,
-          feynmanCheckpoint: {
-            ...updated[modIdx].feynmanCheckpoint,
-            passed: true,
-            score,
-            feedback,
-          }
-        };
-      }
-      // Unlock next module
-      if (modIdx + 1 < updated.length) {
-        updated[modIdx + 1] = {
-          ...updated[modIdx + 1],
-          unlocked: true,
-        };
-      }
-      return updated;
-    });
+    feynmanPass(modIdx, score, feedback);
   };
 
   // Switch active module in Guided Path
   const handleSelectModule = (index: number) => {
-    if (!guidedModules[index] || !guidedModules[index].unlocked) return;
-    setCurrentModuleIndex(index);
-    const modActs = guidedModules[index].activities || [];
-    setActivities(modActs);
-    setCurrentActivityIndex(0);
-    loadStageInputs(0, modActs, userResponses);
+    selectModule(index);
     sound.playBeep(600, 'triangle', 0.1);
   };
 
@@ -1119,9 +830,7 @@ export default function DeepEncodeApp() {
           researchContexts: researchContexts.length > 0 ? researchContexts : undefined
         };
 
-        const updatedList = saveSchemaToHistory(newSavedSchema);
-        setSavedSchemas(updatedList);
-        await saveSchemaToCloud(newSavedSchema);
+        await saveSchemaToLibrary(newSavedSchema);
 
         // Auto-trigger End Session Review Modal
         handleEndSessionReview(updatedResponses, activities);
@@ -1140,51 +849,25 @@ export default function DeepEncodeApp() {
   };
 
   const resetApp = () => {
-    setAppState('input');
+    resetSession();
     setRawNotes('');
     setUploadedFile(null);
     setYoutubeUrl('');
-    setYoutubeData(null);
-    setIsGuidedPathMode(false);
-    setGuidedModules([]);
-    setResearchContexts([]);
-    setActivities([]);
-    setCurrentActivityIndex(0);
-    setUserResponses({});
-    setField1('');
-    setField2('');
-    setField3('');
-    setSelectedPreset('');
-    setFeynmanResult(null);
-    setXp(0);
-    setCombo(1);
   };
 
   const handleResumeSchema = (saved: SavedSchema) => {
-    setTopicSummary(saved.topicSummary);
-    setEncodingMode(saved.mode);
-    setActivities(saved.activities);
-    setUserResponses(saved.userResponses);
-    setXp(saved.xpEarned);
-    setIsGuidedPathMode(Boolean(saved.isGuidedPath));
-    setGuidedModules(saved.guidedModules || []);
-    setYoutubeData(saved.youtubeData || null);
-    setResearchContexts(saved.researchContexts || []);
-    setCurrentActivityIndex(0);
-    loadStageInputs(0, saved.activities, saved.userResponses);
-    setAppState('completed');
+    if (resumeSchema(saved)) {
+      setIsReadinessModalOpen(true);
+    }
     sound.playSuccess();
   };
 
   const handleDeleteSchema = async (id: string) => {
-    const updated = deleteSchemaFromHistory(id);
-    setSavedSchemas(updated);
-    await deleteSchemaFromCloud(id);
+    await deleteSchemaFromLibrary(id);
   };
 
   const handleClearAllHistory = () => {
-    clearAllSchemas();
-    setSavedSchemas([]);
+    clearAllSchemaLibrary();
   };
 
   // Copy formats for RemNote / Anki / Markdown
@@ -1457,8 +1140,7 @@ export default function DeepEncodeApp() {
                     youtubeData: youtubeData || undefined,
                     researchContexts: researchContexts.length > 0 ? researchContexts : undefined
                   };
-                  const updated = saveSchemaToHistory(current);
-                  setSavedSchemas(updated);
+                  saveSchemaToLibrary(current);
                   sound.playSuccess();
                   setImportedShareBanner(null);
                 }}
@@ -1692,238 +1374,24 @@ export default function DeepEncodeApp() {
         {/* STATE 4: COMPLETED MASTER SCHEMA & SRS EXPORT MATRIX         */}
         {/* ------------------------------------------------------------- */}
         {appState === 'completed' && (
-          <motion.div
+          <CompletedSessionView
             key="completed"
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full flex flex-col gap-6"
-          >
-            {/* Completion Hero Banner */}
-            <div className="p-8 bg-gradient-to-r from-indigo-950/40 via-purple-950/30 to-[#0F111A] border border-indigo-500/30 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col items-center text-center">
-              <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 rounded-2xl mb-3 shadow-lg shadow-emerald-500/10">
-                <Award className="w-8 h-8" />
-              </div>
-              <h2 className="text-2xl font-black text-white tracking-tight mb-1">
-                Cognitive Encoding Workout Complete!
-              </h2>
-              <p className="text-xs text-slate-300 font-serif italic max-w-lg mb-4">
-                You have successfully transformed passive input into durable semantic neural schema.
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono">
-                <div className="flex items-center gap-1 bg-[#131622] px-3.5 py-1.5 rounded-xl border border-slate-800">
-                  <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-                  <span className="text-slate-400">Total XP Earned:</span>
-                  <span className="font-black text-amber-400">{xp} XP</span>
-                </div>
-
-                <div className="flex items-center gap-1 bg-[#131622] px-3.5 py-1.5 rounded-xl border border-slate-800">
-                  <Sparkles className="w-4 h-4 text-emerald-400" />
-                  <span className="text-slate-400">Stages Completed:</span>
-                  <span className="font-bold text-emerald-400">{activities.length} / {activities.length} (100%)</span>
-                </div>
-
-                {youtubeData && (
-                  <div className="flex items-center gap-1 bg-red-950/30 border border-red-500/40 text-red-300 px-3 py-1.5 rounded-xl">
-                    <Video className="w-3.5 h-3.5 text-red-400" />
-                    <span>Timestamped Video Linked</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Interleaving CTA banner on completed screen */}
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-violet-950/40 to-indigo-950/30 border border-violet-500/30 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-300 shrink-0">
-                  <Shuffle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-white">
-                    Supercharge Retention with an Interleaved Workout
-                  </h4>
-                  <p className="text-xs text-slate-300">
-                    Mix this schema with other saved subjects in rapid-fire retrieval practice.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsInterleavingOpen(true)}
-                className="px-5 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-violet-600/20 flex items-center gap-2 shrink-0 cursor-pointer"
-              >
-                <Zap className="w-4 h-4 fill-white" />
-                <span>Start Interleaved Drill</span>
-              </button>
-            </div>
-
-            {/* Quick Export Actions (RemNote, Anki, Markdown, Stateless URL Share) */}
-            <div className="bg-[#0F111A] rounded-xl border border-slate-800 p-6 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Save className="w-4 h-4 text-indigo-400" />
-                  Port to Spaced Repetition or Share
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Copy clean formats into RemNote, Anki, Obsidian, or generate a 100% free share link</p>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5">
-                {/* Blurting Method Canvas Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsBlurtingModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-fuchsia-600/20 to-pink-600/20 hover:from-fuchsia-600/30 hover:to-pink-600/30 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-sm"
-                  title="The Blurting Method: Test free recall from memory on a blank canvas. AI marks missed first principles in red."
-                >
-                  <PenTool className="w-3.5 h-3.5 text-fuchsia-400" />
-                  <span>Blurting Canvas (Active Recall)</span>
-                </button>
-
-                {/* RemNote 4-Quadrant Matrix & API Push */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSegregationReport({
-                      topic: topicSummary,
-                      compressionRatio: '65% Semantic Fluff Eliminated',
-                      declarativeFacts: [],
-                      conceptualMechanisms: activities.map(act => ({
-                        id: act.id,
-                        conceptName: act.title,
-                        whatIsIt: userResponses[act.id]?.field1 || act.cognitiveGoal,
-                        whyItMatters: userResponses[act.id]?.field2 || act.prompt,
-                        howItWorks: act.contextSnippet,
-                        whatIfEdgeCase: act.scaffold.exampleAnswer || 'If key boundary conditions fail, system collapses into disordered state.',
-                        boundaryContrast: {
-                          confusableLookalike: `Superficial misinterpretation of ${act.title}`,
-                          distinguishingRule: `True ${act.title} requires active first-principles mechanism.`
-                        }
-                      }))
-                    });
-                    setIsSegregateModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 hover:from-cyan-600/30 hover:to-blue-600/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-sm"
-                  title="RemNote Hierarchical Matrix & API Push"
-                >
-                  <SplitSquareVertical className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>RemNote 4-Quadrant & API</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenStatelessShare()}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-cyan-600/20 to-indigo-600/20 hover:from-cyan-600/30 hover:to-indigo-600/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-sm"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-cyan-400" />
-                  Share Link (Stateless)
-                </button>
-
-                <button
-                  onClick={() => copyToClipboard('remnote')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#161A28] hover:bg-[#1E2336] border border-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-all cursor-pointer"
-                >
-                  {copiedFormat === 'remnote' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-indigo-400" />}
-                  Copy for RemNote
-                </button>
-
-                <button
-                  onClick={() => copyToClipboard('anki')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-[#161A28] hover:bg-[#1E2336] border border-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-all cursor-pointer"
-                >
-                  {copiedFormat === 'anki' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-purple-400" />}
-                  Copy Anki Cloze
-                </button>
-
-                <button
-                  onClick={() => copyToClipboard('markdown')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/50 text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
-                >
-                  {copiedFormat === 'markdown' ? <Check className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
-                  Copy Full Markdown
-                </button>
-              </div>
-            </div>
-
-            {/* Generated Schemas Matrix */}
-            <div className="bg-[#0F111A] rounded-xl shadow-2xl border border-slate-800 overflow-hidden">
-              <div className="p-5 border-b border-slate-800 bg-[#121520] flex items-center justify-between">
-                <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-indigo-400" />
-                  Your Synthesized Cognitive Schemas ({topicSummary})
-                </h3>
-              </div>
-
-              <div className="divide-y divide-slate-800/80">
-                {activities.map((act) => {
-                  const resp = userResponses[act.id] || { field1: '', field2: '', field3: '' };
-                  return (
-                    <div key={act.id} className="p-6 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold rounded uppercase tracking-wider">
-                            Stage {act.stageNumber}: {act.title}
-                          </span>
-                          <span className="text-xs text-slate-400 font-mono">({act.framework})</span>
-                        </div>
-                        {act.videoTimestamp && (
-                          <span className="text-xs text-red-400 font-mono font-bold">
-                            ▶ {act.videoTimestamp.formatted}
-                          </span>
-                        )}
-                      </div>
-
-                      {act.researchContext && (
-                        <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200">
-                          <strong>Grounded Prerequisite:</strong> {act.researchContext.conceptAdded} — {act.researchContext.explanation}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
-                        <div className="bg-[#141724] p-4 rounded-lg border border-slate-800">
-                          <h5 className="text-[11px] font-bold text-indigo-300 uppercase mb-1">
-                            {act.scaffold.field1Label}
-                          </h5>
-                          <p className="text-xs text-slate-200 font-serif leading-relaxed">
-                            {resp.field1}
-                          </p>
-                        </div>
-
-                        <div className="bg-[#141724] p-4 rounded-lg border border-slate-800">
-                          <h5 className="text-[11px] font-bold text-purple-300 uppercase mb-1">
-                            {act.scaffold.field2Label}
-                          </h5>
-                          <p className="text-xs text-slate-200 font-serif leading-relaxed">
-                            {resp.field2}
-                          </p>
-                        </div>
-                      </div>
-
-                      {resp.field3 && (
-                        <div className="bg-black/30 p-3.5 rounded-lg border border-dashed border-slate-700 text-xs text-slate-300 font-serif">
-                          <span className="font-sans font-bold text-[10px] text-emerald-400 uppercase mr-2">
-                            {act.scaffold.field3Label || 'Anchor'}:
-                          </span>
-                          {resp.field3}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Restart Button */}
-            <div className="flex justify-center mt-2 pb-12">
-              <button
-                onClick={resetApp}
-                className="flex items-center gap-2 px-7 py-3 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-200 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors shadow-sm cursor-pointer"
-              >
-                <RefreshCcw className="w-4 h-4" />
-                Encode Another Topic
-              </button>
-            </div>
-          </motion.div>
+            xp={xp}
+            topicSummary={topicSummary}
+            activities={activities}
+            userResponses={userResponses}
+            youtubeData={youtubeData}
+            copiedFormat={copiedFormat}
+            onCopy={copyToClipboard}
+            onShare={() => handleOpenStatelessShare()}
+            onStartInterleavedDrill={() => setIsInterleavingOpen(true)}
+            onOpenBlurting={() => setIsBlurtingModalOpen(true)}
+            onOpenSegregate={(report) => {
+              setSegregationReport(report);
+              setIsSegregateModalOpen(true);
+            }}
+            onRestart={resetApp}
+          />
         )}
 
       </div>
