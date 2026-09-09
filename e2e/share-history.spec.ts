@@ -60,7 +60,7 @@ test.describe('History & drills', () => {
 
     await page.goto('/');
     await page.locator('button[title^="View Saved Schemas History"]').click();
-    await page.getByRole('button', { name: 'Drill', exact: true }).click();
+    await page.getByRole('button', { name: '[ PLAY ] Drill' }).click();
     await expect(page.getByText('Active Retrieval Drill')).toBeVisible();
   });
 });

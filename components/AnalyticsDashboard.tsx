@@ -1,10 +1,6 @@
 ﻿'use client';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import {
-  X, BarChart2, Download, Cpu, TrendingUp,
-  Brain, Star, Award, RefreshCcw, ChevronDown, ChevronUp, Search, ChevronLeft, ChevronRight
-} from 'lucide-react';
 import { Button, Card, CardContent, Badge, Input } from './ui/index';
 
 interface UsageStats {
@@ -155,98 +151,85 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#07080D] overflow-y-auto">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-violet-500/10 border border-violet-500/30 rounded-xl">
-              <BarChart2 className="w-6 h-6 text-violet-400" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Analytics Dashboard</h1>
-              <p className="text-xs text-slate-400">Metacognitive insights · All data is stored locally</p>
-            </div>
+    <div className="fixed inset-0 z-50 bg-chassis overflow-y-auto font-mono">
+      <div className="max-w-3xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-4 border-b border-steel pb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-amber">[</span>
+            <h1 className="text-sm font-bold text-bone uppercase tracking-wider">SYS.07 // ANALYTICS CORE</h1>
+            <span className="text-amber">]</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} leftIcon={<X className="w-5 h-5" />}>
-            Close
-          </Button>
+          <Button variant="ghost" size="xs" onClick={onClose}>[ X ]</Button>
         </div>
 
-        {/* Search and Filter */}
-        <div className="mb-6">
+        <div className="mb-4">
           <Input
             placeholder="Search sessions by topic, mode, or ID..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            leftIcon={<Search className="w-4 h-4" />}
           />
           {searchQuery && (
-            <p className="text-xs text-slate-400 mt-2">
+            <p className="text-[10px] text-solder mt-1">
               Found {filteredCount} of {totalSessions} sessions
             </p>
           )}
         </div>
 
-        {/* Session Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
           {[
-            { label: 'Sessions', value: totalSessions, icon: Brain, color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' },
-            { label: 'Success Rate', value: `${stats.successRate}%`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-            { label: 'Avg Confidence', value: stats.avgConfidence ? `${stats.avgConfidence}/100` : '—', icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
-            { label: 'Reflections', value: stats.reflectionsWritten, icon: Award, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
-            <Card key={label} glass={true} hoverEffect={false} className={bg}>
-              <CardContent className="p-4">
-                <Icon className={`w-5 h-5 ${color} mb-2`} />
-                <p className="text-2xl font-black text-white">{value}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{label}</p>
+            { label: 'SESSIONS', value: String(totalSessions) },
+            { label: 'SUCCESS RATE', value: `${stats.successRate}%` },
+            { label: 'AVG CONFIDENCE', value: stats.avgConfidence ? `${stats.avgConfidence}/100` : '--' },
+            { label: 'REFLECTIONS', value: String(stats.reflectionsWritten) },
+          ].map(({ label, value }) => (
+            <Card key={label}>
+              <CardContent className="p-3">
+                <p className="text-[10px] text-solder uppercase tracking-wider">{label}</p>
+                <p className="text-lg font-bold text-bone mt-1">{value}</p>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        {/* Success Rate Bar */}
         {stats.successRate > 0 && (
-          <Card glass={true} hoverEffect={false} className="mb-4">
-            <CardContent className="p-4">
-              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3">Overall Success Rate</p>
-              <div className="w-full bg-slate-700/50 rounded-full h-3">
+          <Card className="mb-3">
+            <CardContent className="p-3">
+              <p className="text-[10px] text-solder uppercase tracking-wider mb-2">OVERALL SUCCESS RATE</p>
+              <div className="w-full bg-chassis h-2">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${stats.successRate}%` }}
-                  transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className={`h-3 rounded-full ${stats.successRate >= 80 ? 'bg-emerald-500' : stats.successRate >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  transition-none={{ duration: 1.2, ease: 'easeOut' }}
+                  className={`h-2 ${stats.successRate >= 80 ? 'bg-amber' : stats.successRate >= 60 ? 'bg-amber/70' : 'bg-hazard'}`}
                 />
               </div>
-              <p className="text-right text-xs text-slate-400 mt-1">{stats.successRate}%</p>
+              <p className="text-right text-[10px] text-solder mt-1">{stats.successRate}%</p>
             </CardContent>
           </Card>
         )}
 
-        {/* Template Breakdown */}
         {Object.keys(stats.templateBreakdown).length > 0 && (
-          <Card glass={true} hoverEffect={false} className="mb-4">
-            <CardContent className="p-4">
+          <Card className="mb-3">
+            <CardContent className="p-3">
               <button
                 onClick={() => setShowTemplates(t => !t)}
-                className="w-full flex items-center justify-between"
+                className="w-full flex items-center justify-between text-[10px] text-solder uppercase tracking-wider hover:text-bone"
               >
-                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Templates Used</p>
-                {showTemplates ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
+                <span>TEMPLATES USED</span>
+                <span>{showTemplates ? '[-]' : '[+]'}</span>
               </button>
               {showTemplates && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-2 space-y-1">
                   {Object.entries(stats.templateBreakdown).sort((a,b) => b[1]-a[1]).map(([tmpl, count]) => (
-                    <div key={tmpl} className="flex items-center gap-3">
-                      <span className="text-xs text-slate-400 w-40 truncate font-mono">{tmpl}</span>
-                      <div className="flex-1 bg-slate-700/40 rounded-full h-2">
+                    <div key={tmpl} className="flex items-center gap-2">
+                      <span className="text-[10px] text-solder w-36 truncate">{tmpl}</span>
+                      <div className="flex-1 bg-chassis h-1">
                         <div
-                          className="bg-indigo-500 h-2 rounded-full"
+                          className="bg-amber h-1"
                           style={{ width: `${Math.min(100, (count / Math.max(...Object.values(stats.templateBreakdown))) * 100)}%` }}
                         />
                       </div>
-                      <span className="text-xs text-slate-300 font-mono w-6 text-right">{count}</span>
+                      <span className="text-[10px] text-bone w-6 text-right">{count}</span>
                     </div>
                   ))}
                 </div>
@@ -255,129 +238,77 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
           </Card>
         )}
 
-        {/* Model Usage */}
-        <Card glass={true} hoverEffect={false} className="mb-4">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Model Usage</p>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setUsage(loadUsageStats())}
-                leftIcon={<RefreshCcw className="w-3.5 h-3.5" />}
-              >
-                Refresh
-              </Button>
+        <Card className="mb-3">
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] text-solder uppercase tracking-wider">MODEL USAGE</p>
+              <Button variant="ghost" size="xs" onClick={() => setUsage(loadUsageStats())}>[ REFRESH ]</Button>
             </div>
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div className="bg-slate-800/60 rounded-xl p-3">
-                <p className="text-xs text-slate-500 mb-1">Today</p>
-                <p className="text-xl font-black text-white">{totalCalls}<span className="text-xs text-slate-500 font-normal ml-1">calls</span></p>
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div className="bg-chassis p-2 border border-steel">
+                <p className="text-[10px] text-solder">TODAY</p>
+                <p className="text-base font-bold text-bone">{totalCalls} <span className="text-[10px] text-solder">calls</span></p>
               </div>
-              <div className="bg-slate-800/60 rounded-xl p-3">
-                <p className="text-xs text-slate-500 mb-1">This week</p>
-                <p className="text-xl font-black text-white">{weeklyTotal}<span className="text-xs text-slate-500 font-normal ml-1">calls</span></p>
+              <div className="bg-chassis p-2 border border-steel">
+                <p className="text-[10px] text-solder">THIS WEEK</p>
+                <p className="text-base font-bold text-bone">{weeklyTotal} <span className="text-[10px] text-solder">calls</span></p>
               </div>
             </div>
             {Object.keys(usage.callsByModel).length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-[11px] text-slate-500 uppercase tracking-wider">Breakdown by model (today)</p>
+              <div className="space-y-1">
+                <p className="text-[10px] text-solder uppercase tracking-wider">BREAKDOWN BY MODEL (TODAY)</p>
                 {Object.entries(usage.callsByModel).sort((a,b) => b[1]-a[1]).map(([model, count]) => (
-                  <div key={model} className="flex items-center gap-3 bg-slate-800/60 rounded-xl px-3 py-2">
-                    <Cpu className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span className="text-xs text-slate-300 font-mono flex-1 truncate">{model}</span>
-                    <Badge variant="slate" size="xs">{count}</Badge>
+                  <div key={model} className="flex items-center gap-2 bg-chassis border border-steel px-2 py-1">
+                    <span className="text-[10px] text-solder flex-1 truncate">{model}</span>
+                    <Badge variant="steel" size="xs">{count}</Badge>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-slate-500 italic">No calls tracked today yet — usage counters update on each API call.</p>
+              <p className="text-[10px] text-solder italic">No calls tracked today yet.</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Export */}
-        <Card glass={true} hoverEffect={false}>
-          <CardContent className="p-4">
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-3">Export Data</p>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportCSV}
-                disabled={filteredSchemas.length === 0}
-                leftIcon={<Download className="w-4 h-4" />}
-              >
-                Export CSV
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportJSON}
-                disabled={filteredSchemas.length === 0}
-                leftIcon={<Download className="w-4 h-4" />}
-              >
-                Export JSON
-              </Button>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-[10px] text-solder uppercase tracking-wider mb-2">EXPORT DATA</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filteredSchemas.length === 0}>[ EXPORT CSV ]</Button>
+              <Button variant="outline" size="sm" onClick={handleExportJSON} disabled={filteredSchemas.length === 0}>[ EXPORT JSON ]</Button>
             </div>
-            <p className="text-[11px] text-slate-500 mt-2">
-              Exports include all sessions: stage responses, confidence scores, check counts, reflections, and timestamps. Self-monitoring correlates with higher achievement (Zimmerman, 2002).
+            <p className="text-[10px] text-solder mt-2">
+              Exports include all sessions: stage responses, confidence scores, check counts, reflections, and timestamps.
             </p>
           </CardContent>
         </Card>
 
-        {/* Session History with Pagination */}
         {filteredSchemas.length > 0 && (
-          <Card glass={true} hoverEffect={false} className="mt-4">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
-                  Session History
-                </p>
+          <Card className="mt-3">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] text-solder uppercase tracking-wider">SESSION HISTORY</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">
-                    Page {currentPage} of {totalPages}
-                  </span>
+                  <span className="text-[10px] text-solder">Page {currentPage} of {totalPages}</span>
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      leftIcon={<ChevronLeft className="w-3 h-3" />}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      leftIcon={<ChevronRight className="w-3 h-3" />}
-                    />
+                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>[&lt;]</Button>
+                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>[&gt;]</Button>
                   </div>
                 </div>
               </div>
-
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {paginatedSchemas.map((schema) => (
                   <div
                     key={schema.id}
-                    className="flex items-center justify-between p-3 bg-slate-800/40 border border-slate-700/50 rounded-xl hover:bg-slate-800/60 transition-colors"
+                    className="flex items-center justify-between p-2 bg-chassis border border-steel hover:border-amber"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="indigo" size="xs">
-                          {schema.mode || 'standard'}
-                        </Badge>
-                        <span className="text-xs text-slate-500 font-mono">
-                          {new Date(schema.timestamp).toLocaleDateString()}
-                        </span>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Badge variant="amber" size="xs">{schema.mode || 'standard'}</Badge>
+                        <span className="text-[10px] text-solder">{new Date(schema.timestamp).toLocaleDateString()}</span>
                       </div>
-                      <p className="text-sm text-slate-200 font-medium truncate">
-                        {schema.topicSummary || 'Untitled Session'}
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {schema.activities?.length || 0} stages · {schema.xpEarned || 0} XP
-                      </p>
+                      <p className="text-xs text-bone truncate">{schema.topicSummary || 'Untitled Session'}</p>
+                      <p className="text-[10px] text-solder">{schema.activities?.length || 0} stages / {schema.xpEarned || 0} XP</p>
                     </div>
                   </div>
                 ))}

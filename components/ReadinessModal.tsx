@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { CheckSquare, Square, Brain, AlertCircle, Sparkles } from 'lucide-react';
 import { Modal, Button, Textarea, Badge } from './ui/index';
 
 interface Props {
@@ -49,21 +48,20 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
       isOpen={isOpen}
       maxWidth="md"
       showCloseButton={false}
-      isShaking={shaking}
       icon={
-        <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
-          <Brain className="w-5 h-5 text-emerald-400" />
+        <div className="p-2 bg-amber/10 border border-amber/30 ">
+          <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
         </div>
       }
       title={`Readiness Check: Stage ${stageNumber}`}
       description={stageTitle}
       footer={
-        <Button 
-          variant="emerald" 
+        <Button
+          variant="primary"
           size="md" 
           onClick={handleConfirm}
           disabled={!canConfirm}
-          rightIcon={<Sparkles className="w-4 h-4" />}
+          rightIcon={<span className="text-amber font-bold font-mono">[ * ]</span>}
         >
           I'm Ready →
         </Button>
@@ -71,9 +69,9 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
     >
       <div className="space-y-4">
         {stageNumber > 1 && previousPremise && (
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
-            <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold mb-1">Previous Stage Challenge</p>
-            <p className="text-xs text-slate-300 italic">"{previousPremise}"</p>
+          <div className="bg-steel/40 border border-steel/50 p-3">
+            <p className="text-[11px] text-solder uppercase tracking-wider font-semibold mb-1">Previous Stage Challenge</p>
+            <p className="text-xs text-solder italic">"{previousPremise}"</p>
           </div>
         )}
 
@@ -92,12 +90,12 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
         <button
           type="button"
           onClick={() => setChecked(c => !c)}
-          className="flex items-start gap-3 w-full text-left group p-2 rounded-xl hover:bg-slate-800/40 transition-colors"
+          className="flex items-start gap-3 w-full text-left group p-2 hover:bg-steel/40 transition-none-colors"
         >
-          <div className="mt-0.5 text-emerald-400 group-hover:text-emerald-300 transition-colors shrink-0">
-            {checked ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+          <div className="mt-0.5 text-amber group-hover:text-amber300 transition-none-colors shrink-0">
+            {checked ? <span className="text-amber font-bold font-mono">[ CHK ]</span> : <span className="text-amber font-bold font-mono">[ BOX ]</span>}
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <p className="text-xs text-solder leading-relaxed">
             I am actively focused and ready to deduce the next cognitive schema.
           </p>
         </button>
@@ -106,10 +104,10 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl p-3"
+            className="flex items-center gap-2 bg-amber/10 border border-amber/30 p-3"
           >
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-            <p className="text-xs text-amber-300">Retrieval practice only works when you actively generate the memory instead of rushing through.</p>
+            <span className="text-amber font-bold font-mono">[ ! ]</span>
+            <p className="text-xs text-amber">Retrieval practice only works when you actively generate the memory instead of rushing through.</p>
           </motion.div>
         )}
       </div>

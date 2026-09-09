@@ -8,6 +8,9 @@ import {
   YOUTUBE_RESPONSE,
   EVAL_SINGLE,
   EVAL_BATCH,
+  AUDIT_SEGREGATE_RESPONSE,
+  ARCHETYPE_ROUND1,
+  ARCHETYPE_ROUND2,
 } from './fixtures';
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
@@ -90,6 +93,30 @@ export async function mockAiApis(page: Page) {
       body: JSON.stringify({ passed: true, score: 88, feedback: 'Checkpoint passed.' }),
     })
   );
+
+  // Procedural MCQ AI author: round 1 returns one valid + one broken archetype
+  // (repair flow); every later round returns the repaired archetype.
+  let archetypeCall = 0;
+  await page.route('**/api/archetype', (route) => {
+    archetypeCall += 1;
+    const payload = archetypeCall === 1 ? ARCHETYPE_ROUND1 : ARCHETYPE_ROUND2;
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) });
+  });
+}
+
+/**
+ * Overrides the /api/segregate mock (call AFTER mockAiApis) so the
+ * segregation report contains one clean, one ambiguous, and one too-long
+ * cloze fact : exactly the cards the FSRS Card Audit tab is built to flag.
+ */
+export async function mockAuditFlow(page: Page) {
+  await page.route('**/api/segregate', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(AUDIT_SEGREGATE_RESPONSE),
+    })
+  );
 }
 
 // ─── Flow helpers ────────────────────────────────────────────────────────────
@@ -111,7 +138,7 @@ export async function startEncodeFromNotes(page: Page, notes: string) {
 }
 
 export async function expectStage(page: Page, stage: number) {
-  await expect(page.getByText(new RegExp(`Stage ${stage} of `))).toBeVisible();
+  await expect(page.getByText(new RegExp(`STAGE: ${String(stage).padStart(2, '0')}/`, 'i'))).toBeVisible();
 }
 
 /** Walk both stages of the mocked workout to the completed view. */
@@ -123,7 +150,7 @@ export async function completeWorkout(page: Page) {
 
   // Ask Examiner (mocked /api/evaluate, single-stage mode)
   await page.getByRole('button', { name: 'Ask Examiner' }).click();
-  await page.getByText('Good mechanism — tighten the threshold detail.').waitFor();
+  await page.getByText('Good mechanism : tighten the threshold detail.').waitFor();
 
   await page.getByRole('button', { name: 'Next Stage' }).click();
 

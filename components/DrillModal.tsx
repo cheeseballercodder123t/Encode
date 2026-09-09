@@ -2,19 +2,6 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  X, 
-  Brain, 
-  CheckCircle, 
-  RotateCcw, 
-  ArrowRight, 
-  Sparkles, 
-  Eye, 
-  ThumbsUp, 
-  ThumbsDown,
-  Award,
-  Zap
-} from 'lucide-react';
 import { SavedSchema } from '@/lib/types';
 import { sound } from '@/lib/audio';
 
@@ -66,29 +53,29 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/80 ">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="w-full max-w-2xl bg-[#0F111A] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          className="w-full max-w-2xl bg-chassis border border-steel overflow-hidden flex flex-col max-h-[90vh]"
         >
           {/* Header */}
-          <div className="p-5 border-b border-slate-800 bg-[#131622] flex items-center justify-between">
+          <div className="p-5 border-b border-steel bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded-xl">
-                <Brain className="w-5 h-5" />
+              <div className="p-2 bg-steel/10 border border-steel/30 text-bone ">
+                <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">Active Retrieval Drill</h3>
-                <p className="text-xs text-slate-400">Testing: {schema.topicSummary}</p>
+                <h3 className="font-bold text-bone text-base">Active Retrieval Drill</h3>
+                <p className="text-xs text-solder">Testing: {schema.topicSummary}</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-2 text-solder hover:text-bone hover:bg-steel transition-none-colors"
             >
-              <X className="w-5 h-5" />
+              <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
           </div>
 
@@ -98,26 +85,26 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
               <div className="space-y-6">
                 
                 {/* Progress */}
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className="font-bold uppercase tracking-wider text-indigo-400">
+                <div className="flex items-center justify-between text-xs text-solder">
+                  <span className="font-bold uppercase tracking-wider text-bone">
                     Card {currentIndex + 1} of {schema.activities.length}
                   </span>
-                  <span className="font-mono bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
+                  <span className="font-mono bg-deck px-2.5 py-1 border border-steel">
                     {currentAct.framework}
                   </span>
                 </div>
 
                 {/* Question Card */}
-                <div className="bg-[#141724] p-5 rounded-xl border border-slate-800">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                <div className="bg-deck p-5 border border-steel">
+                  <h4 className="text-xs font-bold text-solder uppercase tracking-wider mb-1.5">
                     {currentAct.title}
                   </h4>
-                  <p className="text-base font-semibold text-white mb-4">
+                  <p className="text-base font-semibold text-bone mb-4">
                     {currentAct.prompt}
                   </p>
 
-                  <div className="p-3.5 bg-black/40 rounded-lg border border-slate-800 font-serif italic text-xs text-slate-300">
-                    <span className="text-indigo-300 font-sans font-bold text-[10px] uppercase mr-2">Context Cue:</span>
+                  <div className="p-3.5 bg-chassis/40 border border-steel font-mono italic text-xs text-solder">
+                    <span className="text-bone font-mono font-bold text-[10px] uppercase mr-2">Context Cue:</span>
                     {currentAct.contextSnippet}
                   </div>
                 </div>
@@ -130,12 +117,12 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
                         setRevealed(true);
                         sound.playBeep(700, 'sine', 0.1);
                       }}
-                      className="flex items-center gap-2 mx-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl border border-indigo-500/50 shadow-lg shadow-indigo-500/20 transition-all cursor-pointer"
+                      className="flex items-center gap-2 mx-auto px-6 py-3 bg-steel hover:bg-steel text-bone text-xs font-bold uppercase tracking-wider border border-steel/50   transition-none-all cursor-pointer"
                     >
-                      <Eye className="w-4 h-4" />
+                      <span className="text-amber font-bold font-mono">[ EYE ]</span>
                       Reveal My Encoded Schema
                     </button>
-                    <p className="text-[11px] text-slate-500 mt-2">
+                    <p className="text-[11px] text-solder mt-2">
                       Try to mentally retrieve your answers before revealing!
                     </p>
                   </div>
@@ -145,31 +132,31 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
                     animate={{ opacity: 1, y: 0 }}
                     className="space-y-4"
                   >
-                    <div className="bg-[#11131F] p-4 rounded-xl border border-indigo-500/30 space-y-3">
+                    <div className="bg-deck p-4 border border-steel/30 space-y-3">
                       <div>
-                        <span className="text-[10px] font-bold text-indigo-400 uppercase block mb-1">
+                        <span className="text-[10px] font-bold text-bone uppercase block mb-1">
                           {currentAct.scaffold.field1Label}
                         </span>
-                        <p className="text-xs text-slate-200 font-serif leading-relaxed">
+                        <p className="text-xs text-bone font-mono leading-relaxed">
                           {userResp.field1 || '(No answer provided)'}
                         </p>
                       </div>
 
-                      <div className="pt-2 border-t border-slate-800">
-                        <span className="text-[10px] font-bold text-purple-400 uppercase block mb-1">
+                      <div className="pt-2 border-t border-steel">
+                        <span className="text-[10px] font-bold text-bone uppercase block mb-1">
                           {currentAct.scaffold.field2Label}
                         </span>
-                        <p className="text-xs text-slate-200 font-serif leading-relaxed">
+                        <p className="text-xs text-bone font-mono leading-relaxed">
                           {userResp.field2 || '(No answer provided)'}
                         </p>
                       </div>
 
                       {userResp.field3 && (
-                        <div className="pt-2 border-t border-slate-800">
-                          <span className="text-[10px] font-bold text-emerald-400 uppercase block mb-1">
+                        <div className="pt-2 border-t border-steel">
+                          <span className="text-[10px] font-bold text-amber uppercase block mb-1">
                             {currentAct.scaffold.field3Label || 'Anchor'}
                           </span>
-                          <p className="text-xs text-slate-200 font-serif leading-relaxed">
+                          <p className="text-xs text-bone font-mono leading-relaxed">
                             {userResp.field3}
                           </p>
                         </div>
@@ -178,22 +165,22 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
 
                     {/* Self-Scoring Buttons */}
                     <div className="pt-2">
-                      <p className="text-center text-xs text-slate-400 mb-3 font-semibold">
+                      <p className="text-center text-xs text-solder mb-3 font-semibold">
                         How accurately did you recall this schema?
                       </p>
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={() => handleScore(false)}
-                          className="flex items-center justify-center gap-2 p-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 rounded-xl font-bold text-xs transition-all"
+                          className="flex items-center justify-center gap-2 p-3 bg-hazard500/10 hover:bg-hazard500/20 border border-hazard500/30 text-hazard300 font-bold text-xs transition-none-all"
                         >
-                          <ThumbsDown className="w-4 h-4" />
+                          <span className="text-amber font-bold font-mono">[ - ]</span>
                           Missed / Need Review
                         </button>
                         <button
                           onClick={() => handleScore(true)}
-                          className="flex items-center justify-center gap-2 p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 rounded-xl font-bold text-xs transition-all"
+                          className="flex items-center justify-center gap-2 p-3 bg-amber/10 hover:bg-amber/20 border border-amber/30 text-amber300 font-bold text-xs transition-none-all"
                         >
-                          <ThumbsUp className="w-4 h-4" />
+                          <span className="text-amber font-bold font-mono">[ + ]</span>
                           Retrieved Successfully!
                         </button>
                       </div>
@@ -205,43 +192,43 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
             ) : (
               /* Finish Screen */
               <div className="text-center py-8 space-y-6">
-                <div className="inline-flex items-center justify-center p-4 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-2xl">
-                  <CheckCircle className="w-10 h-10" />
+                <div className="inline-flex items-center justify-center p-4 bg-amber/10 text-amber border border-amber/30 ">
+                  <span className="text-amber font-bold font-mono">[ OK ]</span>
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-white mb-1">Drill Session Complete!</h3>
-                  <p className="text-xs text-slate-400 font-serif italic">
+                  <h3 className="text-2xl font-bold text-bone mb-1">Drill Session Complete!</h3>
+                  <p className="text-xs text-solder font-mono italic">
                     Active testing reinforces the neural pathways constructed during initial encoding.
                   </p>
                 </div>
 
-                <div className="bg-[#141724] p-5 rounded-xl border border-slate-800 max-w-sm mx-auto flex items-center justify-around">
+                <div className="bg-deck p-5 border border-steel max-w-sm mx-auto flex items-center justify-around">
                   <div>
-                    <div className="text-2xl font-bold font-mono text-emerald-400">
+                    <div className="text-2xl font-bold font-mono text-amber">
                       {Math.round((recalledCount / schema.activities.length) * 100)}%
                     </div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Accuracy</span>
+                    <span className="text-[10px] text-solder uppercase font-bold">Accuracy</span>
                   </div>
-                  <div className="h-8 w-px bg-slate-800" />
+                  <div className="h-8 w-px bg-steel" />
                   <div>
-                    <div className="text-2xl font-bold font-mono text-indigo-400">
+                    <div className="text-2xl font-bold font-mono text-bone">
                       {recalledCount} / {schema.activities.length}
                     </div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold">Recalled</span>
+                    <span className="text-[10px] text-solder uppercase font-bold">Recalled</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-center gap-3 pt-4">
                   <button
                     onClick={handleRestart}
-                    className="flex items-center gap-1.5 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold"
+                    className="flex items-center gap-1.5 px-5 py-2.5 bg-steel hover:bg-steel text-bone text-xs font-bold"
                   >
-                    <RotateCcw className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ RESET ]</span>
                     Drill Again
                   </button>
                   <button
                     onClick={onClose}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-500/20"
+                    className="px-6 py-2.5 bg-steel hover:bg-steel text-bone text-xs font-bold  "
                   >
                     Done
                   </button>

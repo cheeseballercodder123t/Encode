@@ -2,21 +2,6 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Cloud, 
-  CloudOff, 
-  LogOut, 
-  LogIn, 
-  User as UserIcon, 
-  RefreshCw, 
-  Check, 
-  Sparkles, 
-  Zap, 
-  ShieldCheck,
-  X,
-  Smartphone,
-  Laptop
-} from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
 interface AuthModalProps {
@@ -73,36 +58,36 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/75 ">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="w-full max-w-md bg-[#0F111A] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+          className="w-full max-w-md bg-chassis border border-steel overflow-hidden flex flex-col"
         >
           {/* Header */}
-          <div className="p-5 border-b border-slate-800 bg-[#131622] flex items-center justify-between">
+          <div className="p-5 border-b border-steel bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl">
-                <Cloud className="w-5 h-5" />
+              <div className="p-2 bg-steel/10 border border-steel/30 text-bone ">
+                <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               </div>
               <div>
-                <h3 className="font-bold text-white text-base">Cloud Sync & Account</h3>
-                <p className="text-xs text-slate-400">Firebase Firestore multi-device synchronization</p>
+                <h3 className="font-bold text-bone text-base">Cloud Sync & Account</h3>
+                <p className="text-xs text-solder">Firebase Firestore multi-device synchronization</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-2 text-solder hover:text-bone hover:bg-steel transition-none-colors"
             >
-              <X className="w-5 h-5" />
+              <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
           </div>
 
           {/* Content */}
           <div className="p-6 space-y-5">
             {errorMsg && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl">
+              <div className="p-3 bg-hazard500/10 border border-hazard500/30 text-hazard300 text-xs ">
                 {errorMsg}
               </div>
             )}
@@ -110,27 +95,27 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             {user ? (
               <div className="space-y-4">
                 {/* User card */}
-                <div className="p-4 bg-[#141724] border border-slate-800 rounded-xl flex items-center gap-3">
+                <div className="p-4 bg-deck border border-steel flex items-center gap-3">
                   {user.photoURL ? (
                     <img 
                       src={user.photoURL} 
                       alt={user.displayName || 'User'} 
-                      className="w-12 h-12 rounded-full border border-indigo-500/40"
+                      className="w-12 h-12 border border-steel/40"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300">
-                      <UserIcon className="w-6 h-6" />
+                    <div className="w-12 h-12 bg-steel/20 border border-steel/40 flex items-center justify-center text-bone">
+                      <span className="text-amber font-bold font-mono">[ USER ]</span>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-white text-sm truncate">
+                    <h4 className="font-bold text-bone text-sm truncate">
                       {user.displayName || (user.isAnonymous ? 'Guest Learner' : user.email || 'Learner')}
                     </h4>
-                    <p className="text-xs text-slate-400 truncate">
+                    <p className="text-xs text-solder truncate">
                       {user.email || (user.isAnonymous ? 'Anonymous Cloud Session' : '')}
                     </p>
-                    <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.2 rounded-full">
-                      <Cloud className="w-3 h-3" />
+                    <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-amber font-semibold bg-amber/10 border border-amber/30 px-2 py-0.5 ">
+                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       Live Sync Active
                     </span>
                   </div>
@@ -138,14 +123,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
                 {/* Cloud stats */}
                 <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="p-3 bg-[#141724] border border-slate-800 rounded-xl">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Cloud Schemas</span>
-                    <span className="text-lg font-black text-indigo-300 font-mono">{cloudStats.schemasCompleted}</span>
+                  <div className="p-3 bg-deck border border-steel ">
+                    <span className="text-[10px] uppercase font-bold text-solder block mb-1">Cloud Schemas</span>
+                    <span className="text-lg font-black text-bone font-mono">{cloudStats.schemasCompleted}</span>
                   </div>
-                  <div className="p-3 bg-[#141724] border border-slate-800 rounded-xl">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Total Cloud XP</span>
-                    <span className="text-lg font-black text-amber-400 font-mono flex items-center justify-center gap-1">
-                      <Zap className="w-4 h-4" />
+                  <div className="p-3 bg-deck border border-steel ">
+                    <span className="text-[10px] uppercase font-bold text-solder block mb-1">Total Cloud XP</span>
+                    <span className="text-lg font-black text-amber font-mono flex items-center justify-center gap-1">
+                      <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                       {cloudStats.totalXp}
                     </span>
                   </div>
@@ -156,15 +141,15 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleSyncLocal}
                     disabled={isSyncing}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 font-bold text-xs rounded-xl transition-all"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-steel/20 hover:bg-steel/30 border border-steel/40 text-bone font-bold text-xs transition-none-all"
                   >
-                    <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span className="text-amber font-bold font-mono">[ RESET ]</span>
                     {isSyncing ? 'Syncing...' : 'Sync Local History to Cloud'}
                   </button>
 
                   {syncSuccessCount !== null && (
-                    <p className="text-center text-xs text-emerald-400 flex items-center justify-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
+                    <p className="text-center text-xs text-amber flex items-center justify-center gap-1">
+                      <span className="text-amber font-bold font-mono">[ OK ]</span>
                       Successfully synced {syncSuccessCount} schemas!
                     </p>
                   )}
@@ -173,9 +158,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     onClick={async () => {
                       await logOut();
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-slate-800/60 text-slate-400 hover:text-red-400 font-bold text-xs rounded-xl transition-all"
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-steel/60 text-solder hover:text-hazard400 font-bold text-xs transition-none-all"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ LOGOUT ]</span>
                     Sign Out
                   </button>
                 </div>
@@ -183,23 +168,23 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             ) : (
               <div className="space-y-4">
                 <div className="text-center space-y-2">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 border border-indigo-500/30 flex items-center justify-center mx-auto text-indigo-400">
-                    <Cloud className="w-6 h-6" />
+                  <div className="w-12 h-12 bg-steel/10 border border-steel/30 flex items-center justify-center mx-auto text-bone">
+                    <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                   </div>
-                  <h4 className="font-bold text-white text-sm">Synchronize Across All Your Devices</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                  <h4 className="font-bold text-bone text-sm">Synchronize Across All Your Devices</h4>
+                  <p className="text-xs text-solder leading-relaxed max-w-xs mx-auto">
                     Sign in to seamlessly access your encoded study schemas, active drill progress, and XP on phone, tablet, or laptop.
                   </p>
                 </div>
 
-                <div className="flex items-center justify-center gap-4 py-1 text-slate-400 text-xs border-y border-slate-800/80">
+                <div className="flex items-center justify-center gap-4 py-1 text-solder text-xs border-y border-steel/80">
                   <div className="flex items-center gap-1.5">
-                    <Smartphone className="w-4 h-4 text-indigo-400" />
+                    <span className="text-amber font-bold font-mono">[ PHONE ]</span>
                     <span>Phone</span>
                   </div>
                   <span>•</span>
                   <div className="flex items-center gap-1.5">
-                    <Laptop className="w-4 h-4 text-purple-400" />
+                    <span className="text-amber font-bold font-mono">[ LAPTOP ]</span>
                     <span>Laptop / Desktop</span>
                   </div>
                 </div>
@@ -208,7 +193,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleGoogleLogin}
                     disabled={isProcessing}
-                    className="w-full flex items-center justify-center gap-2.5 py-3 bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs rounded-xl shadow-lg transition-all"
+                    className="w-full flex items-center justify-center gap-2.5 py-3 bg-bone hover:bg-solder text-bone font-bold text-xs transition-none-all"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -222,9 +207,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleGuestLogin}
                     disabled={isProcessing}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#141724] hover:bg-[#1B1F2E] border border-slate-800 text-slate-300 font-bold text-xs rounded-xl transition-all"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-deck hover:bg-deck border border-steel text-solder font-bold text-xs transition-none-all"
                   >
-                    <UserIcon className="w-4 h-4 text-slate-400" />
+                    <span className="text-amber font-bold font-mono">[ USER ]</span>
                     Quick Guest Session
                   </button>
                 </div>

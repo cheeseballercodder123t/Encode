@@ -2,7 +2,6 @@
 
 import React, { useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X } from 'lucide-react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -14,10 +13,9 @@ export interface ModalProps {
   footer?: ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | 'full';
   showCloseButton?: boolean;
-  isShaking?: boolean;
 }
 
-export function Modal({ isOpen, onClose, title, description, icon, children, footer, maxWidth = 'md', showCloseButton = true, isShaking = false }: ModalProps) {
+export function Modal({ isOpen, onClose, title, description, icon, children, footer, maxWidth = 'md', showCloseButton = true }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && onClose) onClose(); };
@@ -34,34 +32,34 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/90 overflow-y-auto">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0" onClick={onClose} />
         <motion.div
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0, x: isShaking ? [0, -8, 8, -6, 6, 0] : 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 16 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-[#0F111A] border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden my-8`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition-none={{ duration: 0.1 }}
+          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-steel rounded-none overflow-hidden my-8`}
           onClick={e => e.stopPropagation()}
         >
           {(title || icon) && (
-            <div className="p-5 border-b border-slate-800 bg-[#131622] flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                {icon && <div className="shrink-0">{icon}</div>}
+            <div className="p-4 border-b border-steel bg-chassis flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {icon && <div className="shrink-0 text-amber">{icon}</div>}
                 <div className="min-w-0">
-                  {title && <h3 className="font-bold text-white text-base truncate">{title}</h3>}
-                  {description && <p className="text-xs text-slate-400 truncate mt-0.5">{description}</p>}
+                  {title && <h3 className="font-bold text-bone text-sm uppercase tracking-wider font-mono truncate">{title}</h3>}
+                  {description && <p className="text-[10px] text-solder font-mono truncate mt-0.5">{description}</p>}
                 </div>
               </div>
               {showCloseButton && onClose && (
-                <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer" aria-label="Close modal">
-                  <X className="w-4 h-4" />
+                <button type="button" onClick={onClose} className="p-1 text-solder hover:text-bone hover:bg-deck rounded-none cursor-pointer font-mono text-xs" aria-label="Close modal">
+                  [ X ]
                 </button>
               )}
             </div>
           )}
-          <div className="p-5 overflow-y-auto max-h-[calc(85vh-130px)]">{children}</div>
-          {footer && <div className="p-4 border-t border-slate-800 bg-[#131622]/50 flex items-center justify-end gap-3">{footer}</div>}
+          <div className="p-4 overflow-y-auto max-h-[calc(85vh-130px)]">{children}</div>
+          {footer && <div className="p-3 border-t border-steel bg-chassis flex items-center justify-end gap-2">{footer}</div>}
         </motion.div>
       </div>
     </AnimatePresence>

@@ -88,7 +88,7 @@ Your mission is to perform CONCEPT VS. FACT SEGREGATION, SEMANTIC COMPRESSION, 4
       userPrompt,
       responseSchema: segregationSchema,
       settings,
-      isChecker: false,
+      isChecker: true,
       file: hasFile ? file : null,
     });
 

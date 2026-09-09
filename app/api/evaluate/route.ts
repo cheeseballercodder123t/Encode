@@ -19,7 +19,7 @@ const evaluationSchema = {
     },
     feedback: {
       type: Type.STRING,
-      description: "A concise 1-2 sentence coaching tip acknowledging what was explained well and pointing out any shallow hand-waving or missing nuance."
+      description: "1-2 sentence coaching tip. If the student used a fictional story, praise the vividness and either confirm the mechanism mapping (mastered) or offer a witty 1-sentence Story Patch correcting the character's action."
     },
     depthAlert: {
       type: Type.STRING,
@@ -69,6 +69,29 @@ const batchEvaluationSchema = {
   required: ["overallScore", "analysis", "perStageGrades"]
 };
 
+const MNEMONIC_FREEDOM_DIRECTIVE = `MNEMONIC IMMUNITY // EVALUATOR DIRECTIVE
+
+CORE RULE: Never penalize fictional, bizarre, or personal stories, cartoons, or slang. Leverage Structure Mapping & Self-Reference Effect.
+
+TWO-LAYER EVALUATION:
+
+[ 01 ] STICKINESS CHECK
+- Praise vivid, absurd, or personal framing immediately. Treat invented characters, cartoons, or absurd scenarios as ELITE encoding.
+- If the student leans on slang, cartoons, or personal anecdotes, note the vividness and boost engagement signal. Do not dock for non-academic tone.
+
+[ 02 ] STRUCTURAL FIDELITY CHECK
+- After praising stickiness, check ONLY whether the narrative's causal mechanisms strictly map to the target scientific logic.
+- Map story actions to the underlying cause-and-effect. If the mapping is sound, award FULL MASTERY (100/100) and explain why the mapping works.
+  Example: "Mastered (100/100): That mental image of the mob boss cutting the telephone wire is hilarious and physically accurate -- Atropine blocks the parasympathetic brake on the sinoatrial node. Card forged for Anki."
+
+SCORING & FEEDBACK:
+- Accurate Logic: Award full mastery (100/100).
+- Flawed Logic: Never scold or lecture. Provide a concise, witty "Story Patch" adjusting the narrative actions to correct the underlying scientific mechanism.
+  Example: "Love the mob boss character! Story Patch: Atropine does not hand the heart coffee to pump faster (that would be an adrenergic agonist). Have the mob boss cut the brake lines on the car instead."
+
+BOUNDARY:
+- This immunity never authorizes endorsing harmful instructions or pseudoscience; it protects creative encoding of verified academic content.`;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -79,7 +102,9 @@ export async function POST(req: NextRequest) {
       const systemPrompt = `You are the Feynman Master Evaluator & Metacognitive Assessor.
 Analyze the complete multi-stage cognitive encoding workout submitted by the learner for "${topicSummary || 'Cognitive Schema'}".
 Assess the student's genuine grasp across all stages. Rate overall performance (0-100), give 2-3 sentences of holistic insight, and grade each stage.
-Be strict but encouraging: reward active causal deduction; penalize memorized jargon without explanation.`;
+Be strict but encouraging: reward active causal deduction; penalize memorized jargon without explanation.
+
+${MNEMONIC_FREEDOM_DIRECTIVE}`;
 
       const userPrompt = `TOPIC: ${topicSummary || 'Cognitive Workout'}
 PRE-SESSION SELF-RATED CONFIDENCE: ${preSessionConfidence || 3}/5
@@ -128,18 +153,18 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
 
     let strictnessDirective = '';
     if (strictnessLevel === 'sherpa') {
-      strictnessDirective = `STRICTNESS MODE: 🟢 SOCRATIC SHERPA (Supportive Learning)
+      strictnessDirective = `STRICTNESS MODE: [ 01 ] SOCRATIC SHERPA (Supportive Learning)
 - Grade generously (score 70-95).
 - Forgive scientific jargon and focus on whether their general intuition is pointed in the right direction.
 - Provide encouraging guidance and fill in small missing steps.`;
     } else if (strictnessLevel === 'viva') {
-      strictnessDirective = `STRICTNESS MODE: 🔴 OXFORD ORAL DEFENSE / RUTHLESS VIVA (Exam Readiness)
+      strictnessDirective = `STRICTNESS MODE: [ 03 ] OXFORD ORAL DEFENSE / RUTHLESS VIVA (Exam Readiness)
 - Zero tolerance for hand-waving, buzzwords, or skipping causal transitions.
 - If they omit the underlying physical mechanism, FAIL THEM (grade: 'needs_elaboration', score: 35-60).
 - Populate 'vivaCrossExamination' with a sharp, rigorous counter-question challenging their causal direction or asking: "Why doesn't the reverse happen?"
 - Challenge every assumption as an elite thesis examiner.`;
     } else {
-      strictnessDirective = `STRICTNESS MODE: 🟡 FEYNMAN STANDARD (True Understanding)
+      strictnessDirective = `STRICTNESS MODE: [ 02 ] FEYNMAN STANDARD (True Understanding)
 - THE JARGON BUZZER: If the student uses textbook terms (e.g. "depolarization", "AIMD", "mitosis") WITHOUT explaining the physical mechanical motion (e.g. ions rushing in, window halving), trigger 'jargonBuzzer'.
 - Reward simple, visual, plain-English mechanical explanations.`;
     }
@@ -154,6 +179,8 @@ EVALUATION CRITERIA:
 2. Did they articulate the core mechanism/causality or mnemonic connection?
 3. Check for the 'Illusion of Explanatory Depth' (feeling like they understand because they recognize terms, but unable to explain the inner moving parts).
 4. In 'errorAnalysis', provide 1 targeted sentence highlighting what exact mechanistic link was missed.
+
+${MNEMONIC_FREEDOM_DIRECTIVE}
 
 Output strictly JSON matching the evaluation schema.`;
 

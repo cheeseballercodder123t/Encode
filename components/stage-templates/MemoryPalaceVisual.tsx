@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity, MemoryPalaceVisualData } from '@/lib/types';
-import { Castle, Sparkles, HelpCircle, Eye, EyeOff, MapPin, Footprints } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -42,29 +41,29 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-none-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-amber-500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-amber-500/20 text-amber-400">
-            <Castle className="w-3.5 h-3.5" />
+          <div className="p-1 bg-amber/20 text-amber">
+            <span className="text-amber font-bold font-mono">[ CASTLE ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-amber">
             Method of Loci & Spatial Architectural Journey
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded flex items-center gap-1">
-          <Footprints className="w-2.5 h-2.5" /> Room Journey
+        <span className="text-[9px] font-mono font-bold text-amber bg-amber/40 border border-amber/30 px-2 py-0.5 flex items-center gap-1">
+          <span className="text-amber font-bold font-mono">[ FOOTPRINTS ]</span> Room Journey
         </span>
       </div>
 
       {/* Generation Effect: Memory Palace Challenge Card */}
-      <div className="mb-3.5 p-3 rounded-xl bg-amber-950/30 border border-amber-500/30">
+      <div className="mb-3.5 p-3 bg-amber/30 border border-amber/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <HelpCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-amber-300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-amber block">
                 Spatial Anchor & Sensory Hook Challenge
               </span>
               <p className="text-xs text-amber-100 font-medium mt-0.5">
@@ -75,14 +74,14 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-amber-400 hover:text-amber-300 bg-amber-900/30 px-2 py-1 rounded border border-amber-500/20 shrink-0 transition-colors"
+            className="text-[10px] font-mono font-semibold text-amber hover:text-amber bg-amber/30 px-2 py-1 border border-amber/20 shrink-0 transition-none-colors"
           >
             {showClue ? 'Hide Hint' : 'Get Sensory Hint'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-amber-500/20 text-[11px] text-amber-200/90 italic font-serif">
+          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber/90 italic font-mono">
             💡 <strong>Mnemonic Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -98,32 +97,32 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
             <div
               key={idx}
               onClick={() => setActiveLocus(idx)}
-              className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+              className={`p-3  border transition-none-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                 isCurrent
-                  ? 'border-amber-400/80 bg-amber-950/40 ring-1 ring-amber-400/50 shadow-md'
-                  : 'border-slate-700/60 bg-slate-900/60 hover:border-amber-500/40'
+                  ? 'border-amber/80 bg-amber/40 ring-1 ring-amber-400/50 '
+                  : 'border-steel/60 bg-deck/60 hover:border-amber/40'
               }`}
             >
               <div className="flex items-start gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-300 font-mono text-[10px] font-bold">
+                <div className="w-6 h-6 bg-amber/20 border border-amber/40 flex items-center justify-center shrink-0 text-amber font-mono text-[10px] font-bold">
                   {room.locusNumber || idx + 1}
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="text-xs font-bold text-white">
+                    <span className="text-xs font-bold text-bone">
                       {room.roomName}
                     </span>
-                    <span className="text-[9px] font-mono text-amber-300 bg-amber-950/60 border border-amber-500/30 px-1.5 py-0.2 rounded">
+                    <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
                       Anchored Item: {room.itemPlaced}
                     </span>
                   </div>
 
                   {/* Vivid Sensory Hook */}
-                  <div className="mt-1 text-[11px] text-slate-300 font-serif italic">
+                  <div className="mt-1 text-[11px] text-solder font-mono italic">
                     {isRevealed ? (
-                      <span className="text-amber-200">✨ &ldquo;{room.vividSensoryHook}&rdquo;</span>
+                      <span className="text-amber">✨ &ldquo;{room.vividSensoryHook}&rdquo;</span>
                     ) : (
-                      <span className="text-slate-500 italic">Click reveal to view bizarre sensory image...</span>
+                      <span className="text-solder italic">Click reveal to view bizarre sensory image...</span>
                     )}
                   </div>
                 </div>
@@ -135,7 +134,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
                   e.stopPropagation();
                   toggleHook(idx);
                 }}
-                className="text-[10px] font-mono text-amber-400 hover:text-amber-300 bg-amber-950/50 px-2 py-1 rounded border border-amber-500/30 shrink-0 self-end sm:self-center transition-colors"
+                className="text-[10px] font-mono text-amber hover:text-amber bg-amber/50 px-2 py-1 border border-amber/30 shrink-0 self-end sm:self-center transition-none-colors"
               >
                 {isRevealed ? 'Hide Image' : 'Reveal Hook'}
               </button>
@@ -146,24 +145,24 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
 
       {/* User Generated Palace Locus */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-amber-950/40 via-orange-950/30 to-slate-900/50 border border-amber-500/40 text-xs">
+        <div className="mt-3 p-3 border border-amber/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-amber-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[10px] font-mono font-bold uppercase text-amber flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Self-Generated Loci Anchor
             </span>
-            <span className="text-[9px] font-mono text-amber-400 bg-amber-950/60 border border-amber-500/30 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
               Palace Station
             </span>
           </div>
           {field1 && (
-            <p className="text-slate-200 font-serif italic text-xs">
+            <p className="text-bone font-mono italic text-xs">
               <strong>Room / Station:</strong> &ldquo;{field1}&rdquo;
             </p>
           )}
           {field2 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-amber-300">Bizarre Sensory Action: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-amber">Bizarre Sensory Action: </strong>
               {field2}
             </p>
           )}

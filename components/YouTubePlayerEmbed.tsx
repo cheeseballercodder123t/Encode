@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Play, Clock, ExternalLink, FastForward, Rewind } from 'lucide-react';
 import { YouTubeMetadata, VideoTimestamp } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 
@@ -39,20 +38,20 @@ export function YouTubePlayerEmbed({
   const embedUrl = `https://www.youtube-nocookie.com/embed/${youtubeData.videoId}?autoplay=1&start=${currentSeconds}&rel=0`;
 
   return (
-    <div className="w-full rounded-2xl border border-red-500/20 bg-slate-900/80 backdrop-blur-xl overflow-hidden shadow-2xl p-4 sm:p-5 space-y-4">
+    <div className="w-full border border-hazard500/20 bg-deck/80  overflow-hidden  p-4 sm:p-5 space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/30 text-red-400 shrink-0">
-            <Play className="w-4 h-4 fill-red-400" />
+          <div className="flex items-center justify-center w-8 h-8 bg-hazard600/20 border border-hazard500/30 text-hazard400 shrink-0">
+            <span className="text-amber font-bold font-mono">[ PLAY ]</span>
           </div>
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-slate-100 truncate">
+            <h3 className="text-sm font-bold text-bone truncate">
               {youtubeData.title}
             </h3>
-            <p className="text-xs text-slate-400 flex items-center gap-2 truncate">
+            <p className="text-xs text-solder flex items-center gap-2 truncate">
               <span>{youtubeData.authorName || 'YouTube Educator'}</span>
-              <span className="inline-block w-1 h-1 rounded-full bg-slate-600" />
+              <span className="inline-block w-1 h-1 bg-steel" />
               <span>{youtubeData.duration || 'Video Lecture'}</span>
             </p>
           </div>
@@ -60,22 +59,22 @@ export function YouTubePlayerEmbed({
 
         <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
           {/* Quick Seek Controls */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          <div className="flex items-center gap-1 bg-chassis p-1 border border-steel text-xs">
             <button
               type="button"
               onClick={() => handleSeekOffset(-10)}
               title="Rewind 10s"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+              className="p-1 hover:bg-steel text-solder hover:text-bone transition-none-colors"
             >
-              <Rewind className="w-3.5 h-3.5" />
+              <span className="text-amber font-bold font-mono">[ REWIND ]</span>
             </button>
             <button
               type="button"
               onClick={() => handleSeekOffset(10)}
               title="Forward 10s"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
+              className="p-1 hover:bg-steel text-solder hover:text-bone transition-none-colors"
             >
-              <FastForward className="w-3.5 h-3.5" />
+              <span className="text-amber font-bold font-mono">[ SKIP ]</span>
             </button>
           </div>
 
@@ -83,16 +82,16 @@ export function YouTubePlayerEmbed({
             href={youtubeData.videoUrl} 
             target="_blank" 
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-steel hover:bg-steel text-xs font-semibold text-solder transition-none-colors"
           >
             <span>YouTube</span>
-            <ExternalLink className="w-3 h-3 text-slate-400" />
+            <span className="text-amber font-bold font-mono">[ EXT ]</span>
           </a>
         </div>
       </div>
 
       {/* Video Player Box */}
-      <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-black border border-slate-800">
+      <div className="relative w-full aspect-video overflow-hidden bg-chassis border border-steel">
         <iframe
           src={embedUrl}
           title={youtubeData.title}
@@ -106,11 +105,11 @@ export function YouTubePlayerEmbed({
       {youtubeData.timestamps && youtubeData.timestamps.length > 0 && (
         <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-xs font-bold text-solder uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ TIME ]</span>
               Cognitive Milestones & Timestamp Anchors
             </span>
-            <span className="text-[11px] text-slate-500">
+            <span className="text-[11px] text-solder">
               Click anchor to jump to lecture moment
             </span>
           </div>
@@ -123,13 +122,13 @@ export function YouTubePlayerEmbed({
                   key={idx}
                   type="button"
                   onClick={() => handleJumpToTimestamp(ts)}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                  className={`flex items-start gap-2.5 p-2.5  text-left border transition-none-all cursor-pointer ${
                     isSelected
-                      ? 'bg-red-500/20 border-red-500/50 text-white shadow-lg shadow-red-500/10 ring-1 ring-red-500/40'
-                      : 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/60 text-slate-300'
+                      ? 'bg-hazard500/20 border-hazard500/50 text-bone   ring-1 ring-red-500/40'
+                      : 'bg-steel/60 hover:bg-steel border-steel/60 text-solder'
                   }`}
                 >
-                  <span className="px-2 py-0.5 rounded-md bg-red-600/30 border border-red-500/40 text-red-300 text-xs font-mono font-bold shrink-0">
+                  <span className="px-2 py-0.5 bg-hazard600/30 border border-hazard500/40 text-hazard300 text-xs font-mono font-bold shrink-0">
                     ▶ {ts.formatted}
                   </span>
                   <div className="min-w-0">
@@ -137,7 +136,7 @@ export function YouTubePlayerEmbed({
                       {ts.label}
                     </p>
                     {ts.insight && (
-                      <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">
+                      <p className="text-[10px] text-solder line-clamp-1 mt-0.5">
                         {ts.insight}
                       </p>
                     )}

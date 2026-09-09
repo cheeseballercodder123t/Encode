@@ -66,7 +66,7 @@ When a student prepares to encode complex material (e.g., Quantum Entanglement, 
       userPrompt,
       responseSchema: prerequisitesSchema,
       settings,
-      isChecker: false,
+      isChecker: true,
       file: hasFile ? file : null,
     });
 

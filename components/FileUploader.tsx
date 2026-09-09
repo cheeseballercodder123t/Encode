@@ -1,17 +1,6 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { 
-  FileText, 
-  Image as ImageIcon, 
-  UploadCloud, 
-  X, 
-  File, 
-  Check, 
-  Sparkles,
-  AlertCircle,
-  Cloud
-} from 'lucide-react';
 import { UploadedFileAsset } from '@/lib/types';
 import { sound } from '@/lib/audio';
 import { GoogleDriveModal } from './GoogleDriveModal';
@@ -122,27 +111,27 @@ export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) 
       />
 
       {selectedFile ? (
-        <div className="p-3 bg-[#141724] border border-indigo-500/40 rounded-xl flex items-center justify-between gap-3 shadow-lg">
+        <div className="p-3 bg-deck border border-steel/40 flex items-center justify-between gap-3 ">
           <div className="flex items-center gap-3 min-w-0">
             {selectedFile.previewUrl ? (
               <img
                 src={selectedFile.previewUrl}
                 alt={selectedFile.name}
-                className="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0"
+                className="w-10 h-10 object-cover border border-steel shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-                <FileText className="w-5 h-5" />
+              <div className="w-10 h-10 bg-steel/10 border border-steel/30 flex items-center justify-center text-bone shrink-0">
+                <span className="text-amber font-bold font-mono">[ FILE ]</span>
               </div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-white text-xs truncate">{selectedFile.name}</span>
-                <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 text-[9px] font-bold rounded">
+                <span className="font-bold text-bone text-xs truncate">{selectedFile.name}</span>
+                <span className="px-1.5 py-0.5 bg-amber/20 text-amber300 text-[9px] font-bold ">
                   Multimodal Ready
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-solder">
                 {selectedFile.type.includes('pdf') ? 'PDF Document' : 'Image'} • {Math.round(selectedFile.size / 1024)} KB
               </p>
             </div>
@@ -151,10 +140,10 @@ export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) 
           <button
             type="button"
             onClick={clearFile}
-            className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-800 transition-colors shrink-0"
+            className="p-1.5 text-solder hover:text-hazard400 hover:bg-steel transition-none-colors shrink-0"
             title="Remove attachment"
           >
-            <X className="w-4 h-4" />
+            <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
         </div>
       ) : (
@@ -163,26 +152,26 @@ export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) 
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
-          className={`p-4 border-2 border-dashed rounded-xl transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-3 ${
+          className={`p-4 border-2 border-dashed  transition-none-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-3 ${
             isDragging
-              ? 'border-indigo-500 bg-indigo-500/10'
-              : 'border-slate-800 hover:border-slate-700 bg-[#0F111A]/80 hover:bg-[#121522]'
+              ? 'border-steel bg-steel/10'
+              : 'border-steel hover:border-steel bg-chassis/80 hover:bg-deck'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-600/10 border border-indigo-500/20 text-indigo-400">
-              <UploadCloud className="w-5 h-5" />
+            <div className="p-2.5 bg-steel/10 border border-steel/20 text-bone">
+              <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-200">
+                <span className="text-xs font-bold text-bone">
                   Attach Handwritten Notes, Whiteboard, or PDF Slides
                 </span>
-                <span className="px-1.5 py-0.2 bg-purple-500/20 text-purple-300 text-[9px] font-bold rounded">
+                <span className="px-1.5 py-0.5 bg-steel/20 text-bone text-[9px] font-bold ">
                   Gemini 3.7 Vision
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-solder">
                 Drag & drop or click to upload PDF lecture slides, diagrams, or photo of notes
               </p>
             </div>
@@ -195,17 +184,17 @@ export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) 
                 e.stopPropagation();
                 setIsDriveModalOpen(true);
               }}
-              className="px-3 py-1.5 bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 text-xs font-bold rounded-lg transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-steel/60 hover:bg-steel/60 border border-steel/40 text-bone text-xs font-bold transition-none-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
-              <Cloud className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               Import Google Drive
             </button>
 
             <button
               type="button"
-              className="px-3 py-1.5 bg-[#181C2C] hover:bg-[#20253A] border border-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-deck hover:bg-steel border border-steel text-bone text-xs font-bold transition-none-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
-              <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="text-amber font-bold font-mono">[ IMG ]</span>
               Browse Local
             </button>
           </div>
@@ -213,8 +202,8 @@ export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) 
       )}
 
       {errorMessage && (
-        <div className="flex items-center gap-1.5 text-xs text-red-400 px-1">
-          <AlertCircle className="w-3.5 h-3.5" />
+        <div className="flex items-center gap-1.5 text-xs text-hazard400 px-1">
+          <span className="text-amber font-bold font-mono">[ ! ]</span>
           <span>{errorMessage}</span>
         </div>
       )}

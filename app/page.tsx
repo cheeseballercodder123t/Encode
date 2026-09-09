@@ -2,27 +2,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  Brain,
-  Sparkles,
-  Volume2,
-  VolumeX,
-  Award,
-  Zap,
-  Layers,
-  Eye,
-  Flame,
-  Settings,
-  History as HistoryIcon,
-  Shuffle,
-  ShieldCheck,
-  SplitSquareVertical,
-  Share2,
-  Cloud,
-  GitCompare,
-  WifiOff,
-  BarChart2
-} from 'lucide-react';
 import { sound } from '@/lib/audio';
 import {
   Activity,
@@ -90,7 +69,7 @@ export default function DeepEncodeApp() {
     isOffline,
   } = useSettings();
 
-  // The whole session flow — schema, progress, stage inputs & gamification
+  // The whole session flow : schema, progress, stage inputs & gamification
   // (useSession: reducer-backed state hub)
   const {
     appState, setAppState,
@@ -155,10 +134,11 @@ export default function DeepEncodeApp() {
   // Blurting Method State
   const [isBlurtingModalOpen, setIsBlurtingModalOpen] = useState(false);
 
-  // Segregation & RemNote Engine State
+  // Segregation & Export Engine State
   const [isSegregateModalOpen, setIsSegregateModalOpen] = useState(false);
   const [isSegregating, setIsSegregating] = useState(false);
   const [segregationReport, setSegregationReport] = useState<SegregationReport | null>(null);
+  const [showExportChoice, setShowExportChoice] = useState(false);
 
   // Anki Export & Webhook SM-2 Sync State
   const [isAnkiExportOpen, setIsAnkiExportOpen] = useState(false);
@@ -317,11 +297,11 @@ export default function DeepEncodeApp() {
     }
   };
 
-  // Concept vs Fact Segregator (4-Quadrant + RemNote)
+  // Concept vs Fact Segregator (4-Quadrant + Export)
   const handleSegregateNotes = async () => {
     if (!rawNotes.trim() && !uploadedFile) return;
     setIsSegregating(true);
-    setIsSegregateModalOpen(true);
+    setShowExportChoice(false);
     sound.playBeep(600, 'sine', 0.15);
 
     try {
@@ -342,11 +322,11 @@ export default function DeepEncodeApp() {
 
       const data: SegregationReport = await res.json();
       setSegregationReport(data);
+      setShowExportChoice(true);
       sound.playSuccess();
     } catch (err: any) {
       console.error(err);
       alert(err?.message || 'Segregation failed. Try again.');
-      setIsSegregateModalOpen(false);
     } finally {
       setIsSegregating(false);
     }
@@ -431,11 +411,11 @@ export default function DeepEncodeApp() {
   // Rank calculation based on XP
   const userRank = useMemo(() => {
     const displayXp = xp + (cloudStats?.totalXp || 0);
-    if (displayXp >= 1000) return { title: 'Master Neural Architect', level: 5, color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' };
-    if (displayXp >= 750) return { title: 'Cognitive Synthesizer', level: 4, color: 'text-purple-400 border-purple-500/40 bg-purple-500/10' };
-    if (displayXp >= 500) return { title: 'Schema Engineer', level: 3, color: 'text-indigo-400 border-indigo-500/40 bg-indigo-500/10' };
-    if (displayXp >= 250) return { title: 'Active Encoder', level: 2, color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' };
-    return { title: 'Passive Reader', level: 1, color: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' };
+    if (displayXp >= 1000) return { title: 'Master Neural Architect', level: 5, color: 'text-amber border-amber/60' };
+    if (displayXp >= 750) return { title: 'Cognitive Synthesizer', level: 4, color: 'text-amber border-amber/40' };
+    if (displayXp >= 500) return { title: 'Schema Engineer', level: 3, color: 'text-bone border-steel' };
+    if (displayXp >= 250) return { title: 'Active Encoder', level: 2, color: 'text-bone border-steel' };
+    return { title: 'Passive Reader', level: 1, color: 'text-solder border-steel' };
   }, [xp, cloudStats]);
 
 
@@ -912,59 +892,46 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="min-h-screen bg-[#07080D] text-slate-100 flex flex-col items-center py-8 px-4 sm:px-6 relative overflow-x-hidden selection:bg-indigo-500/30 selection:text-white font-sans">
-      
-      {/* Background ambient glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 -left-40 w-[400px] h-[400px] bg-purple-600/5 rounded-full blur-3xl" />
-      </div>
+    <main className="min-h-screen bg-chassis text-bone flex flex-col items-center py-8 px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber/30 selection:text-chassis font-mono">
 
       <div className="w-full max-w-5xl relative z-10 flex-1 flex flex-col">
-        
+
         {/* Top Control Bar */}
-        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-steel bg-deck px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl shadow-inner shadow-indigo-500/20">
-              <Brain className="w-6 h-6 animate-pulse" />
-            </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-white">DeepEncode</h1>
-                <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-full">
-                  Gemini 3.7 Flash & Firestore
+                <h1 className="text-xl font-bold tracking-tight text-bone uppercase">DeepEncode</h1>
+                <span className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest bg-chassis text-amber border border-amber/40">
+                  [ GEMINI 3.7 // FIRESTORE ]
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Multimodal cognitive schema architect with adaptive chunking & interleaving</p>
+              <p className="text-[10px] text-solder font-mono uppercase tracking-wider">// Multimodal cognitive schema architect with adaptive chunking & interleaving</p>
             </div>
           </div>
 
           {/* Gamification Bar & Top Buttons */}
           <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
             {appState !== 'input' && (
-              <div className="flex items-center gap-2.5 bg-[#0F111A] border border-slate-800 px-3 py-1.5 rounded-xl shadow-lg relative">
-                <div className="flex items-center gap-1 text-amber-400">
-                  <Zap className="w-4 h-4 fill-amber-400 animate-bounce" />
-                  <span className="text-xs font-black font-mono tracking-tight">{xp} XP</span>
-                </div>
+              <div className="flex items-center gap-2.5 bg-chassis border border-steel px-3 py-1.5 relative">
+                <span className="text-xs font-bold font-mono tracking-tight text-amber">XP: {String(xp).padStart(4, '0')}</span>
 
-                <div className="h-4 w-px bg-slate-800" />
+                <div className="h-4 w-px bg-steel" />
 
-                <div className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded border ${userRank.color}`}>
-                  Lvl {userRank.level}: {userRank.title}
+                <div className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border bg-deck ${userRank.color}`}>
+                  LVL: {String(userRank.level).padStart(2, '0')} // {userRank.title}
                 </div>
 
                 {/* Floating XP Gain Indicator */}
                 <AnimatePresence>
                   {xpGainAnimation && (
                     <motion.div
-                      initial={{ opacity: 0, y: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, y: -28, scale: 1.1 }}
+                      initial={{ opacity: 0, y: 0 }}
+                      animate={{ opacity: 1, y: -28 }}
                       exit={{ opacity: 0 }}
-                      className="absolute -top-3 right-4 px-2 py-0.5 bg-emerald-500 text-black text-[11px] font-black rounded-md shadow-lg shadow-emerald-500/30 flex items-center gap-1 z-20"
+                      className="absolute -top-3 right-4 px-2 py-0.5 bg-amber text-chassis text-[11px] font-mono font-bold z-20"
                     >
-                      <Sparkles className="w-3 h-3" />
-                      +{xpGainAnimation} XP!
+                      +{xpGainAnimation} XP
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -973,9 +940,8 @@ export default function DeepEncodeApp() {
 
             {/* PWA Local-First Offline & Install Indicator */}
             {isOffline && (
-              <div className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl text-[11px] font-mono font-semibold flex items-center gap-1.5 shadow-sm">
-                <WifiOff className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Offline Mode</span>
+              <div className="px-2.5 py-1 bg-chassis border border-hazard text-solder text-[10px] font-mono font-bold uppercase tracking-wider">
+                [ LINK: OFFLINE ]
               </div>
             )}
             <PWAInstallHeader />
@@ -984,33 +950,30 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsComparativeModalOpen(true)}
-              className="p-2 bg-gradient-to-r from-purple-600/20 to-pink-600/20 hover:from-purple-600/30 hover:to-pink-600/30 border border-purple-500/40 text-purple-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Compare two documents (e.g. Lecture Slides vs Textbook Chapter)"
             >
-              <GitCompare className="w-4 h-4 text-purple-400" />
-              <span className="text-[11px] font-bold hidden md:inline">Compare 2 Docs</span>
+              [ COMPARE // 2 DOCS ]
             </button>
 
             {/* Anki & SM-2 Exporter Button */}
             <button
               type="button"
               onClick={() => setIsAnkiExportOpen(true)}
-              className="p-2 bg-gradient-to-r from-cyan-600/20 to-blue-600/20 hover:from-cyan-600/30 hover:to-blue-600/30 border border-cyan-500/40 text-cyan-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Export .apkg Anki package or sync via SM-2 Webhooks"
             >
-              <Zap className="w-4 h-4 text-amber-300" />
-              <span className="text-[11px] font-bold hidden md:inline">Anki / SM-2</span>
+              [ ANKI: SM-2 ]
             </button>
 
             {/* Interleaving Multi-Domain Drill Button */}
             <button
               type="button"
               onClick={() => setIsInterleavingOpen(true)}
-              className="p-2 bg-gradient-to-r from-violet-600/20 to-indigo-600/20 hover:from-violet-600/30 hover:to-indigo-600/30 border border-violet-500/40 text-violet-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Start Interleaved Multi-Domain Drill (Mix subjects)"
             >
-              <Shuffle className="w-4 h-4 text-violet-400" />
-              <span className="text-[11px] font-bold hidden md:inline">Interleaved Drill</span>
+              [ DRILL: INTERLEAVE ]
             </button>
 
             {/* Stateless Share Button in Top Bar (when active or completed) */}
@@ -1018,28 +981,24 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleOpenStatelessShare()}
-                className="p-2 bg-[#0F111A] hover:bg-[#151824] border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
                 title="Share Stateless URL (Free & Zero DB Required)"
               >
-                <Share2 className="w-4 h-4 text-cyan-400" />
-                <span className="text-[11px] font-bold hidden sm:inline">Share</span>
+                [ SHARE ]
               </button>
             )}
 
             {/* Cloud Sync / Account Button */}
             <button
               onClick={() => setIsAuthOpen(true)}
-              className={`p-2 border rounded-xl transition-all flex items-center gap-1.5 ${
-                user 
-                  ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-600/20' 
-                  : 'bg-[#0F111A] hover:bg-[#151824] border-slate-800 text-slate-400 hover:text-slate-200'
+              className={`px-2.5 py-1.5 bg-chassis border transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer ${
+                user
+                  ? 'border-amber/40 text-amber'
+                  : 'border-steel text-solder hover:text-bone'
               }`}
               title={user ? `Signed in as ${user.displayName || user.email || 'User'} (Cloud Synced)` : 'Connect Cloud Database (Firestore)'}
             >
-              <Cloud className={`w-4 h-4 ${user ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span className="text-[11px] font-bold hidden sm:inline">
-                {user ? (user.displayName?.split(' ')[0] || 'Synced') : 'Cloud'}
-              </span>
+              [ CLOUD: {user ? 'SYNCED' : 'OFF'} ]
             </button>
 
             {/* Metacognitive Performance Review Button (when completed) */}
@@ -1047,11 +1006,10 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleEndSessionReview()}
-                className="p-2 bg-gradient-to-r from-emerald-600/20 to-teal-600/20 hover:from-emerald-600/30 hover:to-teal-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                className="px-2.5 py-1.5 bg-amber border border-amber text-chassis transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
                 title="View Metacognitive Performance Review"
               >
-                <Award className="w-4 h-4 text-emerald-400" />
-                <span className="text-[11px] font-bold hidden sm:inline">AI Review</span>
+                [ SESSION REVIEW ]
               </button>
             )}
 
@@ -1059,43 +1017,37 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsAnalyticsOpen(true)}
-              className="p-2 bg-[#0F111A] hover:bg-[#151824] border border-violet-500/40 text-violet-300 hover:text-violet-200 rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Metacognitive Analytics & Model Quota Dashboard"
             >
-              <BarChart2 className="w-4 h-4 text-violet-400" />
-              <span className="text-[11px] font-bold hidden md:inline">Analytics</span>
+              [ TELEMETRY ]
             </button>
 
             {/* Saved Schemas History Button */}
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="p-2 bg-[#0F111A] hover:bg-[#151824] border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all relative"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer relative"
               title="View Saved Schemas History"
             >
-              <HistoryIcon className="w-4 h-4 text-indigo-400" />
-              {savedSchemas.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-mono font-bold rounded-full border border-slate-900">
-                  {savedSchemas.length}
-                </span>
-              )}
+              [ LIBRARY{savedSchemas.length > 0 ? `: ${String(savedSchemas.length).padStart(2, '0')}` : ''} ]
             </button>
 
             {/* AI Settings / Multi-Key Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 bg-[#0F111A] hover:bg-[#151824] border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Configure Models (Gemini 3.7 Flash & 3.5 Flash-Lite)"
             >
-              <Settings className="w-4 h-4 text-slate-300" />
+              [ CONFIG ]
             </button>
 
             {/* Audio Toggle */}
             <button
               onClick={toggleSound}
-              className="p-2 bg-[#0F111A] hover:bg-[#151824] border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all"
+              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title={soundMuted ? 'Unmute audio effects' : 'Mute audio effects'}
             >
-              {soundMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-indigo-400" />}
+              [ SND: {soundMuted ? 'OFF' : 'ON'} ]
             </button>
           </div>
         </header>
@@ -1105,21 +1057,18 @@ export default function DeepEncodeApp() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-cyan-950/90 via-slate-900 to-indigo-950/90 border border-cyan-500/50 shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+            className="mb-6 p-4 bg-deck border border-amber/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 flex items-center justify-center shrink-0">
-                <Share2 className="w-4 h-4 text-cyan-300" />
-              </div>
+              <span className="px-2 py-1 bg-chassis border border-amber/40 text-amber text-[9px] font-mono font-bold uppercase tracking-widest shrink-0">
+                [ STATELESS URL ]
+              </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-black text-slate-100 text-sm">Classmate Shared Schema Loaded</span>
-                  <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 text-[9px] font-mono uppercase font-bold">
-                    Stateless URL
-                  </span>
+                  <span className="font-bold text-bone text-sm font-mono uppercase">Classmate Shared Schema Loaded</span>
                 </div>
-                <p className="text-slate-300 text-xs mt-0.5">
-                  Loaded <strong className="text-cyan-300">&ldquo;{importedShareBanner}&rdquo;</strong> completely free with zero database login needed.
+                <p className="text-solder text-xs mt-0.5 font-mono">
+                  Loaded <span className="text-amber">&ldquo;{importedShareBanner}&rdquo;</span> completely free with zero database login needed.
                 </p>
               </div>
             </div>
@@ -1144,16 +1093,16 @@ export default function DeepEncodeApp() {
                   sound.playSuccess();
                   setImportedShareBanner(null);
                 }}
-                className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs cursor-pointer shadow-lg shadow-cyan-600/20"
+                className="px-3.5 py-2 bg-amber border border-amber text-chassis font-mono font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-none"
               >
-                Save to History
+                [ SAVE TO HISTORY ]
               </button>
               <button
                 type="button"
                 onClick={() => setImportedShareBanner(null)}
-                className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                className="px-2 py-1 text-solder hover:text-bone border border-steel hover:border-solder font-mono text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-none"
               >
-                ✕
+                [ X ]
               </button>
             </div>
           </motion.div>
@@ -1193,86 +1142,84 @@ export default function DeepEncodeApp() {
 
             {/* Quick Diagnostic Power Tools */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-              <span className="text-[11px] font-semibold text-slate-500 mr-1">
-                Deep Diagnostics:
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder mr-1">
+                // DEEP DIAGNOSTICS:
               </span>
               <button
                 type="button"
                 onClick={handleAuditPrerequisites}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isAuditingPrereq}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-amber-500/40 text-amber-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
                 title="Concept Prerequisites Check: Diagnoses background fundamentals you need before tackling this topic"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>{isAuditingPrereq ? 'Auditing...' : 'Check Prerequisites'}</span>
+                {isAuditingPrereq ? '[ AUDITING... ]' : '[ CHECK PREREQUISITES ]'}
               </button>
 
               <button
                 type="button"
                 onClick={handleLaunchPretest}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isLoadingPretest}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-rose-500/40 text-rose-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
                 title="Pre-Testing Effect (Productive Failure): 3-question diagnostic failure drill before learning"
               >
-                <Zap className="w-3.5 h-3.5 text-rose-400" />
-                <span>{isLoadingPretest ? 'Generating...' : 'Pre-Test Drill'}</span>
+                {isLoadingPretest ? '[ GENERATING... ]' : '[ PRE-TEST DRILL ]'}
               </button>
 
               <button
                 type="button"
                 onClick={handleSegregateNotes}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isSegregating}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
-                title="Concept vs Fact Segregator & RemNote: 4-Quadrant Matrix + Cloze Optimizer"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
+                title="Concept vs Fact Segregator: 4-Quadrant Matrix + Cloze Optimizer / Export to Anki or RemNote"
               >
-                <SplitSquareVertical className="w-3.5 h-3.5 text-cyan-400" />
-                <span>{isSegregating ? 'Segregating...' : 'Segregate & RemNote'}</span>
+                {isSegregating ? '[ SEGREGATING... ]' : '[ SEGREGATE AND EXPORT ]'}
               </button>
 
               <button
                 type="button"
                 onClick={handleRoastNotes}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isRoasting}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0F111A] hover:bg-[#151824] disabled:opacity-40 border border-slate-800 hover:border-orange-500/40 text-orange-300 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-hazard text-hazard text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
                 title="Strict Professor Audit: Call out fallacies, hand-waving, and missing gaps before encoding"
               >
-                <Flame className="w-3.5 h-3.5 text-orange-400" />
-                <span>{isRoasting ? 'Auditing...' : 'Roast Notes'}</span>
+                {isRoasting ? '[ AUDITING... ]' : '[ ROAST NOTES ]'}
               </button>
             </div>
 
-            {/* Cognitive framework explanations */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-              <div className="p-4 bg-[#0F111A]/60 border border-slate-800/70 rounded-xl">
-                <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold mb-1.5">
-                  <Layers className="w-4 h-4" />
-                  {encodingMode === 'memorization' ? "Miller's 7±2 Law & Chunking" : "Craik & Lockhart Levels of Processing"}
-                </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {encodingMode === 'memorization'
-                    ? "Chunking arbitrary items into semantic sub-clusters prevents working memory overload."
-                    : "Semantic analysis creates drastically stronger memory traces than passive re-reading."}
-                </p>
+            {/* Cognitive framework telemetry */}
+            <div className="bg-deck border border-steel">
+              <div className="px-4 py-2 border-b border-steel bg-chassis">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder">// COGNITIVE FRAMEWORK TELEMETRY</span>
               </div>
-              <div className="p-4 bg-[#0F111A]/60 border border-slate-800/70 rounded-xl">
-                <div className="flex items-center gap-2 text-purple-400 text-xs font-bold mb-1.5">
-                  <Eye className="w-4 h-4" />
-                  {encodingMode === 'memorization' ? "Method of Loci (Palace)" : "Paivio Dual Coding (1986)"}
+              <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x divide-y md:divide-y-0 divide-steel">
+                <div className="p-4">
+                  <div className="text-amber text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
+                    [ 01 ] {encodingMode === 'memorization' ? "Miller's 7±2 Law & Chunking" : "Craik & Lockhart Levels of Processing"}
+                  </div>
+                  <p className="text-[11px] text-solder font-mono leading-relaxed">
+                    {encodingMode === 'memorization'
+                      ? "Chunking arbitrary items into semantic sub-clusters prevents working memory overload."
+                      : "Semantic analysis creates drastically stronger memory traces than passive re-reading."}
+                  </p>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {encodingMode === 'memorization'
-                    ? "Placing items along a familiar physical path leverages spatial navigation memory."
-                    : "Forming both verbal and visual mental spatial codes doubles retrievability during recall."}
-                </p>
-              </div>
-              <div className="p-4 bg-[#0F111A]/60 border border-slate-800/70 rounded-xl">
-                <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold mb-1.5">
-                  <Shuffle className="w-4 h-4" />
-                  <span>The Interleaving Effect</span>
+                <div className="p-4">
+                  <div className="text-amber text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
+                    [ 02 ] {encodingMode === 'memorization' ? "Method of Loci (Palace)" : "Paivio Dual Coding (1986)"}
+                  </div>
+                  <p className="text-[11px] text-solder font-mono leading-relaxed">
+                    {encodingMode === 'memorization'
+                      ? "Placing items along a familiar physical path leverages spatial navigation memory."
+                      : "Forming both verbal and visual mental spatial codes doubles retrievability during recall."}
+                  </p>
                 </div>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Mixing diverse domains forces active neural discrimination, preventing mental fixation and building flexible mastery.
-                </p>
+                <div className="p-4">
+                  <div className="text-amber text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
+                    [ 03 ] The Interleaving Effect
+                  </div>
+                  <p className="text-[11px] text-solder font-mono leading-relaxed">
+                    Mixing diverse domains forces active neural discrimination, preventing mental fixation and building flexible mastery.
+                  </p>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -1288,22 +1235,23 @@ export default function DeepEncodeApp() {
             animate={{ opacity: 1, scale: 1 }}
             className="w-full py-28 flex flex-col items-center justify-center text-center"
           >
-            <div className="relative mb-6">
-              <div className="w-16 h-16 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin" />
-              <Brain className="w-7 h-7 text-indigo-400 absolute inset-0 m-auto animate-pulse" />
+            <div className="mb-6 border border-steel bg-deck px-6 py-2">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber">
+                [ PROCESSING /// ]
+              </span>
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
+            <h2 className="text-lg font-bold text-bone mb-2 tracking-tight font-mono uppercase">
               {activeTab === 'youtube'
                 ? 'Deconstructing YouTube Video Lecture Timestamps...'
-                : uploadedFile 
-                  ? `Multimodal Analysis (${uploadedFile.name})...` 
+                : uploadedFile
+                  ? `Multimodal Analysis (${uploadedFile.name})...`
                   : isGuidedPathMode || wordCount > 900
                     ? "Architecting Miller's Law Guided Path..."
-                    : encodingMode === 'memorization' 
-                      ? 'Constructing Mnemonic & Chunking Blueprint...' 
+                    : encodingMode === 'memorization'
+                      ? 'Constructing Mnemonic & Chunking Blueprint...'
                       : 'Deconstructing Semantic Schemas...'}
             </h2>
-            <p className="text-slate-400 max-w-md font-serif italic text-sm">
+            <p className="text-solder max-w-md font-mono text-xs uppercase tracking-wider">
               {activeTab === 'youtube'
                 ? 'Gemini 3.7 Flash is extracting key lecture milestones, visual animations, and timestamp anchors.'
                 : enableDeepResearch
@@ -1388,7 +1336,7 @@ export default function DeepEncodeApp() {
             onOpenBlurting={() => setIsBlurtingModalOpen(true)}
             onOpenSegregate={(report) => {
               setSegregationReport(report);
-              setIsSegregateModalOpen(true);
+              setShowExportChoice(true);
             }}
             onRestart={resetApp}
           />
@@ -1512,6 +1460,58 @@ export default function DeepEncodeApp() {
         }}
         settings={aiSettings}
       />
+
+      {/* Export Choice Modal: Anki vs RemNote */}
+      {showExportChoice && segregationReport && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-chassis/90">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-deck border border-steel p-6 max-w-md w-full mx-4"
+          >
+            <div className="text-center mb-6">
+              <span className="inline-block px-3 py-1 bg-chassis border border-amber/40 text-amber text-[10px] font-mono font-bold uppercase tracking-widest mb-3">
+                [ SEGREGATION COMPLETE ]
+              </span>
+              <h3 className="text-base font-bold text-bone font-mono uppercase tracking-wider">Export your 4-Quadrant Matrix</h3>
+              <p className="text-[10px] text-solder font-mono uppercase tracking-wider mt-1">
+                // TARGET: ANKI OR REMNOTE
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setShowExportChoice(false);
+                  setIsAnkiExportOpen(true);
+                }}
+                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-steel hover:border-amber transition-none cursor-pointer"
+              >
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-bone">[ ANKI ]</span>
+                <span className="text-[10px] font-mono text-solder">.APKG + SM-2</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowExportChoice(false);
+                  setIsSegregateModalOpen(true);
+                }}
+                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-steel hover:border-amber transition-none cursor-pointer"
+              >
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-bone">[ REMNOTE ]</span>
+                <span className="text-[10px] font-mono text-solder">MARKDOWN + API</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowExportChoice(false)}
+              className="w-full mt-4 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder hover:text-bone transition-none cursor-pointer"
+            >
+              [ CANCEL ]
+            </button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Feature: Direct Anki .apkg Export & SM-2 Spaced Repetition Webhook Sync */}
       <AnkiExportModal

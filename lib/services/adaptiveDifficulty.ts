@@ -29,11 +29,11 @@ export function computeSuccessRate(userResponses: Record<string, { feynmanReview
 export function getDifficultyPromptModifier(level: DifficultyLevel): string {
   switch (level) {
     case 'hard':
-      return `ADAPTIVE DIFFICULTY — HARD (learner success rate >=80%): Make the generationChallenge significantly harder. Provide only a single cryptic one-word clue. Include at least 3 missing components the learner must deduce. Use advanced cross-domain analogies.`;
+      return `ADAPTIVE DIFFICULTY : HARD (learner success rate >=80%): Make the generationChallenge significantly harder. Provide only a single cryptic one-word clue. Include at least 3 missing components the learner must deduce. Use advanced cross-domain analogies.`;
     case 'easy':
-      return `ADAPTIVE DIFFICULTY — EASY (learner success rate <50%): Make the generationChallenge more supportive. Provide a generous multi-sentence clue. Only ask for one missing component. Use a highly familiar everyday analogy as the premise.`;
+      return `ADAPTIVE DIFFICULTY : EASY (learner success rate <50%): Make the generationChallenge more supportive. Provide a generous multi-sentence clue. Only ask for one missing component. Use a highly familiar everyday analogy as the premise.`;
     default:
-      return `ADAPTIVE DIFFICULTY — MEDIUM: Standard challenge level. Provide one focused clue and ask for 1-2 missing components.`;
+      return `ADAPTIVE DIFFICULTY : MEDIUM: Standard challenge level. Provide one focused clue and ask for 1-2 missing components.`;
   }
 }
 

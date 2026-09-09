@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity, CauseEffectVisualData } from '@/lib/types';
-import { Flame, ArrowRight, AlertTriangle, ShieldAlert, Sparkles, HelpCircle, ToggleLeft, ToggleRight } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -35,14 +34,14 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-rose-500/30 bg-gradient-to-br from-rose-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+    <div className=" border border-hazard500/30 via-[#0E111C]  p-4   transition-none-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-rose-500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-hazard500/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-rose-500/20 text-rose-400">
-            <Flame className="w-3.5 h-3.5" />
+          <div className="p-1 bg-hazard500/20 text-hazard400">
+            <span className="text-amber font-bold font-mono">[ FLAME ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-rose-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-hazard300">
             Counterfactual Perturbation & Breakdown Dynamics
           </span>
         </div>
@@ -51,16 +50,16 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
         <button
           type="button"
           onClick={() => setIsPerturbed(!isPerturbed)}
-          className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-1 rounded bg-rose-950/50 border border-rose-500/30 text-rose-300 hover:bg-rose-900/40 transition-colors"
+          className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-1 bg-hazard950/50 border border-hazard500/30 text-hazard300 hover:bg-hazard900/40 transition-none-colors"
         >
           {isPerturbed ? (
             <>
-              <ToggleRight className="w-4 h-4 text-rose-400" />
+              <span className="text-amber font-bold font-mono">[ ON ]</span>
               <span>Simulation: Perturbation Active</span>
             </>
           ) : (
             <>
-              <ToggleLeft className="w-4 h-4 text-slate-400" />
+              <span className="text-amber font-bold font-mono">[ OFF ]</span>
               <span>Simulation: Baseline State</span>
             </>
           )}
@@ -68,15 +67,15 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
       </div>
 
       {/* Generation Effect: Perturbation Challenge Card */}
-      <div className="mb-3.5 p-3 rounded-xl bg-rose-950/30 border border-rose-500/30">
+      <div className="mb-3.5 p-3 bg-hazard950/30 border border-hazard500/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <HelpCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-rose-300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-hazard300 block">
                 Counterfactual Domino Challenge
               </span>
-              <p className="text-xs text-rose-100 font-medium mt-0.5">
+              <p className="text-xs text-hazard100 font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -84,14 +83,14 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-rose-400 hover:text-rose-300 bg-rose-900/30 px-2 py-1 rounded border border-rose-500/20 shrink-0 transition-colors"
+            className="text-[10px] font-mono font-semibold text-hazard400 hover:text-hazard300 bg-hazard900/30 px-2 py-1 border border-hazard500/20 shrink-0 transition-none-colors"
           >
             {showClue ? 'Hide Clue' : 'Socratic Clue'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-rose-500/20 text-[11px] text-rose-200/90 italic font-serif">
+          <div className="mt-2.5 pt-2 border-t border-hazard500/20 text-[11px] text-hazard200/90 italic font-mono">
             💡 <strong>Dynamic Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -104,38 +103,38 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
           const isUserMapped = index === 0 ? field1 : index === 1 ? field2 : field3;
 
           let cardClasses = isDanger && isPerturbed
-            ? 'border-rose-500/60 bg-rose-950/40 text-rose-200 ring-1 ring-rose-500/40'
+            ? 'border-hazard500/60 bg-hazard950/40 text-hazard200 ring-1 ring-rose-500/40'
             : index === 1 && isPerturbed
-            ? 'border-amber-500/50 bg-amber-950/30 text-amber-200'
-            : 'border-slate-700/60 bg-slate-900/60 text-slate-300';
+            ? 'border-amber/50 bg-amber/30 text-amber'
+            : 'border-steel/60 bg-deck/60 text-solder';
 
           return (
             <div
               key={node.id || index}
-              className={`p-3 rounded-xl border transition-all flex flex-col justify-between ${cardClasses}`}
+              className={`p-3  border transition-none-all flex flex-col justify-between ${cardClasses}`}
             >
               <div>
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                  <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-950/50 text-rose-300 flex items-center gap-1">
-                    {isDanger ? <ShieldAlert className="w-2.5 h-2.5 text-rose-400" /> : null}
+                  <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 border border-hazard500/30 bg-hazard950/50 text-hazard300 flex items-center gap-1">
+                    {isDanger ? <span className="text-amber font-bold font-mono">[ ! ]</span> : null}
                     Step 0{index + 1}: {index === 0 ? 'Equilibrium' : index === 1 ? 'Perturbation' : 'Consequence'}
                   </span>
                 </div>
 
-                <h4 className="text-xs font-bold text-white mb-1">
+                <h4 className="text-xs font-bold text-bone mb-1">
                   {node.label}
                 </h4>
 
                 {node.subtext && (
-                  <p className="text-[11px] text-slate-300 leading-relaxed font-serif">
+                  <p className="text-[11px] text-solder leading-relaxed font-mono">
                     {node.subtext}
                   </p>
                 )}
               </div>
 
               {isUserMapped && (
-                <div className="mt-2 pt-1.5 border-t border-rose-500/20 text-[10px] text-rose-300 font-mono flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-rose-400 shrink-0" />
+                <div className="mt-2 pt-1.5 border-t border-hazard500/20 text-[10px] text-hazard300 font-mono flex items-center gap-1">
+                  <span className="text-amber font-bold font-mono">[ * ]</span>
                   <span className="truncate">Your insight: &ldquo;{isUserMapped}&rdquo;</span>
                 </div>
               )}
@@ -146,30 +145,30 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
 
       {/* User Generated Counterfactual Model */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-rose-950/40 via-amber-950/30 to-slate-900/50 border border-rose-500/40 text-xs">
+        <div className="mt-3 p-3 border border-hazard500/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-rose-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+            <span className="text-[10px] font-mono font-bold uppercase text-hazard300 flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Counterfactual Synthesis
             </span>
-            <span className="text-[9px] font-mono text-rose-400 bg-rose-950/60 border border-rose-500/30 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono text-hazard400 bg-hazard950/60 border border-hazard500/30 px-1.5 py-0.5 ">
               Active Simulation
             </span>
           </div>
           {field1 && (
-            <p className="text-slate-200 font-serif italic text-xs">
+            <p className="text-bone font-mono italic text-xs">
               <strong>Perturbation:</strong> &ldquo;{field1}&rdquo;
             </p>
           )}
           {field2 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-amber-300">Cascading Domino: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-amber">Cascading Domino: </strong>
               {field2}
             </p>
           )}
           {field3 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-rose-300">Failure State: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-hazard300">Failure State: </strong>
               {field3}
             </p>
           )}

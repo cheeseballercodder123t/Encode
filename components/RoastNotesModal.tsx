@@ -2,20 +2,6 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Flame, 
-  Sparkles, 
-  AlertTriangle, 
-  CheckCircle2, 
-  HelpCircle, 
-  ArrowRight, 
-  Plus, 
-  Check, 
-  Quote, 
-  RotateCcw,
-  Zap,
-  GraduationCap
-} from 'lucide-react';
 import { RoastReport, RoastCriticism } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 
@@ -64,36 +50,36 @@ export default function RoastNotesModal({
   };
 
   const getScoreColor = (score: number) => {
-    if (score < 40) return { text: 'text-rose-400', bg: 'bg-rose-500/20', border: 'border-rose-500/40', label: 'Critical Academic CPR Required' };
-    if (score < 70) return { text: 'text-amber-400', bg: 'bg-amber-500/20', border: 'border-amber-500/40', label: 'Passable (If Grader Has Cataracts)' };
-    return { text: 'text-emerald-400', bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', label: 'Suspiciously Rigorous' };
+    if (score < 40) return { text: 'text-hazard400', bg: 'bg-hazard500/20', border: 'border-hazard500/40', label: 'Critical Academic CPR Required' };
+    if (score < 70) return { text: 'text-amber', bg: 'bg-amber/20', border: 'border-amber/40', label: 'Passable (If Grader Has Cataracts)' };
+    return { text: 'text-amber', bg: 'bg-amber/20', border: 'border-amber/40', label: 'Suspiciously Rigorous' };
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-3xl bg-slate-900 border border-orange-500/40 rounded-2xl shadow-2xl overflow-hidden my-6 flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-3xl bg-deck border border-hazard500/40 overflow-hidden my-6 flex flex-col max-h-[90vh]"
       >
         {/* Animated Fire Header */}
-        <div className="p-4 sm:p-6 bg-gradient-to-r from-orange-950/80 via-red-950/60 to-slate-900 border-b border-orange-500/30 flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-6 border-b border-hazard500/30 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-600 to-red-600 flex items-center justify-center shadow-lg shadow-orange-600/30 shrink-0">
-              <Flame className="w-6 h-6 text-amber-200 animate-pulse" />
+            <div className="w-12 h-12 flex items-center justify-center   shrink-0">
+              <span className="text-amber font-bold font-mono">[ FLAME ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-black text-slate-100 flex items-center gap-1.5">
+                <h2 className="text-lg sm:text-xl font-black text-bone flex items-center gap-1.5">
                   <span>Roast My Notes</span>
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 text-[10px] font-black uppercase tracking-wider">
+                <span className="px-2 py-0.5 bg-hazard500/20 text-hazard300 border border-hazard500/30 text-[10px] font-black uppercase tracking-wider">
                   Strict Professor Mode
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                <GraduationCap className="w-3.5 h-3.5 text-orange-400" />
+              <p className="text-xs text-solder mt-0.5 flex items-center gap-1">
+                <span className="text-amber font-bold font-mono">[ CAP ]</span>
                 <span>{report?.professorTitle || "Office Hours with Tenured Faculty"}</span>
               </p>
             </div>
@@ -102,24 +88,24 @@ export default function RoastNotesModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors cursor-pointer text-xs"
+            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-none-colors cursor-pointer text-xs"
           >
-            ✕
+            [ X ]
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-slate-200">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-bone">
           {loading ? (
             <div className="py-16 text-center space-y-4">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center animate-bounce">
-                <Flame className="w-7 h-7 text-orange-400" />
+              <div className="w-14 h-14 mx-auto bg-hazard500/20 border border-hazard500/40 flex items-center justify-center ">
+                <span className="text-amber font-bold font-mono">[ FLAME ]</span>
               </div>
               <div className="space-y-1">
-                <h3 className="text-base font-bold text-slate-100">
+                <h3 className="text-base font-bold text-bone">
                   Professor is sharpening red pen...
                 </h3>
-                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                <p className="text-xs text-solder max-w-sm mx-auto">
                   Hunting for hand-wavy assumptions, missing causal links, and buzzword fluff in your notes.
                 </p>
               </div>
@@ -132,15 +118,15 @@ export default function RoastNotesModal({
                 {(() => {
                   const scoreConfig = getScoreColor(report.preparednessScore);
                   return (
-                    <div className={`p-4 rounded-2xl border ${scoreConfig.border} ${scoreConfig.bg} flex flex-col justify-between space-y-2`}>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <div className={`p-4  border ${scoreConfig.border} ${scoreConfig.bg} flex flex-col justify-between space-y-2`}>
+                      <span className="text-[10px] font-bold text-solder uppercase tracking-wider">
                         Rigor & Preparedness Score
                       </span>
                       <div className="flex items-baseline gap-2">
                         <span className={`text-4xl font-black ${scoreConfig.text}`}>
                           {report.preparednessScore}%
                         </span>
-                        <span className="text-xs text-slate-400 font-medium">/ 100</span>
+                        <span className="text-xs text-solder font-medium">/ 100</span>
                       </div>
                       <span className={`text-[11px] font-bold ${scoreConfig.text}`}>
                         {scoreConfig.label}
@@ -150,16 +136,16 @@ export default function RoastNotesModal({
                 })()}
 
                 {/* Lethal Quote */}
-                <div className="md:col-span-2 p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col justify-between space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs text-orange-400 font-bold">
-                    <Quote className="w-3.5 h-3.5" />
+                <div className="md:col-span-2 p-4 bg-chassis border border-steel flex flex-col justify-between space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs text-hazard400 font-bold">
+                    <span className="text-amber font-bold font-mono">[ QUOTE ]</span>
                     <span>Professor&apos;s Core Verdict</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-slate-200 font-medium italic leading-relaxed">
+                  <p className="text-xs sm:text-sm text-bone font-medium italic leading-relaxed">
                     &ldquo;{report.overallVerdict}&rdquo;
                   </p>
-                  <div className="pt-2 border-t border-slate-900 text-[11px] text-amber-300/90 font-mono">
-                    🔥 &ldquo;{report.lethalQuote}&rdquo;
+                  <div className="pt-2 border-t border-steel text-[11px] text-amber/90 font-mono">
+                    [ FLAME ] &ldquo;{report.lethalQuote}&rdquo;
                   </div>
                 </div>
               </div>
@@ -167,11 +153,11 @@ export default function RoastNotesModal({
               {/* Critiques Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                  <h4 className="text-xs font-black uppercase tracking-wider text-solder flex items-center gap-1.5">
+                    <span className="text-amber font-bold font-mono">[ ! ]</span>
                     <span>Identified Gaps & Flawed Assumptions ({report.criticisms.length})</span>
                   </h4>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-solder">
                     Click patch to inject into notes
                   </span>
                 </div>
@@ -182,19 +168,19 @@ export default function RoastNotesModal({
                     return (
                       <div
                         key={critique.id}
-                        className="p-4 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all space-y-3"
+                        className="p-4 bg-chassis border border-steel hover:border-steel transition-none-all space-y-3"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wide bg-hazard500/20 text-hazard300 border border-hazard500/30">
                               {critique.categoryLabel}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            <span className={`px-2 py-0.5  text-[10px] font-bold uppercase ${
                               critique.severity === 'brutal' 
-                                ? 'bg-red-500/20 text-red-300 border border-red-500/30' 
-                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                ? 'bg-hazard500/20 text-hazard300 border border-hazard500/30' 
+                                : 'bg-amber/20 text-amber border border-amber/30'
                             }`}>
-                              {critique.severity === 'brutal' ? '🔥 Fatal Gap' : '⚠️ Vague'}
+                              {critique.severity === 'brutal' ? '[ FLAME ] Fatal Gap' : '[ ! ] Vague'}
                             </span>
                           </div>
 
@@ -203,20 +189,20 @@ export default function RoastNotesModal({
                               type="button"
                               onClick={() => handleInjectSingle(critique)}
                               disabled={isPatched}
-                              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              className={`flex items-center gap-1 px-2.5 py-1  text-xs font-bold transition-none-all cursor-pointer ${
                                 isPatched
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                                  ? 'bg-amber/20 text-amber300 border border-amber/40'
+                                  : 'bg-steel hover:bg-steel text-bone border border-steel'
                               }`}
                             >
                               {isPatched ? (
                                 <>
-                                  <Check className="w-3 h-3 text-emerald-400" />
+                                  <span className="text-amber font-bold font-mono">[ OK ]</span>
                                   <span>Injected</span>
                                 </>
                               ) : (
                                 <>
-                                  <Plus className="w-3 h-3 text-indigo-400" />
+                                  <span className="text-amber font-bold font-mono">[ + ]</span>
                                   <span>Inject Fix</span>
                                 </>
                               )}
@@ -226,28 +212,28 @@ export default function RoastNotesModal({
 
                         {/* Called out quote */}
                         {critique.quoteOrTarget && (
-                          <div className="text-xs bg-slate-900 border border-slate-800 p-2 rounded-lg text-slate-300 font-mono">
-                            <span className="text-slate-500">Target: </span>
+                          <div className="text-xs bg-deck border border-steel p-2 text-solder font-mono">
+                            <span className="text-solder">Target: </span>
                             &ldquo;{critique.quoteOrTarget}&rdquo;
                           </div>
                         )}
 
                         {/* Snarky comment */}
-                        <p className="text-xs sm:text-sm text-amber-200/90 leading-relaxed font-medium">
+                        <p className="text-xs sm:text-sm text-amber/90 leading-relaxed font-medium">
                           {critique.roastComment}
                         </p>
 
                         {/* First Principles Fix Tip */}
-                        <div className="p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-xs space-y-1">
-                          <span className="text-[10px] font-black uppercase text-indigo-400 block">
+                        <div className="p-2.5 bg-steel/30 border border-steel/30 text-xs space-y-1">
+                          <span className="text-[10px] font-black uppercase text-bone block">
                             💡 First Principles Fix:
                           </span>
-                          <p className="text-indigo-200 leading-normal">
+                          <p className="text-bone leading-normal">
                             {critique.fixTip}
                           </p>
                           {critique.suggestedPatch && (
-                            <div className="pt-1 text-[11px] text-slate-300 italic">
-                              <strong className="text-slate-400 font-semibold not-italic">Suggested text: </strong>
+                            <div className="pt-1 text-[11px] text-solder italic">
+                              <strong className="text-solder font-semibold not-italic">Suggested text: </strong>
                               {critique.suggestedPatch}
                             </div>
                           )}
@@ -260,13 +246,13 @@ export default function RoastNotesModal({
 
               {/* Begrudging Compliment */}
               {report.begrudgingCompliment && (
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-3 text-xs">
+                <div className="p-3.5 bg-chassis border border-steel flex items-center gap-3 text-xs">
                   <span className="text-lg">😏</span>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    <span className="text-[10px] font-bold text-solder uppercase tracking-wider block">
                       Begrudging Silver Lining
                     </span>
-                    <span className="text-slate-300 italic">
+                    <span className="text-solder italic">
                       &ldquo;{report.begrudgingCompliment}&rdquo;
                     </span>
                   </div>
@@ -275,11 +261,11 @@ export default function RoastNotesModal({
 
               {/* Actionable Recommendations */}
               {report.actionableRecommendations?.length > 0 && (
-                <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                <div className="p-4 bg-chassis border border-steel space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-solder block">
                     Core Conceptual Injections Recommended:
                   </span>
-                  <ul className="space-y-1 text-xs text-slate-300 list-disc list-inside">
+                  <ul className="space-y-1 text-xs text-solder list-disc list-inside">
                     {report.actionableRecommendations.map((rec, i) => (
                       <li key={i} className="leading-relaxed">{rec}</li>
                     ))}
@@ -288,7 +274,7 @@ export default function RoastNotesModal({
               )}
             </>
           ) : (
-            <div className="py-12 text-center text-slate-400 text-xs">
+            <div className="py-12 text-center text-solder text-xs">
               No roast report generated yet.
             </div>
           )}
@@ -296,11 +282,11 @@ export default function RoastNotesModal({
 
         {/* Footer Actions */}
         {report && (
-          <div className="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="p-4 sm:p-5 bg-chassis border-t border-steel flex flex-col sm:flex-row items-center justify-between gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-900 border border-slate-800 cursor-pointer"
+              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-deck border border-steel cursor-pointer"
             >
               Close & Edit Manually
             </button>
@@ -309,19 +295,19 @@ export default function RoastNotesModal({
               <button
                 type="button"
                 onClick={handleApplyAll}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold text-xs shadow-lg shadow-orange-600/20 transition-all cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 hover: hover: text-bone font-bold text-xs   transition-none-all cursor-pointer"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <span className="text-amber font-bold font-mono">[ * ]</span>
                 <span>Auto-Patch Notes & Encode</span>
               </button>
 
               <button
                 type="button"
                 onClick={onProceedToEncode}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-steel hover:bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
               >
                 <span>Encode As-Is</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <span className="text-amber font-bold font-mono">[ NEXT ]</span>
               </button>
             </div>
           </div>

@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity, ConceptHierarchyVisualData } from '@/lib/types';
-import { GitFork, ChevronDown, ChevronRight, Sparkles, HelpCircle, FolderTree, Check } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -44,32 +43,32 @@ export function ConceptHierarchyVisual({ activity, field1, field2, field3, selec
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-none-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-purple-500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-purple-500/20 text-purple-400">
-            <GitFork className="w-3.5 h-3.5" />
+          <div className="p-1 bg-steel/20 text-bone">
+            <span className="text-amber font-bold font-mono">[ FORK ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-purple-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-bone">
             Ausubel Meaningful Subsumption & Mind-Tree DAG
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-purple-300 bg-purple-950/40 border border-purple-500/30 px-2 py-0.5 rounded flex items-center gap-1">
-          <FolderTree className="w-2.5 h-2.5" /> Interactive Tree
+        <span className="text-[9px] font-mono font-bold text-bone bg-steel/40 border border-steel/30 px-2 py-0.5 flex items-center gap-1">
+          <span className="text-amber font-bold font-mono">[ TREE ]</span> Interactive Tree
         </span>
       </div>
 
       {/* Generation Effect: Hierarchy Challenge Card */}
-      <div className="mb-3.5 p-3 rounded-xl bg-purple-950/30 border border-purple-500/30">
+      <div className="mb-3.5 p-3 bg-steel/30 border border-steel/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <HelpCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+            <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-purple-300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-bone block">
                 Subsumption Hierarchy Challenge
               </span>
-              <p className="text-xs text-purple-100 font-medium mt-0.5">
+              <p className="text-xs text-bone font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -77,59 +76,59 @@ export function ConceptHierarchyVisual({ activity, field1, field2, field3, selec
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-purple-400 hover:text-purple-300 bg-purple-900/30 px-2 py-1 rounded border border-purple-500/20 shrink-0 transition-colors"
+            className="text-[10px] font-mono font-semibold text-bone hover:text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-none-colors"
           >
             {showClue ? 'Hide Hint' : 'Get Subsumption Hint'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-purple-500/20 text-[11px] text-purple-200/90 italic font-serif">
+          <div className="mt-2.5 pt-2 border-t border-steel/20 text-[11px] text-bone/90 italic font-mono">
             💡 <strong>Category Clue:</strong> {challenge.clue}
           </div>
         )}
       </div>
 
       {/* Interactive Tree Root & Branches */}
-      <div className="p-3 rounded-xl bg-slate-900/70 border border-purple-500/20">
+      <div className="p-3 bg-deck/70 border border-steel/20">
         {/* Superordinate Root Node */}
-        <div className="p-2.5 rounded-lg bg-purple-950/40 border border-purple-500/40 text-center mb-3">
-          <span className="text-[9px] font-mono uppercase text-purple-400 block font-bold">
+        <div className="p-2.5 bg-steel/40 border border-steel/40 text-center mb-3">
+          <span className="text-[9px] font-mono uppercase text-bone block font-bold">
             Superordinate Root Theory
           </span>
-          <div className="text-sm font-bold text-white mt-0.5">
+          <div className="text-sm font-bold text-bone mt-0.5">
             {tree.rootNode}
           </div>
         </div>
 
         {/* Child Subsumption Branches */}
-        <div className="space-y-2 pl-2 sm:pl-4 border-l-2 border-purple-500/30">
+        <div className="space-y-2 pl-2 sm:pl-4 border-l-2 border-steel/30">
           {tree.branches.map((branch, bIdx) => {
             const isExpanded = expandedBranches[bIdx] ?? true;
 
             return (
-              <div key={bIdx} className="rounded-lg bg-slate-950/60 border border-slate-800 p-2.5">
+              <div key={bIdx} className=" bg-chassis/60 border border-steel p-2.5">
                 <div
                   onClick={() => toggleBranch(bIdx)}
-                  className="flex items-center justify-between cursor-pointer text-xs font-bold text-purple-200 hover:text-purple-100 transition-colors"
+                  className="flex items-center justify-between cursor-pointer text-xs font-bold text-bone hover:text-bone transition-none-colors"
                 >
                   <div className="flex items-center gap-1.5">
-                    {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-purple-400" /> : <ChevronRight className="w-3.5 h-3.5 text-purple-400" />}
+                    {isExpanded ? <span className="text-amber font-bold font-mono">[ v ]</span> : <span className="text-amber font-bold font-mono">[ NEXT ]</span>}
                     <span>{branch.branchName}</span>
                   </div>
-                  <span className="text-[9px] font-mono text-slate-500">
+                  <span className="text-[9px] font-mono text-solder">
                     {branch.subItems.length} Sub-elements
                   </span>
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-2 pl-5 space-y-1.5 border-l border-purple-500/20">
+                  <div className="mt-2 pl-5 space-y-1.5 border-l border-steel/20">
                     {branch.subItems.map((item, iIdx) => (
                       <div
                         key={iIdx}
-                        className="text-[11px] text-slate-300 flex items-center gap-1.5 py-0.5"
+                        className="text-[11px] text-solder flex items-center gap-1.5 py-0.5"
                       >
-                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shrink-0" />
+                        <div className="w-1.5 h-1.5 bg-steel shrink-0" />
                         <span>{item}</span>
                       </div>
                     ))}
@@ -143,24 +142,24 @@ export function ConceptHierarchyVisual({ activity, field1, field2, field3, selec
 
       {/* User Live Tree Deduction */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-slate-900/50 border border-purple-500/40 text-xs">
+        <div className="mt-3 p-3 border border-steel/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-purple-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-[10px] font-mono font-bold uppercase text-bone flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Subsumption Integration
             </span>
-            <span className="text-[9px] font-mono text-purple-400 bg-purple-950/60 border border-purple-500/30 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono text-bone bg-steel/60 border border-steel/30 px-1.5 py-0.5 ">
               Tree Node Added
             </span>
           </div>
           {field1 && (
-            <p className="text-slate-200 font-serif italic text-xs">
+            <p className="text-bone font-mono italic text-xs">
               <strong>Category:</strong> &ldquo;{field1}&rdquo;
             </p>
           )}
           {field2 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-purple-300">Sub-mechanism: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-bone">Sub-mechanism: </strong>
               {field2}
             </p>
           )}

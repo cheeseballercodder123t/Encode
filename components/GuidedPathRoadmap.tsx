@@ -2,19 +2,6 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  CheckCircle2, 
-  Lock, 
-  Play, 
-  Sparkles, 
-  BrainCircuit, 
-  Award, 
-  HelpCircle,
-  ArrowRight,
-  RefreshCw,
-  Zap,
-  Check
-} from 'lucide-react';
 import { GuidedPathModule, FeynmanCheckpoint } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 
@@ -105,22 +92,22 @@ export function GuidedPathRoadmap({
   const totalRoadmapXp = modules.reduce((acc, m) => acc + (m.completed ? 150 : 0), 0);
 
   return (
-    <div className="w-full rounded-2xl border border-indigo-500/20 bg-slate-900/90 backdrop-blur-xl p-4 sm:p-6 shadow-2xl space-y-4">
+    <div className="w-full border border-steel/20 bg-deck/90  p-4 sm:p-6  space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-              <BrainCircuit className="w-4 h-4" />
+            <span className="flex items-center justify-center w-6 h-6 bg-steel/20 text-bone border border-steel/30">
+              <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
             </span>
-            <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-bone uppercase tracking-wider">
               Miller&apos;s Law Adaptive Guided Path
             </h3>
-            <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase">
+            <span className="px-2 py-0.5 bg-steel/20 text-bone text-[10px] font-black uppercase">
               7±2 Chunked Progression
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-solder mt-1">
             Textbook decomposed into {modules.length} digestible modules. Pass the Feynman Checkpoint at each milestone to unlock the next chapter.
           </p>
         </div>
@@ -129,34 +116,34 @@ export function GuidedPathRoadmap({
           <button
             type="button"
             onClick={() => handleOpenCheckpoint()}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all shrink-0 animate-pulse cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 hover: hover: text-bone font-bold text-xs   transition-none-all shrink-0  cursor-pointer"
           >
-            <Sparkles className="w-4 h-4 fill-slate-950" />
+            <span className="text-amber font-bold font-mono">[ * ]</span>
             <span>Unlock Next Chapter (Feynman Check)</span>
           </button>
         )}
       </div>
 
       {/* Roadmap Progress Bar */}
-      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-chassis border border-steel/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
-          <div className="w-36 sm:w-48 h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div className="w-36 sm:w-48 h-2 bg-steel overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-500"
+              className="h-full transition-none-all duration-500"
               style={{ width: `${(completedModulesCount / Math.max(1, modules.length)) * 100}%` }}
             />
           </div>
-          <span className="text-slate-300 font-semibold text-[11px] whitespace-nowrap">
+          <span className="text-solder font-semibold text-[11px] whitespace-nowrap">
             {completedModulesCount} of {modules.length} Chapters Mastered
           </span>
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
-          <span className="text-slate-400">
-            Active Focus: <strong className="text-indigo-300">Chapter {currentModuleIndex + 1}</strong>
+          <span className="text-solder">
+            Active Focus: <strong className="text-bone">Chapter {currentModuleIndex + 1}</strong>
           </span>
-          <span className="text-amber-400 font-bold flex items-center gap-1">
-            <Award className="w-3.5 h-3.5" />
+          <span className="text-amber font-bold flex items-center gap-1">
+            <span className="text-amber font-bold font-mono">[ TROPHY ]</span>
             +{totalRoadmapXp} Milestone XP
           </span>
         </div>
@@ -172,19 +159,19 @@ export function GuidedPathRoadmap({
           return (
             <div
               key={mod.moduleId || idx}
-              className={`relative flex flex-col p-4 rounded-xl text-left border transition-all ${
+              className={`relative flex flex-col p-4  text-left border transition-none-all ${
                 isActive
-                  ? 'bg-indigo-950/40 border-indigo-500 text-white ring-2 ring-indigo-500/40 shadow-xl shadow-indigo-500/10'
+                  ? 'bg-steel/40 border-steel text-bone ring-2 ring-indigo-500/40  '
                   : isCompleted
-                  ? 'bg-emerald-950/20 hover:bg-emerald-950/30 border-emerald-500/40 text-slate-200'
+                  ? 'bg-amber950/20 hover:bg-amber950/30 border-amber/40 text-bone'
                   : isUnlocked
-                  ? 'bg-slate-800/60 hover:bg-slate-800 border-slate-700 text-slate-300'
-                  : 'bg-slate-950/40 border-slate-800/80 text-slate-600 opacity-60'
+                  ? 'bg-steel/60 hover:bg-steel border-steel text-solder'
+                  : 'bg-chassis/40 border-steel/80 text-bone opacity-60'
               }`}
             >
               {/* Top status */}
               <div className="flex items-center justify-between w-full mb-2">
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-800/80 border border-slate-700 text-slate-300">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-steel/80 border border-steel text-solder">
                   Chapter {idx + 1} of {modules.length}
                 </span>
 
@@ -193,27 +180,27 @@ export function GuidedPathRoadmap({
                     <button
                       type="button"
                       onClick={() => handleOpenCheckpoint(idx)}
-                      className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 text-xs font-bold bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded cursor-pointer"
+                      className="flex items-center gap-1 text-amber hover:text-amber300 text-xs font-bold bg-amber950/60 border border-amber/30 px-2 py-0.5 cursor-pointer"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span className="text-amber font-bold font-mono">[ OK ]</span>
                       <span>Mastered</span>
                     </button>
                   ) : isActive ? (
-                    <span className="flex items-center gap-1 text-indigo-400 text-xs font-bold">
-                      <Play className="w-3.5 h-3.5 fill-indigo-400" />
+                    <span className="flex items-center gap-1 text-bone text-xs font-bold">
+                      <span className="text-amber font-bold font-mono">[ PLAY ]</span>
                       <span>Active Focus</span>
                     </span>
                   ) : isUnlocked ? (
                     <button
                       type="button"
                       onClick={() => onSelectModule(idx)}
-                      className="text-[11px] text-slate-400 hover:text-white font-semibold cursor-pointer underline"
+                      className="text-[11px] text-solder hover:text-bone font-semibold cursor-pointer underline"
                     >
                       Jump to Chapter
                     </button>
                   ) : (
-                    <span className="flex items-center gap-1 text-slate-500 text-xs font-medium">
-                      <Lock className="w-3.5 h-3.5" />
+                    <span className="flex items-center gap-1 text-solder text-xs font-medium">
+                      <span className="text-amber font-bold font-mono">[ LOCK ]</span>
                       <span>Locked</span>
                     </span>
                   )}
@@ -224,25 +211,25 @@ export function GuidedPathRoadmap({
               <h4 className="text-xs font-bold line-clamp-1 mb-1">
                 {mod.title}
               </h4>
-              <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
+              <p className="text-[11px] text-solder line-clamp-2 leading-relaxed">
                 {mod.summary}
               </p>
 
               {/* Progress footer */}
-              <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-400 w-full">
+              <div className="mt-3 pt-2 border-t border-steel/80 flex items-center justify-between text-[10px] text-solder w-full">
                 <span>{mod.activities.length} Encoding Exercises</span>
                 {isUnlocked && !isActive && (
                   <button
                     type="button"
                     onClick={() => onSelectModule(idx)}
-                    className="text-indigo-400 hover:text-indigo-300 font-bold cursor-pointer"
+                    className="text-bone hover:text-bone font-bold cursor-pointer"
                   >
                     Switch Module →
                   </button>
                 )}
                 {isCompleted && (
-                  <span className="text-amber-400 font-bold flex items-center gap-1">
-                    <Award className="w-3 h-3" /> +150 XP
+                  <span className="text-amber font-bold flex items-center gap-1">
+                    <span className="text-amber font-bold font-mono">[ TROPHY ]</span> +150 XP
                   </span>
                 )}
               </div>
@@ -254,24 +241,24 @@ export function GuidedPathRoadmap({
       {/* Feynman Checkpoint Modal */}
       <AnimatePresence>
         {showCheckpointModal && checkpoint && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/80 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-slate-900 border border-amber-500/40 rounded-2xl shadow-2xl p-6 space-y-5 my-6"
+              className="relative w-full max-w-2xl bg-deck border border-amber/40 p-6 space-y-5 my-6"
             >
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
-                    <Sparkles className="w-5 h-5" />
+                  <div className="flex items-center justify-center w-10 h-10 bg-amber/20 border border-amber/40 text-amber">
+                    <span className="text-amber font-bold font-mono">[ * ]</span>
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">
+                    <h3 className="text-base font-bold text-bone">
                       Feynman Mastery Checkpoint
                     </h3>
-                    <p className="text-xs text-amber-300/80">
+                    <p className="text-xs text-amber/80">
                       Module {currentModuleIndex + 1}: {activeModule.title}
                     </p>
                   </div>
@@ -280,47 +267,47 @@ export function GuidedPathRoadmap({
                 <button
                   type="button"
                   onClick={() => setShowCheckpointModal(false)}
-                  className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded-lg bg-slate-800 cursor-pointer"
+                  className="text-solder hover:text-bone text-xs px-2 py-1 bg-steel cursor-pointer"
                 >
-                  ✕
+                  [ X ]
                 </button>
               </div>
 
               {/* Socratic Question */}
-              <div className="p-4 rounded-xl bg-amber-950/30 border border-amber-500/30 space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 block">
+              <div className="p-4 bg-amber/30 border border-amber/30 space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber block">
                   Causal Reasoning Prompt:
                 </span>
                 <p className="text-sm font-semibold text-amber-100 leading-relaxed">
                   &ldquo;{checkpoint.question}&rdquo;
                 </p>
                 {checkpoint.hint && (
-                  <p className="text-xs text-amber-300/70 italic flex items-center gap-1.5 pt-1">
-                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                  <p className="text-xs text-amber/70 italic flex items-center gap-1.5 pt-1">
+                    <span className="text-amber font-bold font-mono">[ ? ]</span>
                     <span>Hint: {checkpoint.hint}</span>
                   </p>
                 )}
               </div>
 
               {/* Evaluation Rubric Guide */}
-              <div className="grid grid-cols-3 gap-2 text-[10px] text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-3 gap-2 text-[10px] text-solder bg-chassis p-2.5 border border-steel">
                 <div>
-                  <strong className="text-slate-200 block">1. Intuitive Analogy</strong>
+                  <strong className="text-bone block">1. Intuitive Analogy</strong>
                   <span>No memorized jargon</span>
                 </div>
                 <div>
-                  <strong className="text-slate-200 block">2. Causal Mechanism</strong>
+                  <strong className="text-bone block">2. Causal Mechanism</strong>
                   <span>Why step A causes step B</span>
                 </div>
                 <div>
-                  <strong className="text-slate-200 block">3. First Principles</strong>
+                  <strong className="text-bone block">3. First Principles</strong>
                   <span>Core scientific law</span>
                 </div>
               </div>
 
               {/* Input */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-300">
+                <label className="block text-xs font-bold text-solder">
                   Explain the core mechanism in simple, intuitive terms (avoid memorized jargon):
                 </label>
                 <textarea
@@ -328,24 +315,24 @@ export function GuidedPathRoadmap({
                   onChange={(e) => setCheckpointAnswer(e.target.value)}
                   placeholder="Explain as if teaching a bright 12-year-old student..."
                   rows={4}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-sans"
+                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-mono"
                 />
               </div>
 
               {/* Evaluation Result */}
               {evaluationResult && (
                 <div
-                  className={`p-4 rounded-xl border ${
+                  className={`p-4  border ${
                     evaluationResult.passed
-                      ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
-                      : 'bg-rose-950/40 border-rose-500/50 text-rose-200'
+                      ? 'bg-amber950/40 border-amber/50 text-amber200'
+                      : 'bg-hazard950/40 border-hazard500/50 text-hazard200'
                   } space-y-2`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                       {evaluationResult.passed ? (
                         <>
-                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span className="text-amber font-bold font-mono">[ OK ]</span>
                           Mastery Verified (Score: {evaluationResult.score}/100)
                         </>
                       ) : (
@@ -353,7 +340,7 @@ export function GuidedPathRoadmap({
                       )}
                     </span>
                     {evaluationResult.passed && (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold">
+                      <span className="px-2 py-0.5 bg-amber/20 text-amber300 text-xs font-bold">
                         +{evaluationResult.xpBonus} XP Earned!
                       </span>
                     )}
@@ -369,7 +356,7 @@ export function GuidedPathRoadmap({
                 <button
                   type="button"
                   onClick={() => setShowCheckpointModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone cursor-pointer"
                 >
                   {evaluationResult?.passed ? 'Done' : 'Back to Exercises'}
                 </button>
@@ -383,26 +370,26 @@ export function GuidedPathRoadmap({
                         onSelectModule(currentModuleIndex + 1);
                       }
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 hover: hover: text-bone font-bold text-xs   cursor-pointer"
                   >
                     <span>Enter Next Chapter</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ NEXT ]</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleEvaluateCheckpoint}
                     disabled={evaluating || !checkpointAnswer.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 hover: hover: text-bone font-bold text-xs   disabled:opacity-50 cursor-pointer"
                   >
                     {evaluating ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span className="text-amber font-bold font-mono">[ RESET ]</span>
                         <span>Evaluating Feynman Mastery...</span>
                       </>
                     ) : (
                       <>
-                        <Zap className="w-4 h-4 fill-slate-950" />
+                        <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                         <span>Submit for Verification</span>
                       </>
                     )}

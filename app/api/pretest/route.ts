@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = `You are a Cognitive Neuroscientist specializing in THE PRE-TESTING EFFECT and PRODUCTIVE FAILURE (Kornell, Hays, & Bjork, 2009; Kapur, 2016).
 
-Attempting to answer a question before learning the material—even if the student fails completely—primes the brain's semantic networks and dramatically increases subsequent retention when the correct explanation is revealed.
+Attempting to answer a question before learning the material:even if the student fails completely:primes the brain's semantic networks and dramatically increases subsequent retention when the correct explanation is revealed.
 
 Generate exactly 3 difficult, mechanistic "Pre-Test" questions that force the student to guess/hypothesize about the material in their notes.
 Include the counter-intuitive trap, the first-principle answer to be shown after they attempt, and the cognitive rationale.`;
@@ -63,7 +63,7 @@ Include the counter-intuitive trap, the first-principle answer to be shown after
       userPrompt,
       responseSchema: pretestSchema,
       settings,
-      isChecker: false,
+      isChecker: true,
       file: hasFile ? file : null,
     });
 

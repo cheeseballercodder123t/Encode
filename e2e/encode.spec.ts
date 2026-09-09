@@ -25,7 +25,7 @@ test.describe('Main encode flow', () => {
     await mockAiApis(page);
     await page.goto('/');
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
-    await page.getByRole('button', { name: /Check Prerequisites/ }).click();
+    await page.getByRole('button', { name: /check prerequisites/i }).click();
     // ConceptPrerequisitesModal opened with the mocked report
     await expect(page.getByText('Prerequisite Audit')).toBeVisible();
     await expect(page.getByRole('heading', { name: /Prerequisites for "Action Potentials"/ })).toBeVisible();
@@ -36,7 +36,7 @@ test.describe('Main encode flow', () => {
     await mockAiApis(page);
     await page.goto('/');
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
-    await page.getByRole('button', { name: /Roast Notes/ }).click();
+    await page.getByRole('button', { name: /roast notes/i }).click();
     await expect(page.getByText('You hand-waved the threshold.')).toBeVisible();
   });
 });
@@ -67,7 +67,7 @@ test.describe('Offline resilience', () => {
   test('going offline after load falls back to the local generator', async ({ page, context }) => {
     await page.goto('/');
 
-    // Kill the network after the app has loaded — generation must still work
+    // Kill the network after the app has loaded : generation must still work
     await context.setOffline(true);
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
     await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();

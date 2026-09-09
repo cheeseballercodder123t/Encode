@@ -1,16 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Download, 
-  Check, 
-  Smartphone, 
-  Monitor, 
-  Share, 
-  X,
-  Wifi,
-  WifiOff,
-  CloudCheck
-} from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -80,9 +69,8 @@ export const PWAInstallHeader: React.FC = () => {
       <div className="flex items-center gap-2">
         {/* Offline / Online state indicator badge */}
         {!isOnline && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse">
-            <WifiOff className="w-3.5 h-3.5" />
-            <span>Offline (IndexedDB Active)</span>
+          <div className="px-2.5 py-1 bg-chassis border border-hazard text-solder text-[10px] font-mono font-bold uppercase tracking-wider">
+            [ LINK: OFFLINE // INDEXEDDB ACTIVE ]
           </div>
         )}
 
@@ -90,56 +78,52 @@ export const PWAInstallHeader: React.FC = () => {
         {!isInstalled && (deferredPrompt || isIOS) && (
           <button
             onClick={handleInstallClick}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 transition-all border border-blue-400/30 active:scale-95"
+            className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
             title="Install DeepEncode locally for offline flight/subway use"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Install App (PWA)</span>
+            [ INSTALL APP: PWA ]
           </button>
         )}
       </div>
 
       {/* iOS Installation Guide Modal */}
       {showIOSGuide && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-6 shadow-2xl text-slate-200"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/90 p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="w-full max-w-sm bg-deck border border-steel p-6"
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-base text-white">Install DeepEncode on iOS</h3>
-              </div>
-              <button 
+              <h3 className="font-bold text-sm text-bone font-mono uppercase tracking-wider">// INSTALL ON iOS</h3>
+              <button
                 onClick={() => setShowIOSGuide(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg"
+                className="px-2 py-1 text-solder hover:text-bone border border-steel hover:border-solder font-mono text-[10px] font-bold transition-none cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                [ X ]
               </button>
             </div>
 
-            <ol className="space-y-3 text-sm text-slate-300">
+            <ol className="space-y-3 text-xs text-solder font-mono">
               <li className="flex items-start gap-2.5">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center text-xs font-bold border border-blue-500/30">1</span>
-                <span>Tap the <strong className="text-white">Share</strong> button in Safari toolbar.</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-steel text-amber text-[10px] font-bold">[ 1 ]</span>
+                <span>Tap the <strong className="text-bone">Share</strong> button in Safari toolbar.</span>
               </li>
               <li className="flex items-start gap-2.5">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center text-xs font-bold border border-blue-500/30">2</span>
-                <span>Scroll down and select <strong className="text-white">Add to Home Screen</strong>.</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-steel text-amber text-[10px] font-bold">[ 2 ]</span>
+                <span>Scroll down and select <strong className="text-bone">Add to Home Screen</strong>.</span>
               </li>
               <li className="flex items-start gap-2.5">
-                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600/30 text-blue-400 flex items-center justify-center text-xs font-bold border border-blue-500/30">3</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-steel text-amber text-[10px] font-bold">[ 3 ]</span>
                 <span>Launch directly from your home screen for full offline IndexedDB access!</span>
               </li>
             </ol>
 
             <button
               onClick={() => setShowIOSGuide(false)}
-              className="mt-6 w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-medium text-sm transition"
+              className="mt-6 w-full py-2 bg-amber border border-amber text-chassis font-mono font-bold text-[10px] uppercase tracking-wider transition-none cursor-pointer"
             >
-              Got it
+              [ ACKNOWLEDGED ]
             </button>
           </motion.div>
         </div>

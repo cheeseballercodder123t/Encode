@@ -3,24 +3,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  GitCompare, 
-  FileText, 
-  Upload, 
-  Cloud, 
-  X, 
-  Sparkles, 
-  Loader2, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Layers, 
-  Zap, 
-  BookOpen, 
-  ShieldAlert, 
-  ArrowRight,
-  Download,
-  Share2
-} from 'lucide-react';
-import { 
   ComparativeDocumentAsset, 
   ComparativeSchemaReport, 
   UploadedFileAsset, 
@@ -124,22 +106,22 @@ export function ComparativeSynthesisModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-[#0F1222] border border-indigo-500/30 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]">
+    <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl bg-[#0F1222] border border-steel/30 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-indigo-950/40 via-slate-900 to-slate-950">
+        <div className="p-4 sm:p-5 border-b border-steel flex items-center justify-between ">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-              <GitCompare className="w-5 h-5" />
+            <div className="w-10 h-10 bg-steel/10 border border-steel/30 flex items-center justify-center text-bone">
+              <span className="text-amber font-bold font-mono">[ COMPARE ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-base">Multi-Document Comparative Synthesis</h3>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <h3 className="font-bold text-bone text-base">Multi-Document Comparative Synthesis</h3>
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-steel/20 text-bone border border-steel/30">
                   Cross-Examination Engine
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-solder">
                 Compare slides vs textbook chapters to detect contradictions, exam traps, and complementary insights
               </p>
             </div>
@@ -147,17 +129,17 @@ export function ComparativeSynthesisModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
         </div>
 
         {/* Main Content Area */}
         <div className="p-5 overflow-y-auto flex-1 space-y-5">
           {errorMessage && (
-            <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/40 text-xs text-red-300 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />
+            <div className="p-3.5 bg-hazard950/40 border border-hazard500/40 text-xs text-hazard300 flex items-start gap-2">
+              <span className="text-amber font-bold font-mono">[ ! ]</span>
               <div className="flex-1 leading-relaxed">{errorMessage}</div>
             </div>
           )}
@@ -167,43 +149,43 @@ export function ComparativeSynthesisModal({
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Document A Card */}
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-indigo-500/20 space-y-3">
+                <div className="p-4 bg-deck/80 border border-steel/20 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <FileText className="w-4 h-4 text-indigo-400" />
+                    <span className="font-bold text-xs text-bone uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="text-amber font-bold font-mono">[ FILE ]</span>
                       Source Document A
                     </span>
                     {docAFile && (
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/30 font-bold">
+                      <span className="px-2 py-0.5 text-[10px] bg-amber950 text-amber300 border border-amber/30 font-bold">
                         File Attached
                       </span>
                     )}
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Title / Label:</label>
+                    <label className="text-[11px] font-semibold text-solder block mb-1">Title / Label:</label>
                     <input
                       type="text"
                       value={docAName}
                       onChange={(e) => setDocAName(e.target.value)}
                       placeholder="e.g. Lecture 4 Slides"
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Text Notes / Excerpt:</label>
+                    <label className="text-[11px] font-semibold text-solder block mb-1">Text Notes / Excerpt:</label>
                     <textarea
                       value={docASnippet}
                       onChange={(e) => setDocASnippet(e.target.value)}
                       placeholder="Paste key slide bullet points or notes here..."
-                      className="w-full h-24 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"
+                      className="w-full h-24 p-2.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel resize-none"
                     />
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <label className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition">
-                      <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                    <label className="flex-1 py-1.5 px-2 bg-steel hover:bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
+                      <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
                       <span>Upload File</span>
                       <input
                         type="file"
@@ -215,52 +197,52 @@ export function ComparativeSynthesisModal({
 
                     <button
                       onClick={() => setDriveTargetDoc('A')}
-                      className="py-1.5 px-3 bg-indigo-950/60 hover:bg-indigo-900/60 rounded-lg text-xs font-bold text-indigo-300 border border-indigo-500/40 flex items-center gap-1.5 cursor-pointer transition"
+                      className="py-1.5 px-3 bg-steel/60 hover:bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
-                      <Cloud className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       <span>Google Drive</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Document B Card */}
-                <div className="p-4 rounded-xl bg-slate-900/80 border border-purple-500/20 space-y-3">
+                <div className="p-4 bg-deck/80 border border-steel/20 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
-                      <BookOpen className="w-4 h-4 text-purple-400" />
+                    <span className="font-bold text-xs text-bone uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="text-amber font-bold font-mono">[ BOOK ]</span>
                       Source Document B
                     </span>
                     {docBFile && (
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/30 font-bold">
+                      <span className="px-2 py-0.5 text-[10px] bg-amber950 text-amber300 border border-amber/30 font-bold">
                         File Attached
                       </span>
                     )}
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Title / Label:</label>
+                    <label className="text-[11px] font-semibold text-solder block mb-1">Title / Label:</label>
                     <input
                       type="text"
                       value={docBName}
                       onChange={(e) => setDocBName(e.target.value)}
                       placeholder="e.g. Textbook Chapter 4"
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500"
+                      className="w-full px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Text Notes / Excerpt:</label>
+                    <label className="text-[11px] font-semibold text-solder block mb-1">Text Notes / Excerpt:</label>
                     <textarea
                       value={docBSnippet}
                       onChange={(e) => setDocBSnippet(e.target.value)}
                       placeholder="Paste textbook paragraph or reference excerpt here..."
-                      className="w-full h-24 p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-purple-500 resize-none"
+                      className="w-full h-24 p-2.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel resize-none"
                     />
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <label className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer transition">
-                      <Upload className="w-3.5 h-3.5 text-purple-400" />
+                    <label className="flex-1 py-1.5 px-2 bg-steel hover:bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
+                      <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
                       <span>Upload File</span>
                       <input
                         type="file"
@@ -272,9 +254,9 @@ export function ComparativeSynthesisModal({
 
                     <button
                       onClick={() => setDriveTargetDoc('B')}
-                      className="py-1.5 px-3 bg-purple-950/60 hover:bg-purple-900/60 rounded-lg text-xs font-bold text-purple-300 border border-purple-500/40 flex items-center gap-1.5 cursor-pointer transition"
+                      className="py-1.5 px-3 bg-steel/60 hover:bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
-                      <Cloud className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       <span>Google Drive</span>
                     </button>
                   </div>
@@ -285,16 +267,16 @@ export function ComparativeSynthesisModal({
               <button
                 onClick={handleRunSynthesis}
                 disabled={isSynthesizing}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold text-xs shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2.5 transition cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
               >
                 {isSynthesizing ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-amber font-bold font-mono">[ BUSY ]</span>
                     Cross-Examining Document A vs Document B...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ * ]</span>
                     Generate Comparative Schema Matrix
                   </>
                 )}
@@ -304,27 +286,27 @@ export function ComparativeSynthesisModal({
             /* Results View */
             <div className="space-y-4">
               {/* Header Bar */}
-              <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+              <div className="p-3.5 bg-deck border border-steel flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
                 <div>
-                  <h4 className="font-bold text-white text-sm">{report.synthesisTitle}</h4>
-                  <p className="text-slate-400 text-[11px] mt-0.5">
-                    Synthesizing <span className="text-indigo-300 font-bold">{report.docAName}</span> against <span className="text-purple-300 font-bold">{report.docBName}</span>
+                  <h4 className="font-bold text-bone text-sm">{report.synthesisTitle}</h4>
+                  <p className="text-solder text-[11px] mt-0.5">
+                    Synthesizing <span className="text-bone font-bold">{report.docAName}</span> against <span className="text-bone font-bold">{report.docBName}</span>
                   </p>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => setReport(null)}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-bold text-[11px] transition cursor-pointer"
+                    className="px-3 py-1.5 bg-steel text-solder hover:text-bone font-bold text-[11px] transition-none cursor-pointer"
                   >
                     Compare New Documents
                   </button>
                   {onOpenAnkiExport && (
                     <button
                       onClick={() => onOpenAnkiExport(report)}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px] flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                      className="px-3 py-1.5 bg-steel hover:bg-steel text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
                     >
-                      <Zap className="w-3.5 h-3.5 text-amber-300" />
+                      <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                       Export Comparative Anki Cards
                     </button>
                   )}
@@ -332,52 +314,52 @@ export function ComparativeSynthesisModal({
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
+              <div className="flex items-center gap-2 border-b border-steel pb-2 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('contradictions')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     activeTab === 'contradictions'
-                      ? 'bg-amber-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                      ? 'bg-amber text-bone '
+                      : 'text-solder hover:text-bone hover:bg-deck'
                   }`}
                 >
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-200" />
+                  <span className="text-amber font-bold font-mono">[ ! ]</span>
                   <span>Contradictions & Traps ({report.contradictions?.length || 0})</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('complements')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     activeTab === 'complements'
-                      ? 'bg-purple-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                      ? 'bg-steel text-bone '
+                      : 'text-solder hover:text-bone hover:bg-deck'
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="text-amber font-bold font-mono">[ * ]</span>
                   <span>Complementary Deep-Dives ({report.complements?.length || 0})</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('matrix')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     activeTab === 'matrix'
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                      ? 'bg-steel text-bone '
+                      : 'text-solder hover:text-bone hover:bg-deck'
                   }`}
                 >
-                  <Layers className="w-3.5 h-3.5" />
+                  <span className="text-amber font-bold font-mono">[ LAYERS ]</span>
                   <span>Unified 4-Quadrant Matrix ({report.unifiedMatrix?.length || 0})</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('agreed')}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     activeTab === 'agreed'
-                      ? 'bg-emerald-600 text-white shadow'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                      ? 'bg-amber600 text-bone '
+                      : 'text-solder hover:text-bone hover:bg-deck'
                   }`}
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span className="text-amber font-bold font-mono">[ OK ]</span>
                   <span>Agreed Principles ({report.agreedCorePrinciples?.length || 0})</span>
                 </button>
               </div>
@@ -386,38 +368,38 @@ export function ComparativeSynthesisModal({
               {activeTab === 'contradictions' && (
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {report.contradictions?.map((c, idx) => (
-                    <div key={c.id || idx} className="p-4 rounded-xl bg-amber-950/20 border border-amber-500/30 text-xs space-y-3">
+                    <div key={c.id || idx} className="p-4 bg-amber/20 border border-amber/30 text-xs space-y-3">
                       <div className="flex items-center justify-between">
-                        <h5 className="font-bold text-amber-300 text-sm flex items-center gap-2">
-                          <ShieldAlert className="w-4 h-4 text-amber-400" />
+                        <h5 className="font-bold text-amber text-sm flex items-center gap-2">
+                          <span className="text-amber font-bold font-mono">[ ! ]</span>
                           {c.topicOrConcept}
                         </h5>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-200 border border-amber-500/30">
+                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-amber/20 text-amber border border-amber/30">
                           Discrepancy #{idx + 1}
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="p-3 rounded-lg bg-slate-900 border border-indigo-500/30">
-                          <span className="font-bold text-indigo-300 block mb-1">{report.docAName}:</span>
-                          <p className="text-slate-300 leading-relaxed">{c.docAClaim}</p>
+                        <div className="p-3 bg-deck border border-steel/30">
+                          <span className="font-bold text-bone block mb-1">{report.docAName}:</span>
+                          <p className="text-solder leading-relaxed">{c.docAClaim}</p>
                         </div>
 
-                        <div className="p-3 rounded-lg bg-slate-900 border border-purple-500/30">
-                          <span className="font-bold text-purple-300 block mb-1">{report.docBName}:</span>
-                          <p className="text-slate-300 leading-relaxed">{c.docBClaim}</p>
+                        <div className="p-3 bg-deck border border-steel/30">
+                          <span className="font-bold text-bone block mb-1">{report.docBName}:</span>
+                          <p className="text-solder leading-relaxed">{c.docBClaim}</p>
                         </div>
                       </div>
 
-                      <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 space-y-1">
-                        <span className="font-bold text-emerald-400 block">Reconciliation & Academic Nuance:</span>
-                        <p className="text-slate-200 leading-relaxed">{c.resolutionOrNuance}</p>
+                      <div className="p-3 bg-deck/90 border border-steel space-y-1">
+                        <span className="font-bold text-amber block">Reconciliation & Academic Nuance:</span>
+                        <p className="text-bone leading-relaxed">{c.resolutionOrNuance}</p>
                       </div>
 
-                      <div className="p-2.5 rounded-lg bg-red-950/30 border border-red-500/30 text-red-200 flex items-start gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-red-400 mt-0.5" />
+                      <div className="p-2.5 bg-hazard950/30 border border-hazard500/30 text-hazard200 flex items-start gap-2">
+                        <span className="text-amber font-bold font-mono">[ ! ]</span>
                         <div>
-                          <strong className="text-red-300">Exam Trap Warning:</strong> {c.examTrapWarning}
+                          <strong className="text-hazard300">Exam Trap Warning:</strong> {c.examTrapWarning}
                         </div>
                       </div>
                     </div>
@@ -429,28 +411,28 @@ export function ComparativeSynthesisModal({
               {activeTab === 'complements' && (
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {report.complements?.map((comp, idx) => (
-                    <div key={comp.id || idx} className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 text-xs space-y-3">
-                      <h5 className="font-bold text-purple-300 text-sm">{comp.conceptName}</h5>
+                    <div key={comp.id || idx} className="p-4 bg-steel/20 border border-steel/30 text-xs space-y-3">
+                      <h5 className="font-bold text-bone text-sm">{comp.conceptName}</h5>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {comp.uniqueInDocA && (
-                          <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="font-bold text-indigo-300 block mb-1">Unique to {report.docAName}:</span>
-                            <p className="text-slate-300">{comp.uniqueInDocA}</p>
+                          <div className="p-3 bg-deck border border-steel">
+                            <span className="font-bold text-bone block mb-1">Unique to {report.docAName}:</span>
+                            <p className="text-solder">{comp.uniqueInDocA}</p>
                           </div>
                         )}
 
                         {comp.uniqueInDocB && (
-                          <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                            <span className="font-bold text-purple-300 block mb-1">Unique to {report.docBName}:</span>
-                            <p className="text-slate-300">{comp.uniqueInDocB}</p>
+                          <div className="p-3 bg-deck border border-steel">
+                            <span className="font-bold text-bone block mb-1">Unique to {report.docBName}:</span>
+                            <p className="text-solder">{comp.uniqueInDocB}</p>
                           </div>
                         )}
                       </div>
 
-                      <div className="p-3 rounded-lg bg-slate-900 border border-purple-500/40">
-                        <span className="font-bold text-purple-300 block mb-1">Synthesized Master Takeaway:</span>
-                        <p className="text-slate-200 leading-relaxed">{comp.synthesizedTakeaway}</p>
+                      <div className="p-3 bg-deck border border-steel/40">
+                        <span className="font-bold text-bone block mb-1">Synthesized Master Takeaway:</span>
+                        <p className="text-bone leading-relaxed">{comp.synthesizedTakeaway}</p>
                       </div>
                     </div>
                   ))}
@@ -461,28 +443,28 @@ export function ComparativeSynthesisModal({
               {activeTab === 'matrix' && (
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {report.unifiedMatrix?.map((mech, idx) => (
-                    <div key={mech.id || idx} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3 text-xs">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                        <h5 className="font-bold text-white text-sm">{mech.conceptName}</h5>
-                        <span className="text-[10px] text-indigo-400 font-mono">Synthesized Mechanism #{idx + 1}</span>
+                    <div key={mech.id || idx} className="p-4 bg-deck border border-steel space-y-3 text-xs">
+                      <div className="flex items-center justify-between border-b border-steel pb-2">
+                        <h5 className="font-bold text-bone text-sm">{mech.conceptName}</h5>
+                        <span className="text-[10px] text-bone font-mono">Synthesized Mechanism #{idx + 1}</span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        <div className="p-2.5 rounded bg-slate-950">
-                          <span className="font-bold text-indigo-300 block mb-0.5">What is it?</span>
-                          <p className="text-slate-300">{mech.whatIsIt}</p>
+                        <div className="p-2.5 bg-chassis">
+                          <span className="font-bold text-bone block mb-0.5">What is it?</span>
+                          <p className="text-solder">{mech.whatIsIt}</p>
                         </div>
-                        <div className="p-2.5 rounded bg-slate-950">
-                          <span className="font-bold text-purple-300 block mb-0.5">Why it matters?</span>
-                          <p className="text-slate-300">{mech.whyItMatters}</p>
+                        <div className="p-2.5 bg-chassis">
+                          <span className="font-bold text-bone block mb-0.5">Why it matters?</span>
+                          <p className="text-solder">{mech.whyItMatters}</p>
                         </div>
-                        <div className="p-2.5 rounded bg-slate-950">
-                          <span className="font-bold text-emerald-300 block mb-0.5">How it works?</span>
-                          <p className="text-slate-300">{mech.howItWorks}</p>
+                        <div className="p-2.5 bg-chassis">
+                          <span className="font-bold text-amber300 block mb-0.5">How it works?</span>
+                          <p className="text-solder">{mech.howItWorks}</p>
                         </div>
-                        <div className="p-2.5 rounded bg-slate-950">
-                          <span className="font-bold text-amber-300 block mb-0.5">What if (Edge case)?</span>
-                          <p className="text-slate-300">{mech.whatIfEdgeCase}</p>
+                        <div className="p-2.5 bg-chassis">
+                          <span className="font-bold text-amber block mb-0.5">What if (Edge case)?</span>
+                          <p className="text-solder">{mech.whatIfEdgeCase}</p>
                         </div>
                       </div>
                     </div>
@@ -494,8 +476,8 @@ export function ComparativeSynthesisModal({
               {activeTab === 'agreed' && (
                 <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
                   {report.agreedCorePrinciples?.map((principle, idx) => (
-                    <div key={idx} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs flex items-start gap-2.5 text-slate-200">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div key={idx} className="p-3.5 bg-deck border border-steel text-xs flex items-start gap-2.5 text-bone">
+                      <span className="text-amber font-bold font-mono">[ OK ]</span>
                       <div className="leading-relaxed">{principle}</div>
                     </div>
                   ))}
@@ -506,11 +488,11 @@ export function ComparativeSynthesisModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs text-slate-400">
+        <div className="p-4 border-t border-steel bg-chassis flex items-center justify-between text-xs text-solder">
           <span>DeepEncode Multi-Document Cross-Examination Engine</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition cursor-pointer"
+            className="px-4 py-1.5 bg-steel hover:bg-steel text-bone font-bold transition-none cursor-pointer"
           >
             Close
           </button>

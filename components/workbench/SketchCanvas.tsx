@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Palette, RotateCcw, PenTool, Eraser, Check } from 'lucide-react';
 
 interface SketchCanvasProps {
   onSaveSketch?: (dataUrl: string) => void;
@@ -78,26 +77,26 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
   };
 
   return (
-    <div className="rounded-xl border border-indigo-500/30 bg-[#07080D] p-3 space-y-2">
+    <div className=" border border-steel/30 bg-[#07080D] p-3 space-y-2">
       {/* Canvas Toolbar */}
       <div className="flex items-center justify-between text-xs">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setIsEraser(false)}
-            className={`p-1.5 rounded-lg border transition-colors ${!isEraser ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/40' : 'bg-slate-900 text-slate-400 border-slate-800'}`}
+            className={`p-1.5  border transition-none-colors ${!isEraser ? 'bg-steel/30 text-bone border-steel/40' : 'bg-deck text-solder border-steel'}`}
             title="Pen"
           >
-            <PenTool className="w-3.5 h-3.5" />
+            <span className="text-amber font-bold font-mono">[ PEN ]</span>
           </button>
 
           <button
             type="button"
             onClick={() => setIsEraser(true)}
-            className={`p-1.5 rounded-lg border transition-colors ${isEraser ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/40' : 'bg-slate-900 text-slate-400 border-slate-800'}`}
+            className={`p-1.5  border transition-none-colors ${isEraser ? 'bg-steel/30 text-bone border-steel/40' : 'bg-deck text-solder border-steel'}`}
             title="Eraser"
           >
-            <Eraser className="w-3.5 h-3.5" />
+            <span className="text-amber font-bold font-mono">[ ERASER ]</span>
           </button>
 
           {/* Color Presets */}
@@ -108,7 +107,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`w-4 h-4 rounded-full border ${color === c ? 'ring-2 ring-white scale-110' : 'border-slate-700'}`}
+                  className={`w-4 h-4  border ${color === c ? 'ring-2 ring-white scale-110' : 'border-steel'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -119,10 +118,10 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
         <button
           type="button"
           onClick={clearCanvas}
-          className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-rose-400 p-1 rounded transition-colors"
+          className="flex items-center gap-1 text-[11px] text-solder hover:text-hazard400 p-1 transition-none-colors"
           title="Clear canvas"
         >
-          <RotateCcw className="w-3 h-3" />
+          <span className="text-amber font-bold font-mono">[ RESET ]</span>
           <span>Clear</span>
         </button>
       </div>
@@ -137,9 +136,9 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
         onTouchStart={startDrawing}
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
-        className="w-full h-36 bg-[#0B0D14] rounded-lg border border-slate-800 cursor-crosshair touch-none"
+        className="w-full h-36 bg-[#0B0D14] border border-steel cursor-crosshair touch-none"
       />
-      <span className="text-[10px] text-slate-500 block text-right font-mono">
+      <span className="text-[10px] text-solder block text-right font-mono">
         Paivio Dual-Coding Mental Sketchpad
       </span>
     </div>

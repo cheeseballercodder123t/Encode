@@ -2,18 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity } from '@/lib/types';
-import { 
-  Bug, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Sparkles, 
-  HelpCircle, 
-  ArrowRight, 
-  ShieldAlert, 
-  XCircle, 
-  Check, 
-  Eye
-} from 'lucide-react';
 import { playSound } from '@/lib/audio';
 
 interface Props {
@@ -102,23 +90,23 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
   const falseAlarmsCount = nodes.filter(n => !n.isFlawed && flaggedBugs[n.id]).length;
 
   return (
-    <div className="rounded-xl border border-rose-500/40 bg-gradient-to-br from-rose-950/25 via-[#0E111C] to-slate-900/70 p-4 shadow-xl backdrop-blur-md transition-all space-y-4">
+    <div className=" border border-hazard500/40 via-[#0E111C]  p-4   transition-none-all space-y-4">
       {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between border-b border-rose-500/20 pb-3 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-hazard500/20 pb-3 gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse">
-            <Bug className="w-4 h-4" />
+          <div className="p-1.5 bg-hazard500/20 text-hazard400 border border-hazard500/30 ">
+            <span className="text-amber font-bold font-mono">[ BUG ]</span>
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider text-rose-300">
+              <span className="text-[10px] font-black uppercase tracking-wider text-hazard300">
                 Socratic Sabotage: Causal Bug Hunt
               </span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-rose-900/60 text-rose-200 border border-rose-500/30">
+              <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-hazard900/60 text-hazard200 border border-hazard500/30">
                 {brokenData.flawCount} Planted Bugs
               </span>
             </div>
-            <h4 className="text-xs font-bold text-white mt-0.5">
+            <h4 className="text-xs font-bold text-bone mt-0.5">
               {brokenData.scenarioTitle}
             </h4>
           </div>
@@ -126,28 +114,28 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
         {/* Bug Score Counter */}
         <div className="flex items-center gap-2">
-          <div className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono">
-            <span className="text-slate-400">Bugs Spotted: </span>
-            <span className="font-bold text-emerald-400">{bugsFoundCount}</span>
-            <span className="text-slate-500">/{brokenData.flawCount}</span>
+          <div className="px-2.5 py-1 bg-chassis border border-steel text-[11px] font-mono">
+            <span className="text-solder">Bugs Spotted: </span>
+            <span className="font-bold text-amber">{bugsFoundCount}</span>
+            <span className="text-solder">/{brokenData.flawCount}</span>
           </div>
         </div>
       </div>
 
       {/* Sabotage Premise Card */}
-      <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-500/30 text-xs text-rose-200 space-y-1">
-        <div className="flex items-center gap-1.5 text-rose-300 font-bold text-[11px]">
-          <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+      <div className="p-3 bg-hazard950/30 border border-hazard500/30 text-xs text-hazard200 space-y-1">
+        <div className="flex items-center gap-1.5 text-hazard300 font-bold text-[11px]">
+          <span className="text-amber font-bold font-mono">[ ! ]</span>
           <span>The Planted Exam Misconception:</span>
         </div>
-        <p className="font-serif italic leading-relaxed text-slate-200">
+        <p className="font-mono italic leading-relaxed text-bone">
           &ldquo;{brokenData.studentMisconceptionPremise}&rdquo;
         </p>
       </div>
 
       {/* Interactive Causal Pipeline Nodes */}
       <div className="space-y-2">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+        <span className="text-[10px] font-bold text-solder uppercase tracking-wider block">
           Inspect the steps below. Click to identify which ones contain fatal misconceptions:
         </span>
 
@@ -162,42 +150,42 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
                 key={node.id || idx}
                 type="button"
                 onClick={() => handleSelectNode(idx)}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between min-h-[105px] ${
+                className={`p-3  border text-left transition-none-all cursor-pointer relative flex flex-col justify-between min-h-[105px] ${
                   isSelected
-                    ? 'border-rose-400 bg-rose-950/40 ring-2 ring-rose-500/30 shadow-lg'
+                    ? 'border-hazard400 bg-hazard950/40 ring-2 ring-rose-500/30 '
                     : isFlagged
-                    ? 'border-amber-500/60 bg-amber-950/20'
-                    : 'border-slate-800 bg-slate-900/70 hover:border-slate-700'
+                    ? 'border-amber/60 bg-amber/20'
+                    : 'border-steel bg-deck/70 hover:border-steel'
                 }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[9px] font-mono font-bold uppercase text-slate-400">
+                    <span className="text-[9px] font-mono font-bold uppercase text-solder">
                       Step 0{idx + 1}
                     </span>
                     {isFlagged && (
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold flex items-center gap-0.5 ${
+                      <span className={`px-1.5 py-0.5  text-[9px] font-mono font-bold flex items-center gap-0.5 ${
                         node.isFlawed 
-                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' 
-                          : 'bg-red-950 text-red-300 border border-red-500/40'
+                          ? 'bg-amber950 text-amber300 border border-amber/40' 
+                          : 'bg-hazard950 text-hazard300 border border-hazard500/40'
                       }`}>
-                        {node.isFlawed ? '✓ Real Bug' : '✗ False Alarm'}
+                        {node.isFlawed ? '[ OK ] Real Bug' : '[ X ] False Alarm'}
                       </span>
                     )}
                   </div>
 
-                  <h5 className="text-xs font-bold text-white leading-snug line-clamp-2">
+                  <h5 className="text-xs font-bold text-bone leading-snug line-clamp-2">
                     {node.label}
                   </h5>
 
                   {node.subtext && (
-                    <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">
+                    <p className="text-[10px] text-solder mt-1 line-clamp-2">
                       {node.subtext}
                     </p>
                   )}
                 </div>
 
-                <div className="pt-2 text-[9px] font-mono text-rose-300/80">
+                <div className="pt-2 text-[9px] font-mono text-hazard300/80">
                   {isSelected ? '▶ Inspecting' : 'Tap to inspect'}
                 </div>
               </button>
@@ -208,13 +196,13 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
       {/* Selected Node Inspection & Correction Workbench */}
       {selectedNode && (
-        <div className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+        <div className="p-4 bg-chassis/90 border border-steel space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel/80 pb-2.5">
             <div>
-              <span className="text-[10px] font-mono text-slate-500 uppercase block">
+              <span className="text-[10px] font-mono text-solder uppercase block">
                 Inspecting Step 0{selectedNodeIndex + 1}
               </span>
-              <h5 className="text-sm font-bold text-white">
+              <h5 className="text-sm font-bold text-bone">
                 {selectedNode.label}
               </h5>
             </div>
@@ -223,13 +211,13 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
               <button
                 type="button"
                 onClick={() => handleToggleFlagBug(selectedNode.id, selectedNode.isFlawed)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3 py-1.5  text-xs font-bold transition-none-all cursor-pointer ${
                   flaggedBugs[selectedNode.id]
-                    ? 'bg-rose-600 text-white shadow-md'
-                    : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white'
+                    ? 'bg-hazard600 text-bone '
+                    : 'bg-deck border border-steel text-solder hover:text-bone'
                 }`}
               >
-                <Bug className="w-3.5 h-3.5" />
+                <span className="text-amber font-bold font-mono">[ BUG ]</span>
                 <span>{flaggedBugs[selectedNode.id] ? 'Flagged as Bug' : 'Flag This Step as Broken'}</span>
               </button>
 
@@ -237,9 +225,9 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
                 <button
                   type="button"
                   onClick={() => handleRevealFlaw(selectedNode.id)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 text-xs font-bold rounded-lg hover:bg-indigo-900/60 transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-steel/60 border border-steel/30 text-bone text-xs font-bold hover:bg-steel/60 transition-none-colors"
                 >
-                  <Eye className="w-3 h-3" />
+                  <span className="text-amber font-bold font-mono">[ EYE ]</span>
                   <span>Reveal Flaw</span>
                 </button>
               )}
@@ -248,8 +236,8 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
           {/* Socratic Hint */}
           {selectedNode.studentCorrectionHint && (
-            <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg flex items-start gap-2">
-              <HelpCircle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+            <div className="text-xs text-amber bg-amber/10 border border-amber/20 p-2.5 flex items-start gap-2">
+              <span className="text-amber font-bold font-mono">[ ? ]</span>
               <div>
                 <strong>Socratic Diagnostic Clue: </strong>
                 <span>{selectedNode.studentCorrectionHint}</span>
@@ -259,9 +247,9 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
           {/* Secret Flaw Explanation (Revealed when clicked or correctly flagged) */}
           {revealedExplanations[selectedNode.id] && selectedNode.flawExplanation && (
-            <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-500/40 text-xs text-emerald-200 space-y-1">
-              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5" />
+            <div className="p-3 bg-amber950/30 border border-amber/40 text-xs text-amber200 space-y-1">
+              <div className="font-bold text-amber flex items-center gap-1.5">
+                <span className="text-amber font-bold font-mono">[ OK ]</span>
                 <span>Underlying Mechanical Reality:</span>
               </div>
               <p className="leading-relaxed">{selectedNode.flawExplanation}</p>
@@ -272,12 +260,12 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
       {/* User Scaffold Output */}
       {(field1 || field2) && (
-        <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1">
-          <span className="text-[10px] font-mono font-bold text-rose-400 uppercase block">
+        <div className="p-3 bg-chassis border border-steel text-xs space-y-1">
+          <span className="text-[10px] font-mono font-bold text-hazard400 uppercase block">
             Your Causal Debug Deduction
           </span>
-          {field1 && <p className="text-slate-200"><strong>Flaw Identified:</strong> {field1}</p>}
-          {field2 && <p className="text-slate-300 text-[11px]"><strong>Correct First Principle:</strong> {field2}</p>}
+          {field1 && <p className="text-bone"><strong>Flaw Identified:</strong> {field1}</p>}
+          {field2 && <p className="text-solder text-[11px]"><strong>Correct First Principle:</strong> {field2}</p>}
         </div>
       )}
     </div>

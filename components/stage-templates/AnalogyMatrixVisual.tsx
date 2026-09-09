@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity, AnalogyMatrixVisualData, AnalogyMappingItem } from '@/lib/types';
-import { GitCompare, ArrowLeftRight, HelpCircle, Eye, EyeOff, Sparkles, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -36,34 +35,34 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-none-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-cyan-500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-cyan-500/20 text-cyan-400">
-            <GitCompare className="w-3.5 h-3.5" />
+          <div className="p-1 bg-steel/20 text-bone">
+            <span className="text-amber font-bold font-mono">[ COMPARE ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-cyan-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-bone">
             Gentner Structure-Mapping & Generation Bridge
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded">
+          <span className="text-[9px] font-mono font-bold text-bone bg-steel/40 border border-steel/30 px-2 py-0.5 ">
             Generation Effect Active
           </span>
         </div>
       </div>
 
       {/* Generation Effect: Partial Schema Challenge Card */}
-      <div className="mb-3.5 p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30">
+      <div className="mb-3.5 p-3 bg-steel/30 border border-steel/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <HelpCircle className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+            <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-cyan-300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-bone block">
                 Self-Generation Premise Challenge
               </span>
-              <p className="text-xs text-cyan-100 font-medium mt-0.5">
+              <p className="text-xs text-bone font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -71,14 +70,14 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-cyan-400 hover:text-cyan-300 bg-cyan-900/30 px-2 py-1 rounded border border-cyan-500/20 shrink-0 transition-colors"
+            className="text-[10px] font-mono font-semibold text-bone hover:text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-none-colors"
           >
             {showClue ? 'Hide Hint' : 'Get Socratic Hint'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-cyan-500/20 text-[11px] text-cyan-200/90 italic font-serif">
+          <div className="mt-2.5 pt-2 border-t border-steel/20 text-[11px] text-bone/90 italic font-mono">
             💡 <strong>Socratic Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -91,36 +90,36 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           return (
             <div
               key={idx}
-              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 rounded-xl bg-slate-900/70 border border-cyan-500/20 hover:border-cyan-500/40 transition-colors"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-deck/70 border border-steel/20 hover:border-steel/40 transition-none-colors"
             >
               {/* Familiar Source Side */}
-              <div className="flex-1 p-2.5 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-left">
-                <span className="text-[9px] font-mono font-bold uppercase text-cyan-400 block mb-0.5">
+              <div className="flex-1 p-2.5 bg-steel/40 border border-steel/30 text-left">
+                <span className="text-[9px] font-mono font-bold uppercase text-bone block mb-0.5">
                   Familiar Source Anchor
                 </span>
-                <div className="text-xs font-bold text-white">
+                <div className="text-xs font-bold text-bone">
                   {mapping.sourceElement}
                 </div>
               </div>
 
               {/* Connecting Bridge Arrow */}
-              <div className="flex flex-col items-center justify-center shrink-0 text-cyan-400 px-1 py-0.5">
-                <ArrowLeftRight className="w-4 h-4 transform rotate-90 sm:rotate-0" />
-                <span className="text-[8px] font-mono text-slate-400 mt-0.5 hidden sm:inline">Maps To</span>
+              <div className="flex flex-col items-center justify-center shrink-0 text-bone px-1 py-0.5">
+                <span className="text-amber font-bold font-mono">[ SWAP ]</span>
+                <span className="text-[8px] font-mono text-solder mt-0.5 hidden sm:inline">Maps To</span>
               </div>
 
               {/* Target Theory Side (User-Generated or Live Synced) */}
-              <div className="flex-1 p-2.5 rounded-lg bg-indigo-950/40 border border-indigo-500/30 text-left">
-                <span className="text-[9px] font-mono font-bold uppercase text-indigo-400 block mb-0.5">
+              <div className="flex-1 p-2.5 bg-steel/40 border border-steel/30 text-left">
+                <span className="text-[9px] font-mono font-bold uppercase text-bone block mb-0.5">
                   Target Science Concept
                 </span>
-                <div className="text-xs font-bold text-white">
+                <div className="text-xs font-bold text-bone">
                   {field2 ? (
-                    <span className="text-emerald-300 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 shrink-0" /> {field2}
+                    <span className="text-amber300 flex items-center gap-1">
+                      <span className="text-amber font-bold font-mono">[ * ]</span> {field2}
                     </span>
                   ) : isTargetMissing ? (
-                    <span className="text-amber-300 italic font-mono text-[11px] animate-pulse">
+                    <span className="text-amber italic font-mono text-[11px] ">
                       ? Type your mapping below...
                     </span>
                   ) : (
@@ -135,24 +134,24 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
 
       {/* User Live Analogical Synthesis Preview */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-cyan-950/40 via-indigo-950/30 to-slate-900/50 border border-cyan-500/40 text-xs">
+        <div className="mt-3 p-3 border border-steel/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-cyan-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="text-[10px] font-mono font-bold uppercase text-bone flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Self-Generated Mental Schema
             </span>
-            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono text-amber bg-amber950/60 border border-amber/30 px-1.5 py-0.5 ">
               Active Generation
             </span>
           </div>
           {field1 && (
-            <p className="text-slate-200 font-serif italic text-xs">
+            <p className="text-bone font-mono italic text-xs">
               &ldquo;{field1}&rdquo;
             </p>
           )}
           {field2 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-indigo-300">Exact Mechanism Correspondence: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-bone">Exact Mechanism Correspondence: </strong>
               {field2}
             </p>
           )}
@@ -160,40 +159,40 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
       )}
 
       {/* Interactive Limits & Breakdown Tab */}
-      <div className="mt-3 pt-2.5 border-t border-cyan-500/20 flex flex-col gap-2">
+      <div className="mt-3 pt-2.5 border-t border-steel/20 flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs">
           <button
             type="button"
             onClick={() => setShowBreakdown(!showBreakdown)}
-            className="flex items-center gap-1 text-[11px] font-mono text-slate-400 hover:text-cyan-300 transition-colors"
+            className="flex items-center gap-1 text-[11px] font-mono text-solder hover:text-bone transition-none-colors"
           >
-            <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-amber font-bold font-mono">[ ! ]</span>
             Where does this analogy break down? (Boundary Test)
-            {showBreakdown ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            {showBreakdown ? <span className="text-amber font-bold font-mono">[ ^ ]</span> : <span className="text-amber font-bold font-mono">[ v ]</span>}
           </button>
 
           {hasUserGenerated && (
             <button
               type="button"
               onClick={() => setShowExpertSynthesis(!showExpertSynthesis)}
-              className="flex items-center gap-1 text-[10px] font-mono text-indigo-400 hover:text-indigo-300 transition-colors"
+              className="flex items-center gap-1 text-[10px] font-mono text-bone hover:text-bone transition-none-colors"
             >
-              {showExpertSynthesis ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+              {showExpertSynthesis ? <span className="text-amber font-bold font-mono">[ HIDDEN ]</span> : <span className="text-amber font-bold font-mono">[ EYE ]</span>}
               {showExpertSynthesis ? 'Hide Expert Synthesis' : 'Compare with Expert Synthesis'}
             </button>
           )}
         </div>
 
         {showBreakdown && (
-          <div className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/30 text-[11px] text-amber-200">
+          <div className="p-2.5 bg-amber/20 border border-amber/30 text-[11px] text-amber">
             <strong>Analogy Limit: </strong>
-            {visualData.whereAnalogyBreaks || "Every analogy has limits—identify where the physical or structural laws diverge from the intuitive source."}
+            {visualData.whereAnalogyBreaks || "Every analogy has limits:identify where the physical or structural laws diverge from the intuitive source."}
           </div>
         )}
 
         {showExpertSynthesis && challenge.expertCompletion && (
-          <div className="p-2.5 rounded-lg bg-indigo-950/30 border border-indigo-500/30 text-[11px] text-indigo-200">
-            <strong className="text-indigo-300 block mb-0.5">AI Expert Ground Truth Schema:</strong>
+          <div className="p-2.5 bg-steel/30 border border-steel/30 text-[11px] text-bone">
+            <strong className="text-bone block mb-0.5">AI Expert Ground Truth Schema:</strong>
             {challenge.expertCompletion}
           </div>
         )}

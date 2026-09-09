@@ -15,7 +15,7 @@ export type AppState = 'input' | 'loading' | 'encoding' | 'completed';
 
 /**
  * Full session state for the encode flow. Owned by a single reducer so every
- * transition (generation, stage navigation, checks, completion) is explicit
+ * transition-none (generation, stage navigation, checks, completion) is explicit
  * and testable.
  */
 export interface SessionState {

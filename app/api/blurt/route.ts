@@ -83,7 +83,7 @@ Perform the Blurting Method differential analysis.`;
       userPrompt,
       responseSchema: blurtingSchema,
       settings,
-      isChecker: false
+      isChecker: true
     });
 
     return NextResponse.json(result);

@@ -1,7 +1,6 @@
 ﻿'use client';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Brain, Star, Clock } from 'lucide-react';
 import { Modal, Button, Badge } from './ui/index';
 
 interface Props {
@@ -26,7 +25,7 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
     if (countdown <= 0 && isOpen) onConfirm(selected || 3);
   }, [countdown, isOpen, selected, onConfirm]);
 
-  const labels = ['Clueless 😅', 'Shaky 🌀', 'Decent 🤔', 'Confident 💪', 'Expert 🔥'];
+  const labels = ['Clueless 😅', 'Shaky 🌀', 'Decent 🤔', 'Confident 💪', 'Expert [ FLAME ]'];
 
   return (
     <Modal
@@ -35,8 +34,8 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
       maxWidth="md"
       showCloseButton={false}
       icon={
-        <div className="p-2 bg-indigo-500/10 border border-indigo-500/30 rounded-xl">
-          <Brain className="w-5 h-5 text-indigo-400" />
+        <div className="p-2 bg-steel/10 border border-steel/30 ">
+          <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
         </div>
       }
       title="Before we begin..."
@@ -55,29 +54,29 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
       <div className="space-y-4">
         {/* Countdown badge */}
         <div className="flex justify-end">
-          <Badge variant="slate" size="sm" icon={<Clock className="w-3.5 h-3.5" />}>
-            {countdown}s
+          <Badge variant="steel" size="sm">
+            <span className="inline-flex items-center gap-1"><span className="text-amber font-bold font-mono">[ TIME ]</span>{countdown}s</span>
           </Badge>
         </div>
 
         {/* Topic preview */}
         {topicPreview && (
-          <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-3">
-            <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold mb-1">Target Material</p>
-            <p className="text-sm text-slate-200 line-clamp-2">{topicPreview}</p>
+          <div className="bg-steel/40 border border-steel/50 p-3">
+            <p className="text-[11px] text-solder uppercase tracking-wider font-semibold mb-1">Target Material</p>
+            <p className="text-sm text-bone line-clamp-2">{topicPreview}</p>
           </div>
         )}
 
         {/* Science note */}
-        <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-xl p-3">
-          <p className="text-[11px] text-indigo-300 leading-relaxed">
-            <span className="font-semibold text-indigo-200">Metacognitive Calibration (Nelson & Narens):</span> Assessing what you know before learning primes your memory retrieval systems.
+        <div className="bg-steel/5 border border-steel/20 p-3">
+          <p className="text-[11px] text-bone leading-relaxed">
+            <span className="font-semibold text-bone">Metacognitive Calibration (Nelson & Narens):</span> Assessing what you know before learning primes your memory retrieval systems.
           </p>
         </div>
 
         {/* Stars */}
         <div className="space-y-3">
-          <p className="text-sm text-slate-300 font-medium text-center">How confident are you in this topic right now?</p>
+          <p className="text-sm text-solder font-medium text-center">How confident are you in this topic right now?</p>
           <div className="flex items-center justify-center gap-2.5">
             {[1, 2, 3, 4, 5].map(n => (
               <button
@@ -86,15 +85,9 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
                 onClick={() => setSelected(n)}
                 onMouseEnter={() => setHovered(n)}
                 onMouseLeave={() => setHovered(0)}
-                className="transition-transform hover:scale-125 focus:outline-none p-1"
+                className="transition-none-transform hover:scale-125 focus:outline-none p-1"
               >
-                <Star
-                  className={`w-8 h-8 transition-colors ${
-                    n <= (hovered || selected)
-                      ? 'text-amber-400 fill-amber-400'
-                      : 'text-slate-700 fill-slate-800'
-                  }`}
-                />
+                <span className="text-amber font-bold font-mono">[ STAR ]</span>
               </button>
             ))}
           </div>
@@ -102,7 +95,7 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-center text-xs text-amber-300 font-semibold"
+              className="text-center text-xs text-amber font-semibold"
             >
               {labels[(hovered || selected) - 1]}
             </motion.p>

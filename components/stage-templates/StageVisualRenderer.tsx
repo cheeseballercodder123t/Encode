@@ -38,18 +38,18 @@ interface Props extends VisualComponentProps {}
 
 function TemplateLoadingSkeleton() {
   return (
-    <div className="rounded-xl border border-slate-700/40 bg-slate-900/40 p-4 shadow-lg animate-pulse">
-      <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+    <div className=" border border-steel/40 bg-deck/40 p-4 ">
+      <div className="flex items-center justify-between border-b border-steel pb-2 mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-slate-800" />
-          <div className="h-3 w-36 bg-slate-800 rounded" />
+          <div className="w-5 h-5 bg-steel" />
+          <div className="h-3 w-36 bg-steel " />
         </div>
-        <div className="h-3 w-24 bg-slate-800 rounded" />
+        <div className="h-3 w-24 bg-steel " />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="h-20 bg-slate-800/60 rounded-xl" />
-        <div className="h-20 bg-slate-800/60 rounded-xl" />
-        <div className="h-20 bg-slate-800/60 rounded-xl" />
+        <div className="h-20 bg-steel/60 " />
+        <div className="h-20 bg-steel/60 " />
+        <div className="h-20 bg-steel/60 " />
       </div>
     </div>
   );

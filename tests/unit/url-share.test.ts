@@ -30,7 +30,7 @@ describe('schema URL share roundtrip', () => {
     }
   });
 
-  it('never throws — returns empty string on failure', () => {
+  it('never throws : returns empty string on failure', () => {
     const circular: any = { id: 'x' };
     circular.self = circular;
     expect(compressSchemaForUrl(circular)).toBe('');

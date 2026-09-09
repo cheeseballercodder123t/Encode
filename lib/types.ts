@@ -91,7 +91,7 @@ export interface StageResponse {
     depthAlert?: string;
     errorAnalysis?: string;
   };
-  confidenceScore?: number;        // 0–100 slider value
+  confidenceScore?: number;        // 0-100 slider value
   reflection?: string;             // one-sentence takeaway
   checkCount?: number;             // how many times re-checked by AI
   errorAnalysis?: string;          // targeted diff feedback from checker
@@ -101,8 +101,8 @@ export interface StageResponse {
 }
 
 export interface SessionMetacognition {
-  preSessionConfidence: number;    // 1–5 star rating
-  finalAIScore?: number;           // 0–100 from end-of-session checker
+  preSessionConfidence: number;    // 1-5 star rating
+  finalAIScore?: number;           // 0-100 from end-of-session checker
   finalAIAnalysis?: string;        // written analysis
   totalCheckCalls?: number;
   sessionId?: string;
@@ -302,6 +302,58 @@ export interface ComparativeSchemaReport {
   contradictions: ComparativeContradiction[];
   complements: ComparativeComplement[];
   unifiedMatrix: ConceptualMechanismItem[];
+}
+
+
+// ─── Procedural Trap-Engine MCQ Archetypes ──────────────────────────────────
+//
+// A ProceduralMCQArchetype is a parametric AP-style multiple-choice blueprint.
+// At review time the embedded client-side runner in the Anki note rolls fresh
+// variable values inside their declared ranges, evaluates correctFormulaJs to
+// compute the answer, evaluates each trap's formulaJs to build AP-style
+// conceptual distractors, then shuffles A-D into clickable buttons.
+// Everything runs natively inside Anki's webview : no add-ons, no network,
+// no API keys at review time.
+
+export interface ProceduralMCQVariableSpec {
+  /** Required unless `choices` is provided. */
+  min?: number;
+  /** Required unless `choices` is provided. */
+  max?: number;
+  /** Optional quantization step (e.g. 0.5 to roll half-integers). */
+  step?: number;
+  /** Optional rounding to N decimal places (default: 2). */
+  decimals?: number;
+  /** Optional discrete pool the roller must pick from instead of a range. */
+  choices?: number[];
+}
+
+export interface ProceduralMCQTrap {
+  /** Human name of the misconception, e.g. "Inverted Frequency Formula". */
+  trapName: string;
+  /** JS expression (same sandbox rules as correctFormulaJs) yielding the distractor value. */
+  formulaJs: string;
+  /** Shown when the student falls for the trap: why the distractor is wrong. */
+  explanation: string;
+}
+
+export interface ProceduralMCQArchetype {
+  id: string;
+  /** e.g. "AP Physics C: Simple Harmonic Motion" */
+  topic: string;
+  /** Question template with {{var}} placeholders, e.g. "A block of mass m = {{m}} kg ..." */
+  questionTemplate: string;
+  variables: Record<string, ProceduralMCQVariableSpec>;
+  /** Unit of the correct answer, e.g. "m/s" */
+  unit: string;
+  /**
+   * Pure JS expression over the declared variables (plus Math only), e.g.
+   * "(A * Math.sqrt(k / m)).toFixed(2)".
+   */
+  correctFormulaJs: string;
+  traps: ProceduralMCQTrap[];
+  /** Full LaTeX step-by-step derivation using \( ... \) inline delimiters. */
+  stepByStepSolutionTemplate: string;
 }
 
 

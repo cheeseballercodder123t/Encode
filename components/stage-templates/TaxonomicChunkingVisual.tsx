@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity, TaxonomicChunkingVisualData } from '@/lib/types';
-import { Boxes, Sparkles, HelpCircle, CheckCircle2, Tag } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -46,32 +45,32 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-teal-500/30 bg-gradient-to-br from-teal-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-none-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-teal-500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-teal-500/20 text-teal-400">
-            <Boxes className="w-3.5 h-3.5" />
+          <div className="p-1 bg-amber/20 text-amber">
+            <span className="text-amber font-bold font-mono">[ BOXES ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-teal-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-amber">
             Miller's 7±2 Law & Taxonomic Cluster Buckets
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-teal-300 bg-teal-950/40 border border-teal-500/30 px-2 py-0.5 rounded flex items-center gap-1">
-          <Tag className="w-2.5 h-2.5" /> Interactive Chunking
+        <span className="text-[9px] font-mono font-bold text-amber bg-amber/40 border border-amber/30 px-2 py-0.5 flex items-center gap-1">
+          <span className="text-amber font-bold font-mono">[ TAG ]</span> Interactive Chunking
         </span>
       </div>
 
       {/* Generation Effect: Chunking Challenge Card */}
-      <div className="mb-3.5 p-3 rounded-xl bg-teal-950/30 border border-teal-500/30">
+      <div className="mb-3.5 p-3 bg-amber/30 border border-amber/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <HelpCircle className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
+            <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-teal-300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-amber block">
                 Working Memory Compression Challenge
               </span>
-              <p className="text-xs text-teal-100 font-medium mt-0.5">
+              <p className="text-xs text-amber font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -79,14 +78,14 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-teal-400 hover:text-teal-300 bg-teal-900/30 px-2 py-1 rounded border border-teal-500/20 shrink-0 transition-colors"
+            className="text-[10px] font-mono font-semibold text-amber hover:text-amber bg-amber/30 px-2 py-1 border border-amber/20 shrink-0 transition-none-colors"
           >
             {showClue ? 'Hide Hint' : 'Get Chunking Rule'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-teal-500/20 text-[11px] text-teal-200/90 italic font-serif">
+          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber/90 italic font-mono">
             💡 <strong>Chunking Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -101,23 +100,23 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
             <div
               key={bIdx}
               onClick={() => setSelectedBucket(isSelected ? null : bIdx)}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+              className={`p-3.5  border transition-none-all cursor-pointer flex flex-col justify-between ${
                 isSelected
-                  ? 'border-teal-400/80 bg-teal-950/40 ring-1 ring-teal-400/50 shadow-md'
-                  : 'border-slate-700/60 bg-slate-900/60 hover:border-teal-500/40'
+                  ? 'border-amber/80 bg-amber/40 ring-1 ring-teal-400/50 '
+                  : 'border-steel/60 bg-deck/60 hover:border-amber/40'
               }`}
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] font-mono font-bold uppercase text-teal-300 bg-teal-950/60 border border-teal-500/30 px-1.5 py-0.5 rounded">
+                  <span className="text-[9px] font-mono font-bold uppercase text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
                     Bucket 0{bIdx + 1}
                   </span>
-                  <span className="text-[9px] font-mono text-slate-400">
+                  <span className="text-[9px] font-mono text-solder">
                     {bucket.items.length} Items ({bucket.items.length <= 4 ? 'Optimal Chunk' : 'Split Recommended'})
                   </span>
                 </div>
 
-                <h4 className="text-xs font-bold text-white mb-2">
+                <h4 className="text-xs font-bold text-bone mb-2">
                   {bucket.bucketName}
                 </h4>
 
@@ -126,7 +125,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
                   {bucket.items.map((item, iIdx) => (
                     <span
                       key={iIdx}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950/80 border border-slate-700 text-slate-200"
+                      className="text-[10px] font-mono px-2 py-0.5 bg-chassis/80 border border-steel text-bone"
                     >
                       {item}
                     </span>
@@ -135,7 +134,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
               </div>
 
               {bucket.categoryRule && (
-                <div className="mt-2 pt-1.5 border-t border-teal-500/20 text-[10px] text-teal-200/80 italic">
+                <div className="mt-2 pt-1.5 border-t border-amber/20 text-[10px] text-amber/80 italic">
                   Rule: {bucket.categoryRule}
                 </div>
               )}
@@ -146,24 +145,24 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
 
       {/* User Generated Chunking Synthesis */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-teal-950/40 via-cyan-950/30 to-slate-900/50 border border-teal-500/40 text-xs">
+        <div className="mt-3 p-3 border border-amber/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-teal-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+            <span className="text-[10px] font-mono font-bold uppercase text-amber flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Semantic Chunking Classification
             </span>
-            <span className="text-[9px] font-mono text-teal-400 bg-teal-950/60 border border-teal-500/30 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
               Chunk Model
             </span>
           </div>
           {field1 && (
-            <p className="text-slate-200 font-serif italic text-xs">
+            <p className="text-bone font-mono italic text-xs">
               <strong>Category Name:</strong> &ldquo;{field1}&rdquo;
             </p>
           )}
           {field2 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-teal-300">Classified Items: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-amber">Classified Items: </strong>
               {field2}
             </p>
           )}

@@ -2,23 +2,6 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  History, 
-  X, 
-  Trash2, 
-  Play, 
-  Copy, 
-  Check, 
-  FileText, 
-  Search, 
-  BookOpen, 
-  Calendar, 
-  Zap,
-  ArrowRight,
-  Cloud,
-  FileDown,
-  Share2
-} from 'lucide-react';
 import { SavedSchema } from '@/lib/types';
 import { sound } from '@/lib/audio';
 import { useAuth } from '@/lib/auth-context';
@@ -78,89 +61,89 @@ export function HistoryDrawer({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex justify-end bg-chassis/70 ">
         <motion.div
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-          className="w-full max-w-md bg-[#0F111A] border-l border-slate-800 h-full flex flex-col shadow-2xl"
+          transition-none={{ type: 'spring', damping: 25, stiffness: 220 }}
+          className="w-full max-w-md bg-chassis border-l border-steel h-full flex flex-col "
         >
           {/* Header */}
-          <div className="p-5 border-b border-slate-800 bg-[#131622] flex items-center justify-between">
+          <div className="p-5 border-b border-steel bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl">
-                <History className="w-5 h-5" />
+              <div className="p-2 bg-steel/10 border border-steel/30 text-bone ">
+                <span className="text-amber font-bold font-mono">[ HIST ]</span>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-white text-base">Saved Schemas</h3>
+                  <h3 className="font-bold text-bone text-base">Saved Schemas</h3>
                   {user ? (
-                    <span className="px-2 py-0.2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[9px] font-bold rounded flex items-center gap-1">
-                      <Cloud className="w-2.5 h-2.5" />
+                    <span className="px-2 py-0.5 bg-amber/10 border border-amber/30 text-amber text-[9px] font-bold flex items-center gap-1">
+                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       Cloud Synced
                     </span>
                   ) : (
                     <button 
                       onClick={onOpenAuth}
-                      className="px-2 py-0.2 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[9px] font-bold rounded flex items-center gap-1 transition-all"
+                      className="px-2 py-0.5 bg-steel/10 hover:bg-steel/20 border border-steel/30 text-bone text-[9px] font-bold flex items-center gap-1 transition-none-all"
                     >
-                      <Cloud className="w-2.5 h-2.5" />
+                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       Enable Cloud
                     </button>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">{displaySchemas.length} encoded topics recorded</p>
+                <p className="text-xs text-solder">{displaySchemas.length} encoded topics recorded</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+              className="p-2 text-solder hover:text-bone hover:bg-steel transition-none-colors"
             >
-              <X className="w-5 h-5" />
+              <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="p-4 border-b border-slate-800/80 bg-[#0B0D14] space-y-3">
+          <div className="p-4 border-b border-steel/80 bg-[#0B0D14] space-y-3">
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <span className="text-amber font-bold font-mono">[ SEARCH ]</span>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search topics by title..."
-                className="w-full pl-9 pr-3 py-2 bg-[#141724] border border-slate-800 rounded-lg text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-indigo-500"
+                className="w-full pl-9 pr-3 py-2 bg-deck border border-steel text-xs text-bone placeholder:text-bone outline-none focus:border-steel"
               />
             </div>
 
             <div className="flex gap-2 text-[11px]">
               <button
                 onClick={() => setFilterMode('all')}
-                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                className={`px-2.5 py-1  font-bold transition-none-colors ${
                   filterMode === 'all'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-[#141724] text-slate-400 hover:text-slate-200'
+                    ? 'bg-steel text-bone'
+                    : 'bg-deck text-solder hover:text-bone'
                 }`}
               >
                 All ({displaySchemas.length})
               </button>
               <button
                 onClick={() => setFilterMode('conceptual')}
-                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                className={`px-2.5 py-1  font-bold transition-none-colors ${
                   filterMode === 'conceptual'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-[#141724] text-slate-400 hover:text-slate-200'
+                    ? 'bg-steel text-bone'
+                    : 'bg-deck text-solder hover:text-bone'
                 }`}
               >
                 Conceptual
               </button>
               <button
                 onClick={() => setFilterMode('memorization')}
-                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                className={`px-2.5 py-1  font-bold transition-none-colors ${
                   filterMode === 'memorization'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-[#141724] text-slate-400 hover:text-slate-200'
+                    ? 'bg-steel text-bone'
+                    : 'bg-deck text-solder hover:text-bone'
                 }`}
               >
                 Memorization
@@ -171,10 +154,10 @@ export function HistoryDrawer({
           {/* List */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {filteredSchemas.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 text-xs">
-                <BookOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <div className="text-center py-16 text-solder text-xs">
+                <span className="text-amber font-bold font-mono">[ BOOK ]</span>
                 <p className="font-semibold">No saved schemas found</p>
-                <p className="text-[11px] text-slate-600 mt-1">Complete a workout to store your encoded schema.</p>
+                <p className="text-[11px] text-bone mt-1">Complete a workout to store your encoded schema.</p>
               </div>
             ) : (
               filteredSchemas.map((schema) => {
@@ -188,29 +171,29 @@ export function HistoryDrawer({
                 return (
                   <div
                     key={schema.id}
-                    className="p-4 bg-[#141724] border border-slate-800 rounded-xl space-y-3 hover:border-slate-700 transition-all group"
+                    className="p-4 bg-deck border border-steel space-y-3 hover:border-steel transition-none-all group"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded ${
+                          <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider  ${
                             schema.mode === 'memorization'
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                              ? 'bg-amber/20 text-amber border border-amber/30'
+                              : 'bg-steel/20 text-bone border border-steel/30'
                           }`}>
                             {schema.mode === 'memorization' ? 'Mnemonic Mode' : 'Conceptual'}
                           </span>
-                          <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
+                          <span className="text-[10px] text-solder flex items-center gap-1">
+                            <span className="text-amber font-bold font-mono">[ DATE ]</span>
                             {dateStr}
                           </span>
                         </div>
-                        <h4 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                        <h4 className="text-sm font-bold text-bone group-hover:text-bone transition-none-colors">
                           {schema.topicSummary}
                         </h4>
                         {schema.sourceFileName && (
-                          <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
-                            <FileDown className="w-3 h-3 text-indigo-400" />
+                          <span className="text-[10px] text-solder flex items-center gap-1 mt-0.5">
+                            <span className="text-amber font-bold font-mono">[ EXPORT ]</span>
                             {schema.sourceFileName}
                           </span>
                         )}
@@ -218,16 +201,16 @@ export function HistoryDrawer({
 
                       <button
                         onClick={() => onDeleteSchema(schema.id)}
-                        className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-slate-800 transition-colors"
+                        className="p-1.5 text-solder hover:text-hazard400 hover:bg-steel transition-none-colors"
                         title="Delete schema"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="text-hazard font-bold font-mono">[ DEL ]</span>
                       </button>
                     </div>
 
                     <div className="flex items-center justify-between pt-1 text-xs">
-                      <div className="flex items-center gap-1 text-amber-400 font-mono font-bold text-[11px]">
-                        <Zap className="w-3 h-3" />
+                      <div className="flex items-center gap-1 text-amber font-mono font-bold text-[11px]">
+                        <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                         {schema.xpEarned} XP
                       </div>
 
@@ -238,20 +221,20 @@ export function HistoryDrawer({
                             onClick={() => {
                               onShareSchema(schema);
                             }}
-                            className="p-1.5 bg-[#1A1E2C] hover:bg-[#222738] border border-cyan-500/30 hover:border-cyan-500/60 text-cyan-400 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                            className="p-1.5 bg-deck hover:bg-steel border border-steel/30 hover:border-steel/60 text-bone text-[11px] font-bold transition-none-all flex items-center gap-1 cursor-pointer"
                             title="Share stateless URL"
                           >
-                            <Share2 className="w-3 h-3" />
+                            <span className="text-amber font-bold font-mono">[ SHARE ]</span>
                             <span className="hidden sm:inline">Share</span>
                           </button>
                         )}
 
                         <button
                           onClick={() => handleCopyRemNote(schema)}
-                          className="px-2.5 py-1 bg-[#1A1E2C] hover:bg-[#222738] border border-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                          className="px-2.5 py-1 bg-deck hover:bg-steel border border-steel text-solder text-[11px] font-bold transition-none-all flex items-center gap-1 cursor-pointer"
                           title="Copy RemNote format"
                         >
-                          {copiedId === schema.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-indigo-400" />}
+                          {copiedId === schema.id ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
                           RemNote
                         </button>
 
@@ -260,9 +243,9 @@ export function HistoryDrawer({
                             onStartDrill(schema);
                             onClose();
                           }}
-                          className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                          className="px-3 py-1 bg-steel hover:bg-steel text-bone text-[11px] font-bold transition-none-all flex items-center gap-1 cursor-pointer"
                         >
-                          <Play className="w-3 h-3 fill-current" />
+                          <span className="text-amber font-bold font-mono">[ PLAY ]</span>
                           Drill
                         </button>
 
@@ -271,10 +254,10 @@ export function HistoryDrawer({
                             onSelectSchemaToResume(schema);
                             onClose();
                           }}
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold rounded-lg shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                          className="px-3 py-1 bg-steel hover:bg-steel text-bone text-[11px] font-bold transition-none-all flex items-center gap-1 cursor-pointer"
                         >
                           View
-                          <ArrowRight className="w-3 h-3" />
+                          <span className="text-amber font-bold font-mono">[ NEXT ]</span>
                         </button>
                       </div>
                     </div>
@@ -286,18 +269,18 @@ export function HistoryDrawer({
 
           {/* Footer */}
           {displaySchemas.length > 0 && (
-            <div className="p-3.5 border-t border-slate-800 bg-[#131622] flex items-center justify-between text-xs">
+            <div className="p-3.5 border-t border-steel bg-deck flex items-center justify-between text-xs">
               <button
                 onClick={() => {
                   if (confirm('Are you sure you want to clear all schemas?')) {
                     onClearAll();
                   }
                 }}
-                className="text-slate-500 hover:text-red-400 text-[11px] font-medium"
+                className="text-solder hover:text-hazard400 text-[11px] font-medium"
               >
                 Clear All Schemas
               </button>
-              <span className="text-[10px] text-slate-500 font-mono">
+              <span className="text-[10px] text-solder font-mono">
                 {user ? 'Synced with Firestore' : 'Stored locally'}
               </span>
             </div>

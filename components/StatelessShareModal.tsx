@@ -2,18 +2,6 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Share2, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  Sparkles, 
-  Zap, 
-  Globe, 
-  FileCode2, 
-  ShieldCheck,
-  Send
-} from 'lucide-react';
 import { SavedSchema } from '@/lib/types';
 import { compressSchemaForUrl, generateStatelessShareUrl } from '@/lib/url-share';
 import { playSound } from '@/lib/audio';
@@ -92,29 +80,29 @@ export default function StatelessShareModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-xl bg-slate-900 border border-cyan-500/40 rounded-2xl shadow-2xl overflow-hidden my-6 flex flex-col"
+        className="relative w-full max-w-xl bg-deck border border-steel/40 overflow-hidden my-6 flex flex-col"
       >
         {/* Header */}
-        <div className="p-4 sm:p-6 bg-gradient-to-r from-cyan-950/80 via-indigo-950/60 to-slate-900 border-b border-cyan-500/30 flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-6 border-b border-steel/30 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 shrink-0">
-              <Share2 className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 flex items-center justify-center   shrink-0">
+              <span className="text-amber font-bold font-mono">[ SHARE ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-black text-slate-100">
+                <h2 className="text-lg sm:text-xl font-black text-bone">
                   Stateless URL Sharing
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] font-black uppercase tracking-wider">
+                <span className="px-2 py-0.5 bg-steel/20 text-bone border border-steel/30 text-[10px] font-black uppercase tracking-wider">
                   No Database Required
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-solder mt-0.5">
                 Share full study schemas with classmates using pure URL compression.
               </p>
             </div>
@@ -123,35 +111,35 @@ export default function StatelessShareModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-2 rounded-xl bg-slate-800/80 hover:bg-slate-800 transition-colors cursor-pointer text-xs"
+            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-none-colors cursor-pointer text-xs"
           >
-            ✕
+            [ X ]
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-4 sm:p-6 space-y-5 text-slate-200">
+        <div className="p-4 sm:p-6 space-y-5 text-bone">
           {/* Target Schema Preview */}
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span className="font-semibold uppercase tracking-wider text-slate-500">Schema to Share</span>
-              <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold text-[10px]">
+          <div className="p-3.5 bg-chassis border border-steel space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-solder">
+              <span className="font-semibold uppercase tracking-wider text-solder">Schema to Share</span>
+              <span className="px-2 py-0.5 bg-steel/20 text-bone font-bold text-[10px]">
                 {schema.isGuidedPath ? 'Guided Path Chapter' : '5-Stage Schema'}
               </span>
             </div>
-            <h3 className="text-sm font-bold text-slate-100 line-clamp-1">
+            <h3 className="text-sm font-bold text-bone line-clamp-1">
               {schema.topicSummary}
             </h3>
-            <div className="flex items-center gap-3 text-[11px] text-slate-400">
+            <div className="flex items-center gap-3 text-[11px] text-solder">
               <span>{schema.activities?.length || 0} Exercises & Flashcards</span>
               <span>•</span>
-              <span className="text-amber-400 font-semibold">+{schema.xpEarned || 0} XP Record</span>
+              <span className="text-amber font-semibold">+{schema.xpEarned || 0} XP Record</span>
             </div>
           </div>
 
           {/* Share Link Input with 1-click Copy */}
           <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-300">
+            <label className="block text-xs font-bold text-solder">
               Compressed Shareable URL:
             </label>
             <div className="flex items-center gap-2">
@@ -159,25 +147,25 @@ export default function StatelessShareModal({
                 type="text"
                 readOnly
                 value={shareStats.fullUrl}
-                className="w-full rounded-xl bg-slate-950 border border-slate-700 px-3.5 py-2.5 text-xs text-cyan-300 font-mono focus:outline-none select-all truncate"
+                className="w-full bg-chassis border border-steel px-3.5 py-2.5 text-xs text-bone font-mono focus:outline-none select-all truncate"
               />
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs transition-all shrink-0 cursor-pointer shadow-lg ${
+                className={`flex items-center gap-1.5 px-4 py-2.5  font-bold text-xs transition-none-all shrink-0 cursor-pointer  ${
                   copied
-                    ? 'bg-emerald-600 text-white shadow-emerald-600/30'
-                    : 'bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white shadow-cyan-600/30'
+                    ? 'bg-amber600 text-bone '
+                    : '   hover: hover: text-bone '
                 }`}
               >
                 {copied ? (
                   <>
-                    <Check className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ OK ]</span>
                     <span>Copied!</span>
                   </>
                 ) : (
                   <>
-                    <Copy className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ COPY ]</span>
                     <span>Copy Link</span>
                   </>
                 )}
@@ -187,43 +175,43 @@ export default function StatelessShareModal({
 
           {/* Compression & Privacy Diagnostics */}
           <div className="grid grid-cols-3 gap-2.5 text-center">
-            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-              <span className="text-[10px] text-slate-500 uppercase block font-semibold">Original Payload</span>
-              <span className="text-sm font-bold text-slate-300">
+            <div className="p-3 bg-chassis border border-steel">
+              <span className="text-[10px] text-solder uppercase block font-semibold">Original Payload</span>
+              <span className="text-sm font-bold text-solder">
                 {(shareStats.rawBytes / 1024).toFixed(1)} KB
               </span>
             </div>
-            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-              <span className="text-[10px] text-slate-500 uppercase block font-semibold">LZ-Compressed</span>
-              <span className="text-sm font-bold text-cyan-400">
+            <div className="p-3 bg-chassis border border-steel">
+              <span className="text-[10px] text-solder uppercase block font-semibold">LZ-Compressed</span>
+              <span className="text-sm font-bold text-bone">
                 {(shareStats.compressedBytes / 1024).toFixed(1)} KB
               </span>
             </div>
-            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-              <span className="text-[10px] text-slate-500 uppercase block font-semibold">Compression</span>
-              <span className="text-sm font-bold text-emerald-400">
+            <div className="p-3 bg-chassis border border-steel">
+              <span className="text-[10px] text-solder uppercase block font-semibold">Compression</span>
+              <span className="text-sm font-bold text-amber">
                 {shareStats.savingsPct}% Reduced
               </span>
             </div>
           </div>
 
           {/* How It Works Explainer */}
-          <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/30 space-y-2 text-xs">
-            <div className="flex items-center gap-1.5 font-bold text-indigo-300">
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
+          <div className="p-3.5 bg-steel/30 border border-steel/30 space-y-2 text-xs">
+            <div className="flex items-center gap-1.5 font-bold text-bone">
+              <span className="text-amber font-bold font-mono">[ OK ]</span>
               <span>How Stateless URL Sharing Works</span>
             </div>
-            <ul className="space-y-1.5 text-slate-300 text-[11px] leading-relaxed">
+            <ul className="space-y-1.5 text-solder text-[11px] leading-relaxed">
               <li className="flex items-start gap-1.5">
-                <span className="text-cyan-400">•</span>
+                <span className="text-bone">•</span>
                 <span><strong>No Backend Required:</strong> The entire schema is compressed directly into the URL query parameter using LZString.</span>
               </li>
               <li className="flex items-start gap-1.5">
-                <span className="text-cyan-400">•</span>
+                <span className="text-bone">•</span>
                 <span><strong>Zero Account Barrier:</strong> Your classmates don&apos;t need to log in or create an account to immediately practice your analogies and flashcards.</span>
               </li>
               <li className="flex items-start gap-1.5">
-                <span className="text-cyan-400">•</span>
+                <span className="text-bone">•</span>
                 <span><strong>Privacy Preserved:</strong> The schema travels strictly peer-to-peer via the URL without being stored on third-party tracking servers.</span>
               </li>
             </ul>
@@ -231,8 +219,8 @@ export default function StatelessShareModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
-          <span className="text-[11px] text-slate-500 hidden sm:inline">
+        <div className="p-4 sm:p-5 bg-chassis border-t border-steel flex items-center justify-between gap-3">
+          <span className="text-[11px] text-solder hidden sm:inline">
             Paste in Discord, Slack, WhatsApp, or email
           </span>
 
@@ -241,9 +229,9 @@ export default function StatelessShareModal({
               <button
                 type="button"
                 onClick={handleNativeShare}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-bone bg-steel hover:bg-steel border border-steel cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5" />
+                <span className="text-amber font-bold font-mono">[ SEND ]</span>
                 <span>Share Via...</span>
               </button>
             )}
@@ -251,9 +239,9 @@ export default function StatelessShareModal({
             <button
               type="button"
               onClick={handleCopyLink}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/20 cursor-pointer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 hover: hover: text-bone font-bold text-xs   cursor-pointer"
             >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
               <span>{copied ? 'Copied to Clipboard!' : 'Copy Share URL'}</span>
             </button>
           </div>

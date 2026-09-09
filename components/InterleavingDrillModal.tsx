@@ -2,23 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Shuffle, 
-  Sparkles, 
-  Flame, 
-  Award, 
-  CheckCircle2, 
-  XCircle, 
-  ArrowRight, 
-  RotateCcw, 
-  Zap, 
-  Check, 
-  Layers, 
-  BookOpen,
-  HelpCircle,
-  Clock,
-  ChevronRight
-} from 'lucide-react';
 import { SavedSchema, InterleavedQuestion } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 
@@ -349,27 +332,27 @@ export function InterleavingDrillModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-2xl bg-slate-900 border border-violet-500/30 rounded-2xl shadow-2xl overflow-hidden p-5 sm:p-6 space-y-5 my-8"
+        className="relative w-full max-w-2xl bg-deck border border-steel/30 overflow-hidden p-5 sm:p-6 space-y-5 my-8"
       >
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="flex items-center justify-between border-b border-steel pb-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-violet-600/20 border border-violet-500/40 text-violet-400">
-              <Shuffle className="w-4 h-4" />
+            <div className="flex items-center justify-center w-8 h-8 bg-steel/20 border border-steel/40 text-bone">
+              <span className="text-amber font-bold font-mono">[ SHUF ]</span>
             </div>
             <div>
-              <h2 className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-bold text-bone flex items-center gap-2">
                 <span>The Interleaving Workout</span>
-                <span className="px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 text-[10px] font-black uppercase">
+                <span className="px-2 py-0.5 bg-steel/20 text-bone text-[10px] font-black uppercase">
                   Multi-Domain Drill
                 </span>
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-solder">
                 Cognitive Science: Mixing diverse domains forces rapid discrimination and builds superior synaptic retention.
               </p>
             </div>
@@ -378,9 +361,9 @@ export function InterleavingDrillModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg bg-slate-800 text-xs font-semibold"
+            className="text-solder hover:text-bone p-1.5 bg-steel text-xs font-semibold"
           >
-            ✕
+            [ X ]
           </button>
         </div>
 
@@ -388,10 +371,10 @@ export function InterleavingDrillModal({
         {drillState === 'select' && (
           <div className="space-y-4">
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-200 uppercase tracking-wider block">
+              <label className="text-xs font-bold text-bone uppercase tracking-wider block">
                 Select 2 to 4 Distinct Domains to Interleave:
               </label>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-solder">
                 The engine will mix active recall questions between these subjects unpredictably.
               </p>
             </div>
@@ -404,14 +387,14 @@ export function InterleavingDrillModal({
                     key={dom.id}
                     type="button"
                     onClick={() => toggleSchemaSelection(dom.id)}
-                    className={`flex items-start justify-between p-3 rounded-xl text-left border transition-all ${
+                    className={`flex items-start justify-between p-3  text-left border transition-none-all ${
                       isSelected
-                        ? 'bg-violet-950/40 border-violet-500 text-white ring-1 ring-violet-500/50'
-                        : 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/60 text-slate-300'
+                        ? 'bg-steel/40 border-steel text-bone ring-1 ring-violet-500/50'
+                        : 'bg-steel/60 hover:bg-steel border-steel/60 text-solder'
                     }`}
                   >
                     <div className="min-w-0 pr-2">
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-violet-300 uppercase mb-1 inline-block">
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-chassis border border-steel text-bone uppercase mb-1 inline-block">
                         {dom.domain}
                       </span>
                       <p className="text-xs font-semibold line-clamp-2">
@@ -419,12 +402,12 @@ export function InterleavingDrillModal({
                       </p>
                     </div>
 
-                    <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5 border ${
+                    <div className={`w-5 h-5  flex items-center justify-center shrink-0 mt-0.5 border ${
                       isSelected
-                        ? 'bg-violet-600 border-violet-400 text-white'
-                        : 'border-slate-600 bg-slate-900 text-transparent'
+                        ? 'bg-steel border-steel text-bone'
+                        : 'border-steel bg-deck text-transparent'
                     }`}>
-                      <Check className="w-3.5 h-3.5" />
+                      <span className="text-amber font-bold font-mono">[ OK ]</span>
                     </div>
                   </button>
                 );
@@ -432,14 +415,14 @@ export function InterleavingDrillModal({
             </div>
 
             {/* Mode Switcher: Zen Untimed vs Sprint Blitz */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800">
+            <div className="flex items-center justify-between p-3 bg-chassis border border-steel">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-violet-400" />
+                <span className="text-amber font-bold font-mono">[ TIME ]</span>
                 <div>
-                  <span className="text-xs font-bold text-slate-200 block">
+                  <span className="text-xs font-bold text-bone block">
                     Rapid Recall Sprint Mode
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-solder">
                     25-second countdown per card with rapid-retrieval bonus (+15 XP)
                   </span>
                 </div>
@@ -451,29 +434,29 @@ export function InterleavingDrillModal({
                   setIsSprintMode(!isSprintMode);
                   playSound('click');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                className={`px-3 py-1.5  text-xs font-bold transition-none-all border ${
                   isSprintMode
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                    ? 'bg-amber/20 border-amber text-amber'
+                    : 'bg-steel border-steel text-solder hover:text-bone'
                 }`}
               >
-                {isSprintMode ? '⚡ 25s Sprint Active' : '🧘 Untimed Zen'}
+                {isSprintMode ? '[ ZAP ] 25s Sprint Active' : '🧘 Untimed Zen'}
               </button>
             </div>
 
             {/* Start CTA */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-              <span className="text-xs text-slate-400">
-                Selected: <strong className="text-violet-300">{selectedSchemaIds.length}</strong> domains
+            <div className="flex items-center justify-between pt-2 border-t border-steel">
+              <span className="text-xs text-solder">
+                Selected: <strong className="text-bone">{selectedSchemaIds.length}</strong> domains
               </span>
 
               <button
                 type="button"
                 onClick={handleStartWorkout}
                 disabled={selectedSchemaIds.length < 2}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/20 disabled:opacity-50 transition-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-2.5 hover: hover: text-bone font-bold text-xs   disabled:opacity-50 transition-none-all cursor-pointer"
               >
-                <Zap className="w-4 h-4 fill-white" />
+                <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                 <span>Begin Interleaved Drill ({selectedSchemaIds.length} Domains)</span>
               </button>
             </div>
@@ -486,32 +469,32 @@ export function InterleavingDrillModal({
             {/* Progress & Streak Bar */}
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <span className="text-slate-400 font-medium">
+                <span className="text-solder font-medium">
                   Card {currentIndex + 1} of {questionsQueue.length}
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-violet-500/20 text-violet-300 text-[10px] font-mono font-bold uppercase border border-violet-500/30">
+                <span className="px-2 py-0.5 bg-steel/20 text-bone text-[10px] font-mono font-bold uppercase border border-steel/30">
                   {currentQ.domain}
                 </span>
               </div>
 
               <div className="flex items-center gap-3">
                 {isSprintMode && (
-                  <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold border flex items-center gap-1 ${
+                  <span className={`px-2 py-0.5  text-[11px] font-mono font-bold border flex items-center gap-1 ${
                     timeLeft <= 7 
-                      ? 'bg-red-500/20 text-red-400 border-red-500/50 animate-pulse' 
-                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                      ? 'bg-hazard500/20 text-hazard400 border-hazard500/50 ' 
+                      : 'bg-steel text-solder border-steel'
                   }`}>
-                    <Clock className="w-3 h-3" />
+                    <span className="text-amber font-bold font-mono">[ TIME ]</span>
                     {timeLeft}s
                   </span>
                 )}
                 {streak > 1 && (
-                  <span className="flex items-center gap-1 text-orange-400 font-bold animate-pulse">
-                    <Flame className="w-4 h-4 fill-orange-400" />
+                  <span className="flex items-center gap-1 text-hazard400 font-bold ">
+                    <span className="text-amber font-bold font-mono">[ FLAME ]</span>
                     {streak}x Combo!
                   </span>
                 )}
-                <span className="text-amber-400 font-bold">
+                <span className="text-amber font-bold">
                   +{totalXpEarned} XP
                 </span>
               </div>
@@ -519,10 +502,10 @@ export function InterleavingDrillModal({
 
             {/* Timer Progress Bar (Sprint Mode) */}
             {isSprintMode && !isRevealed && (
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-steel overflow-hidden">
                 <div 
-                  className={`h-full transition-all duration-1000 ${
-                    timeLeft <= 7 ? 'bg-red-500' : 'bg-gradient-to-r from-violet-500 to-amber-400'
+                  className={`h-full transition-none-all duration-1000 ${
+                    timeLeft <= 7 ? 'bg-hazard500' : '  '
                   }`}
                   style={{ width: `${(timeLeft / 25) * 100}%` }}
                 />
@@ -530,23 +513,23 @@ export function InterleavingDrillModal({
             )}
 
             {/* Question Card */}
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 shadow-inner">
-              <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span className="font-semibold text-slate-300">
+            <div className="p-5 bg-chassis border border-steel space-y-3 ">
+              <div className="flex items-center justify-between text-[11px] text-solder">
+                <span className="font-semibold text-solder">
                   {currentQ.schemaTitle}
                 </span>
-                <span className="text-violet-400 font-mono">
+                <span className="text-bone font-mono">
                   {currentQ.stageTitle}
                 </span>
               </div>
 
-              <h3 className="text-sm sm:text-base font-bold text-slate-100 leading-snug">
+              <h3 className="text-sm sm:text-base font-bold text-bone leading-snug">
                 {currentQ.questionPrompt}
               </h3>
 
               {currentQ.contrastTrap && (
-                <p className="text-xs text-amber-400/90 italic bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg">
-                  ⚠️ Interleaving Contrast Trap: {currentQ.contrastTrap}
+                <p className="text-xs text-amber/90 italic bg-amber/10 border border-amber/20 p-2 ">
+                  [ ! ] Interleaving Contrast Trap: {currentQ.contrastTrap}
                 </p>
               )}
             </div>
@@ -559,53 +542,53 @@ export function InterleavingDrillModal({
                   onChange={(e) => setUserAnswer(e.target.value)}
                   placeholder="Type your rapid active recall or think it through..."
                   rows={3}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-700 p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none font-sans"
+                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono"
                 />
 
                 {/* Metacognitive Confidence Predictor */}
-                <div className="space-y-1.5 bg-slate-950/60 border border-slate-800/80 p-3 rounded-xl">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Metacognitive Calibration — Predicted Confidence:
+                <div className="space-y-1.5 bg-chassis/60 border border-steel/80 p-3 ">
+                  <span className="text-[10px] font-bold text-solder uppercase tracking-wider block">
+                    Metacognitive Calibration : Predicted Confidence:
                   </span>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setUserConfidence('certain')}
-                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
+                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-none-all ${
                         userConfidence === 'certain'
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-bold shadow-sm'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                          ? 'bg-amber/20 border-amber text-amber300 font-bold '
+                          : 'bg-deck border-steel text-solder hover:text-bone'
                       }`}
                     >
-                      🟢 Certain (100%)
+                      [ OK ] Certain (100%)
                     </button>
                     <button
                       type="button"
                       onClick={() => setUserConfidence('moderate')}
-                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
+                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-none-all ${
                         userConfidence === 'moderate'
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold shadow-sm'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                          ? 'bg-amber/20 border-amber text-amber font-bold '
+                          : 'bg-deck border-steel text-solder hover:text-bone'
                       }`}
                     >
-                      🟡 Moderate (50%)
+                      [ ! ] Moderate (50%)
                     </button>
                     <button
                       type="button"
                       onClick={() => setUserConfidence('unsure')}
-                      className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all ${
+                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-none-all ${
                         userConfidence === 'unsure'
-                          ? 'bg-rose-500/20 border-rose-500 text-rose-300 font-bold shadow-sm'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                          ? 'bg-hazard500/20 border-hazard500 text-hazard300 font-bold '
+                          : 'bg-deck border-steel text-solder hover:text-bone'
                       }`}
                     >
-                      🔴 Unsure / Guess
+                      [ X ] Unsure / Guess
                     </button>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-solder">
                     Formulate hypothesis before flipping
                   </span>
 
@@ -615,33 +598,33 @@ export function InterleavingDrillModal({
                       setIsRevealed(true);
                       playSound('pop');
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-steel hover:bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
                   >
                     <span>Check Mechanism</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ NEXT ]</span>
                   </button>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 {/* Correct Mechanism Box */}
-                <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2">
+                <div className="p-4 bg-amber950/30 border border-amber/40 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 block">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber block">
                       Core Mechanism / Target Answer:
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-mono text-solder bg-deck px-2 py-0.5 ">
                       Confidence: {userConfidence.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-xs sm:text-sm text-emerald-100 font-medium leading-relaxed">
+                  <p className="text-xs sm:text-sm text-amber100 font-medium leading-relaxed">
                     {currentQ.correctMechanism}
                   </p>
 
                   {currentQ.keyKeywords && currentQ.keyKeywords.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">
                       {currentQ.keyKeywords.map((kw, i) => (
-                        <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 text-[10px] font-semibold">
+                        <span key={i} className="px-1.5 py-0.5 bg-amber900/60 text-amber300 text-[10px] font-semibold">
                           #{kw}
                         </span>
                       ))}
@@ -650,8 +633,8 @@ export function InterleavingDrillModal({
                 </div>
 
                 {userAnswer && (
-                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300">
-                    <span className="text-[10px] text-slate-500 block mb-0.5">Your Response:</span>
+                  <div className="p-3 bg-chassis border border-steel text-xs text-solder">
+                    <span className="text-[10px] text-solder block mb-0.5">Your Response:</span>
                     <p className="italic">{userAnswer}</p>
                   </div>
                 )}
@@ -661,18 +644,18 @@ export function InterleavingDrillModal({
                   <button
                     type="button"
                     onClick={() => handleGrade(false)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 font-bold text-xs transition-colors cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-hazard950/40 hover:bg-hazard900/60 text-hazard300 border border-hazard500/40 font-bold text-xs transition-none-colors cursor-pointer"
                   >
-                    <XCircle className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ X ]</span>
                     <span>Missed / Hesitated (+10 XP)</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleGrade(true)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 hover: hover: text-bone font-bold text-xs   transition-none-all cursor-pointer"
                   >
-                    <CheckCircle2 className="w-4 h-4" />
+                    <span className="text-amber font-bold font-mono">[ OK ]</span>
                     <span>Mastered Mechanism (+{35 + ((streak + 1) * 10)} XP)</span>
                   </button>
                 </div>
@@ -684,76 +667,76 @@ export function InterleavingDrillModal({
         {/* 3. WORKOUT SUMMARY */}
         {drillState === 'summary' && (
           <div className="space-y-5 text-center py-2">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto">
-              <Award className="w-8 h-8" />
+            <div className="inline-flex items-center justify-center w-14 h-14 bg-amber/20 border border-amber/40 text-amber mx-auto">
+              <span className="text-amber font-bold font-mono">[ TROPHY ]</span>
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-lg font-bold text-bone">
                 Interleaving Workout Complete!
               </h3>
-              <p className="text-xs text-slate-300 max-w-md mx-auto">
+              <p className="text-xs text-solder max-w-md mx-auto">
                 By rapidly alternating between distinct domains, you trained cognitive discrimination and prevented mental fixation.
               </p>
             </div>
 
             {/* Metrics Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-lg mx-auto">
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase block">Accuracy</span>
-                <span className="text-base font-bold text-emerald-400">
+              <div className="p-3 bg-chassis border border-steel">
+                <span className="text-[10px] text-solder uppercase block">Accuracy</span>
+                <span className="text-base font-bold text-amber">
                   {Math.round((score / Math.max(1, questionsQueue.length)) * 100)}%
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase block">XP Earned</span>
-                <span className="text-base font-bold text-amber-400">
+              <div className="p-3 bg-chassis border border-steel">
+                <span className="text-[10px] text-solder uppercase block">XP Earned</span>
+                <span className="text-base font-bold text-amber">
                   +{totalXpEarned}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase block">Calibration</span>
-                <span className="text-base font-bold text-cyan-400">
+              <div className="p-3 bg-chassis border border-steel">
+                <span className="text-[10px] text-solder uppercase block">Calibration</span>
+                <span className="text-base font-bold text-bone">
                   {metacognitiveStats.calibrationScore}%
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <span className="text-[10px] text-slate-500 uppercase block">Domains</span>
-                <span className="text-base font-bold text-violet-400">
+              <div className="p-3 bg-chassis border border-steel">
+                <span className="text-[10px] text-solder uppercase block">Domains</span>
+                <span className="text-base font-bold text-bone">
                   {selectedSchemaIds.length}
                 </span>
               </div>
             </div>
 
             {/* Metacognitive Insight Box */}
-            <div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 text-left max-w-lg mx-auto">
-              <div className="flex items-center gap-2 text-cyan-300 text-xs font-bold mb-1">
-                <Sparkles className="w-3.5 h-3.5" />
+            <div className="p-3 bg-steel/30 border border-steel/30 text-left max-w-lg mx-auto">
+              <div className="flex items-center gap-2 text-bone text-xs font-bold mb-1">
+                <span className="text-amber font-bold font-mono">[ * ]</span>
                 <span>Metacognitive Insight: {metacognitiveStats.feedback}</span>
               </div>
-              <p className="text-[11px] text-slate-300">
+              <p className="text-[11px] text-solder">
                 Calibration measures whether your subjective certainty matched your objective recall accuracy. High calibration prevents the illusion of competence.
               </p>
             </div>
 
             {/* Domain Breakdown Table */}
             {Object.keys(domainBreakdown).length > 0 && (
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-left max-w-lg mx-auto space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              <div className="p-3 bg-chassis border border-steel text-left max-w-lg mx-auto space-y-2">
+                <span className="text-[10px] font-bold text-solder uppercase tracking-wider block">
                   Domain Performance Breakdown:
                 </span>
                 <div className="space-y-1.5">
                   {Object.entries(domainBreakdown).map(([domain, stats]) => {
                     const pct = Math.round((stats.passed / Math.max(1, stats.total)) * 100);
                     return (
-                      <div key={domain} className="flex items-center justify-between text-xs border-b border-slate-800/60 pb-1">
-                        <span className="font-semibold text-slate-300">{domain}</span>
+                      <div key={domain} className="flex items-center justify-between text-xs border-b border-steel/60 pb-1">
+                        <span className="font-semibold text-solder">{domain}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] text-slate-400 font-mono">
+                          <span className="text-[11px] text-solder font-mono">
                             {stats.passed} / {stats.total}
                           </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            pct >= 80 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                          <span className={`px-1.5 py-0.5  text-[10px] font-bold ${
+                            pct >= 80 ? 'bg-amber/20 text-amber300' : 'bg-amber/20 text-amber'
                           }`}>
                             {pct}%
                           </span>
@@ -769,16 +752,16 @@ export function InterleavingDrillModal({
               <button
                 type="button"
                 onClick={() => setDrillState('select')}
-                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 bg-steel hover:bg-steel text-xs font-bold text-bone flex items-center gap-2 cursor-pointer"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="text-amber font-bold font-mono">[ RESET ]</span>
                 <span>New Drill</span>
               </button>
 
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/20 cursor-pointer"
+                className="px-6 py-2.5 hover: hover: text-bone font-bold text-xs   cursor-pointer"
               >
                 Back to Dashboard
               </button>

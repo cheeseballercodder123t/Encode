@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { Activity, VisualBlueprintVisualData, VisualBlueprintAnchor } from '@/lib/types';
-import { Compass, Sparkles, HelpCircle, Eye, Layers } from 'lucide-react';
 
 interface Props {
   activity: Activity;
@@ -37,32 +36,32 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-950/20 via-[#0E111C] to-slate-900/60 p-4 shadow-lg backdrop-blur-md transition-all">
+    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-none-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-violet-500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-violet-500/20 text-violet-400">
-            <Compass className="w-3.5 h-3.5" />
+          <div className="p-1 bg-steel/20 text-bone">
+            <span className="text-amber font-bold font-mono">[ COMPASS ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-violet-300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-bone">
             Paivio Dual-Coding & Mental Spatial Blueprint
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-violet-300 bg-violet-950/40 border border-violet-500/30 px-2 py-0.5 rounded flex items-center gap-1">
-          <Layers className="w-2.5 h-2.5" /> Spatial Anchors
+        <span className="text-[9px] font-mono font-bold text-bone bg-steel/40 border border-steel/30 px-2 py-0.5 flex items-center gap-1">
+          <span className="text-amber font-bold font-mono">[ LAYERS ]</span> Spatial Anchors
         </span>
       </div>
 
       {/* Generation Effect: Dual-Coding Challenge Card */}
-      <div className="mb-3.5 p-3 rounded-xl bg-violet-950/30 border border-violet-500/30">
+      <div className="mb-3.5 p-3 bg-steel/30 border border-steel/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
-            <HelpCircle className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+            <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-violet-300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-bone block">
                 Dual-Coding Mental Sketch Challenge
               </span>
-              <p className="text-xs text-violet-100 font-medium mt-0.5">
+              <p className="text-xs text-bone font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -70,14 +69,14 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-violet-400 hover:text-violet-300 bg-violet-900/30 px-2 py-1 rounded border border-violet-500/20 shrink-0 transition-colors"
+            className="text-[10px] font-mono font-semibold text-bone hover:text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-none-colors"
           >
             {showClue ? 'Hide Hint' : 'Get Spatial Clue'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-violet-500/20 text-[11px] text-violet-200/90 italic font-serif">
+          <div className="mt-2.5 pt-2 border-t border-steel/20 text-[11px] text-bone/90 italic font-mono">
             💡 <strong>Spatial Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -92,22 +91,22 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
             <div
               key={idx}
               onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+              className={`p-3.5  border transition-none-all cursor-pointer flex flex-col justify-between ${
                 isSelected
-                  ? 'border-violet-400/80 bg-violet-950/50 ring-1 ring-violet-400/50 shadow-md'
-                  : 'border-slate-700/60 bg-slate-900/60 hover:border-violet-500/40'
+                  ? 'border-steel/80 bg-steel/50 ring-1 ring-violet-400/50 '
+                  : 'border-steel/60 bg-deck/60 hover:border-steel/40'
               }`}
             >
               <div>
-                <span className="text-[9px] font-mono font-bold uppercase text-violet-300 bg-violet-950/60 border border-violet-500/30 px-1.5 py-0.5 rounded block w-fit mb-1.5">
+                <span className="text-[9px] font-mono font-bold uppercase text-bone bg-steel/60 border border-steel/30 px-1.5 py-0.5 block w-fit mb-1.5">
                   Spatial Anchor: {anchor.spatialPosition}
                 </span>
 
-                <h4 className="text-xs font-bold text-white mb-1">
+                <h4 className="text-xs font-bold text-bone mb-1">
                   {anchor.label}
                 </h4>
 
-                <p className="text-[11px] text-slate-300 font-serif leading-relaxed">
+                <p className="text-[11px] text-solder font-mono leading-relaxed">
                   {anchor.sensoryDetail}
                 </p>
               </div>
@@ -118,24 +117,24 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
 
       {/* User Generated Dual-Coding Synthesis */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-violet-950/40 via-purple-950/30 to-slate-900/50 border border-violet-500/40 text-xs">
+        <div className="mt-3 p-3 border border-steel/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-violet-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+            <span className="text-[10px] font-mono font-bold uppercase text-bone flex items-center gap-1.5">
+              <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Mental Spatial Blueprint
             </span>
-            <span className="text-[9px] font-mono text-violet-400 bg-violet-950/60 border border-violet-500/30 px-1.5 py-0.5 rounded">
+            <span className="text-[9px] font-mono text-bone bg-steel/60 border border-steel/30 px-1.5 py-0.5 ">
               Image Encoded
             </span>
           </div>
           {field1 && (
-            <p className="text-slate-200 font-serif italic text-xs">
+            <p className="text-bone font-mono italic text-xs">
               <strong>1. Foreground Spatial Focus:</strong> &ldquo;{field1}&rdquo;
             </p>
           )}
           {field2 && (
-            <p className="text-slate-300 text-[11px] mt-1">
-              <strong className="text-violet-300">2. Motion Vector & Dynamic: </strong>
+            <p className="text-solder text-[11px] mt-1">
+              <strong className="text-bone">2. Motion Vector & Dynamic: </strong>
               {field2}
             </p>
           )}

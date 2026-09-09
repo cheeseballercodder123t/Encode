@@ -10,7 +10,7 @@ export interface SessionStats {
   templateBreakdown: Record<string, number>;
 }
 
-// Memoization cache for session stats — prevents re-computation on every dashboard render
+// Memoization cache for session stats : prevents re-computation on every dashboard render
 const statsCache = new Map<string, SessionStats>();
 
 export function computeSessionStats(schema: SavedSchema): SessionStats {
