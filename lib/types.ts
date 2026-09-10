@@ -76,6 +76,11 @@ export interface Activity {
   visualData?: ActivityVisualData;
   researchContext?: ResearchContextItem;
   videoTimestamp?: VideoTimestamp;
+  /** Discriminative boundary: confusable lookalike + distinguishing rule (prevents export leeches). */
+  boundaryContrast?: {
+    confusableLookalike: string;
+    distinguishingRule: string;
+  };
 }
 
 export interface StageResponse {
@@ -98,6 +103,8 @@ export interface StageResponse {
   readinessConfirmed?: boolean;    // readiness modal confirmed
   readinessLatencyMs?: number;     // ms from modal open to confirm
   difficultyLevel?: 'easy' | 'medium' | 'hard';
+  /** True when the user chose "Skip for now" â€” exported tagged DeepEncode::Unfinished. */
+  skipped?: boolean;
 }
 
 export interface SessionMetacognition {
@@ -305,7 +312,7 @@ export interface ComparativeSchemaReport {
 }
 
 
-// ─── Procedural Trap-Engine MCQ Archetypes ──────────────────────────────────
+// â”€â”€â”€ Procedural Trap-Engine MCQ Archetypes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // A ProceduralMCQArchetype is a parametric AP-style multiple-choice blueprint.
 // At review time the embedded client-side runner in the Anki note rolls fresh
@@ -356,4 +363,117 @@ export interface ProceduralMCQArchetype {
   stepByStepSolutionTemplate: string;
 }
 
+
+// â”€â”€â”€ TEACH ME (Brilliant-style interactive lesson) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// The AI-authored lesson model. The AI gets huge freedom over segment types,
+// counts, order and content; `lib/services/teachLesson.ts` sanitizes whatever
+// comes back before the renderer (TeachMeModal) touches it.
+
+export type LessonSegmentType =
+  | 'concept'          // teaching card (the "teaching" half)
+  | 'checkpoint'       // interactive MCQ / ordering / matching / fill-blank / free-response
+  | 'guidedProblem'    // Brilliant-style worked example with step reveal
+  | 'youTry'           // learner attempts, then reveals the model answer
+  | 'memoryHook'       // mnemonic peg / chant / palace link (memorization mode)
+  | 'storyBeat'        // narrative continuation (story mode)
+  | 'wrapup';          // final summary / finish screen
+
+export interface LessonVisual {
+  kind: 'steps' | 'analogy' | 'list' | 'formula' | 'diagram';
+  lines?: { label: string; detail?: string }[];
+  analogyPairs?: { source: string; target: string; note?: string }[];
+  callout?: string;
+}
+
+export type LessonQuestionKind =
+  | 'mcq'
+  | 'ordering'
+  | 'matching'
+  | 'fillBlank'
+  | 'freeResponse'
+  | 'trueFalse';
+
+export interface LessonQuestion {
+  kind: LessonQuestionKind;
+  prompt: string;
+  /** MCQ / trueFalse options. Exactly one should carry correct=true. */
+  options?: { id: string; label: string; correct?: boolean; explanation?: string }[];
+  /** Ordering: asked to arrange items; correctIndex = the final position each item belongs in. */
+  items?: { id?: string; label: string; correctIndex?: number }[];
+  /** Matching: tap-left / tap-right pairs to link together. */
+  pairs?: { id?: string; left: string; right: string }[];
+  /** Fill-blank: sentence fragments the learner completes. */
+  blanks?: { id?: string; before?: string; answer: string; after?: string }[];
+  /** freeResponse grading reference. */
+  modelAnswer?: string;
+  /** Progressive hint ladder: gentlest first. */
+  hints?: string[];
+}
+
+export interface LessonSegment {
+  id: string;
+  type: LessonSegmentType;
+  title?: string;
+  body?: string;
+  keyTerms?: string[];
+  visual?: LessonVisual;
+  question?: LessonQuestion;
+  /** Shown when the learner picks the confusable trap (boundary contrast lesson). */
+  trapNote?: string;
+  /** guidedProblem steps, revealed one at a time. */
+  steps?: { title: string; detail: string }[];
+  finalAnswer?: string;
+  /** memoryHook chant / peg phrase. */
+  phrase?: string;
+  linkedList?: string[];
+  /** storyBeat narrative. */
+  narrative?: string;
+  continuation?: string;
+  /** Optional chapter grouping label for the progress rail. */
+  chapterTitle?: string;
+  xpValue?: number;
+}
+
+export interface TeachLesson {
+  title: string;
+  tagline?: string;
+  estimatedMin?: number;
+  intro?: { hook?: string; whyItMatters?: string };
+  segments: LessonSegment[];
+  masteryCheck?: {
+    prompt: string;
+    keywords?: string[];
+    modelAnswer?: string;
+    hints?: string[];
+  };
+  wrapup?: { summary?: string; callToAction?: string; connectionPrompt?: string };
+}
+
+export type TeachScope = 'notes' | 'stage' | 'schema';
+
+export interface TeachLessonOptions {
+  style: 'brilliant' | 'socratic' | 'storyteller' | 'professor' | 'meme';
+  storyMode: boolean;
+  checkpoints: number;        // 0-8 soft target
+  lessonDepth: number;        // 1-3 concept-card layers per idea
+  difficulty: 'intro' | 'standard' | 'viva';
+  humor: number;              // 0-5
+  includeAnalogy: boolean;
+  includeMemoryHooks: boolean;
+  allowFreeResponse: boolean;
+  maxSteps: number;
+}
+
+export const DEFAULT_TEACH_OPTIONS: TeachLessonOptions = {
+  style: 'brilliant',
+  storyMode: true,
+  checkpoints: 4,
+  lessonDepth: 2,
+  difficulty: 'standard',
+  humor: 3,
+  includeAnalogy: true,
+  includeMemoryHooks: true,
+  allowFreeResponse: true,
+  maxSteps: 14,
+};
 

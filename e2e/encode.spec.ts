@@ -57,9 +57,9 @@ test.describe('YouTube flow', () => {
     await expectStage(page, 1);
     await page.getByPlaceholder('STAGE1_FIELD1').fill('Layers learn edge detectors first.');
     await page.getByPlaceholder('STAGE1_FIELD2').fill('Backprop assigns credit to earlier layers.');
-    await page.getByRole('button', { name: 'Finish Workout' }).click();
+    await page.getByRole('button', { name: /FINISH/ }).click();
 
-    await expect(page.getByText('Cognitive Encoding Workout Complete!')).toBeVisible();
+    await expect(page.getByText('Clean cards, ready for Anki.')).toBeVisible();
   });
 });
 
@@ -71,7 +71,6 @@ test.describe('Offline resilience', () => {
     await context.setOffline(true);
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
     await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
-    await page.getByRole('button', { name: 'Skip' }).click();
 
     await confirmReadiness(page);
     // The offline generator produced a workout entirely client-side

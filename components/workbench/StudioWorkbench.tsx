@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { SketchCanvas } from './SketchCanvas';
 import { Activity, StageResponse, UploadedFileAsset, YouTubeMetadata } from '@/lib/types';
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { generateRemnoteHierarchy } from '@/lib/remnote';
 import { playSound } from '@/lib/audio';
+import { countWords } from '@/lib/fsrs-audit';
 
 const FLUFF_PATTERNS = [
   /\b(it is important to note that|as we can clearly see|in other words|basically|essentially|it should be remembered that|in this regard|furthermore, we notice that|it is worth mentioning that|needless to say)\b/gi,
@@ -32,10 +33,20 @@ interface StudioWorkbenchProps {
   strictnessLevel: 'sherpa' | 'feynman' | 'viva';
   setStrictnessLevel: (lvl: 'sherpa' | 'feynman' | 'viva') => void;
   onCheckAnswer: () => void;
+  onTeachStage: () => void;
   isEvaluating: boolean;
   feynmanResult: StageResponse['feynmanReview'] | null;
   onNextActivity: () => void;
   onPreviousActivity: () => void;
+  // Friction-cut loop additions
+  onSkipStage: () => void;
+  onRegenerateStage: (reason?: string) => void;
+  isRegenerating: boolean;
+  /** True right after the examiner grades the stage 'mastered' : pulse Next. */
+  justMastered: boolean;
+  /** Shown once, right after stage 1 completes : inline 1-5 difficulty rating. */
+  showDifficultyRating: boolean;
+  onDifficultyRate: (stars: number) => void;
 }
 
 export function StudioWorkbench({
@@ -57,10 +68,17 @@ export function StudioWorkbench({
   strictnessLevel,
   setStrictnessLevel,
   onCheckAnswer,
+  onTeachStage,
   isEvaluating,
   feynmanResult,
   onNextActivity,
   onPreviousActivity,
+  onSkipStage,
+  onRegenerateStage,
+  isRegenerating,
+  justMastered,
+  showDifficultyRating,
+  onDifficultyRate,
 }: StudioWorkbenchProps) {
   const [fluffStripperActive, setFluffStripperActive] = useState(false);
   const [copiedRemNote, setCopiedRemNote] = useState(false);
@@ -78,6 +96,41 @@ export function StudioWorkbench({
   const [showSketchpad, setShowSketchpad] = useState(false);
 
   const currentActivity = activities[currentActivityIndex];
+
+  // ─── Atomicity meters (FSRS handoff quality, live) ─────────────────────────
+  // Same 15-word threshold the Anki exporter tags as LeechCandidate, so what
+  // you see while typing is exactly what the handoff quality report will say.
+  const f1Words = countWords(field1);
+  const f2Words = countWords(field2);
+  const wordMeter = (words: number) => {
+    const over = words > 15;
+    return (
+      <div className="flex items-center justify-end gap-1.5">
+        <span className={`text-[9px] font-mono font-bold uppercase tracking-wider ${over ? 'text-hazard' : 'text-solder'}`}>
+          {words}w {over ? '[ LEECH RISK: SPLIT IT ]' : '[ ATOMIC ]'}
+        </span>
+      </div>
+    );
+  };
+
+  // Cmd/Ctrl+Enter : check the stage, and if it's already checked, advance.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (isEvaluating) return;
+        const hasInput = field1.trim() && field2.trim();
+        if (!hasInput) return;
+        if (feynmanResult) {
+          onNextActivity();
+        } else {
+          onCheckAnswer();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [field1, field2, feynmanResult, isEvaluating, onCheckAnswer, onNextActivity]);
 
   // Native Speech-to-Text handler
   const toggleSpeechRecognition = () => {
@@ -182,26 +235,33 @@ export function StudioWorkbench({
 
   return (
     <div className="w-full flex flex-col gap-3">
-      {/* Mobile Tab Switcher */}
-      <div className="flex lg:hidden bg-chassis border border-steel text-[10px] font-mono font-bold uppercase tracking-wider">
+      {/* Mobile Tab Switcher : sticky so the zone state stays visible while
+          scrolling long forge content on small screens. */}
+      <div className="flex lg:hidden bg-chassis border border-steel text-[10px] font-mono font-bold uppercase tracking-wider sticky top-0 z-10" role="tablist" aria-label="Workbench zones">
         <button
           type="button"
+          role="tab"
+          aria-selected={mobileTab === 'source'}
           onClick={() => setMobileTab('source')}
-          className={`flex-1 py-1.5 border-r border-steel transition-none ${mobileTab === 'source' ? 'bg-amber text-chassis' : 'bg-deck text-solder'}`}
+          className={`flex-1 min-h-[44px] px-2 text-[11px] border-r border-steel transition-none ${mobileTab === 'source' ? 'bg-amber text-chassis' : 'bg-deck text-solder'}`}
         >
           [ 01:SOURCE ]
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={mobileTab === 'forge'}
           onClick={() => setMobileTab('forge')}
-          className={`flex-1 py-1.5 border-r border-steel transition-none ${mobileTab === 'forge' ? 'bg-amber text-chassis' : 'bg-deck text-solder'}`}
+          className={`flex-1 min-h-[44px] px-2 text-[11px] border-r border-steel transition-none ${mobileTab === 'forge' ? 'bg-amber text-chassis' : 'bg-deck text-solder'}`}
         >
           [ 02:FORGE ]
         </button>
         <button
           type="button"
+          role="tab"
+          aria-selected={mobileTab === 'remnote'}
           onClick={() => setMobileTab('remnote')}
-          className={`flex-1 py-1.5 transition-none ${mobileTab === 'remnote' ? 'bg-amber text-chassis' : 'bg-deck text-solder'}`}
+          className={`flex-1 min-h-[44px] px-2 text-[11px] transition-none ${mobileTab === 'remnote' ? 'bg-amber text-chassis' : 'bg-deck text-solder'}`}
         >
           [ 03:REMNOTE ]
         </button>
@@ -214,11 +274,11 @@ export function StudioWorkbench({
         {/* ZONE 1: THE SOURCE DOCK (LEFT 3 COLS)                     */}
         {/* ========================================================= */}
         <div className={`lg:col-span-3 flex-col gap-3 ${mobileTab === 'source' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-deck border border-steel p-3 flex flex-col max-h-[82vh] overflow-hidden">
+          <div className="bg-deck border border-steel p-3 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden">
             {/* Zone 1 Header */}
             <div className="flex items-center justify-between border-b border-steel pb-2.5 mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-bold text-bone uppercase tracking-wider">// SOURCE DOCK</span>
+                <span className="text-[10px] font-mono font-bold text-bone uppercase tracking-wider">{'// SOURCE DOCK'}</span>
               </div>
               
               {/* Fluff Stripper Button */}
@@ -285,7 +345,7 @@ export function StudioWorkbench({
                   )}
                 </div>
               ) : !youtubeData && !uploadedFile ? (
-                <p className="text-solder font-mono text-[11px]">// NO EXTERNAL SOURCE ATTACHED.</p>
+                <p className="text-solder font-mono text-[11px]">{'// NO EXTERNAL SOURCE ATTACHED.'}</p>
               ) : null}
             </div>
           </div>
@@ -357,6 +417,7 @@ export function StudioWorkbench({
                 rows={2}
                 className="w-full p-3 bg-chassis border border-steel text-bone placeholder-solder text-xs leading-relaxed outline-none focus:border-amber font-mono resize-none transition-none"
               />
+              {field1.trim() && wordMeter(f1Words)}
             </div>
 
             {/* Scaffold Input 2 with Mic Button */}
@@ -390,6 +451,7 @@ export function StudioWorkbench({
                   isListening ? 'border-hazard' : 'border-steel focus:border-amber'
                 }`}
               />
+              {field2.trim() && wordMeter(f2Words)}
             </div>
 
             {/* Scaffold Input 3 (if provided) */}
@@ -408,34 +470,107 @@ export function StudioWorkbench({
               </div>
             )}
 
-            {/* Forge Navigation Footer */}
-            <div className="flex items-center justify-between pt-2 border-t border-steel">
-              <button
-                type="button"
-                onClick={onPreviousActivity}
-                disabled={currentActivityIndex === 0}
-                className="px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone transition-none disabled:opacity-40 cursor-pointer"
-              >
-                [ &lt;&lt; PREV ]
-              </button>
+            {/* Inline difficulty rating ; collected ONCE, right after stage 1,
+                replacing the old blocking pre-session modal (same 1-5 data). */}
+            {showDifficultyRating && (
+              <div className="p-2.5 bg-chassis border border-amber/40">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">
+                    {'// HOW HARD WAS STAGE 1?'}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          onDifficultyRate(n);
+                          playSound('pop');
+                        }}
+                        title={['Trivial', 'Light', 'Fair', 'Hard', 'Brutal'][n - 1]}
+                        className={`w-6 h-6 text-[10px] font-mono font-bold border transition-none cursor-pointer ${
+                          n >= 4
+                            ? 'border-hazard/50 text-hazard hover:bg-hazard/20'
+                            : 'border-steel text-solder hover:border-amber hover:text-amber'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[9px] text-solder font-mono mt-1">
+                  Calibrates the AI for the rest of this session (no XP impact).
+                </p>
+              </div>
+            )}
 
-              <div className="flex items-center gap-2">
+            {/* Forge Navigation Footer : sticky action bar */}
+            <div className="sticky bottom-0 bg-deck/95 backdrop-blur-sm flex items-center justify-between pt-2 pb-1 border-t border-steel gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onPreviousActivity}
+                  disabled={currentActivityIndex === 0}
+                  className="px-2.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone transition-none disabled:opacity-40 cursor-pointer"
+                >
+                  [ &lt;&lt; ]
+                </button>
+
+                {/* Regenerate stage : lightweight flash-lite model, for stages
+                    that don't fit the learner (not relevant / too personal). */}
+                <button
+                  type="button"
+                  onClick={() => onRegenerateStage()}
+                  disabled={isRegenerating}
+                  title="Regenerate this stage (lightweight model) : use when the stage doesn't fit you"
+                  className="px-2.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone hover:border-solder transition-none disabled:opacity-40 cursor-pointer"
+                >
+                  {isRegenerating ? '[ REGEN... ]' : '[ REGEN ]'}
+                </button>
+                {/* Teach Me this stage : Brilliant-style interactive lesson for the
+                    exact mechanism + problem the learner is stuck on. */}
+                <button
+                  type="button"
+                  onClick={onTeachStage}
+                  title="Teach Me This: interactive lesson that teaches this stage's mechanism and walks the problem step-by-step"
+                  className="px-2.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-amber bg-chassis border border-amber/40 hover:bg-amber hover:text-chassis transition-none cursor-pointer"
+                >
+                  [ TEACH ME THIS ]
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={onCheckAnswer}
                   disabled={isEvaluating || (!field1.trim() && !field2.trim())}
-                  className="px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider bg-chassis border border-steel text-bone hover:border-amber transition-none disabled:opacity-40 cursor-pointer"
+                  title="Check with the examiner (Cmd/Ctrl+Enter)"
+                  className="px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wider bg-chassis border border-steel text-bone hover:border-amber transition-none disabled:opacity-40 cursor-pointer"
                 >
-                  {isEvaluating ? '[ EVALUATING... ]' : '[ ASK EXAMINER ]'}
+                  {isEvaluating ? '[ CHECKING... ]' : '[ CHECK ⌘↵ ]'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onSkipStage}
+                  title="Skip for now : exports tagged DeepEncode::Unfinished so a filtered deck catches it"
+                  className="px-2.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone transition-none cursor-pointer"
+                >
+                  [ SKIP ]
                 </button>
 
                 <button
                   type="button"
                   onClick={onNextActivity}
                   disabled={!field1.trim() || !field2.trim()}
-                  className="px-5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber border border-amber text-chassis transition-none disabled:opacity-40 cursor-pointer"
+                  className={`px-4 py-2 text-[10px] font-mono font-bold uppercase tracking-wider bg-amber border border-amber text-chassis transition-none disabled:opacity-40 cursor-pointer ${
+                    justMastered ? 'animate-pulse shadow-[0_0_12px_rgba(251,191,36,0.6)]' : ''
+                  }`}
                 >
-                  {currentActivityIndex === activities.length - 1 ? 'FINISH WORKOUT //' : 'NEXT STAGE >>'}
+                  {justMastered
+                    ? (currentActivityIndex === activities.length - 1 ? 'MASTERED! FINISH >>' : 'MASTERED! NEXT >>')
+                    : (currentActivityIndex === activities.length - 1 ? 'FINISH //' : 'NEXT >>')}
                 </button>
               </div>
             </div>
@@ -447,13 +582,13 @@ export function StudioWorkbench({
         {/* ZONE 3: REMNOTE STAGING & INQUISITOR (RIGHT 3 COLS)       */}
         {/* ========================================================= */}
         <div className={`lg:col-span-3 flex-col gap-3 ${mobileTab === 'remnote' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-deck border border-steel p-4 flex flex-col max-h-[82vh] overflow-hidden space-y-3.5">
+          <div className="bg-deck border border-steel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden space-y-3.5">
 
             {/* Zone 3 Header & Strictness Rocker Plate */}
             <div className="space-y-2 border-b border-steel pb-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono font-bold text-bone uppercase tracking-wider">
-                  // EXAMINER CONSOLE
+                  {'// EXAMINER CONSOLE'}
                 </span>
                 <span className="text-[10px] font-mono text-solder">
                   {strictnessLevel === 'sherpa' ? '[ 01:SHERPA ]' : strictnessLevel === 'feynman' ? '[ 02:FEYNMAN ]' : '[ 03:VIVA ]'}
@@ -548,7 +683,7 @@ export function StudioWorkbench({
             <div className="flex-1 flex flex-col space-y-2 overflow-hidden">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono font-bold text-bone uppercase tracking-wider">
-                  // REMNOTE STAGING
+                  {'// REMNOTE STAGING'}
                 </span>
 
                 {/* Smoke Test Cloze Masking Toggle */}

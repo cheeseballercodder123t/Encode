@@ -76,6 +76,7 @@ interface ZenLaunchpadProps {
   interleaveMode: boolean;
   setInterleaveMode: (val: boolean) => void;
   onGenerate: () => void;
+  onTeach: () => void;
   isLoading: boolean;
 }
 
@@ -97,6 +98,7 @@ export function ZenLaunchpad({
   interleaveMode,
   setInterleaveMode,
   onGenerate,
+  onTeach,
   isLoading
 }: ZenLaunchpadProps) {
   const [showSettings, setShowSettings] = useState(false);
@@ -266,6 +268,15 @@ export function ZenLaunchpad({
           </button>
 
           {/* Primary Action Button */}
+          <button
+            type="button"
+            onClick={onTeach}
+            disabled={!hasContent}
+            className="flex items-center gap-2 px-4 py-2.5 bg-chassis border border-amber text-amber text-xs font-mono font-bold uppercase tracking-wider transition-none disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:bg-amber hover:text-chassis"
+            title="Teach Me: Brilliant-style interactive lesson that teaches the concept, then walks a problem step-by-step"
+          >
+            <span>[ TEACH ME ]</span>
+          </button>
           <button
             type="button"
             onClick={onGenerate}

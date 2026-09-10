@@ -267,6 +267,15 @@ const standardResponseSchema = {
             description: "Template identifier chosen intelligently from the catalog for this mode." 
           },
           prompt: { type: Type.STRING, description: "The overarching guiding challenge" },
+          boundaryContrast: {
+            type: Type.OBJECT,
+            description: "Discriminative boundary for this stage's concept (required for exam-ready cards)",
+            properties: {
+              confusableLookalike: { type: Type.STRING, description: "The lookalike concept students confuse it with" },
+              distinguishingRule: { type: Type.STRING, description: "The concrete test/rule that separates the two" }
+            },
+            required: ["confusableLookalike", "distinguishingRule"]
+          },
           visualData: visualDataSchema,
           researchContext: {
             type: Type.OBJECT,
@@ -368,6 +377,14 @@ const guidedPathResponseSchema = {
                 },
                 templateType: { type: Type.STRING },
                 prompt: { type: Type.STRING },
+                boundaryContrast: {
+                  type: Type.OBJECT,
+                  properties: {
+                    confusableLookalike: { type: Type.STRING },
+                    distinguishingRule: { type: Type.STRING }
+                  },
+                  required: ["confusableLookalike", "distinguishingRule"]
+                },
                 visualData: visualDataSchema,
                 scaffold: {
                   type: Type.OBJECT,
@@ -479,6 +496,8 @@ AVAILABLE MEMORIZATION TEMPLATES:
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 If the user's notes miss foundational rules (e.g. forgot why HF is a weak acid or omitted a cranial nerve ganglion), fetch the missing foundational context in 'researchContexts' and link it.` : ''}
 
+ATOMIC + BOUNDARY DISCIPLINE: One item-cluster per stage. For EVERY stage populate 'boundaryContrast' (confusableLookalike + distinguishingRule) : the confusable pair in this list (e.g. strong vs weak acid, Na vs K channel) and the one-sentence rule that separates them.
+
 CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/buckets/palace rooms/acronyms, and provide clear scaffold labels and concrete high-quality example answers.`;
     } else {
       systemPrompt = `You are a world-class Cognitive Science Architect specializing in Semantic Memory Encoding (Craik & Lockhart Levels of Processing, Paivio Dual Coding Theory, Chi's ICAP Framework, and Ausubel's Meaningful Learning).
@@ -522,10 +541,20 @@ For EVERY stage, you MUST populate 'visualData.generationChallenge' with:
 3. 'missingRoleOrTarget': The missing counterpart or mechanism to be deduced.
 4. 'expertCompletion': The completed expert synthesis.
 
+ATOMIC CARD DISCIPLINE (CRITICAL FOR FSRS HANDOFF):
+Each stage teaches exactly ONE mechanism : one idea, one card. Never bundle multiple mechanisms into a single stage.
+Every scaffold label and example answer must be answerable in UNDER 15 WORDS so the learner's generated wording can become one atomic spaced-repetition card.
+
+BOUNDARY CONTRAST (REQUIRED):
+For EVERY stage, populate 'boundaryContrast' with:
+1. 'confusableLookalike': the concept this stage's topic is most often confused with.
+2. 'distinguishingRule': the concrete test, exception, or rule that separates them (one sentence).
+These become discriminative Anki cards that prevent the classic single-concept exam trap.
+
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting potential, compounding frequency). Fetch 1-2 missing background concepts into 'researchContexts' and link to relevant stages.` : ''}
 
-CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges and 'generationChallenge', and provide clear scaffold labels, domain presets, and concrete example answers.`;
+CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges and 'generationChallenge', provide clear scaffold labels, domain presets, and concrete example answers, and ALWAYS include 'boundaryContrast' for the stage's concept.`;
     }
 
     systemPrompt += `\n\n${difficultyInstruction}${confidenceContext}`;

@@ -8,6 +8,14 @@ import {
   YouTubeMetadata
 } from '@/lib/types';
 
+export interface HandoffStats {
+  totalCards: number;
+  fsrsReady: number;
+  leechCandidates: number;
+  unfinished: number;
+  boundaryTraps: number;
+}
+
 interface CompletedSessionViewProps {
   xp: number;
   topicSummary: string;
@@ -15,17 +23,23 @@ interface CompletedSessionViewProps {
   userResponses: Record<string, StageResponse>;
   youtubeData: YouTubeMetadata | null;
   copiedFormat: string | null;
+  handoffStats: HandoffStats;
+  onDownloadApkg: () => void;
   onCopy: (format: 'remnote' | 'anki' | 'markdown') => void;
   onShare: () => void;
   onStartInterleavedDrill: () => void;
   onOpenBlurting: () => void;
   onOpenSegregate: (report: SegregationReport) => void;
+  onTeach: () => void;
   onRestart: () => void;
 }
 
 /**
  * STATE 4: Completed master schema & SRS export matrix. Extracted from
  * app/page.tsx : receives everything it needs as props.
+ *
+ * Identity-first: the trophy is the CLEAN HANDOFF ("I convert messy notes to
+ * clean cards"), not XP. Primary CTA is the one-click FSRS-ready .apkg.
  */
 export function CompletedSessionView({
   xp,
@@ -34,13 +48,17 @@ export function CompletedSessionView({
   userResponses,
   youtubeData,
   copiedFormat,
+  handoffStats,
+  onDownloadApkg,
   onCopy,
   onShare,
   onStartInterleavedDrill,
   onOpenBlurting,
   onOpenSegregate,
+  onTeach,
   onRestart
 }: CompletedSessionViewProps) {
+  const { totalCards, fsrsReady, leechCandidates, unfinished, boundaryTraps } = handoffStats;
   return (
     <motion.div
       key="completed"
@@ -48,37 +66,69 @@ export function CompletedSessionView({
       animate={{ opacity: 1, scale: 1 }}
       className="w-full flex flex-col gap-6"
     >
-      {/* Completion Hero Banner */}
+      {/* Identity Trophy Hero : the clean handoff is the reward */}
       <div className="p-8 to-[#0F111A] border border-steel/30   relative overflow-hidden flex flex-col items-center text-center">
         <div className="p-3 bg-amber/20 border border-amber/40 text-amber mb-3  ">
-          <span className="text-amber font-bold font-mono">[ TROPHY ]</span>
+          <span className="text-amber font-bold font-mono">[ CARDS ]</span>
         </div>
         <h2 className="text-2xl font-black text-bone tracking-tight mb-1">
-          Cognitive Encoding Workout Complete!
+          Clean cards, ready for Anki.
         </h2>
         <p className="text-xs text-solder font-mono italic max-w-lg mb-4">
-          You have successfully transformed passive input into durable semantic neural schema.
+          You converted messy notes into {totalCards} cards encoded in your own words.
         </p>
 
+        {/* Handoff quality report : replaces XP as the trophy */}
         <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono">
-          <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
-            <span className="text-amber font-bold font-mono">[ ZAP ]</span>
-            <span className="text-solder">Total XP Earned:</span>
-            <span className="font-black text-amber">{xp} XP</span>
+          <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-emerald-500/40">
+            <span className="text-emerald-400 font-bold font-mono">[ OK ]</span>
+            <span className="text-solder">FSRS-Ready:</span>
+            <span className="font-black text-emerald-400">{fsrsReady} / {totalCards}</span>
           </div>
 
           <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
-            <span className="text-amber font-bold font-mono">[ * ]</span>
-            <span className="text-solder">Stages Completed:</span>
-            <span className="font-bold text-amber">{activities.length} / {activities.length} (100%)</span>
+            <span className="text-amber font-bold font-mono">[ TRAP ]</span>
+            <span className="text-solder">Boundary Traps:</span>
+            <span className="font-bold text-amber">{boundaryTraps}</span>
           </div>
 
-          {youtubeData && (
-            <div className="flex items-center gap-1 bg-hazard950/30 border border-hazard500/40 text-hazard300 px-3 py-1.5 ">
-              <span className="text-amber font-bold font-mono">[ VIDEO ]</span>
-              <span>Timestamped Video Linked</span>
+          {unfinished > 0 && (
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
+              <span className="text-solder font-bold font-mono">[ ? ]</span>
+              <span className="text-solder">Unfinished:</span>
+              <span className="font-bold text-solder">{unfinished}</span>
             </div>
           )}
+
+          {leechCandidates > 0 && (
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
+              <span className="text-hazard400 font-bold font-mono">[ LEECH ]</span>
+              <span className="text-solder">Dense (tagged):</span>
+              <span className="font-bold text-hazard400">{leechCandidates}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 bg-chassis/60 px-2.5 py-1 border border-steel/50">
+            <span className="text-solder">XP {xp}</span>
+          </div>
+        </div>
+
+        {/* Primary CTA : one-click FSRS-ready handoff */}
+        <div className="flex flex-col items-center gap-2 mt-6 w-full max-w-md">
+          <button
+            type="button"
+            onClick={onDownloadApkg}
+            disabled={totalCards === 0}
+            className="w-full py-3.5 bg-amber border border-amber text-chassis text-xs font-black uppercase tracking-widest font-mono hover:brightness-110 transition-none disabled:opacity-40 cursor-pointer"
+            title="Real .apkg (Basic + Cloze note types) : open directly in Anki, FSRS owns scheduling"
+          >
+            [ DL ] Download FSRS-Ready .apkg ({totalCards} cards)
+          </button>
+          <p className="text-[10px] text-solder font-mono">
+            // {unfinished + leechCandidates > 0
+              ? `${unfinished + leechCandidates} card${unfinished + leechCandidates === 1 ? '' : 's'} tagged Unfinished/LeechCandidate : build a filtered deck from those tags on day 1.`
+              : 'Zero leeches, zero unfinished : textbook-clean handoff.'}
+          </p>
         </div>
       </div>
 
@@ -128,6 +178,17 @@ export function CompletedSessionView({
           >
             <span className="text-amber font-bold font-mono">[ PEN ]</span>
             <span>Blurting Canvas (Active Recall)</span>
+          </button>
+
+          {/* Teach Me : re-teach the whole saved schema as an interactive lesson */}
+          <button
+            type="button"
+            onClick={onTeach}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber/10 hover:bg-amber/20 border border-amber/40 text-amber text-xs font-bold transition-none-all cursor-pointer"
+            title="Teach Me: Brilliant-style interactive lesson that re-teaches this schema, concept then problem"
+          >
+            <span className="text-amber font-bold font-mono">[ TEACH ]</span>
+            <span>Teach Me (Interactive Lesson)</span>
           </button>
 
           {/* RemNote 4-Quadrant Matrix & API Push */}

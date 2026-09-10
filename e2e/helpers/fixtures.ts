@@ -208,3 +208,105 @@ export const AUDIT_SEGREGATE_RESPONSE = {
   ],
   conceptualMechanisms: [],
 };
+
+// ─── TEACH ME interactive-lesson mock (/api/teach) ─────────────────────────
+// A full AI-authored Brilliant-style lesson used by e2e/teachme.spec.ts. The
+// UI renders this deterministically without any API key or network.
+
+export const TEACH_RESPONSE = {
+  lesson: {
+    title: 'Action Potentials: The Voltage Story',
+    tagline: 'Repair the pump and you will never forget the threshold.',
+    estimatedMin: 5,
+    intro: {
+      hook: 'A neuron at rest holds -70 mV. What changes in the first millisecond of a thought?',
+      whyItMatters: 'Every nerve signal, muscle contraction and heartbeat starts here.',
+    },
+    segments: [
+      {
+        id: 't1',
+        type: 'concept',
+        title: 'The Resting Membrane',
+        body: 'A healthy neuron sits at -70 mV. The Na+/K+ pump constantly exports 3 Na+ and imports 2 K+, maintaining the gradient.',
+        keyTerms: ['resting potential', 'Na+/K+ pump', '-70 mV'],
+        visual: {
+          kind: 'steps',
+          lines: [
+            { label: 'Pump runs', detail: '3 Na+ out, 2 K+ in' },
+            { label: 'Gradient holds', detail: '-70 mV steady' },
+          ],
+        },
+        xpValue: 5,
+      },
+      {
+        id: 't2',
+        type: 'concept',
+        title: 'Firing the Threshold',
+        body: 'When stimulus pushes the membrane to -55 mV, voltage-gated Na+ channels snap open. Na+ rushes in and the voltage rockets toward +40 mV.',
+        keyTerms: ['threshold', 'depolarization'],
+        xpValue: 5,
+      },
+      {
+        id: 't3',
+        type: 'checkpoint',
+        title: 'Checkpoint',
+        question: {
+          kind: 'mcq',
+          prompt: 'What triggers the rapid depolarization phase?',
+          options: [
+            { id: 'a', label: 'Voltage-gated Na+ channels opening at -55 mV', correct: true, explanation: 'Threshold opens Na+ channels; influx drives depolarization.' },
+            { id: 'b', label: 'Passive K+ leak alone', correct: false, explanation: 'Trap: passive leak maintains rest, it does not cause the spike.' },
+            { id: 'c', label: 'The Na+/K+ pump reversing', correct: false, explanation: 'The pump maintains the gradient; it does not reverse during firing.' },
+          ],
+          hints: ['It happens right at threshold.', 'Which ion rushes IN?'],
+        },
+        trapNote: 'Confusable lookalike detected.',
+        xpValue: 15,
+      },
+      {
+        id: 't4',
+        type: 'guidedProblem',
+        title: 'Worked Example',
+        body: 'Walk through one full cycle.',
+        steps: [
+          { title: 'Reach threshold', detail: 'Stimulus drives membrane from -70 mV to -55 mV.' },
+          { title: 'Na+ influx', detail: 'Voltage-gated Na+ channels open; Na+ rushes in to +40 mV.' },
+          { title: 'Repolarize', detail: 'Na+ channels inactivate and K+ channels open; K+ exits toward -70 mV.' },
+        ],
+        finalAnswer: 'The membrane fires and resets in under 2 ms.',
+        xpValue: 20,
+      },
+      {
+        id: 't5',
+        type: 'youTry',
+        title: 'Your Turn',
+        question: {
+          kind: 'freeResponse',
+          prompt: 'What happens if Na+ channels never inactivate?',
+          modelAnswer: 'The cell stays depolarized and cannot fire again until the pump restores the gradient.',
+          hints: ['Think about the refractory period.'],
+        },
+        xpValue: 25,
+      },
+      {
+        id: 't6',
+        type: 'wrapup',
+        title: 'Wrap Up',
+        body: 'You reconstructed the action potential from the mechanism up.',
+        xpValue: 0,
+      },
+    ],
+    masteryCheck: {
+      prompt: 'Explain the full cycle in one plain-language sentence.',
+      keywords: ['threshold', 'inactivate', 'repolarize'],
+      modelAnswer: 'At threshold Na+ rushes in to spike the voltage, then Na+ channels inactivate and K+ exits to reset the membrane.',
+      hints: ['Name the ion that enters, then the ion that exits.'],
+    },
+    wrapup: {
+      summary: 'Concept encoded. Ready to encode the full schema.',
+      callToAction: 'Now build the cognitive schema — you are pre-warmed.',
+      connectionPrompt: 'How would this change in a demyelinated neuron?',
+    },
+  },
+};
+

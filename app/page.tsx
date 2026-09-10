@@ -11,7 +11,8 @@ import {
   PrerequisitesReport,
   PretestSession,
   SegregationReport,
-  RoastReport
+  RoastReport,
+  TeachScope
 } from '@/lib/types';
 import { incrementModelCall } from '@/lib/storage';
 import { decompressSchemaFromUrl } from '@/lib/url-share';
@@ -35,16 +36,17 @@ import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
-import { PreSessionConfidenceModal } from '@/components/PreSessionConfidenceModal';
 import { ReadinessModal } from '@/components/ReadinessModal';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
+import { extractAnkiCardsFromSchema, classifyDeckQuality, buildHierarchicalDeckName, generateAnkiApkgPackage } from '@/lib/anki-exporter';
 import { useSession } from '@/hooks/useSession';
 import { useSettings } from '@/hooks/useSettings';
 import { useInputSource } from '@/hooks/useInputSource';
 import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
 import { CompletedSessionView } from '@/components/CompletedSessionView';
+import { TeachMeModal } from '@/components/TeachMeModal';
 export default function DeepEncodeApp() {
   const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud } = useAuth();
 
@@ -157,14 +159,25 @@ export default function DeepEncodeApp() {
   const [importedShareBanner, setImportedShareBanner] = useState<string | null>(null);
 
   // New Metacognition & Science States
-  const [isConfidenceModalOpen, setIsConfidenceModalOpen] = useState(false);
+  // (PreSessionConfidenceModal removed: no pre-session gate. The 1-5 rating is
+  // now collected inline right after stage 1 and feeds the same state.)
   const [preSessionConfidence, setPreSessionConfidence] = useState<number>(3);
+  const [difficultyRated, setDifficultyRated] = useState(false);
   const [isReadinessModalOpen, setIsReadinessModalOpen] = useState(false);
   const [isEndSessionReviewOpen, setIsEndSessionReviewOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [endSessionReviewData, setEndSessionReviewData] = useState<EndSessionReviewData | null>(null);
   const [isLoadingEndSessionReview, setIsLoadingEndSessionReview] = useState(false);
   const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
+
+  // Friction-cut loop states: mastered auto-save pulse, stage skip, stage regen
+  const [justMastered, setJustMastered] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Teach Me (Brilliant-style interactive lesson) state
+  const [isTeachOpen, setIsTeachOpen] = useState(false);
+  const [teachScope, setTeachScope] = useState<TeachScope>('notes');
+  const [teachStageIndex, setTeachStageIndex] = useState(0);
 
 
   // Feynman Evaluator checking state
@@ -332,6 +345,16 @@ export default function DeepEncodeApp() {
     }
   };
 
+  // Open Teach Me lesson helper. scope = 'notes' (from source), 'stage' (current
+  // stage in the workbench), or 'schema' (re-teach a completed saved schema).
+  const handleOpenTeach = (scope: TeachScope = 'notes', stageIndex: number = currentActivityIndex) => {
+    setTeachScope(scope);
+    setTeachStageIndex(stageIndex);
+    setIsTeachOpen(true);
+    sound.playBeep(640, 'sine', 0.1);
+  };
+
+  // Open Stateless Share Modal helper
   // Open Stateless Share Modal helper
   const handleOpenStatelessShare = (schema?: SavedSchema) => {
     const target: SavedSchema = schema || {
@@ -425,7 +448,8 @@ export default function DeepEncodeApp() {
     }
   }, [appState, currentActivityIndex]);
 
-  // Initiate Generation with Pre-Session Confidence Gate
+  // Initiate Generation (no pre-session gate : friction cut. The 1-5 difficulty
+  // rating is collected inline after stage 1 instead of blocking startup.)
   const handleInitiateGenerate = () => {
     if (activeTab === 'youtube') {
       if (!youtubeUrl.trim()) return;
@@ -433,13 +457,12 @@ export default function DeepEncodeApp() {
       return;
     }
     if (!rawNotes.trim() && !uploadedFile) return;
-    setIsConfidenceModalOpen(true);
+    handleGenerate();
   };
 
   // Main Generation Handler (Text / File / YouTube)
   const handleGenerate = async (confirmedConfidence?: number) => {
     const userConfidenceVal = confirmedConfidence || preSessionConfidence;
-    setIsConfidenceModalOpen(false);
 
     if (activeTab === 'youtube') {
       if (!youtubeUrl.trim()) return;
@@ -669,16 +692,31 @@ export default function DeepEncodeApp() {
         setStageErrorAnalysis(evalData.errorAnalysis);
       }
 
-      // Update response record with checkCount and errorAnalysis
+      const mastered = evalData.grade === 'mastered';
+
+      // Update response record. On mastery, auto-save the full response
+      // (fields + confidence + reflection) so "Next" is a single keypress.
       setUserResponses(prev => ({
         ...prev,
         [currentActivity.id]: {
           ...(prev[currentActivity.id] || { field1, field2 }),
+          ...(mastered ? { field1, field2, field3, selectedPreset } : {}),
+          confidenceScore: stageConfidence,
+          reflection: stageReflection,
           checkCount: nextCount,
           errorAnalysis: evalData.errorAnalysis || undefined,
           feynmanReview: evalData,
         }
       }));
+
+      if (mastered) {
+        // Auto-advance cue: pulse the Next button (Atomic Habits : make the
+        // next action obvious + immediately satisfying).
+        setJustMastered(true);
+        setTimeout(() => setJustMastered(false), 2200);
+      } else {
+        setJustMastered(false);
+      }
 
       if (evalData.xpBonus) {
         addXP(evalData.xpBonus);
@@ -818,6 +856,99 @@ export default function DeepEncodeApp() {
     }
   };
 
+  // "Skip for now" : habit survival valve. Marks the stage skipped (exported
+  // tagged DeepEncode::Unfinished) and moves on WITHOUT XP or field guards.
+  const handleSkipStage = async () => {
+    if (!currentActivity) return;
+    setJustMastered(false);
+
+    const updatedResponses: Record<string, StageResponse> = {
+      ...userResponses,
+      [currentActivity.id]: {
+        field1: '',
+        field2: '',
+        field3: '',
+        selectedPreset: '',
+        readinessConfirmed: true,
+        skipped: true,
+      }
+    };
+    setUserResponses(updatedResponses);
+    sound.playBeep(350, 'sine', 0.15);
+
+    if (currentActivityIndex < activities.length - 1) {
+      const nextIdx = currentActivityIndex + 1;
+      setCurrentActivityIndex(nextIdx);
+      loadStageInputs(nextIdx, activities, updatedResponses);
+    } else if (isGuidedPathMode && currentModuleIndex < guidedModules.length - 1) {
+      sound.playSuccess();
+    } else {
+      sound.playLevelUp();
+      setAppState('completed');
+      const newSavedSchema: SavedSchema = {
+        id: `schema_${Date.now()}`,
+        timestamp: Date.now(),
+        topicSummary: topicSummary || 'Synthesized Schema',
+        mode: encodingMode,
+        xpEarned: xp,
+        activities,
+        userResponses: updatedResponses,
+        sourceFileName: uploadedFile?.name,
+        isGuidedPath: isGuidedPathMode,
+        guidedModules: isGuidedPathMode ? guidedModules : undefined,
+        youtubeData: youtubeData || undefined,
+        researchContexts: researchContexts.length > 0 ? researchContexts : undefined
+      };
+      await saveSchemaToLibrary(newSavedSchema);
+    }
+  };
+
+  // Regenerate the current stage with the lightweight checker model
+  // (gemini-3.5-flash-lite by default) : for stages that don't fit the learner.
+  const handleRegenerateStage = async (reason?: string) => {
+    if (!currentActivity || isRegenerating) return;
+    setIsRegenerating(true);
+    sound.playBeep(520, 'sine', 0.12);
+    incrementModelCall(aiSettings.geminiCheckerModel || 'gemini-3.5-flash-lite');
+
+    try {
+      const response = await fetch('/api/regenerate-stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          activity: currentActivity,
+          topicSummary,
+          mode: encodingMode,
+          reason: reason || undefined,
+          settings: aiSettings,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Stage regeneration failed');
+      }
+      const data = await response.json();
+      const newAct: Activity = { ...data.activity, stageNumber: currentActivity.stageNumber };
+      const newActs = [...activities];
+      newActs[currentActivityIndex] = newAct;
+      const newResponses = { ...userResponses };
+      delete newResponses[currentActivity.id];
+      setFeynmanResult(null);
+      setStageCheckCount(0);
+      setStageErrorAnalysis(null);
+      setJustMastered(false);
+      setActivities(newActs);
+      setUserResponses(newResponses);
+      applyStageInputs(currentActivityIndex, newActs, newResponses);
+      sound.playSuccess();
+    } catch (err: any) {
+      console.error('Stage regeneration error', err);
+      alert(err?.message || 'Could not regenerate this stage. Check your settings.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const handlePreviousActivity = () => {
     if (currentActivityIndex > 0) {
       const prevIdx = currentActivityIndex - 1;
@@ -848,6 +979,30 @@ export default function DeepEncodeApp() {
 
   const handleClearAllHistory = () => {
     clearAllSchemaLibrary();
+  };
+
+  // ─── Identity trophy: handoff quality (NOT XP) ────────────────────────────
+  // "I convert messy notes to clean cards." The reward is the clean handoff:
+  // N FSRS-ready cards, X leech candidates, Y unfinished, Z boundary traps.
+  const handoffCards = useMemo(
+    () => extractAnkiCardsFromSchema({ topicSummary, activities, userResponses }),
+    [activities, userResponses, topicSummary]
+  );
+  const handoffStats = useMemo(() => classifyDeckQuality(handoffCards), [handoffCards]);
+
+  // One-click FSRS-ready .apkg download (real collection.anki2, no import maze)
+  const handleDownloadApkg = async () => {
+    if (handoffCards.length === 0) return;
+    const deckName = buildHierarchicalDeckName(topicSummary);
+    sound.playBeep(660, 'sine', 0.12);
+    const blob = await generateAnkiApkgPackage(handoffCards, deckName);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${deckName.replace(/::/g, '_')}.apkg`;
+    a.click();
+    URL.revokeObjectURL(url);
+    sound.playSuccess();
   };
 
   // Copy formats for RemNote / Anki / Markdown
@@ -892,12 +1047,12 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="min-h-screen bg-chassis text-bone flex flex-col items-center py-8 px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber/30 selection:text-chassis font-mono">
+    <main className="min-h-screen min-h-dvh bg-chassis text-bone flex flex-col items-center py-4 sm:py-8 px-3 sm:px-6 relative overflow-x-hidden selection:bg-amber/30 selection:text-chassis font-mono mobile-safe-bottom">
 
       <div className="w-full max-w-5xl relative z-10 flex-1 flex flex-col">
 
-        {/* Top Control Bar */}
-        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-steel bg-deck px-4 py-3">
+        {/* Top Control Bar : wraps cleanly on phones, full-width rows. */}
+        <header className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border border-steel bg-deck px-3 sm:px-4 py-3">
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -906,20 +1061,21 @@ export default function DeepEncodeApp() {
                   [ GEMINI 3.7 // FIRESTORE ]
                 </span>
               </div>
-              <p className="text-[10px] text-solder font-mono uppercase tracking-wider">// Multimodal cognitive schema architect with adaptive chunking & interleaving</p>
+              <p className="text-[10px] text-solder font-mono uppercase tracking-wider">{'// Multimodal cognitive schema architect with adaptive chunking & interleaving'}</p>
             </div>
           </div>
 
-          {/* Gamification Bar & Top Buttons */}
-          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+          {/* Gamification Bar & Top Buttons : scrolls horizontally on phones
+              so items keep 44px targets instead of wrapping into a tall stack. */}
+          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto max-w-full py-1 [-webkit-overflow-scrolling:touch]">
             {appState !== 'input' && (
-              <div className="flex items-center gap-2.5 bg-chassis border border-steel px-3 py-1.5 relative">
+              <div className="shrink-0 flex items-center gap-2.5 bg-chassis border border-steel px-3 py-1.5 min-h-[44px] relative">
                 <span className="text-xs font-bold font-mono tracking-tight text-amber">XP: {String(xp).padStart(4, '0')}</span>
 
                 <div className="h-4 w-px bg-steel" />
 
                 <div className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border bg-deck ${userRank.color}`}>
-                  LVL: {String(userRank.level).padStart(2, '0')} // {userRank.title}
+                  LVL: {String(userRank.level).padStart(2, '0')} {'//'} {userRank.title}
                 </div>
 
                 {/* Floating XP Gain Indicator */}
@@ -940,7 +1096,7 @@ export default function DeepEncodeApp() {
 
             {/* PWA Local-First Offline & Install Indicator */}
             {isOffline && (
-              <div className="px-2.5 py-1 bg-chassis border border-hazard text-solder text-[10px] font-mono font-bold uppercase tracking-wider">
+              <div className="shrink-0 px-2.5 py-1 min-h-[44px] flex items-center bg-chassis border border-hazard text-solder text-[10px] font-mono font-bold uppercase tracking-wider">
                 [ LINK: OFFLINE ]
               </div>
             )}
@@ -950,7 +1106,7 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsComparativeModalOpen(true)}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Compare two documents (e.g. Lecture Slides vs Textbook Chapter)"
             >
               [ COMPARE // 2 DOCS ]
@@ -960,7 +1116,7 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsAnkiExportOpen(true)}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Export .apkg Anki package or sync via SM-2 Webhooks"
             >
               [ ANKI: SM-2 ]
@@ -970,7 +1126,7 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsInterleavingOpen(true)}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Start Interleaved Multi-Domain Drill (Mix subjects)"
             >
               [ DRILL: INTERLEAVE ]
@@ -981,7 +1137,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleOpenStatelessShare()}
-                className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
                 title="Share Stateless URL (Free & Zero DB Required)"
               >
                 [ SHARE ]
@@ -991,7 +1147,7 @@ export default function DeepEncodeApp() {
             {/* Cloud Sync / Account Button */}
             <button
               onClick={() => setIsAuthOpen(true)}
-              className={`px-2.5 py-1.5 bg-chassis border transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer ${
+              className={`shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer ${
                 user
                   ? 'border-amber/40 text-amber'
                   : 'border-steel text-solder hover:text-bone'
@@ -1006,7 +1162,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleEndSessionReview()}
-                className="px-2.5 py-1.5 bg-amber border border-amber text-chassis transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-amber border border-amber text-chassis transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
                 title="View Metacognitive Performance Review"
               >
                 [ SESSION REVIEW ]
@@ -1017,7 +1173,7 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsAnalyticsOpen(true)}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Metacognitive Analytics & Model Quota Dashboard"
             >
               [ TELEMETRY ]
@@ -1026,7 +1182,7 @@ export default function DeepEncodeApp() {
             {/* Saved Schemas History Button */}
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer relative"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer relative"
               title="View Saved Schemas History"
             >
               [ LIBRARY{savedSchemas.length > 0 ? `: ${String(savedSchemas.length).padStart(2, '0')}` : ''} ]
@@ -1035,7 +1191,7 @@ export default function DeepEncodeApp() {
             {/* AI Settings / Multi-Key Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title="Configure Models (Gemini 3.7 Flash & 3.5 Flash-Lite)"
             >
               [ CONFIG ]
@@ -1044,7 +1200,7 @@ export default function DeepEncodeApp() {
             {/* Audio Toggle */}
             <button
               onClick={toggleSound}
-              className="px-2.5 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
               title={soundMuted ? 'Unmute audio effects' : 'Mute audio effects'}
             >
               [ SND: {soundMuted ? 'OFF' : 'ON'} ]
@@ -1137,13 +1293,14 @@ export default function DeepEncodeApp() {
               interleaveMode={interleaveMode}
               setInterleaveMode={setInterleaveMode}
               onGenerate={handleInitiateGenerate}
+              onTeach={() => handleOpenTeach('notes')}
               isLoading={false}
             />
 
             {/* Quick Diagnostic Power Tools */}
             <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder mr-1">
-                // DEEP DIAGNOSTICS:
+                {'// DEEP DIAGNOSTICS:'}
               </span>
               <button
                 type="button"
@@ -1189,7 +1346,7 @@ export default function DeepEncodeApp() {
             {/* Cognitive framework telemetry */}
             <div className="bg-deck border border-steel">
               <div className="px-4 py-2 border-b border-steel bg-chassis">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder">// COGNITIVE FRAMEWORK TELEMETRY</span>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder">{'// COGNITIVE FRAMEWORK TELEMETRY'}</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x divide-y md:divide-y-0 divide-steel">
                 <div className="p-4">
@@ -1310,10 +1467,20 @@ export default function DeepEncodeApp() {
               strictnessLevel={strictnessLevel}
               setStrictnessLevel={setStrictnessLevel}
               onCheckAnswer={handleCheckAnswer}
+              onTeachStage={() => handleOpenTeach('stage', currentActivityIndex)}
               isEvaluating={isEvaluating}
               feynmanResult={feynmanResult}
               onNextActivity={handleNextActivity}
               onPreviousActivity={handlePreviousActivity}
+              onSkipStage={handleSkipStage}
+              onRegenerateStage={handleRegenerateStage}
+              isRegenerating={isRegenerating}
+              justMastered={justMastered}
+              showDifficultyRating={currentActivityIndex === 1 && !difficultyRated}
+              onDifficultyRate={(stars: number) => {
+                setPreSessionConfidence(stars);
+                setDifficultyRated(true);
+              }}
             />
           </motion.div>
         )}
@@ -1330,10 +1497,13 @@ export default function DeepEncodeApp() {
             userResponses={userResponses}
             youtubeData={youtubeData}
             copiedFormat={copiedFormat}
+            handoffStats={handoffStats}
+            onDownloadApkg={handleDownloadApkg}
             onCopy={copyToClipboard}
             onShare={() => handleOpenStatelessShare()}
             onStartInterleavedDrill={() => setIsInterleavingOpen(true)}
             onOpenBlurting={() => setIsBlurtingModalOpen(true)}
+            onTeach={() => handleOpenTeach('schema')}
             onOpenSegregate={(report) => {
               setSegregationReport(report);
               setShowExportChoice(true);
@@ -1437,6 +1607,26 @@ export default function DeepEncodeApp() {
         }}
       />
 
+      {/* Teach Me : Brilliant-style interactive lesson (AI-authored, with an
+          offline schema-based fallback). Available from the launchpad, the
+          per-stage workbench, and the completed session view. */}
+      <TeachMeModal
+        isOpen={isTeachOpen}
+        onClose={() => setIsTeachOpen(false)}
+        scope={teachScope}
+        topicSummary={topicSummary}
+        mode={encodingMode}
+        notes={rawNotes}
+        file={uploadedFile}
+        activities={activities}
+        stageIndex={teachStageIndex}
+        userResponses={userResponses}
+        researchContexts={researchContexts}
+        settings={aiSettings}
+        onAwardXP={(earnedXp: number) => addXP(earnedXp)}
+      />
+
+      {/* Feature 51: The Blurting Method (Free Recall Blank Canvas) Modal */}
       {/* Feature 51: The Blurting Method (Free Recall Blank Canvas) Modal */}
       <BlurtingModal
         isOpen={isBlurtingModalOpen}
@@ -1475,7 +1665,7 @@ export default function DeepEncodeApp() {
               </span>
               <h3 className="text-base font-bold text-bone font-mono uppercase tracking-wider">Export your 4-Quadrant Matrix</h3>
               <p className="text-[10px] text-solder font-mono uppercase tracking-wider mt-1">
-                // TARGET: ANKI OR REMNOTE
+                {'// TARGET: ANKI OR REMNOTE'}
               </p>
             </div>
 
@@ -1533,20 +1723,6 @@ export default function DeepEncodeApp() {
         onOpenAnkiExport={(compReport: any) => {
           setIsComparativeModalOpen(false);
           setIsAnkiExportOpen(true);
-        }}
-      />
-
-      {/* Science Feature: Pre-Session Metacognitive Confidence Rating Modal */}
-      <PreSessionConfidenceModal
-        isOpen={isConfidenceModalOpen}
-        topicPreview={rawNotes.slice(0, 120) || (uploadedFile ? uploadedFile.name : '')}
-        onConfirm={(stars: number) => {
-          setPreSessionConfidence(stars);
-          handleGenerate(stars);
-        }}
-        onSkip={() => {
-          setPreSessionConfidence(3);
-          handleGenerate(3);
         }}
       />
 

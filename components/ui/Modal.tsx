@@ -16,6 +16,16 @@ export interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, description, icon, children, footer, maxWidth = 'md', showCloseButton = true }: ModalProps) {
+  // Lock body scroll while a modal is open so mobile background content
+  // cannot scroll underneath the sheet.
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && onClose) onClose(); };
@@ -32,15 +42,17 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/90 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-chassis/90 overflow-y-auto">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0" onClick={onClose} />
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition-none={{ duration: 0.1 }}
-          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-steel rounded-none overflow-hidden my-8`}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 24 }}
+          transition={{ duration: 0.15 }}
+          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-steel rounded-none overflow-hidden mobile-sheet-viewport flex flex-col sm:my-8`}
           onClick={e => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
         >
           {(title || icon) && (
             <div className="p-4 border-b border-steel bg-chassis flex items-center justify-between gap-3">
@@ -52,14 +64,19 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
                 </div>
               </div>
               {showCloseButton && onClose && (
-                <button type="button" onClick={onClose} className="p-1 text-solder hover:text-bone hover:bg-deck rounded-none cursor-pointer font-mono text-xs" aria-label="Close modal">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center px-3 text-solder hover:text-bone hover:bg-deck rounded-none cursor-pointer font-mono text-xs"
+                  aria-label="Close modal"
+                >
                   [ X ]
                 </button>
               )}
             </div>
           )}
-          <div className="p-4 overflow-y-auto max-h-[calc(85vh-130px)]">{children}</div>
-          {footer && <div className="p-3 border-t border-steel bg-chassis flex items-center justify-end gap-2">{footer}</div>}
+          <div className="p-4 overflow-y-auto max-h-[calc(88vh-130px)] max-h-[calc(88dvh-130px)] overscroll-contain [-webkit-overflow-scrolling:touch]">{children}</div>
+          {footer && <div className="p-3 border-t border-steel bg-chassis flex items-center justify-end gap-2 flex-wrap mobile-safe-bottom">{footer}</div>}
         </motion.div>
       </div>
     </AnimatePresence>

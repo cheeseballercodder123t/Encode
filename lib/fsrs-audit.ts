@@ -126,6 +126,57 @@ export function auditDeck(cards: AnkiCardItem[]): AuditedCard[] {
   return result;
 }
 
+export interface CardQuality {
+  /** Word count of front+back combined (what FSRS actually schedules). */
+  wordCount: number;
+  /** Dense card: FSRS will likely turn it into a D=10 leech. */
+  isLeechCandidate: boolean;
+  /** Stage was skipped, un-encoded, or the checker graded it needs_elaboration. */
+  isUnfinished: boolean;
+  /** Ambiguous retrieval cue. */
+  isAmbiguous: boolean;
+}
+
+/**
+ * Classifies a single exported card for the handoff-quality report shown on
+ * the completed screen ("N FSRS-ready cards · X leeches · Y unfinished").
+ * Pure heuristic, zero network, matches the audit thresholds used in the
+ * Anki export modal so both surfaces agree.
+ */
+export function classifyCardQuality(card: AnkiCardItem): CardQuality {
+  const text = `${card.front} ${card.back}`;
+  const wordCount = countWords(text);
+  const isLeechCandidate = card.isCloze && wordCount > TOO_LONG_WORD_LIMIT;
+  const isUnfinished = card.tags.includes('Unfinished');
+  const isAmbiguous = card.isCloze && isAmbiguousCloze(text);
+  return { wordCount, isLeechCandidate, isUnfinished, isAmbiguous };
+}
+
+/** Aggregates quality stats for a whole deck (used by the identity trophy). */
+export function classifyDeckQuality(cards: AnkiCardItem[]): {
+  totalCards: number;
+  fsrsReady: number;
+  leechCandidates: number;
+  unfinished: number;
+  boundaryTraps: number;
+} {
+  let fsrsReady = 0;
+  let leechCandidates = 0;
+  let unfinished = 0;
+  let boundaryTraps = 0;
+  for (const card of cards) {
+    const q = classifyCardQuality(card);
+    if (card.tags.includes('BoundaryContrast')) boundaryTraps += 1;
+    if (q.isUnfinished) unfinished += 1;
+    else if (q.isLeechCandidate || q.isAmbiguous) leechCandidates += 1;
+    else fsrsReady += 1;
+  }
+  return { totalCards: cards.length, fsrsReady, leechCandidates, unfinished, boundaryTraps };
+}
+
+/**
+ * Splits a dense cloze sentence into two atomic cloze sentences, each at or
+
 /**
  * Splits a dense cloze sentence into two atomic cloze sentences, each at or
  * under the word limit. Strategy:

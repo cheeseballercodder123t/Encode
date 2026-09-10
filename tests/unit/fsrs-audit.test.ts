@@ -6,6 +6,8 @@ import {
   auditAnkiCard,
   auditDeck,
   splitDenseCloze,
+  classifyCardQuality,
+  classifyDeckQuality,
   TOO_LONG_WORD_LIMIT,
 } from '@/lib/fsrs-audit';
 import { AnkiCardItem } from '@/lib/anki-exporter';
@@ -110,6 +112,46 @@ describe('auditDeck', () => {
     expect(result).toHaveLength(2);
     // Ambiguous has severity 1000 → sorts first.
     expect(result[0].issues.some((i) => i.kind === 'ambiguous')).toBe(true);
+  });
+});
+
+describe('classifyCardQuality / classifyDeckQuality', () => {
+  it('flags a dense cloze as leech candidate', () => {
+    const dense = clozeCard(
+      'The {{c1::mitochondrial}} electron transport chain produces a large amount of ATP via oxidative phosphorylation across the inner mitochondrial membrane'
+    );
+    expect(classifyCardQuality(dense).isLeechCandidate).toBe(true);
+  });
+
+  it('flags Unfinished by tag (skipped stages export this way)', () => {
+    const skipped = clozeCard('Prompt', 'skip-1');
+    skipped.tags.push('Unfinished');
+    expect(classifyCardQuality(skipped).isUnfinished).toBe(true);
+  });
+
+  it('clean short cloze is FSRS-ready', () => {
+    const clean = clozeCard('The formula is {{c1::HCl}}.');
+    expect(classifyCardQuality(clean)).toMatchObject({
+      isLeechCandidate: false,
+      isUnfinished: false,
+      isAmbiguous: false,
+    });
+  });
+
+  it('aggregates deck stats for the identity trophy', () => {
+    const stats = classifyDeckQuality([
+      clozeCard('The formula is {{c1::HCl}}.'),
+      clozeCard('The ion is {{c1::Na+ or K+}}.'),
+      (() => {
+        const skipped = clozeCard('Prompt', 'skip-1');
+        skipped.tags.push('Unfinished');
+        return skipped;
+      })(),
+    ]);
+    expect(stats.totalCards).toBe(3);
+    expect(stats.fsrsReady).toBe(1);
+    expect(stats.unfinished).toBe(1);
+    expect(stats.leechCandidates).toBeGreaterThan(0);
   });
 });
 

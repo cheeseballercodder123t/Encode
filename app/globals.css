@@ -9,6 +9,16 @@
     background-color: #141517;
     color: #7A7D82;
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    /* Prevent iOS auto-zoom on focus for text fields whose computed size is
+       under 16px : apply an iOS-safe 16px floor on small screens only. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Prevent iOS Safari auto-zoom when focusing small monospace inputs. */
+  @media (max-width: 640px) {
+    input, textarea, select {
+      font-size: 16px !important;
+    }
   }
 
   *, *::before, *::after {
@@ -42,5 +52,24 @@
 
   input, textarea, select, button {
     border-radius: 0 !important;
+    /* Larger tap targets on coarse-pointer devices without touching layout. */
+    touch-action: manipulation;
+  }
+
+  /* Safe-area + dynamic viewport fallbacks for notched mobile browsers.
+     max-h-dvh / min-h-dvh are native Tailwind, but older engines need the
+     vh + env() fallback : apply where marked with .mobile-dvh helpers. */
+  .mobile-sheet-viewport {
+    max-height: 88vh;
+    max-height: 88dvh;
+  }
+
+  .mobile-full-viewport {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .mobile-safe-bottom {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
   }
 }

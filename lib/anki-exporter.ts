@@ -1,6 +1,9 @@
 import JSZip from 'jszip';
-import { SavedSchema, SegregationReport, DeclarativeFactItem, ConceptualMechanismItem, ProceduralMCQArchetype } from './types';
+import { SavedSchema, SegregationReport, ProceduralMCQArchetype, StageResponse, Activity } from './types';
 import { buildAnkiCollectionSqlite, generateAnkiGuid, AnkiNoteRow } from './anki-sqlite-writer';
+import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
+
+export { classifyDeckQuality };
 
 export interface SM2State {
   repetitions: number;
@@ -58,17 +61,188 @@ export function calculateSM2(grade: number, previousState?: SM2State): SM2State 
   };
 }
 
+/** Sanitizes a topic into a single Anki deck path segment (no '::' inside). */
+function sanitizeTopicSegment(topic: string): string {
+  return topic
+    .replace(/::/g, ' - ')
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/[^a-zA-Z0-9 _\-.]/g, '')
+    .trim()
+    .slice(0, 80);
+}
+
+/** Hierarchical handoff deck: `DeepEncode::{Topic}`. */
+export function buildHierarchicalDeckName(topicSummary?: string): string {
+  const topic = sanitizeTopicSegment(topicSummary || '');
+  return topic ? `DeepEncode::${topic}` : 'DeepEncode';
+}
+
+/** Adds LeechCandidate when FSRS would punish the card's density. */
+function appendLeechTag(card: AnkiCardItem): void {
+  if (countWords(`${card.front} ${card.back}`) > 15) card.tags.push('LeechCandidate');
+}
+
+/** Export tag set for one activity + response (Unfinished gate lives here). */
+export function computeActivityExportTags(resp: StageResponse | undefined): string[] {
+  const hasWording = Boolean(resp && !resp.skipped && (resp.field1?.trim() || resp.field2?.trim()));
+  if (!hasWording || !resp) return ['DeepEncode', 'SchemaActivity', 'Unfinished'];
+  const tags = ['DeepEncode', 'SchemaActivity'];
+  if (resp.skipped || resp.feynmanReview?.grade === 'needs_elaboration') tags.push('Unfinished');
+  return tags;
+}
+
 /**
- * Extracts normalized Anki cards from a SavedSchema or SegregationReport
+ * Clozes the highest-value keyword inside the USER'S own sentence (mirrors the
+ * RemNote `optimizeCloze` heuristic so both handoffs treat wording alike).
+ */
+export function clozeUserWording(text: string, keywords: string[]): string {
+  if (!text || text.includes('{{c1::')) return text;
+  for (const kw of keywords) {
+    const clean = (kw || '').trim();
+    if (clean.length > 2 && text.toLowerCase().includes(clean.toLowerCase())) {
+      const regex = new RegExp(`(${clean.replace(/[-/\\^$*+?.()|[\\]{}]/g, '\\$&')})`, 'i');
+      if (regex.test(text)) return text.replace(regex, '{{$1}}');
+    }
+  }
+  const words = text.trim().split(/\s+/);
+  if (words.length <= 4) return `{{${text}}}`;
+  const mid = Math.ceil(words.length / 2);
+  return `${words.slice(0, mid).join(' ')} {{${words.slice(mid).join(' ')}}}`;
+}
+
+/**
+ * Converts RemNote/cloze-style `{{Term}}` markers into real Anki cloze
+ * deletions `{{cN::Term}}` (sequential c1, c2, ...). Already-indexed markers
+ * like `{{c2::X}}` are preserved untouched. Required because the .apkg hands
+ * user wording to Anki's Cloze note type: bare `{{X}}` would render literally.
+ */
+export function normalizeClozeTermToAnki(text: string): string {
+  let index = 0;
+  return text.replace(/\{\{([^{}]*)\}\}/g, (match, inner: string) => {
+    if (/^c\d+::/.test(inner)) return match;
+    index += 1;
+    return `{{c${index}::${inner}}}`;
+  });
+}
+
+/** True when the response carries real user encoding worth exporting. */
+function isEncoded(resp?: StageResponse): boolean {
+  if (!resp || resp.skipped) return false;
+  return Boolean(resp.field1?.trim() || resp.field2?.trim());
+}
+
+/**
+ * Builds cards from ONE activity's user wording (the whole point: their own
+ * phrasing encodes deeper than AI text). Front = AI cue, Back = user wording.
+ */
+function buildUserWordingCards(
+  act: Activity,
+  resp: StageResponse | undefined,
+  idx: number,
+  initialSM2: SM2State
+): AnkiCardItem[] {
+  const cards: AnkiCardItem[] = [];
+  const stageTag = `Stage:${act.stageNumber ?? idx + 1}`;
+  const baseTags = computeActivityExportTags(resp);
+  const f1 = (resp?.field1 || '').trim();
+  const f2 = (resp?.field2 || '').trim();
+  const f3 = (resp?.field3 || '').trim();
+
+  if (!isEncoded(resp)) {
+    // Nothing encoded (skipped or abandoned): export the AI cue only, tagged
+    // Unfinished so a filtered deck forces the student to re-encode it.
+    cards.push({
+      id: `act-${act.id}-cue`,
+      front: `<b>${act.title}</b><br>${act.prompt}`,
+      back: `<b>Not encoded yet.</b><br>${act.contextSnippet}`,
+      isCloze: false,
+      tags: [...baseTags, stageTag],
+      sm2: { ...initialSM2 },
+    });
+    return cards;
+  }
+
+  // Card 1: user wording cloze (generation effect payoff). Cloze the key term
+  // inside THEIR sentence; their full wording becomes the answer side.
+  const userSentence = f1 || f2;
+  const clozed = normalizeClozeTermToAnki(clozeUserWording(userSentence, act.keywords || []));
+  const hasCloze = clozed.includes('{{');
+  const otherField = f1 && f2 ? (f1 === userSentence ? f2 : f1) : '';
+  const backParts: string[] = [];
+  if (otherField) backParts.push(`<b>In your own words:</b> ${otherField}`);
+  if (f3) backParts.push(`<b>Anchor:</b> ${f3}`);
+  if (resp?.errorAnalysis) backParts.push(`<b>Checker note:</b> ${resp.errorAnalysis}`);
+  if (!hasCloze) backParts.push(`<b>Full recall:</b> ${userSentence}`);
+
+  const mainCard: AnkiCardItem = {
+    id: `act-${act.id}-main`,
+    front: hasCloze
+      ? `<b>${act.title}</b><br>${clozed}`
+      : `<b>${act.title}</b><br>${act.prompt}`,
+    back: backParts.join('<br>') || `<b>In your own words:</b> ${userSentence}`,
+    isCloze: hasCloze,
+    tags: [...baseTags, stageTag],
+    sm2: { ...initialSM2 },
+  };
+  appendLeechTag(mainCard);
+  cards.push(mainCard);
+
+  // Card 2 (only when both fields were answered): the mechanism recall pair.
+  if (f1 && f2) {
+    const mechCard: AnkiCardItem = {
+      id: `act-${act.id}-mech`,
+      front: `<b>${act.title}</b> — mechanism<br>${act.scaffold.field2Label}: how does it actually work?`,
+      back: `<b>In your own words:</b> ${f2}<br><b>Cue:</b> ${f1}`,
+      isCloze: false,
+      tags: [...baseTags, stageTag],
+      sm2: { ...initialSM2 },
+    };
+    appendLeechTag(mechCard);
+    cards.push(mechCard);
+  }
+
+  // Card 3: boundary contrast trap (discriminative practice).
+  if (act.boundaryContrast?.confusableLookalike && act.boundaryContrast?.distinguishingRule) {
+    cards.push({
+      id: `act-${act.id}-boundary`,
+      front: `How do you distinguish <b>${act.title}</b> from its lookalike <i>${act.boundaryContrast.confusableLookalike}</i>?`,
+      back: `<b>Distinguishing Rule:</b> ${act.boundaryContrast.distinguishingRule}`,
+      isCloze: false,
+      tags: ['DeepEncode', 'BoundaryContrast', stageTag],
+      sm2: { ...initialSM2 },
+    });
+  }
+
+  return cards;
+}
+
+/**
+ * Extracts normalized Anki cards from a SavedSchema.
+ *
+ * Priority order (encoder-first handoff):
+ *   1. USER WORDING per stage (field1/field2/field3 + error analysis) — the
+ *      generation-effect payoff. Skipped / needs_elaboration stages export
+ *      tagged `Unfinished`, dense ones tagged `LeechCandidate`.
+ *   2. SegregationReport quadrant cards when present.
  */
 export function extractAnkiCardsFromSchema(
   schema?: Partial<SavedSchema> | null,
   report?: SegregationReport | null
 ): AnkiCardItem[] {
-  const cards: AnkiCardItem[] = [];
   const initialSM2 = calculateSM2(4); // Default initialized with 1-day initial SM2 interval
+  const activities: Activity[] = schema?.activities || [];
 
-  // 1. Declarative Facts
+  // 1. USER WORDING — primary path. Every activity, encoded or not.
+  const userCards: AnkiCardItem[] = [];
+  activities.forEach((act, idx) => {
+    if (!act) return;
+    userCards.push(...buildUserWordingCards(act, schema?.userResponses?.[act.id], idx, initialSM2));
+  });
+  if (userCards.length > 0) return userCards;
+
+  const cards: AnkiCardItem[] = [];
+
+  // 2a. Declarative Facts (segregation report path)
   if (report?.declarativeFacts) {
     report.declarativeFacts.forEach((fact, idx) => {
       cards.push({
@@ -162,36 +336,199 @@ export function generateAnkiTextDeck(cards: AnkiCardItem[], deckName: string): s
   return lines.join('\n');
 }
 
+// ─── Declarative note types (real .apkg, FSRS-ready) ────────────────────────
+
+const DECLARATIVE_CSS = `
+.card { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; line-height: 1.55; text-align: left; color: #e2e8f0; background: #0f111a; padding: 12px; }
+.cloze, .cloze b { font-weight: 700; color: #fbbf24; }
+.backextra { margin-top: 10px; padding-top: 8px; border-top: 1px solid #334155; font-size: 14px; color: #94a3b8; }
+`;
+
 /**
- * Generates an Anki .apkg zip package containing the text deck, manifest, and SM-2 metadata
+ * Builds the two declarative note types for handoff: `DeepEncode Basic`
+ * (Front, Back, Extra) and `DeepEncode Cloze` (Text, Extra). Cloze deletions
+ * behave as real clozes instead of Basic cards carrying literal {{c1::}} text.
+ */
+export function buildDeclarativeModels(modSec: number): Record<string, unknown> {
+  const basicId = 1700000000100;
+  const clozeId = 1700000000101;
+  const base = {
+    mod: modSec,
+    usn: -1,
+    did: null,
+    css: DECLARATIVE_CSS,
+    latexPre:
+      '\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage[utf8]{inputenc}\n' +
+      '\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n',
+    latexPost: '\\end{document}',
+    tags: [],
+    vers: [],
+  };
+  return {
+    [String(basicId)]: {
+      ...base,
+      id: basicId,
+      name: 'DeepEncode Basic',
+      type: 0,
+      sortf: 0,
+      tmpl: [
+        {
+          name: 'Card 1',
+          ord: 0,
+          qfmt: '{{Front}}',
+          afmt: '{{FrontSide}}<hr id="answer">{{Back}}{{#Extra}}<div class="backextra">{{Extra}}</div>{{/Extra}}',
+          bqfmt: '',
+          bafmt: '',
+          did: null,
+        },
+      ],
+      flds: [
+        { name: 'Front', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+        { name: 'Back', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+        { name: 'Extra', ord: 2, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+      ],
+      req: [[0, 'any', [0]]],
+    },
+    [String(clozeId)]: {
+      ...base,
+      id: clozeId,
+      name: 'DeepEncode Cloze',
+      type: 1, // cloze model: Anki generates one card per {{cN::}} index
+      sortf: 0,
+      tmpl: [
+        {
+          name: 'Cloze',
+          ord: 0,
+          qfmt: '{{cloze:Text}}',
+          afmt: '{{cloze:Text}}<hr id="answer">{{Extra}}',
+          bqfmt: '',
+          bafmt: '',
+          did: null,
+        },
+      ],
+      flds: [
+        { name: 'Text', ord: 0, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+        { name: 'Extra', ord: 1, sticky: false, rtl: false, font: 'Arial', size: 20, media: [] },
+      ],
+      req: [[0, 'any', [0]]],
+    },
+  };
+}
+
+function makeDeckEntry(id: number, name: string, modSec: number, desc: string): Record<string, unknown> {
+  return {
+    id,
+    name,
+    desc,
+    mod: modSec,
+    usn: -1,
+    lrnToday: [0, 0],
+    revToday: [0, 0],
+    newToday: [0, 0],
+    timeToday: [0, 0],
+    collapsed: false,
+    browserCollapsed: false,
+    dyn: 0,
+    conf: 1,
+    extendNew: 0,
+    extendRev: 0,
+  };
+}
+
+/**
+ * Generates a REAL Anki .apkg (legacy collection.anki2, schema 11) for the
+ * declarative cards: proper Basic + Cloze note types, stable GUIDs, and the
+ * hierarchical `DeepEncode::{Topic}` deck. Opens cleanly in Anki Desktop /
+ * AnkiDroid / AnkiMobile with zero import steps; FSRS owns all scheduling.
  */
 export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: string): Promise<Blob> {
-  const zip = new JSZip();
-  const textDeck = generateAnkiTextDeck(cards, deckName);
+  const modMs = Date.now();
+  const modSec = Math.floor(modMs / 1000);
+  const rootDeckId = 1700000000200;
+  const childDeckId = 1700000000201;
+  const basicModelId = 1700000000100;
+  const clozeModelId = 1700000000101;
 
-  // 1. Media mapping file
+  const conf = {
+    activeDecks: [1, childDeckId],
+    addToCur: true,
+    collapseTime: 1200,
+    curDeck: childDeckId,
+    curModel: String(basicModelId),
+    dueCounts: true,
+    estTimes: true,
+    newBury: true,
+    nextPos: 1,
+    newSpread: 0,
+    sortBackwards: false,
+    sortType: 'noteFld',
+    timeLim: 0,
+  };
+  const decks: Record<string, unknown> = {
+    '1': makeDeckEntry(1, 'Default', modSec, ''),
+    [String(rootDeckId)]: makeDeckEntry(rootDeckId, 'DeepEncode', modSec, 'Encoded with DeepEncode (encoder-first handoff).'),
+    [String(childDeckId)]: makeDeckEntry(childDeckId, deckName, modSec, 'Encoded with DeepEncode (encoder-first handoff).'),
+  };
+  const dconf = {
+    '1': {
+      id: 1,
+      name: 'Default',
+      replayq: true,
+      timer: 0,
+      maxTaken: 60,
+      usn: -1,
+      new: { bury: true, delays: [1, 10], initialFactor: 2500, ints: [1, 4, 7], perDay: 20, separate: true },
+      rev: { perDay: 100, fuzz: 0.05, ivlFct: 1, maxIvl: 36500, ease4: 1.3, bury: true, minSpace: 1 },
+      lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
+      dyn: false,
+    },
+  };
+
+  const notes: (AnkiNoteRow & { _nid: number })[] = cards.map((card, i) => {
+    const nid = modMs + i;
+    const isCloze = card.isCloze && card.front.includes('{{c');
+    return {
+      guid: generateAnkiGuid(),
+      mid: isCloze ? clozeModelId : basicModelId,
+      tags: card.tags.join(' '),
+      flds: isCloze ? [card.front, card.back] : [card.front, card.back, ''],
+      sfld: stripHtml(card.front).slice(0, 120) || card.id,
+      _nid: nid,
+    };
+  });
+
+  const cardRows = notes.map((note, i) => ({
+    nid: note._nid,
+    did: childDeckId,
+    ord: 0,
+    due: modMs + i,
+  }));
+
+  const collectionBytes = buildAnkiCollectionSqlite({
+    conf: JSON.stringify(conf),
+    models: JSON.stringify(buildDeclarativeModels(modSec)),
+    decks: JSON.stringify(decks),
+    dconf: JSON.stringify(dconf),
+    notes: notes.map(({ _nid, ...rest }) => rest),
+    cards: cardRows,
+    modMs,
+  });
+
+  const zip = new JSZip();
+  zip.file('collection.anki2', collectionBytes);
   zip.file('media', '{}');
 
-  // 2. Anki Import Deck File
-  zip.file('deck.txt', textDeck);
-
-  // 3. Metadata JSON for SM-2 Spaced Repetition engine
+  // Metadata only (FSRS owns all scheduling : no fake SM-2 due dates shipped).
   const sm2Manifest = {
     generator: 'DeepEncode Cognitive AI Engine',
     deckName,
-    createdTimestamp: Date.now(),
+    createdTimestamp: modMs,
     cardCount: cards.length,
-    cards: cards.map((c) => ({
-      id: c.id,
-      front: c.front,
-      back: c.back,
-      tags: c.tags,
-      sm2: c.sm2,
-    })),
+    noteTypes: ['DeepEncode Basic', 'DeepEncode Cloze'],
+    cards: cards.map((c) => ({ id: c.id, tags: c.tags, sm2: c.sm2 })),
   };
   zip.file('deepencode_sm2_manifest.json', JSON.stringify(sm2Manifest, null, 2));
 
-  // Generate zip binary
   return await zip.generateAsync({ type: 'blob' });
 }
 
@@ -647,7 +984,7 @@ function buildProceduralColJson(deckId: number, deckName: string, modSec: number
   };
 }
 
-/** Sanitizes a deck name for Anki's :: path separator. */
+/** Sanitizes a deck name for Anki's :: path separator (procedural path). */
 function sanitizeDeckName(deckName: string): string {
   return deckName.replace(/[\\/:]/g, '_').replace(/[^a-zA-Z0-9 _\-.]/g, '').slice(0, 120) || 'DeepEncode_Procedural_MCQ';
 }
