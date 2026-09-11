@@ -30,12 +30,15 @@ interface AnkiExportModalProps {
   onClose: () => void;
   schema?: Partial<SavedSchema> | null;
   report?: SegregationReport | null;
+  /** The student's raw notes : MCQs are authored FROM these, not AP presets. */
+  notes?: string;
 }
 
-export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportModalProps) {
+export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: AnkiExportModalProps) {
   const [cards, setCards] = useState<AnkiCardItem[]>([]);
   const [deckName, setDeckName] = useState<string>('DeepEncode::Cognitive_Schema');
-  const [activeTab, setActiveTab] = useState<'apkg' | 'ankiconnect' | 'webhook' | 'sm2_simulator' | 'procedural' | 'audit'>('apkg');
+  // Three tabs only : Export (apkg/txt + audit), MCQ Deck, Sync (AnkiConnect/Webhook).
+  const [activeTab, setActiveTab] = useState<'export' | 'mcq' | 'sync'>('export');
 
   // FSRS Card Audit : recomputed whenever the deck changes.
   const audit = useMemo(() => auditDeck(cards), [cards]);
@@ -50,29 +53,20 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
   const [isSyncingWebhook, setIsSyncingWebhook] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
-  // SM-2 Simulator State
-  const [simGrade, setSimGrade] = useState<number>(4);
-  const [simState, setSimState] = useState<SM2State>(() => ({
-    repetitions: 1,
-    interval: 1,
-    easeFactor: 2.5,
-    nextReviewTimestamp: Date.now() + 86400000,
-  }));
-
   const [prevIsOpen, setPrevIsOpen] = useState(false);
   const [prevReport, setPrevReport] = useState<SegregationReport | null | undefined>(undefined);
   const [prevSchema, setPrevSchema] = useState<Partial<SavedSchema> | null | undefined>(undefined);
 
   // ── Procedural MCQ tab state ─────────────────────────────────────────────────
-  const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>(() =>
-    BUILT_IN_ARCHETYPES.map((a) => a.id)
-  );
+  // Start with NOTHING selected : the point is MCQs authored from the student's
+  // own notes, not the built-in AP presets. Presets stay available but opt-in.
+  const [selectedArchetypeIds, setSelectedArchetypeIds] = useState<string[]>([]);
   const [aiArchetypes, setAiArchetypes] = useState<ProceduralMCQArchetype[]>([]);
-  const [aiTopic, setAiTopic] = useState('AP Physics C: Rotational Motion');
+  const [aiTopic, setAiTopic] = useState('');
   const [aiCount, setAiCount] = useState(3);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [aiGenStatus, setAiGenStatus] = useState<{ success?: boolean; message?: string } | null>(null);
-  const [previewArchetypeId, setPreviewArchetypeId] = useState<string>(BUILT_IN_ARCHETYPES[0].id);
+  const [previewArchetypeId, setPreviewArchetypeId] = useState<string>('');
 
   const availableArchetypes = useMemo<ProceduralMCQArchetype[]>(
     () => [...BUILT_IN_ARCHETYPES, ...aiArchetypes],
@@ -96,6 +90,8 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
     setCards(extracted);
     const title = report?.topic || schema?.topicSummary || 'Cognitive_Schema';
     setDeckName(`DeepEncode::${title.replace(/[^a-zA-Z0-9_]/g, '_')}`);
+    // MCQs default to the CURRENT session topic + notes, not AP presets.
+    setAiTopic(report?.topic || schema?.topicSummary || '');
   } else if (!isOpen && prevIsOpen) {
     setPrevIsOpen(false);
   }
@@ -167,12 +163,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
     if (res.success) playSound('success');
   };
 
-  const handleSimulateGrade = (grade: number) => {
-    playSound('click');
-    setSimGrade(grade);
-    const updated = calculateSM2(grade, simState);
-    setSimState(updated);
-  };
+  const handleSimulateGrade = null; // removed : SM-2 simulator tab dropped for simplicity
 
   // ── Procedural MCQ tab handlers ──────────────────────────────────────────
   const selectedArchetypes = availableArchetypes.filter((a) => selectedArchetypeIds.includes(a.id));
@@ -221,6 +212,8 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
         body: JSON.stringify({
           topic: aiTopic,
           count: aiCount,
+          // MCQs are authored FROM the student's notes when available.
+          notes: notes?.trim() ? notes : undefined,
           settings: loadAISettings(),
         }),
       });
@@ -255,7 +248,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
       });
       if (generated.length > 0) {
         setPreviewArchetypeId(generated[0].id);
-        setActiveTab('procedural');
+        setActiveTab('mcq');
       }
     } catch (err: any) {
       console.error(err);
@@ -360,83 +353,45 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
           </button>
         </div>
 
-        {/* Modal Navigation Tabs */}
+        {/* Modal Navigation Tabs : Export / MCQ Deck / Sync */}
         <div className="p-3 border-b border-steel bg-chassis flex items-center gap-2 overflow-x-auto">
           <button
-            onClick={() => setActiveTab('apkg')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'apkg'
+            onClick={() => setActiveTab('export')}
+            className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'export'
                 ? 'bg-steel text-bone '
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ DL ]</span>
-            <span>Direct .apkg Package</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ankiconnect')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'ankiconnect'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-deck'
-            }`}
-          >
-            <span className="text-amber font-bold font-mono">[ CPU ]</span>
-            <span>AnkiConnect Sync</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('webhook')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'webhook'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-deck'
-            }`}
-          >
-            <span className="text-amber font-bold font-mono">[ WEB ]</span>
-            <span>Web-Hook SM-2 Sync</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('sm2_simulator')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'sm2_simulator'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-deck'
-            }`}
-          >
-            <span className="text-amber font-bold font-mono">[ RESET ]</span>
-            <span>SM-2 Scheduler Engine</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('procedural')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'procedural'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-deck'
-            }`}
-          >
-            <span className="text-amber font-bold font-mono">[ FLASK ]</span>
-            <span>Procedural MCQ Deck (AP Chem / Stats / Phys C)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'audit'
-                ? 'bg-amber text-bone '
-                : 'text-solder hover:text-bone hover:bg-deck'
-            }`}
-          >
-            <span className="text-amber font-bold font-mono">[ ! ]</span>
-            <span>FSRS Card Audit</span>
+            <span>Export .apkg / .txt</span>
             {audit.length > 0 && (
-              <span className="px-1.5 py-0.5 bg-amber/30 text-[10px] font-bold text-amber">
-                {audit.length}
-              </span>
+              <span className="px-1.5 py-0.5 bg-amber/30 text-[10px] font-bold text-amber">{audit.length}</span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('mcq')}
+            className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'mcq'
+                ? 'bg-steel text-bone '
+                : 'text-solder hover:text-bone hover:bg-deck'
+            }`}
+          >
+            <span className="text-amber font-bold font-mono">[ MCQ ]</span>
+            <span>MCQ Deck (from your notes)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sync')}
+            className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'sync'
+                ? 'bg-steel text-bone '
+                : 'text-solder hover:text-bone hover:bg-deck'
+            }`}
+          >
+            <span className="text-amber font-bold font-mono">[ SYNC ]</span>
+            <span>Sync (AnkiConnect / Webhook)</span>
           </button>
         </div>
 
@@ -453,8 +408,8 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
             />
           </div>
 
-          {/* TAB 1: Direct .apkg Download */}
-          {activeTab === 'apkg' && (
+          {/* TAB 1: Export (.apkg + .txt + card preview + FSRS audit) */}
+          {activeTab === 'export' && (
             <div className="space-y-4">
               <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
@@ -505,101 +460,154 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
                   ))}
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* TAB 2: AnkiConnect Desktop Sync */}
-          {activeTab === 'ankiconnect' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-amber/30 border border-amber/30 text-xs text-amber leading-relaxed space-y-2">
-                <div className="font-bold text-amber flex items-center gap-2">
-                  <span className="text-amber font-bold font-mono">[ CPU ]</span>
-                  1-Click Local Anki Desktop Integration
-                </div>
-                <p>
-                  Requires Anki Desktop running locally with the <code className="text-amber font-mono">AnkiConnect</code> add-on enabled on port <code className="text-amber font-mono">8765</code>.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-solder block">AnkiConnect Endpoint URL:</label>
-                <input
-                  type="text"
-                  value={ankiConnectUrl}
-                  onChange={(e) => setAnkiConnectUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
-                />
-              </div>
-
-              <button
-                onClick={handleSyncAnkiConnect}
-                disabled={isSyncingAnkiConnect}
-                className="w-full py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
-              >
-                {isSyncingAnkiConnect ? (
-                  <>
-                    <span className="text-amber font-bold font-mono">[ BUSY ]</span>
-                    Connecting & Pushing to Anki...
-                  </>
-                ) : (
-                  <>
-                    <span className="text-amber font-bold font-mono">[ SEND ]</span>
-                    Push {cards.length} Cards directly to Anki Desktop
-                  </>
-                )}
-              </button>
-
-              {ankiConnectStatus && (
-                <div className={`p-3  text-xs flex items-start gap-2 ${
-                  ankiConnectStatus.success
-                    ? 'bg-amber950/40 border border-amber/40 text-amber200'
-                    : 'bg-hazard950/40 border border-hazard500/40 text-hazard200'
+              {/* FSRS Card Audit (inline; badge count on the tab) */}
+              <div className="space-y-2 pt-2 border-t border-steel/60">
+                <div className={`p-4 border text-xs leading-relaxed space-y-2 ${
+                  audit.length > 0
+                    ? 'bg-amber/30 border-amber/30 text-amber'
+                    : 'bg-amber950/30 border-amber/30 text-amber200'
                 }`}>
-                  {ankiConnectStatus.success ? (
-                    <span className="text-amber font-bold font-mono">[ OK ]</span>
+                  <div className="font-bold flex items-center gap-2">
+                    <span className="font-bold font-mono">[ ! ]</span>
+                    FSRS Card Audit : {audit.length} card{audit.length === 1 ? '' : 's'} flagged
+                  </div>
+                  {audit.length > 0 ? (
+                    <p>Dense cloze sentences become <b>D=10 leeches</b> in FSRS. Split them below for cleaner spaced-repetition.</p>
                   ) : (
-                    <span className="text-amber font-bold font-mono">[ ! ]</span>
+                    <p><b>All clear.</b> No too-long or ambiguous cloze cards detected. Your deck is FSRS-ready.</p>
                   )}
-                  <div className="leading-relaxed">{ankiConnectStatus.message}</div>
                 </div>
-              )}
+
+                {audit.length > 0 && (
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {audit.map(({ card: c, issues }) => (
+                      <div key={c.id} className="p-3 bg-deck/60 border border-steel text-xs space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="font-mono text-[11px] text-bone leading-relaxed" dangerouslySetInnerHTML={{ __html: c.front }} />
+                          <button
+                            onClick={() => handleAutoSplit(c.id)}
+                            disabled={!issues.some((i) => i.kind === 'too_long')}
+                            className="shrink-0 px-2.5 py-1 bg-amber/20 hover:bg-amber/30 border border-amber/40 text-amber font-bold flex items-center gap-1.5 transition-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={issues.some((i) => i.kind === 'too_long') ? 'Auto-split into two atomic cards' : 'Only too-long cards can be split'}
+                          >
+                            <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
+                            <span>Split</span>
+                          </button>
+                        </div>
+                        <div className="space-y-1">
+                          {issues.map((issue, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex items-start gap-2 ${
+                                issue.kind === 'ambiguous' ? 'text-hazard300' : 'text-amber'
+                              }`}
+                            >
+                              <span className="text-amber font-bold font-mono">[ ! ]</span>
+                              <span>{issue.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* TAB 3: Webhook SM-2 Sync */}
-          {activeTab === 'webhook' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
-                <div className="font-bold text-bone flex items-center gap-2">
-                  <span className="text-amber font-bold font-mono">[ WEB ]</span>
-                  Web-Hook SM-2 Spaced Repetition Dispatcher
+          {/* TAB 3: Sync (AnkiConnect + Webhook, side by side) */}
+          {activeTab === 'sync' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* AnkiConnect */}
+              <div className="space-y-4">
+                <div className="p-4 bg-amber/30 border border-amber/30 text-xs text-amber leading-relaxed space-y-2">
+                  <div className="font-bold text-amber flex items-center gap-2">
+                    <span className="text-amber font-bold font-mono">[ CPU ]</span>
+                    Anki Desktop (AnkiConnect)
+                  </div>
+                  <p>
+                    Requires Anki Desktop running locally with the <code className="text-amber font-mono">AnkiConnect</code> add-on enabled on port <code className="text-amber font-mono">8765</code>.
+                  </p>
                 </div>
-                <p>
-                  Sends the complete active recall card payload along with pre-calculated SM-2 ease factors and review timestamps directly to your server or webhook receiver.
-                </p>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-solder block">AnkiConnect Endpoint URL:</label>
+                  <input
+                    type="text"
+                    value={ankiConnectUrl}
+                    onChange={(e) => setAnkiConnectUrl(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSyncAnkiConnect}
+                  disabled={isSyncingAnkiConnect}
+                  className="w-full py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
+                >
+                  {isSyncingAnkiConnect ? (
+                    <>
+                      <span className="text-amber font-bold font-mono">[ BUSY ]</span>
+                      Connecting & Pushing to Anki...
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-amber font-bold font-mono">[ SEND ]</span>
+                      Push {cards.length} Cards to Anki Desktop
+                    </>
+                  )}
+                </button>
+
+                {ankiConnectStatus && (
+                  <div className={`p-3  text-xs flex items-start gap-2 ${
+                    ankiConnectStatus.success
+                      ? 'bg-amber950/40 border border-amber/40 text-amber200'
+                      : 'bg-hazard950/40 border border-hazard500/40 text-hazard200'
+                  }`}>
+                    {ankiConnectStatus.success ? (
+                      <span className="text-amber font-bold font-mono">[ OK ]</span>
+                    ) : (
+                      <span className="text-amber font-bold font-mono">[ ! ]</span>
+                    )}
+                    <div className="leading-relaxed">{ankiConnectStatus.message}</div>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-solder block">Webhook Receiver Endpoint URL:</label>
-                <input
-                  type="url"
-                  placeholder="https://api.myworkspace.com/v1/anki-sync"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
-                />
-              </div>
+              {/* Webhook */}
+              <div className="space-y-4">
+                <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+                  <div className="font-bold text-bone flex items-center gap-2">
+                    <span className="text-amber font-bold font-mono">[ WEB ]</span>
+                    Custom Webhook
+                  </div>
+                  <p>
+                    Sends the complete card payload with pre-calculated SM-2 ease factors and review timestamps to your server.
+                  </p>
+                </div>
 
-              <button
-                onClick={handleSyncWebhook}
-                disabled={!webhookUrl.trim() || isSyncingWebhook}
-                className="w-full py-3 px-4 bg-steel hover:bg-steel text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
-              >
-                {isSyncingWebhook ? (
-                  <>
-                    <span className="text-amber font-bold font-mono">[ BUSY ]</span>
-                    Dispatching Webhook...
-                  </>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-solder block">Webhook Receiver Endpoint URL:</label>
+                  <input
+                    type="url"
+                    placeholder="https://api.myworkspace.com/v1/anki-sync"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+                  />
+                </div>
+
+                <button
+                  onClick={handleSyncWebhook}
+                  disabled={!webhookUrl.trim() || isSyncingWebhook}
+                  className="w-full py-3 px-4 bg-steel hover:bg-steel text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
+                >
+                  {isSyncingWebhook ? (
+                    <>
+                      <span className="text-amber font-bold font-mono">[ BUSY ]</span>
+                      Dispatching Webhook...
+                    </>
                 ) : (
                   <>
                     <span className="text-amber font-bold font-mono">[ SEND ]</span>
@@ -625,78 +633,18 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
             </div>
           )}
 
-          {/* TAB 4: SM-2 Scheduler Engine Simulator */}
-          {activeTab === 'sm2_simulator' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-amber950/30 border border-amber/30 text-xs text-amber200 leading-relaxed space-y-2">
-                <div className="font-bold text-amber300 flex items-center gap-2">
-                  <span className="text-amber font-bold font-mono">[ RESET ]</span>
-                  SuperMemo SM-2 Interval Calculation Engine
-                </div>
-                <p>
-                  Test how recall ratings (Grade 0 through 5) dynamically compute review intervals (<code className="text-amber300 font-bold">I(n) = I(n-1) × EF</code>) and ease factors in real-time.
-                </p>
-              </div>
-
-              {/* Rating Buttons */}
-              <div className="space-y-2">
-                <span className="text-xs font-bold text-solder">Simulate Active Recall Performance Grade:</span>
-                <div className="grid grid-cols-6 gap-2">
-                  {[0, 1, 2, 3, 4, 5].map((g) => (
-                    <button
-                      key={g}
-                      onClick={() => handleSimulateGrade(g)}
-                      className={`py-2  text-xs font-bold transition-none cursor-pointer border ${
-                        simGrade === g
-                          ? 'bg-amber text-bone border-amber '
-                          : 'bg-deck hover:bg-steel text-solder border-steel'
-                      }`}
-                    >
-                      Grade {g}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* SM2 Computed State Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 bg-deck border border-steel">
-                  <span className="text-solder block text-[11px]">Repetition Count:</span>
-                  <span className="font-bold text-bone text-base mt-0.5 block">{simState.repetitions}</span>
-                </div>
-
-                <div className="p-3 bg-deck border border-steel">
-                  <span className="text-solder block text-[11px]">Ease Factor (EF):</span>
-                  <span className="font-bold text-amber text-base mt-0.5 block">{simState.easeFactor}</span>
-                </div>
-
-                <div className="p-3 bg-deck border border-steel">
-                  <span className="text-solder block text-[11px]">Review Interval:</span>
-                  <span className="font-bold text-bone text-base mt-0.5 block">{simState.interval} Days</span>
-                </div>
-
-                <div className="p-3 bg-deck border border-steel">
-                  <span className="text-solder block text-[11px]">Next Due Date:</span>
-                  <span className="font-bold text-bone text-xs mt-1 block">
-                    {new Date(simState.nextReviewTimestamp).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-        {/* TAB 5: Procedural Trap-Engine MCQ Deck */}
-          {activeTab === 'procedural' && (
+        {/* TAB 2: Procedural MCQ Deck (authored from the student's notes) */}
+          {activeTab === 'mcq' && (
             <div className="space-y-4">
               <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
                   <span className="text-amber font-bold font-mono">[ FLASK ]</span>
-                  Procedural Trap-Engine MCQ Deck : defies the Answer Recognition Trap
+                  Procedural MCQs authored from YOUR notes
                 </div>
                 <p>
-                  Exports parametric AP Chem / Stats / Physics C MCQs into a custom{' '}
-                  <code className="text-bone font-bold">{PROCEDURAL_NOTE_TYPE_NAME}</code> note type.
+                  Parametric multiple-choice archetypes written from the notes you provided (not generic presets).
                   Every review, the card&apos;s embedded client-side JavaScript rolls fresh numbers, computes the
-                  answer + 3 AP-style conceptual traps, and gives instant interactive feedback with the full
+                  answer + 3 conceptual traps, and gives instant interactive feedback with the full
                   step-by-step solution : <b>100% offline in Anki Desktop, AnkiDroid &amp; Anki Mobile, zero add-ons,
                   zero API keys at review time.</b>
                 </p>
@@ -706,15 +654,15 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
               <div className="p-4 bg-deck/60 border border-steel space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-bone">
                   <span className="text-amber font-bold font-mono">[ WAND ]</span>
-                  AI-Author New Archetypes
+                  Author MCQs from this session&apos;s notes
                   <span className="text-[10px] text-solder font-normal">
-                    (validated automatically; the flash-lite repairer fixes broken equations)
+                    (validated automatically; broken equations are repaired)
                   </span>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
-                    placeholder="e.g. AP Physics C: Rotational Motion"
+                    placeholder="Topic (prefilled from your session)"
                     value={aiTopic}
                     onChange={(e) => setAiTopic(e.target.value)}
                     className="flex-1 px-3 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
@@ -876,68 +824,11 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
               </div>
             </div>
           )}
-
-          {/* TAB: FSRS Card Audit */}
-          {activeTab === 'audit' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-amber/30 border border-amber/30 text-xs text-amber leading-relaxed space-y-2">
-                <div className="font-bold text-amber flex items-center gap-2">
-                  <span className="text-amber font-bold font-mono">[ ! ]</span>
-                  FSRS Card Audit : {audit.length} card{audit.length === 1 ? '' : 's'} flagged
-                </div>
-                <p>
-                  Dense cloze sentences become <b className="text-amber">D=10 leeches</b> in FSRS, and ambiguous cues
-                  force you to guess instead of recall. Fix them before exporting for cleaner spaced-repetition.
-                </p>
-              </div>
-
-              {audit.length === 0 ? (
-                <div className="p-6 bg-amber950/30 border border-amber/30 text-xs text-amber200 flex items-center gap-3">
-                  <span className="text-amber font-bold font-mono">[ OK ]</span>
-                  <span>
-                    <b className="text-amber300">All clear.</b> No too-long or ambiguous cloze cards detected. Your deck is FSRS-ready.
-                  </span>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                  {audit.map(({ card: c, issues }) => (
-                    <div key={c.id} className="p-3 bg-deck/60 border border-steel text-xs space-y-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="font-mono text-[11px] text-bone leading-relaxed" dangerouslySetInnerHTML={{ __html: c.front }} />
-                        <button
-                          onClick={() => handleAutoSplit(c.id)}
-                          disabled={!issues.some((i) => i.kind === 'too_long')}
-                          className="shrink-0 px-2.5 py-1 bg-amber/20 hover:bg-amber/30 border border-amber/40 text-amber font-bold flex items-center gap-1.5 transition-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                          title={issues.some((i) => i.kind === 'too_long') ? 'Auto-split into two atomic cards' : 'Only too-long cards can be split'}
-                        >
-                          <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
-                          <span>Split</span>
-                        </button>
-                      </div>
-                      <div className="space-y-1">
-                        {issues.map((issue, idx) => (
-                          <div
-                            key={idx}
-                            className={`flex items-start gap-2 ${
-                              issue.kind === 'ambiguous' ? 'text-hazard300' : 'text-amber'
-                            }`}
-                          >
-                            <span className="text-amber font-bold font-mono">[ ! ]</span>
-                            <span>{issue.message}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Modal Footer */}
         <div className="p-4 border-t border-steel bg-chassis flex items-center justify-between text-xs text-solder">
-          <span>SuperMemo SM-2 & Cloze Deletion Standard</span>
+          <span>SuperMemo SM-2 &amp; Cloze Deletion Standard</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-steel hover:bg-steel text-bone font-bold transition-none cursor-pointer"

@@ -340,11 +340,19 @@ assert names['DeepEncode Basic']['type'] == 0
 assert names['DeepEncode Cloze']['type'] == 1  # real cloze model, not Basic-with-braces
 dconf = json.loads(col[2])
 cfg = dconf['1']
-# Anki refuses decks missing 'mod' / 'new.order' / 'rev.hardFactor' :
-# "decoding deck config: missing field mod"
+# Anki's DeckConfig deserializer requires every key a real export writes :
+# omitting any one fails with "decoding deck config: missing field <key>"
+# (we previously hit 'mod', then 'autoplay').
+expected_top = {'id', 'mod', 'name', 'usn', 'autoplay', 'timer', 'replayq', 'maxTaken', 'new', 'rev', 'lapse', 'dyn'}
+assert expected_top <= set(cfg.keys()), sorted(expected_top - set(cfg.keys()))
 assert isinstance(cfg['mod'], int) and cfg['mod'] > 0, cfg
-assert isinstance(cfg['new'].get('order'), int), cfg['new']
-assert isinstance(cfg['rev'].get('hardFactor'), (int, float)), cfg['rev']
+assert isinstance(cfg['autoplay'], bool), cfg
+expected_new = {'bury', 'delays', 'initialFactor', 'ints', 'order', 'perDay', 'separate'}
+assert expected_new <= set(cfg['new'].keys()), sorted(expected_new - set(cfg['new'].keys()))
+expected_rev = {'bury', 'ease4', 'fuzz', 'hardFactor', 'ivlFct', 'maxIvl', 'minSpace', 'perDay'}
+assert expected_rev <= set(cfg['rev'].keys()), sorted(expected_rev - set(cfg['rev'].keys()))
+expected_lapse = {'delays', 'leechAction', 'leechFails', 'minInt', 'mult'}
+assert expected_lapse <= set(cfg['lapse'].keys()), sorted(expected_lapse - set(cfg['lapse'].keys()))
 decks = json.loads(col[1])
 deck_names = [d['name'] for d in decks.values()]
 assert 'DeepEncode::Action Potentials' in deck_names, deck_names

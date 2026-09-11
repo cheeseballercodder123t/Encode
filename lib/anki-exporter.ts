@@ -145,23 +145,29 @@ function clozeToBasicText(front: string): string {
 }
 
 /**
- * Canonical Anki "Default" deck options group (deck config id 1). Every field
- * Anki's legacy schema-11 deserializer requires is present — including `mod`,
- * `new.order` and `rev.hardFactor` which older hand-rolled generators omit and
- * which make import fail with `decoding deck config: missing field`.
+ * Canonical Anki "Default" deck options group (deck config id 1), matching the
+ * exact JSON a real Anki schema-11 export writes. Anki's Rust deserializer
+ * requires EVERY one of these keys — omitting any single one fails import with
+ * `decoding deck config: missing field <key>` (we hit `mod`, then `autoplay`).
+ *
+ * Top level : id, mod, name, usn, autoplay, timer, replayq, maxTaken, new, rev, lapse, dyn
+ * new       : bury, delays, initialFactor, ints, order, perDay, separate
+ * rev       : bury, ease4, fuzz, hardFactor, ivlFct, maxIvl, minSpace, perDay
+ * lapse     : delays, leechAction, leechFails, minInt, mult
  */
 function makeDefaultDconf(modSec: number): Record<string, unknown> {
   return {
     id: 1,
     mod: modSec,
     name: 'Default',
-    replayq: true,
-    timer: 0,
-    maxTaken: 60,
     usn: -1,
+    autoplay: true,
+    timer: 0,
+    replayq: true,
+    maxTaken: 60,
     new: { bury: true, delays: [1, 10], initialFactor: 2500, ints: [1, 4, 7], order: 1, perDay: 20, separate: true },
-    rev: { bury: true, fuzz: 0.05, ivlFct: 1, maxIvl: 36500, ease4: 1.3, hardFactor: 1.2, minSpace: 1, perDay: 100 },
-    lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
+    rev: { bury: true, ease4: 1.3, fuzz: 0.05, hardFactor: 1.2, ivlFct: 1, maxIvl: 36500, minSpace: 1, perDay: 100 },
+    lapse: { delays: [10], leechAction: 1, leechFails: 8, minInt: 1, mult: 0 },
     dyn: false,
   };
 }
