@@ -8,11 +8,13 @@ import {
   calculateSM2,
   extractAnkiCardsFromSchema,
   generateAnkiTextDeck,
+  generateAnkiTextDecks,
   generateAnkiApkgPackage,
   buildHierarchicalDeckName,
   clozeUserWording,
   normalizeClozeTermToAnki,
   computeActivityExportTags,
+  AnkiCardItem,
 } from '@/lib/anki-exporter';
 import { SavedSchema, SegregationReport } from '@/lib/types';
 import { classifyCardQuality, classifyDeckQuality } from '@/lib/fsrs-audit';
@@ -330,12 +332,19 @@ conn = sqlite3.connect(${JSON.stringify(path)})
 cur = conn.cursor()
 assert cur.execute('PRAGMA integrity_check').fetchall() == [('ok',)], 'integrity'
 assert cur.execute('PRAGMA user_version').fetchone()[0] == 11, 'user_version'
-col = cur.execute('SELECT models, decks FROM col WHERE id=1').fetchone()
+col = cur.execute('SELECT models, decks, dconf FROM col WHERE id=1').fetchone()
 models = json.loads(col[0])
 names = {m['name']: m for m in models.values()}
 assert 'DeepEncode Basic' in names and 'DeepEncode Cloze' in names, names
 assert names['DeepEncode Basic']['type'] == 0
 assert names['DeepEncode Cloze']['type'] == 1  # real cloze model, not Basic-with-braces
+dconf = json.loads(col[2])
+cfg = dconf['1']
+# Anki refuses decks missing 'mod' / 'new.order' / 'rev.hardFactor' :
+# "decoding deck config: missing field mod"
+assert isinstance(cfg['mod'], int) and cfg['mod'] > 0, cfg
+assert isinstance(cfg['new'].get('order'), int), cfg['new']
+assert isinstance(cfg['rev'].get('hardFactor'), (int, float)), cfg['rev']
 decks = json.loads(col[1])
 deck_names = [d['name'] for d in decks.values()]
 assert 'DeepEncode::Action Potentials' in deck_names, deck_names
@@ -356,19 +365,55 @@ print('PYTHON_OK')
   });
 });
 
-describe('generateAnkiTextDeck', () => {
-  it('emits anki import headers and tab-separated rows', () => {
+describe('generateAnkiTextDecks / generateAnkiTextDeck', () => {
+  it('emits a cloze deck with real deletions and 3 tab-separated columns', () => {
     const cards = extractAnkiCardsFromSchema(null, {
       topic: 'T',
       declarativeFacts: [{ id: 'f1', factStatement: 'a\tb', clozeSuggestion: '{{c1::a}}' }],
       conceptualMechanisms: [],
     });
-    const deck = generateAnkiTextDeck(cards, 'My\nDeck');
-    const lines = deck.split('\n');
+    const decks = generateAnkiTextDecks(cards, 'My\nDeck');
+    expect(decks.cloze).toBeDefined();
+    expect(decks.basic).toBeUndefined();
+
+    const lines = decks.cloze!.split('\n');
     expect(lines[0]).toBe('#separator:tab');
     expect(lines[3]).toBe('#deck:My Deck');
-    expect(lines[3]).toBe('#deck:My Deck');
-    expect(lines[6]).not.toContain('\t\t');
-    expect(lines[6].split('\t')).toHaveLength(4);
+    expect(lines[4]).toBe('#notetype:Cloze');
+    expect(lines[6]).toContain('{{c1::a}}');
+    expect(lines[6].split('\t')).toHaveLength(3);
+  });
+
+  it('splits mixed decks into separate Basic + Cloze files (no "cloze not found")', () => {
+    const cards: AnkiCardItem[] = [
+      {
+        id: 'cloze1', front: 'The {{c1::Na/K pump}} moves 3 out', back: '3 Na out', isCloze: true,
+        tags: ['DeepEncode'], sm2: { repetitions: 0, interval: 1, easeFactor: 2.5, nextReviewTimestamp: 0 },
+      },
+      {
+        id: 'basic1', front: 'Resting potential?', back: '-70mV', isCloze: false,
+        tags: ['DeepEncode'], sm2: { repetitions: 0, interval: 1, easeFactor: 2.5, nextReviewTimestamp: 0 },
+      },
+    ];
+    const decks = generateAnkiTextDecks(cards, 'Blend');
+    expect(decks.cloze).toBeDefined();
+    expect(decks.basic).toBeDefined();
+    expect(decks.cloze!).toContain('#notetype:Cloze');
+    expect(decks.basic!).toContain('#notetype:Basic');
+    // Cloze file never contains the plain card
+    expect(decks.cloze!).not.toContain('Resting potential?');
+    // Basic file never contains cloze deletions text
+    expect(decks.basic!).toContain('Resting potential?');
+  });
+
+  it('legacy single-file wrapper returns cloze deck when present', () => {
+    const cards: AnkiCardItem[] = [
+      {
+        id: 'cloze1', front: 'The {{c1::Na/K pump}} moves 3 out', back: '3 Na out', isCloze: true,
+        tags: ['DeepEncode'], sm2: { repetitions: 0, interval: 1, easeFactor: 2.5, nextReviewTimestamp: 0 },
+      },
+    ];
+    const deck = generateAnkiTextDeck(cards, 'Deck');
+    expect(deck).toContain('#notetype:Cloze');
   });
 });

@@ -11,6 +11,7 @@ import {
 } from '@/lib/types';
 import { 
   generateRemnoteHierarchy, 
+  generateSegregationRemnote, 
   pushToRemnoteApi, 
   compressSemantically,
   optimizeCloze,
@@ -46,34 +47,20 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
 
   if (!isOpen) return null;
 
-  // Generate Remnote markdown either from segregation report or active schema
-  const remnotePayload = generateRemnoteHierarchy(
-    activeSchema || {
-      topicSummary: report?.topic,
-      activities: report?.conceptualMechanisms?.map((c, i) => ({
-        id: c.id || `mech-${i}`,
-        stageNumber: i + 1,
-        title: c.conceptName,
-        framework: '4-Quadrant Cognitive Matrix',
-        cognitiveGoal: c.whatIsIt,
-        contextSnippet: c.howItWorks,
-        keywords: [c.conceptName, 'Mechanism', 'Equilibrium'],
-        templateType: 'causal_chain',
-        prompt: c.howItWorks,
-        scaffold: {
-          field1Label: 'What is it?',
-          field1Placeholder: '',
-          field2Label: 'Why does it matter?',
-          field2Placeholder: '',
-          exampleAnswer: c.whatIfEdgeCase
+  // Generate Remnote markdown either from segregation report or active schema.
+  // When we have a report, render facts + mechanisms + drills + examples as
+  // proper `::` flashcards (never notes).
+  const remnotePayload = report
+    ? generateSegregationRemnote(report, {
+        parentAnchor: parentSystemAnchor,
+      })
+    : generateRemnoteHierarchy(
+        activeSchema || { topicSummary: topicTitle },
+        {
+          parentAnchor: parentSystemAnchor,
+          preferFeynmanCloze: preferFeynmanCloze,
         }
-      }))
-    },
-    {
-      parentAnchor: parentSystemAnchor,
-      preferFeynmanCloze: preferFeynmanCloze,
-    }
-  );
+      );
 
   const handleCopyMarkdown = () => {
     playSound('click');

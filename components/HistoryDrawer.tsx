@@ -50,8 +50,8 @@ export function HistoryDrawer({
     s.activities.forEach(act => {
       const resp = s.userResponses[act.id] || { field1: '', field2: '', field3: '' };
       content += `${act.title} :: ${resp.field1}\n`;
-      content += `  - Elaborative Mechanism ;; ${resp.field2}\n`;
-      if (resp.field3) content += `  - Connection Anchor ;; ${resp.field3}\n`;
+      content += `  - Elaborative Mechanism :: ${resp.field2}\n`;
+      if (resp.field3) content += `  - Connection Anchor :: ${resp.field3}\n`;
     });
     navigator.clipboard.writeText(content);
     setCopiedId(s.id);

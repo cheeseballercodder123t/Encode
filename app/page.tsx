@@ -141,6 +141,16 @@ export default function DeepEncodeApp() {
   const [isSegregating, setIsSegregating] = useState(false);
   const [segregationReport, setSegregationReport] = useState<SegregationReport | null>(null);
   const [showExportChoice, setShowExportChoice] = useState(false);
+  // Pre-generation selections: choose the flashcard sections + export targets
+  // BEFORE hitting generate, instead of generating everything and picking later.
+  const [segregateOptions, setSegregateOptions] = useState({
+    facts: true,
+    mechanisms: true,
+    drills: true,
+    examples: true,
+    anki: true,
+    remnote: true,
+  });
 
   // Anki Export & Webhook SM-2 Sync State
   const [isAnkiExportOpen, setIsAnkiExportOpen] = useState(false);
@@ -318,6 +328,12 @@ export default function DeepEncodeApp() {
     sound.playBeep(600, 'sine', 0.15);
 
     try {
+      const include: string[] = [];
+      if (segregateOptions.facts) include.push('facts');
+      if (segregateOptions.mechanisms) include.push('mechanisms');
+      if (segregateOptions.drills) include.push('drills');
+      if (segregateOptions.examples) include.push('examples');
+
       const res = await fetch('/api/segregate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,6 +341,7 @@ export default function DeepEncodeApp() {
           notes: rawNotes,
           file: uploadedFile,
           settings: aiSettings,
+          include,
         }),
       });
 
@@ -335,8 +352,17 @@ export default function DeepEncodeApp() {
 
       const data: SegregationReport = await res.json();
       setSegregationReport(data);
-      setShowExportChoice(true);
       sound.playSuccess();
+
+      // Route to the pre-selected target(s) : skip the "which one?" popup when
+      // only one export target was chosen beforehand.
+      if (segregateOptions.anki && !segregateOptions.remnote) {
+        setIsAnkiExportOpen(true);
+      } else if (segregateOptions.remnote && !segregateOptions.anki) {
+        setIsSegregateModalOpen(true);
+      } else {
+        setShowExportChoice(true);
+      }
     } catch (err: any) {
       console.error(err);
       alert(err?.message || 'Segregation failed. Try again.');
@@ -1014,8 +1040,8 @@ export default function DeepEncodeApp() {
       activities.forEach(act => {
         const resp = userResponses[act.id] || { field1: '', field2: '', field3: '' };
         content += `${act.title} :: ${resp.field1}\n`;
-        content += `  - Elaborative Mechanism ;; ${resp.field2}\n`;
-        if (resp.field3) content += `  - Connection Anchor ;; ${resp.field3}\n`;
+        content += `  - Elaborative Mechanism :: ${resp.field2}\n`;
+        if (resp.field3) content += `  - Connection Anchor :: ${resp.field3}\n`;
       });
     } else if (format === 'anki') {
       content = `# Anki Cloze Cards: ${topicSummary}\n\n`;
@@ -1298,7 +1324,53 @@ export default function DeepEncodeApp() {
             />
 
             {/* Quick Diagnostic Power Tools */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <div className="flex flex-col items-center gap-2">
+              {/* Pre-generation section + target selectors for SEGREGATE */}
+              <div className="flex flex-wrap items-center justify-center gap-2 border border-steel bg-deck px-3 py-2">
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber">
+                  [ SEGREGATE: ]
+                </span>
+                {([
+                  ['facts', 'Facts'],
+                  ['mechanisms', 'Mechanisms'],
+                  ['drills', 'Drills'],
+                  ['examples', 'Examples'],
+                ] as [keyof typeof segregateOptions, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() =>
+                      setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))
+                    }
+                    className={`px-2 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+                      segregateOptions[key]
+                        ? 'bg-steel border-steel text-bone'
+                        : 'bg-chassis border-steel text-solder'
+                    }`}
+                  >
+                    {segregateOptions[key] ? '[X]' : '[ ]'} {label}
+                  </button>
+                ))}
+                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-solder">→</span>
+                {([['anki', 'ANKI'], ['remnote', 'REMNOTE']] as [keyof typeof segregateOptions, string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() =>
+                      setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))
+                    }
+                    className={`px-2 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+                      segregateOptions[key]
+                        ? 'bg-amber border-amber text-chassis'
+                        : 'bg-chassis border-steel text-solder'
+                    }`}
+                  >
+                    {segregateOptions[key] ? '[X]' : '[ ]'} {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder mr-1">
                 {'// DEEP DIAGNOSTICS:'}
               </span>
@@ -1341,6 +1413,7 @@ export default function DeepEncodeApp() {
               >
                 {isRoasting ? '[ AUDITING... ]' : '[ ROAST NOTES ]'}
               </button>
+            </div>
             </div>
 
             {/* Cognitive framework telemetry */}

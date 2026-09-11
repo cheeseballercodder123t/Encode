@@ -94,7 +94,7 @@ const segregationSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { notes, file, settings } = await req.json();
+    const { notes, file, settings, include } = await req.json();
 
     const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
     const hasFile = file && file.base64Data && file.type;
@@ -103,15 +103,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No notes provided for segregation." }, { status: 400 });
     }
 
+    // Which flashcard sections the user wants. Default : everything.
+    const want = {
+      facts: !Array.isArray(include) || include.includes('facts'),
+      mechanisms: !Array.isArray(include) || include.includes('mechanisms'),
+      drills: !Array.isArray(include) || include.includes('drills'),
+      examples: !Array.isArray(include) || include.includes('examples'),
+    };
+    const wantedLabels = [
+      want.facts ? 'declarativeFacts (12-24)' : null,
+      want.mechanisms ? 'conceptualMechanisms (4-8)' : null,
+      want.drills ? 'practiceQuestions (8-16)' : null,
+      want.examples ? 'workedExamples (2-4)' : null,
+    ].filter(Boolean).join(', ');
+
     const systemPrompt = `You are a Knowledge Graph and RemNote Taxonomy Specialist.
 Your mission is HIGH-VOLUME FLASHCARD GENERATION with CONCEPT VS. FACT SEGREGATION, SEMANTIC COMPRESSION, 4-QUADRANT MATRIX EXTRACTION, and BOUNDARY EDGE-CASE GENERATION:
+
+SECTIONS TO GENERATE (generate ONLY these; set every other array to empty []):
+- ${wantedLabels || '(none selected - return empty arrays)'}
 
 VOLUME TARGETS (hit every minimum — under-producing is a failure):
 - declarativeFacts: 12-24 atomic facts. Cover EVERY testable item in the source: each date, number, constant, formula, name, term, and definition gets its own card. If the source is small, split compound facts into separate atomic cards rather than returning fewer.
 - conceptualMechanisms: 4-8 mechanisms, one per distinct process/law/framework.
 - practiceQuestions: 8-16 rapid-fire Q/A drills covering different facts, numbers, steps, and discriminations.
 - workedExamples: 2-4 step-by-step worked examples.
-Expected total: 26-52 flashcards. NEVER return fewer than 20 cards combined.
+If at least facts+mechs selected, hit 26-52 total cards; otherwise fill the selected sections generously.
 
 CARD BREVITY RULES (a long card is a failed card):
 - factStatement: ONE atomic fact, ONE short sentence, < 25 words, single clause. Split compounds — never cram two facts into one card.
@@ -121,7 +138,7 @@ CARD BREVITY RULES (a long card is a failed card):
 - practiceQuestions: answerable in under ~10 seconds. If it needs an essay, split it into smaller questions.
 - No card front may exceed 25 words. No back may exceed 40 words.
 
-1. Segregate the raw input into TWO distinct buckets:
+1. Segregate the raw input into TWO distinct buckets (when both selected):
    - Declarative Facts: Static memorization items (dates, constants, formulas, proper nouns) -> formatted with {{cloze}} deletions.
    - Conceptual Mechanisms: Deep dynamic processes -> formatted into the strict 4-Quadrant Matrix (What, Why, How, What-If).
 2. Semantic Compression: Eliminate 60% of fluffy filler words, keeping only atomic, high-impact statements.

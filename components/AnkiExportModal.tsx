@@ -7,6 +7,7 @@ import {
   extractAnkiCardsFromSchema, 
   generateAnkiApkgPackage, 
   generateAnkiTextDeck, 
+  generateAnkiTextDecks, 
   syncToAnkiConnect, 
   syncToCustomWebhook, 
   calculateSM2, 
@@ -121,16 +122,24 @@ export function AnkiExportModal({ isOpen, onClose, schema, report }: AnkiExportM
 
   const handleDownloadTxt = () => {
     playSound('click');
-    const txt = generateAnkiTextDeck(cards, deckName);
-    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${deckName}_AnkiImport.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const decks = generateAnkiTextDecks(cards, deckName);
+    // CloZe + Basic are split into separate files so each maps to a single
+    // note type (Anki refuses "No cloze found" or field-count mismatches).
+    const files: { name: string; content: string }[] = [];
+    if (decks.cloze) files.push({ name: `${deckName}_Cloze.txt`, content: decks.cloze });
+    if (decks.basic) files.push({ name: `${deckName}_Basic.txt`, content: decks.basic });
+
+    files.forEach(({ name, content }) => {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
     playSound('success');
   };
 

@@ -125,6 +125,47 @@ export function normalizeClozeTermToAnki(text: string): string {
   });
 }
 
+/**
+ * Guarantees a front carries at least one REAL Anki deletion (`{{cN::...}}`).
+ * Anki's Cloze note type refuses cards without one ("No cloze 1 found"), and
+ * bare `{{term}}` renders as literal braces. Falls back to clozeing the last
+ * half of the sentence when the text has no braces at all.
+ */
+function ensureAnkiCloze(text: string): string {
+  const input = text || '';
+  if (input.includes('{{c')) return input;
+  const normalized = normalizeClozeTermToAnki(input);
+  if (normalized.includes('{{c')) return normalized;
+  return normalizeClozeTermToAnki(clozeUserWording(input, []));
+}
+
+/** Converts a cloze front into a Basic Q/A front: deletions become blanks. */
+function clozeToBasicText(front: string): string {
+  return front.replace(/\{\{c\d+::[^}]*\}\}/g, '<b>[ ? ]</b>');
+}
+
+/**
+ * Canonical Anki "Default" deck options group (deck config id 1). Every field
+ * Anki's legacy schema-11 deserializer requires is present — including `mod`,
+ * `new.order` and `rev.hardFactor` which older hand-rolled generators omit and
+ * which make import fail with `decoding deck config: missing field`.
+ */
+function makeDefaultDconf(modSec: number): Record<string, unknown> {
+  return {
+    id: 1,
+    mod: modSec,
+    name: 'Default',
+    replayq: true,
+    timer: 0,
+    maxTaken: 60,
+    usn: -1,
+    new: { bury: true, delays: [1, 10], initialFactor: 2500, ints: [1, 4, 7], order: 1, perDay: 20, separate: true },
+    rev: { bury: true, fuzz: 0.05, ivlFct: 1, maxIvl: 36500, ease4: 1.3, hardFactor: 1.2, minSpace: 1, perDay: 100 },
+    lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
+    dyn: false,
+  };
+}
+
 /** True when the response carries real user encoding worth exporting. */
 function isEncoded(resp?: StageResponse): boolean {
   if (!resp || resp.skipped) return false;
@@ -243,18 +284,22 @@ export function extractAnkiCardsFromSchema(
   const cards: AnkiCardItem[] = [];
 
   // 2a. Declarative Facts (segregation report path): short Q/A front when
-  // the model supplies one, so fronts never repeat the whole fact.
+  // the model supplies one, so fronts never repeat the whole fact. Cloze
+  // fronts are normalized so Anki always sees a real {{cN::}} deletion (bare
+  // {{term}} would render as literal braces or trip "No cloze found").
   if (report?.declarativeFacts) {
     report.declarativeFacts.forEach((fact, idx) => {
-      const front = fact.question && fact.question.trim().length > 0
-        ? fact.question
-        : (fact.clozeSuggestion || fact.factStatement);
+      const question = (fact.question || '').trim();
+      const hasQuestion = question.length > 0;
+      const front = hasQuestion
+        ? question
+        : ensureAnkiCloze(fact.clozeSuggestion || fact.factStatement);
       const hook = fact.memoryHook ? `<br><i>Hook: ${fact.memoryHook}</i>` : '';
       cards.push({
         id: fact.id || `fact-${idx}`,
         front,
         back: `<b>Fact Detail:</b> ${fact.factStatement}${hook}`,
-        isCloze: (fact.clozeSuggestion || '').includes('{{'),
+        isCloze: !hasQuestion && front.includes('{{c'),
         tags: ['DeepEncode', 'DeclarativeFact', fact.tag || 'General'].filter(Boolean),
         sm2: { ...initialSM2 },
       });
@@ -264,15 +309,16 @@ export function extractAnkiCardsFromSchema(
   // 2. 4-Quadrant Conceptual Mechanisms
   const mechanisms = report?.conceptualMechanisms || [];
   mechanisms.forEach((mech, idx) => {
-    // Quadrant 1 + 3 Causal Cloze
+    // Quadrant 1 + 3 Causal Cloze : if the mechanism text never mentions the
+    // concept name, inject a real deletion anyway so the Cloze note type works.
+    const causalBody = mech.howItWorks.includes(mech.conceptName)
+      ? mech.howItWorks.replace(mech.conceptName, `{{c1::${mech.conceptName}}}`)
+      : ensureAnkiCloze(mech.howItWorks);
     cards.push({
       id: `mech-${idx}-causal`,
-      front: `<b>${mech.conceptName}</b> (Causal Mechanism):<br>${mech.howItWorks.replace(
-        mech.conceptName,
-        `{{c1::${mech.conceptName}}}`
-      )}`,
+      front: `<b>${mech.conceptName}</b> (Causal Mechanism):<br>${causalBody}`,
       back: `<b>What it is:</b> ${mech.whatIsIt}<br><b>Why it matters:</b> ${mech.whyItMatters}`,
-      isCloze: true,
+      isCloze: causalBody.includes('{{c'),
       tags: ['DeepEncode', 'ConceptualMechanism', '4Quadrant'],
       sm2: { ...initialSM2 },
     });
@@ -346,11 +392,12 @@ export function extractAnkiCardsFromSchema(
   // 3. Fallback from SavedSchema Activities if report is empty
   if (cards.length === 0 && schema?.activities) {
     schema.activities.forEach((act, idx) => {
+      const promptBody = ensureAnkiCloze(act.prompt);
       cards.push({
         id: act.id || `act-${idx}`,
-        front: `<b>${act.title}</b>:<br>${act.prompt}`,
+        front: `<b>${act.title}</b>:<br>${promptBody}`,
         back: `<b>Key Concepts:</b> ${act.keywords.join(', ')}<br>${act.contextSnippet}`,
-        isCloze: act.prompt.includes('{{'),
+        isCloze: promptBody.includes('{{c'),
         tags: ['DeepEncode', 'SchemaActivity'],
         sm2: { ...initialSM2 },
       });
@@ -361,25 +408,47 @@ export function extractAnkiCardsFromSchema(
 }
 
 /**
- * Generates Anki Import Text Format (.txt/.tsv) with Cloze headers
+ * Generates Anki Import Text Format (.txt/.tsv). Because Anki maps every row
+ * of a file to ONE note type, cloze cards and basic cards are split into
+ * separate decks/files:
+ *   - cloze file: `#notetype:Cloze`, rows carry real {{cN::}} deletions.
+ *   - basic file: `#notetype:Basic`, plain Front/Back rows.
+ * This prevents "No cloze 1 found" when a mixed deck is imported as Cloze and
+ * avoids field-count mismatches caused by an extra scheduling column.
  */
+export function generateAnkiTextDecks(cards: AnkiCardItem[], deckName: string): { basic?: string; cloze?: string } {
+  const safeDeck = deckName.replace(/[\n\t]/g, ' ');
+  const clozeCards = cards.filter((c) => c.isCloze && c.front.includes('{{c'));
+  const basicCards = cards.filter((c) => !c.isCloze || !c.front.includes('{{c'));
+
+  const build = (noteType: 'Basic' | 'Cloze', rows: AnkiCardItem[]) => {
+    const lines: string[] = [];
+    lines.push(`#separator:tab`);
+    lines.push(`#html:true`);
+    lines.push(`#tags column:3`);
+    lines.push(`#deck:${safeDeck}`);
+    lines.push(`#notetype:${noteType}`);
+    lines.push('');
+    rows.forEach((c) => {
+      const cleanFront = c.front.replace(/[\t\n]/g, ' ');
+      const cleanBack = c.back.replace(/[\t\n]/g, ' ');
+      const tagStr = c.tags.join(' ');
+      // Cloze model fields are [Text, Extra]; Basic model fields are [Front, Back].
+      lines.push(`${cleanFront}\t${cleanBack}\t${tagStr}`);
+    });
+    return lines.join('\n');
+  };
+
+  const result: { basic?: string; cloze?: string } = {};
+  if (basicCards.length > 0) result.basic = build('Basic', basicCards);
+  if (clozeCards.length > 0) result.cloze = build('Cloze', clozeCards);
+  return result;
+}
+
+/** Legacy single-file wrapper : emits one deck (cloze preferred, then basic). */
 export function generateAnkiTextDeck(cards: AnkiCardItem[], deckName: string): string {
-  const lines: string[] = [];
-  lines.push(`#separator:tab`);
-  lines.push(`#html:true`);
-  lines.push(`#tags column:4`);
-  lines.push(`#deck:${deckName.replace(/[\n\t]/g, ' ')}`);
-  lines.push(`#notetype:${cards.some((c) => c.isCloze) ? 'Cloze' : 'Basic'}`);
-  lines.push('');
-
-  cards.forEach((c) => {
-    const cleanFront = c.front.replace(/\t/g, ' ').replace(/\n/g, '<br>');
-    const cleanBack = c.back.replace(/\t/g, ' ').replace(/\n/g, '<br>');
-    const tagStr = c.tags.join(' ');
-    lines.push(`${cleanFront}\t${cleanBack}\t${c.sm2.interval}\t${tagStr}`);
-  });
-
-  return lines.join('\n');
+  const decks = generateAnkiTextDecks(cards, deckName);
+  return decks.cloze || decks.basic || '';
 }
 
 // ─── Declarative note types (real .apkg, FSRS-ready) ────────────────────────
@@ -515,19 +584,8 @@ export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: s
     [String(rootDeckId)]: makeDeckEntry(rootDeckId, 'DeepEncode', modSec, 'Encoded with DeepEncode (encoder-first handoff).'),
     [String(childDeckId)]: makeDeckEntry(childDeckId, deckName, modSec, 'Encoded with DeepEncode (encoder-first handoff).'),
   };
-  const dconf = {
-    '1': {
-      id: 1,
-      name: 'Default',
-      replayq: true,
-      timer: 0,
-      maxTaken: 60,
-      usn: -1,
-      new: { bury: true, delays: [1, 10], initialFactor: 2500, ints: [1, 4, 7], perDay: 20, separate: true },
-      rev: { perDay: 100, fuzz: 0.05, ivlFct: 1, maxIvl: 36500, ease4: 1.3, bury: true, minSpace: 1 },
-      lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
-      dyn: false,
-    },
+  const dconf: Record<string, unknown> = {
+    '1': makeDefaultDconf(modSec),
   };
 
   const notes: (AnkiNoteRow & { _nid: number })[] = cards.map((card, i) => {
@@ -1008,19 +1066,8 @@ function buildProceduralColJson(deckId: number, deckName: string, modSec: number
       extendRev: 0,
     },
   };
-  const dconf = {
-    '1': {
-      id: 1,
-      name: 'Default',
-      replayq: true,
-      timer: 0,
-      maxTaken: 60,
-      usn: -1,
-      new: { bury: true, delays: [1, 10], initialFactor: 2500, ints: [1, 4, 7], perDay: 20, separate: true },
-      rev: { perDay: 100, fuzz: 0.05, ivlFct: 1, maxIvl: 36500, ease4: 1.3, bury: true, minSpace: 1 },
-      lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
-      dyn: false,
-    },
+  const dconf: Record<string, unknown> = {
+    '1': makeDefaultDconf(modSec),
   };
   return {
     conf: JSON.stringify(conf),

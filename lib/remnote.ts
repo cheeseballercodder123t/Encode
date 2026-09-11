@@ -1,4 +1,4 @@
-import { Activity, SavedSchema } from './types';
+import { Activity, SavedSchema, SegregationReport } from './types';
 
 export interface FactItem {
   id: string;
@@ -41,9 +41,128 @@ export interface RemnoteExportPayload {
   feynmanClozings?: FeynmanClozeItem[];
 }
 
+/**
+ * Contextual Anchoring (Feature 86) with the facts/drills/examples sections
+ * rendered as proper RemNote flashcards (`::` descriptors), never notes.
+ */
 export interface RemnoteOptions {
   parentAnchor?: string;
   preferFeynmanCloze?: boolean;
+}
+
+/**
+ * Renders a SegregationReport (facts + mechanisms + drills + examples) into
+ * RemNote markdown where EVERY content line is a `::` descriptor (flashcard),
+ * not a plain note. Cloze cards keep their {{}} deletions for RemNote cloze
+ * rendering. Used by the segregate/export modal.
+ */
+export function generateSegregationRemnote(
+  report: SegregationReport,
+  options?: RemnoteOptions
+): RemnoteExportPayload {
+  const topic = report.topic || 'DeepEncode Cognitive Schema';
+  const parentAnchor = options?.parentAnchor || inferParentSystemAnchor(topic);
+  const lines: string[] = [];
+  let cardCount = 0;
+  let factsCount = 0;
+  let conceptsCount = 0;
+
+  lines.push(`# 🌐 ${parentAnchor}`);
+  lines.push(`## 📁 DeepEncoded: ${topic}`);
+  lines.push(`- **Parent System Anchor** :: [[${parentAnchor}]]`);
+  lines.push('');
+
+  // Declarative Facts as cloze flashcards
+  const facts = report.declarativeFacts || [];
+  if (facts.length > 0) {
+    lines.push('### 🔢 Declarative Facts');
+    facts.forEach((fact, i) => {
+      const front = fact.question?.trim()
+        ? fact.question.trim()
+        : fact.clozeSuggestion || fact.factStatement;
+      lines.push(`- ${front} :: ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
+      cardCount++;
+      factsCount++;
+    });
+    lines.push('');
+  }
+
+  // Conceptual Mechanisms : 4-quadrant flashcards
+  const mechs = report.conceptualMechanisms || [];
+  if (mechs.length > 0) {
+    lines.push('### 🧠 4-Quadrant Mechanisms');
+    mechs.forEach((mech, i) => {
+      lines.push(`- ${mech.conceptName} :: ${mech.whatIsIt}`);
+      cardCount++;
+      conceptsCount++;
+      if (mech.whyItMatters) {
+        lines.push(`  - Why it matters :: ${mech.whyItMatters}`);
+        cardCount++;
+      }
+      if (mech.howItWorks) {
+        const cloze = optimizeCloze(mech.howItWorks, mech.conceptName);
+        lines.push(`  - How it works :: ${cloze}`);
+        cardCount++;
+      }
+      if (mech.whatIfEdgeCase) {
+        lines.push(`  - What if it fails :: ${mech.whatIfEdgeCase}`);
+        cardCount++;
+      }
+      if (mech.boundaryContrast) {
+        lines.push(`  - vs ${mech.boundaryContrast.confusableLookalike} :: ${mech.boundaryContrast.distinguishingRule}`);
+        cardCount++;
+      }
+    });
+    lines.push('');
+  }
+
+  // Practice Drills as Q/A flashcards
+  const drills = report.practiceQuestions || [];
+  if (drills.length > 0) {
+    lines.push('### ⚡ Practice Drills');
+    drills.forEach((d) => {
+      lines.push(`- ${d.question} :: ${d.answer}`);
+      cardCount++;
+      if (d.whyCorrect) {
+        lines.push(`  - Why :: ${d.whyCorrect}`);
+        cardCount++;
+      }
+      if (d.distractors && d.distractors.length > 0) {
+        lines.push(`  - Traps :: ${d.distractors.join(' / ')}`);
+        cardCount++;
+      }
+    });
+    lines.push('');
+  }
+
+  // Worked Examples as step flashcard chains
+  const examples = report.workedExamples || [];
+  if (examples.length > 0) {
+    lines.push('### 🧮 Worked Examples');
+    examples.forEach((ex) => {
+      lines.push(`- ${ex.title || 'Worked example'} :: ${ex.problem}`);
+      cardCount++;
+      (ex.steps || []).forEach((step, sIdx) => {
+        lines.push(`  - Step ${sIdx + 1} :: ${step}`);
+        cardCount++;
+      });
+      if (ex.takeaway) {
+        lines.push(`  - Takeaway :: ${ex.takeaway}`);
+        cardCount++;
+      }
+    });
+    lines.push('');
+  }
+
+  const markdown = lines.join('\n');
+  return {
+    markdown,
+    cardCount,
+    factsCount,
+    conceptsCount,
+    hierarchicalDeck: markdown,
+    parentAnchor,
+  };
 }
 
 /**
