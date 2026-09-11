@@ -242,14 +242,19 @@ export function extractAnkiCardsFromSchema(
 
   const cards: AnkiCardItem[] = [];
 
-  // 2a. Declarative Facts (segregation report path)
+  // 2a. Declarative Facts (segregation report path): short Q/A front when
+  // the model supplies one, so fronts never repeat the whole fact.
   if (report?.declarativeFacts) {
     report.declarativeFacts.forEach((fact, idx) => {
+      const front = fact.question && fact.question.trim().length > 0
+        ? fact.question
+        : (fact.clozeSuggestion || fact.factStatement);
+      const hook = fact.memoryHook ? `<br><i>Hook: ${fact.memoryHook}</i>` : '';
       cards.push({
         id: fact.id || `fact-${idx}`,
-        front: fact.clozeSuggestion || fact.factStatement,
-        back: `<b>Fact Detail:</b> ${fact.factStatement}`,
-        isCloze: fact.clozeSuggestion.includes('{{'),
+        front,
+        back: `<b>Fact Detail:</b> ${fact.factStatement}${hook}`,
+        isCloze: (fact.clozeSuggestion || '').includes('{{'),
         tags: ['DeepEncode', 'DeclarativeFact', fact.tag || 'General'].filter(Boolean),
         sm2: { ...initialSM2 },
       });
@@ -292,6 +297,47 @@ export function extractAnkiCardsFromSchema(
         back: `<b>Distinguishing Rule:</b> ${mech.boundaryContrast.distinguishingRule}`,
         isCloze: false,
         tags: ['DeepEncode', 'BoundaryContrast'],
+        sm2: { ...initialSM2 },
+      });
+    }
+  });
+
+  // 2b. Practice Questions: rapid-fire short Q/A drills.
+  (report?.practiceQuestions || []).forEach((pq, idx) => {
+    const traps = (pq.distractors || []).filter(Boolean);
+    const trapLine = traps.length > 0 ? `<br><i>Traps: ${traps.join(' / ')}</i>` : '';
+    const whyLine = pq.whyCorrect ? `<br><b>Why:</b> ${pq.whyCorrect}` : '';
+    cards.push({
+      id: pq.id || `pq-${idx}`,
+      front: pq.question,
+      back: `<b>Answer:</b> ${pq.answer}${whyLine}${trapLine}`,
+      isCloze: false,
+      tags: ['DeepEncode', 'PracticeQuestion'],
+      sm2: { ...initialSM2 },
+    });
+  });
+
+  // 2c. Worked Examples: one card per solution step (atomic backs) plus a
+  // takeaway card, so multi-step reasoning becomes several small reviews.
+  (report?.workedExamples || []).forEach((ex, idx) => {
+    const steps = (ex.steps || []).filter(Boolean);
+    steps.forEach((step, sIdx) => {
+      cards.push({
+        id: ex.id ? `${ex.id}-step-${sIdx + 1}` : `example-${idx}-step-${sIdx + 1}`,
+        front: `<b>${ex.title}</b> — step ${sIdx + 1}/${steps.length}:<br>${ex.problem}`,
+        back: step,
+        isCloze: false,
+        tags: ['DeepEncode', 'WorkedExample'],
+        sm2: { ...initialSM2 },
+      });
+    });
+    if (ex.takeaway) {
+      cards.push({
+        id: ex.id ? `${ex.id}-takeaway` : `example-${idx}-takeaway`,
+        front: `<b>${ex.title}</b>: what is the transfer rule?`,
+        back: ex.takeaway,
+        isCloze: false,
+        tags: ['DeepEncode', 'WorkedExample'],
         sm2: { ...initialSM2 },
       });
     }

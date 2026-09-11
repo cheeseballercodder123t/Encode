@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  SegregationReport, 
-  DeclarativeFactItem, 
+import {
+  SegregationReport,
+  DeclarativeFactItem,
   ConceptualMechanismItem,
+  PracticeQuestionItem,
+  WorkedExampleItem,
   SavedSchema,
   AISettings
 } from '@/lib/types';
@@ -35,7 +37,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
   const topicTitle = report?.topic || activeSchema?.topicSummary || 'Cognitive Schema';
   const [parentSystemAnchor, setParentSystemAnchor] = useState(() => inferParentSystemAnchor(topicTitle));
   const [preferFeynmanCloze, setPreferFeynmanCloze] = useState(true);
-  const [activeTab, setActiveTab] = useState<'matrix' | 'feynman_cloze' | 'facts' | 'remnote_export' | 'api_push'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'feynman_cloze' | 'facts' | 'drills' | 'examples' | 'remnote_export' | 'api_push'>('matrix');
   const [copied, setCopied] = useState(false);
   const [remnoteApiKey, setRemnoteApiKey] = useState('');
   const [remnoteUserId, setRemnoteUserId] = useState('');
@@ -189,7 +191,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
 
           <button
             onClick={() => setActiveTab('facts')}
-            className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
+            className={`min-h-[44px] px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'facts'
                 ? 'bg-steel text-bone '
                 : 'text-solder hover:text-bone hover:bg-steel'
@@ -197,6 +199,30 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
           >
             <span className="text-amber font-bold font-mono">[ HASH ]</span>
             <span>Declarative Facts ({report?.declarativeFacts?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('drills')}
+            className={`min-h-[44px] px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'drills'
+                ? 'bg-steel text-bone '
+                : 'text-solder hover:text-bone hover:bg-steel'
+            }`}
+          >
+            <span className="text-amber font-bold font-mono">[ PLAY ]</span>
+            <span>Practice Drills ({report?.practiceQuestions?.length || 0})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('examples')}
+            className={`min-h-[44px] px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'examples'
+                ? 'bg-steel text-bone '
+                : 'text-solder hover:text-bone hover:bg-steel'
+            }`}
+          >
+            <span className="text-amber font-bold font-mono">[ DEMO ]</span>
+            <span>Worked Examples ({report?.workedExamples?.length || 0})</span>
           </button>
 
           <button
@@ -360,7 +386,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
 
             {report?.declarativeFacts?.map((fact: DeclarativeFactItem, idx: number) => (
               <div key={fact.id || idx} className="p-3.5 bg-deck/90 border border-steel flex items-start justify-between gap-3 text-xs">
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     {fact.tag && (
                       <span className="px-2 py-0.5 text-[10px] font-bold bg-steel text-bone border border-steel uppercase">
@@ -369,11 +395,72 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                     )}
                     <span className="text-solder text-[11px]">Fact #{idx + 1}</span>
                   </div>
+                  {fact.question && (
+                    <p className="text-amber200 text-[11px] font-bold mb-1">Q: {fact.question}</p>
+                  )}
                   <p className="text-bone mb-1">{fact.factStatement}</p>
                   <p className="font-mono text-bone/90 text-[11px] bg-chassis p-2 border border-steel/80">
                     {fact.clozeSuggestion}
                   </p>
+                  {fact.memoryHook && (
+                    <p className="text-solder text-[11px] italic mt-1">Hook: {fact.memoryHook}</p>
+                  )}
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tab 4: Practice Drills — short rapid-fire Q/A cards */}
+        {activeTab === 'drills' && (
+          <div className="space-y-3 max-h-[54vh] overflow-y-auto pr-1">
+            <div className="p-3 bg-steel/60 border border-steel text-xs text-solder">
+              <span className="font-bold text-bone">Rapid-fire drills:</span> short questions answerable in ~10 seconds, each testing one fact, number, step, or discrimination.
+            </div>
+
+            {(report?.practiceQuestions?.length ?? 0) === 0 && (
+              <p className="text-xs text-solder p-3 border border-steel bg-deck/60">No drills in this report — regenerate segregation to include them.</p>
+            )}
+
+            {report?.practiceQuestions?.map((pq: PracticeQuestionItem, idx: number) => (
+              <div key={pq.id || idx} className="p-3.5 bg-deck/90 border border-steel text-xs space-y-1.5">
+                <span className="text-solder text-[11px]">Drill #{idx + 1}</span>
+                <p className="text-bone font-bold">{pq.question}</p>
+                <p className="text-amber200">A: {pq.answer}</p>
+                {pq.whyCorrect && (
+                  <p className="text-solder text-[11px]">Why: {pq.whyCorrect}</p>
+                )}
+                {(pq.distractors?.length ?? 0) > 0 && (
+                  <p className="text-solder text-[11px]">Traps: {pq.distractors!.join(' / ')}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Tab 5: Worked Examples — step-by-step problem walkthroughs */}
+        {activeTab === 'examples' && (
+          <div className="space-y-3 max-h-[54vh] overflow-y-auto pr-1">
+            <div className="p-3 bg-steel/60 border border-steel text-xs text-solder">
+              <span className="font-bold text-bone">Worked examples:</span> one concrete problem per example, solved in atomic steps.
+            </div>
+
+            {(report?.workedExamples?.length ?? 0) === 0 && (
+              <p className="text-xs text-solder p-3 border border-steel bg-deck/60">No worked examples in this report — regenerate segregation to include them.</p>
+            )}
+
+            {report?.workedExamples?.map((ex: WorkedExampleItem, idx: number) => (
+              <div key={ex.id || idx} className="p-3.5 bg-deck/90 border border-steel text-xs space-y-2">
+                <p className="text-bone font-bold">{ex.title || `Example #${idx + 1}`}</p>
+                <p className="text-solder">{ex.problem}</p>
+                <ol className="space-y-1 list-decimal list-inside text-bone/90">
+                  {(ex.steps || []).map((step, sIdx) => (
+                    <li key={sIdx}>{step}</li>
+                  ))}
+                </ol>
+                {ex.takeaway && (
+                  <p className="text-amber200 text-[11px]">Takeaway: {ex.takeaway}</p>
+                )}
               </div>
             ))}
           </div>

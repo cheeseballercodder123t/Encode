@@ -144,6 +144,55 @@ describe('extractAnkiCardsFromSchema', () => {
     expect(cards.find(c => c.id === 'f2')!.tags).toContain('Chemistry');
   });
 
+  it('prefers the short question front on facts and exports drills + example steps', () => {
+    const rich: SegregationReport = {
+      topic: 'T',
+      declarativeFacts: [
+        {
+          id: 'f1',
+          factStatement: 'The Na+/K+ pump moves 3 Na+ out and 2 K+ in per ATP.',
+          question: 'Na+/K+ pump net ion movement?',
+          clozeSuggestion: 'The Na+/K+ pump moves {{3 Na+ out, 2 K+ in}} per ATP.',
+          memoryHook: '3 out, 2 in — like a 3-2 exit.',
+        },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [
+        {
+          id: 'pq1',
+          question: 'Resting membrane potential value?',
+          answer: '-70mV',
+          whyCorrect: 'K+ leak sets it near EK.',
+          distractors: ['-55mV', '+30mV'],
+        },
+      ],
+      workedExamples: [
+        {
+          id: 'ex1',
+          title: 'Worked example: Nernst check',
+          problem: 'Given [K+]out 5 and [K+]in 140, estimate EK.',
+          steps: ['Plug into Nernst.', 'Read off ≈ -89mV.'],
+          takeaway: 'More gradient, more negative EK.',
+        },
+      ],
+    };
+    const cards = extractAnkiCardsFromSchema(null, rich);
+    // 1 fact + 1 drill + 2 steps + 1 takeaway
+    expect(cards).toHaveLength(5);
+
+    const fact = cards.find(c => c.id === 'f1')!;
+    expect(fact.front).toBe('Na+/K+ pump net ion movement?');
+    expect(fact.back).toContain('3 out, 2 in');
+
+    const drill = cards.find(c => c.id === 'pq1')!;
+    expect(drill.front).toBe('Resting membrane potential value?');
+    expect(drill.tags).toContain('PracticeQuestion');
+    expect(drill.back).toContain('-55mV');
+
+    expect(cards.find(c => c.id === 'ex1-step-1')!.back).toBe('Plug into Nernst.');
+    expect(cards.find(c => c.id === 'ex1-takeaway')!.tags).toContain('WorkedExample');
+  });
+
   it('falls back to AI context cards tagged Unfinished when the user encoded nothing', () => {
     const rawOnly: Partial<SavedSchema> = {
       activities: [

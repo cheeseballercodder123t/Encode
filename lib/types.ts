@@ -255,6 +255,34 @@ export interface DeclarativeFactItem {
   factStatement: string;
   clozeSuggestion: string;
   tag?: string;
+  /** Short front-side prompt so the card never repeats the whole fact. */
+  question?: string;
+  /** Why this fact is worth remembering (one crisp line). */
+  memoryHook?: string;
+}
+
+export interface PracticeQuestionItem {
+  id: string;
+  /** Short front-side question, ideally answerable in under ~10 seconds. */
+  question: string;
+  /** Correct answer, concise. */
+  answer: string;
+  /** One-line explanation of why the answer is right. */
+  whyCorrect?: string;
+  /** Common wrong answers / traps to discriminate against. */
+  distractors?: string[];
+}
+
+export interface WorkedExampleItem {
+  id: string;
+  /** Short title, e.g. 'Worked example: thin-lens image'. */
+  title: string;
+  /** The problem setup in 1-2 short sentences. */
+  problem: string;
+  /** Ordered solution steps, each one atomic line. */
+  steps: string[];
+  /** The key takeaway / transfer rule. */
+  takeaway?: string;
 }
 
 export interface ConceptualMechanismItem {
@@ -274,6 +302,10 @@ export interface SegregationReport {
   topic: string;
   declarativeFacts: DeclarativeFactItem[];
   conceptualMechanisms: ConceptualMechanismItem[];
+  /** Rapid-fire recall drills: short Q/A cards generated from the source. */
+  practiceQuestions?: PracticeQuestionItem[];
+  /** Step-by-step worked examples derived from the source material. */
+  workedExamples?: WorkedExampleItem[];
   compressionRatio?: string;
 }
 
