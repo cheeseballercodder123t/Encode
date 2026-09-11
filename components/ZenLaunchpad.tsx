@@ -119,9 +119,9 @@ export function ZenLaunchpad({
     setNotes(preset.notes);
   };
 
-  const hasContent = 
-    (sourceType === 'text' && notes.trim().length > 0) ||
-    (sourceType === 'file' && !!selectedFile) ||
+  const hasContent =
+    notes.trim().length > 0 ||
+    !!selectedFile ||
     (sourceType === 'youtube' && youtubeUrl.trim().length > 0);
 
   return (
@@ -139,7 +139,7 @@ export function ZenLaunchpad({
             <button
               type="button"
               onClick={() => setSourceType('text')}
-              className={`px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
                 sourceType === 'text'
                   ? 'bg-amber border-amber text-chassis'
                   : 'bg-deck border-steel text-solder'
@@ -151,7 +151,7 @@ export function ZenLaunchpad({
             <button
               type="button"
               onClick={() => setSourceType('file')}
-              className={`px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
                 sourceType === 'file'
                   ? 'bg-amber border-amber text-chassis'
                   : 'bg-deck border-steel text-solder'
@@ -163,7 +163,7 @@ export function ZenLaunchpad({
             <button
               type="button"
               onClick={() => setSourceType('youtube')}
-              className={`px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
                 sourceType === 'youtube'
                   ? 'bg-amber border-amber text-chassis'
                   : 'bg-deck border-steel text-solder'
@@ -180,7 +180,7 @@ export function ZenLaunchpad({
               playSound('pop');
               setMode(mode === 'conceptual' ? 'memorization' : 'conceptual');
             }}
-            className={`px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+            className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
               mode === 'conceptual'
                 ? 'bg-deck border-steel text-bone'
                 : 'bg-amber border-amber text-chassis'
@@ -191,21 +191,24 @@ export function ZenLaunchpad({
           </button>
         </div>
 
-        {/* Input Body */}
-        <div className="p-4">
-          {sourceType === 'text' && (
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Paste study material, complex concepts, or lists to encode (e.g. Periodic Table, action potentials, Krebs cycle)..."
-              rows={5}
-              className="w-full bg-chassis border border-steel focus:border-amber text-xs text-bone placeholder-solder focus:outline-none resize-none font-mono leading-relaxed p-3 transition-none"
-            />
-          )}
-
-          {sourceType === 'file' && (
-            <div className="py-2">
-              <FileUploader onFileLoaded={onFileLoaded} selectedFile={selectedFile} />
+        {/* Input Body : notes + file are combinable (both are sent to the
+            encoder). YouTube stays exclusive since it is its own pipeline. */}
+        <div className="p-4 space-y-3">
+          {sourceType !== 'youtube' && (
+            <div className="space-y-2">
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Paste study material, complex concepts, or lists to encode (e.g. Periodic Table, action potentials, Krebs cycle)... Optional when a file is attached — your notes steer what the encoder pulls from the file."
+                rows={5}
+                aria-label="Study notes (optional when a file is attached)"
+                className="w-full bg-chassis border border-steel focus:border-amber text-xs text-bone placeholder-solder focus:outline-none resize-none font-mono leading-relaxed p-3 transition-none"
+              />
+              <FileUploader
+                onFileLoaded={onFileLoaded}
+                selectedFile={selectedFile}
+                compact={sourceType === 'text'}
+              />
             </div>
           )}
 
@@ -219,7 +222,7 @@ export function ZenLaunchpad({
                 className="w-full px-3 py-2.5 bg-chassis border border-steel focus:border-amber text-xs text-bone placeholder-solder focus:outline-none font-mono transition-none"
               />
               <p className="text-[10px] font-mono text-solder">
-                // EXTRACTS KEY MOMENTS, TRANSCRIPTS, AND TURNS LECTURE CHECKPOINTS INTO ACTIVE FEYNMAN DRILLS.
+                {'// EXTRACTS KEY MOMENTS, TRANSCRIPTS, AND TURNS LECTURE CHECKPOINTS INTO ACTIVE FEYNMAN DRILLS.'}
               </p>
             </div>
           )}
@@ -301,7 +304,7 @@ export function ZenLaunchpad({
               className="border-t border-steel bg-deck px-3 py-3 space-y-2 overflow-hidden"
             >
               <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder mb-1">
-                // COGNITIVE SCIENCE MODULES
+                {'// COGNITIVE SCIENCE MODULES'}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -367,7 +370,7 @@ export function ZenLaunchpad({
       {/* Quick Inspiration Cassette Chips */}
       <div className="flex items-center gap-2 overflow-x-auto py-1 px-1">
         <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder whitespace-nowrap">
-          // QUICK INSPIRATIONS:
+          {'// QUICK INSPIRATIONS:'}
         </span>
         {LAUNCHPAD_PRESETS.map((p) => (
           <button

@@ -8,9 +8,12 @@ import { GoogleDriveModal } from './GoogleDriveModal';
 interface FileUploaderProps {
   onFileLoaded: (file: UploadedFileAsset | null) => void;
   selectedFile: UploadedFileAsset | null;
+  /** Compact strip shown under the notes textarea so file + text can be
+      combined. Full dropzone is shown when standalone (02:PDF tab). */
+  compact?: boolean;
 }
 
-export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) {
+export function FileUploader({ onFileLoaded, selectedFile, compact = false }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
@@ -140,12 +143,25 @@ export function FileUploader({ onFileLoaded, selectedFile }: FileUploaderProps) 
           <button
             type="button"
             onClick={clearFile}
-            className="p-1.5 text-solder hover:text-hazard400 hover:bg-steel transition-none-colors shrink-0"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard400 hover:bg-steel transition-none-colors shrink-0"
             title="Remove attachment"
+            aria-label="Remove attached file"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
         </div>
+      ) : compact ? (
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleDrop}
+          className="w-full min-h-[44px] px-3 py-2 bg-chassis/80 border border-dashed border-steel hover:border-amber text-[11px] font-mono text-solder hover:text-bone transition-none cursor-pointer flex items-center gap-2 text-left"
+          title="Attach a PDF or image alongside your notes — both are sent to the encoder"
+        >
+          <span className="text-amber font-bold">[ +ATTACH FILE ]</span>
+          <span className="truncate">PDF / image (optional) — combines with notes above</span>
+        </button>
       ) : (
         <div
           onDrop={handleDrop}
