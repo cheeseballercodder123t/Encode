@@ -15,16 +15,21 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
   const [summary, setSummary] = useState('');
   const [checked, setChecked] = useState(false);
   const [shaking, setShaking] = useState(false);
+  const [prevOpen, setPrevOpen] = useState(isOpen);
   const openedAt = useRef<number>(0);
   const shakeTimer = useRef<any>(null);
 
-  useEffect(() => {
-    if (!isOpen) { 
-      setSummary(''); 
-      setChecked(false); 
+  if (prevOpen !== isOpen) {
+    setPrevOpen(isOpen);
+    if (!isOpen) {
+      setSummary('');
+      setChecked(false);
       setShaking(false);
-      return; 
     }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return;
     openedAt.current = Date.now();
     shakeTimer.current = setTimeout(() => setShaking(true), 10000);
     return () => {
@@ -63,7 +68,7 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
           disabled={!canConfirm}
           rightIcon={<span className="text-amber font-bold font-mono">[ * ]</span>}
         >
-          I'm Ready →
+          I&apos;m Ready →
         </Button>
       }
     >
@@ -71,7 +76,7 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
         {stageNumber > 1 && previousPremise && (
           <div className="bg-steel/40 border border-steel/50 p-3">
             <p className="text-[11px] text-solder uppercase tracking-wider font-semibold mb-1">Previous Stage Challenge</p>
-            <p className="text-xs text-solder italic">"{previousPremise}"</p>
+            <p className="text-xs text-solder italic">&quot;{previousPremise}&quot;</p>
           </div>
         )}
 

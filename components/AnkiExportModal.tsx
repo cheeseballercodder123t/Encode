@@ -32,9 +32,11 @@ interface AnkiExportModalProps {
   report?: SegregationReport | null;
   /** The student's raw notes : MCQs are authored FROM these, not AP presets. */
   notes?: string;
+  /** Pre-selected before opening : include / skip the Procedural MCQ deck. */
+  includeMcq?: boolean;
 }
 
-export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: AnkiExportModalProps) {
+export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includeMcq }: AnkiExportModalProps) {
   const [cards, setCards] = useState<AnkiCardItem[]>([]);
   const [deckName, setDeckName] = useState<string>('DeepEncode::Cognitive_Schema');
   // Three tabs only : Export (apkg/txt + audit), MCQ Deck, Sync (AnkiConnect/Webhook).
@@ -92,6 +94,14 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
     setDeckName(`DeepEncode::${title.replace(/[^a-zA-Z0-9_]/g, '_')}`);
     // MCQs default to the CURRENT session topic + notes, not AP presets.
     setAiTopic(report?.topic || schema?.topicSummary || '');
+    // The user pre-selected the MCQ deck beforehand : pre-check every valid
+    // built-in archetype (and keep any AI-authored ones already picked) so the
+    // deck is ready to preview + export the moment the modal opens.
+    const builtInIds = BUILT_IN_ARCHETYPES.filter((a) => validateProceduralArchetype(a).valid).map((a) => a.id);
+    setSelectedArchetypeIds((prev) =>
+      includeMcq === false ? [] : [...new Set([...builtInIds, ...prev])]
+    );
+    setPreviewArchetypeId((prev) => prev || builtInIds[0] || '');
   } else if (!isOpen && prevIsOpen) {
     setPrevIsOpen(false);
   }
@@ -333,7 +343,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
                 {audit.length > 0 && (
                   <span
                     className="px-2 py-0.5 text-[10px] font-bold uppercase bg-amber/20 text-amber border border-amber/30 cursor-pointer"
-                    onClick={() => setActiveTab('audit')}
+                    onClick={() => setActiveTab('export')}
                   >
                     {audit.length} need audit
                   </span>
@@ -379,7 +389,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
             }`}
           >
             <span className="text-amber font-bold font-mono">[ MCQ ]</span>
-            <span>MCQ Deck (from your notes)</span>
+            <span>Procedural MCQ Deck (from your notes)</span>
           </button>
 
           <button
@@ -424,7 +434,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={handleDownloadApkg}
-                  className="py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer"
+                  className="py-3 px-4 hover:bg-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer"
                 >
                   <span className="text-amber font-bold font-mono">[ DL ]</span>
                   Download .apkg Package
@@ -544,7 +554,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
                 <button
                   onClick={handleSyncAnkiConnect}
                   disabled={isSyncingAnkiConnect}
-                  className="w-full py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 px-4 hover:bg-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
                 >
                   {isSyncingAnkiConnect ? (
                     <>
@@ -631,6 +641,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
                 </div>
               )}
             </div>
+            </div>
           )}
 
         {/* TAB 2: Procedural MCQ Deck (authored from the student's notes) */}
@@ -639,7 +650,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
               <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
                   <span className="text-amber font-bold font-mono">[ FLASK ]</span>
-                  Procedural MCQs authored from YOUR notes
+                  Procedural Trap-Engine MCQ Deck
                 </div>
                 <p>
                   Parametric multiple-choice archetypes written from the notes you provided (not generic presets).
@@ -662,7 +673,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
-                    placeholder="Topic (prefilled from your session)"
+                    placeholder="e.g. AP Physics C: Rotational Motion"
                     value={aiTopic}
                     onChange={(e) => setAiTopic(e.target.value)}
                     className="flex-1 px-3 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
@@ -808,7 +819,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes }: Anki
                 <button
                   onClick={handleDownloadProceduralApkg}
                   disabled={selectedArchetypes.length === 0}
-                  className="py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
+                  className="py-3 px-4 hover:bg-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
                 >
                   <span className="text-amber font-bold font-mono">[ DL ]</span>
                   Download Procedural MCQ .apkg ({selectedArchetypes.length})

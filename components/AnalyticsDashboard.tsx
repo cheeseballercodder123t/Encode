@@ -1,5 +1,5 @@
 ﻿'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Button, Card, CardContent, Badge, Input } from './ui/index';
 
@@ -71,15 +71,21 @@ function computeAllStats(schemas: import('@/lib/types').SavedSchema[]): SessionS
 }
 
 export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
-  const [usage, setUsage] = useState<UsageStats>({ date: '', callsByModel: {}, weeklyCallsByModel: {} });
+  const [usageVersion, setUsageVersion] = useState(0);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  useEffect(() => {
-    if (isOpen) setUsage(loadUsageStats());
-  }, [isOpen]);
+  // Re-read usage stats whenever the modal opens (or REFRESH is pressed).
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (prevOpen !== isOpen) {
+    setPrevOpen(isOpen);
+    if (isOpen) setUsageVersion(v => v + 1);
+  }
+  // Read usage stats on every render : it's a cheap localStorage read, and
+  // usageVersion bumps force a re-render on open / REFRESH so it stays fresh.
+  const usage = loadUsageStats();
 
   // Filter schemas based on search query
   const filteredSchemas = useMemo(() => {
@@ -92,17 +98,14 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
     );
   }, [savedSchemas, searchQuery]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredSchemas.length / itemsPerPage);
+  // Pagination : clamp to a valid page so narrowing the search can never leave
+  // the user stranded on an out-of-range page (replaces the reset-on-search effect).
+  const totalPages = Math.max(1, Math.ceil(filteredSchemas.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
   const paginatedSchemas = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
+    const startIndex = (safePage - 1) * itemsPerPage;
     return filteredSchemas.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredSchemas, currentPage]);
-
-  // Reset to page 1 when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
+  }, [filteredSchemas, safePage]);
 
   if (!isOpen) return null;
 
@@ -242,7 +245,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] text-solder uppercase tracking-wider">MODEL USAGE</p>
-              <Button variant="ghost" size="xs" onClick={() => setUsage(loadUsageStats())}>[ REFRESH ]</Button>
+              <Button variant="ghost" size="xs" onClick={() => setUsageVersion(v => v + 1)}>[ REFRESH ]</Button>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div className="bg-chassis p-2 border border-steel">
@@ -289,10 +292,10 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[10px] text-solder uppercase tracking-wider">SESSION HISTORY</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-solder">Page {currentPage} of {totalPages}</span>
+                  <span className="text-[10px] text-solder">Page {safePage} of {totalPages}</span>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>[&lt;]</Button>
-                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>[&gt;]</Button>
+                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}>[&lt;]</Button>
+                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>[&gt;]</Button>
                   </div>
                 </div>
               </div>

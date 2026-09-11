@@ -125,7 +125,8 @@ export function CompletedSessionView({
             [ DL ] Download FSRS-Ready .apkg ({totalCards} cards)
           </button>
           <p className="text-[10px] text-solder font-mono">
-            // {unfinished + leechCandidates > 0
+            {'// '}
+            {unfinished + leechCandidates > 0
               ? `${unfinished + leechCandidates} card${unfinished + leechCandidates === 1 ? '' : 's'} tagged Unfinished/LeechCandidate : build a filtered deck from those tags on day 1.`
               : 'Zero leeches, zero unfinished : textbook-clean handoff.'}
           </p>

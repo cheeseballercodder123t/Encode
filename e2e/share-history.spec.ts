@@ -19,7 +19,7 @@ test.describe('Stateless URL sharing', () => {
 
     // Import banner + completed view rendered straight from the URL
     await expect(page.getByText('Classmate Shared Schema Loaded')).toBeVisible();
-    await expect(page.getByText('Cognitive Encoding Workout Complete!')).toBeVisible();
+    await expect(page.getByText('Clean cards, ready for Anki.')).toBeVisible();
 
     // Saving it to history persists locally (banner dismisses)
     await page.getByRole('button', { name: 'Save to History' }).click();
@@ -48,7 +48,7 @@ test.describe('History & drills', () => {
 
     // "View" resumes the schema into the completed view
     await page.getByRole('button', { name: 'View' }).click();
-    await expect(page.getByText('Cognitive Encoding Workout Complete!')).toBeVisible();
+    await expect(page.getByText('Clean cards, ready for Anki.')).toBeVisible();
     await expect(page.getByText('seeded one')).toBeVisible();
   });
 

@@ -148,6 +148,7 @@ export default function DeepEncodeApp() {
     mechanisms: true,
     drills: true,
     examples: true,
+    mcq: true,
     anki: true,
     remnote: true,
   });
@@ -1335,6 +1336,7 @@ export default function DeepEncodeApp() {
                   ['mechanisms', 'Mechanisms'],
                   ['drills', 'Drills'],
                   ['examples', 'Examples'],
+                  ['mcq', 'MCQ'],
                 ] as [keyof typeof segregateOptions, string][]).map(([key, label]) => (
                   <button
                     key={key}
@@ -1786,6 +1788,8 @@ export default function DeepEncodeApp() {
           userResponses,
         }}
         report={segregationReport}
+        notes={rawNotes}
+        includeMcq={segregateOptions.mcq}
       />
 
       {/* Feature: Multi-Document Comparative 4-Quadrant Synthesis */}

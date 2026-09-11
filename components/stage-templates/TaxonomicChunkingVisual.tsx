@@ -53,7 +53,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
             <span className="text-amber font-bold font-mono">[ BOXES ]</span>
           </div>
           <span className="text-[11px] font-black uppercase tracking-wider text-amber">
-            Miller's 7±2 Law & Taxonomic Cluster Buckets
+            Miller&apos;s 7±2 Law &amp; Taxonomic Cluster Buckets
           </span>
         </div>
         <span className="text-[9px] font-mono font-bold text-amber bg-amber/40 border border-amber/30 px-2 py-0.5 flex items-center gap-1">

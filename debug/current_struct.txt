@@ -1,0 +1,524 @@
+ 319:     <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
+ 320:       <div className="w-full max-w-3xl bg-chassis border border-steel/30 overflow-hidden flex flex-col max-h-[88vh]">
+ 321:         {/* Modal Header */}
+ 322:         <div className="p-4 sm:p-5 border-b border-steel flex items-center justify-between ">
+ 323:           <div className="flex items-center gap-3">
+ 324:             <div className="w-10 h-10 bg-steel/10 border border-steel/30 flex items-center justify-center text-bone">
+ 325:               <span className="text-amber font-bold font-mono">[ ZAP ]</span>
+ 326:             </div>
+ 327:             <div>
+ 328:               <div className="flex items-center gap-2">
+ 329:                 <h3 className="font-bold text-bone text-base">Anki & SM-2 Spaced Repetition Exporter</h3>
+ 330:                 <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-steel/20 text-bone border border-steel/30">
+ 331:                   {cards.length} Flashcards
+ 332:                 </span>
+ 333:                 {audit.length > 0 && (
+ 334:                   <span
+ 335:                     className="px-2 py-0.5 text-[10px] font-bold uppercase bg-amber/20 text-amber border border-amber/30 cursor-pointer"
+ 336:                     onClick={() => setActiveTab('audit')}
+ 337:                   >
+ 338:                     {audit.length} need audit
+ 339:                   </span>
+ 340:                 )}
+ 341:               </div>
+ 342:               <p className="text-xs text-solder">
+ 343:                 Export Cloze deletion flashcards into Anki or sync via SM-2 Webhooks
+ 344:               </p>
+ 345:             </div>
+ 346:           </div>
+ 347: 
+ 348:           <button
+ 349:             onClick={onClose}
+ 350:             className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none cursor-pointer"
+ 351:           >
+ 352:             <span className="text-amber font-bold font-mono">[ X ]</span>
+ 353:           </button>
+ 354:         </div>
+ 355: 
+ 356:         {/* Modal Navigation Tabs : Export / MCQ Deck / Sync */}
+ 357:         <div className="p-3 border-b border-steel bg-chassis flex items-center gap-2 overflow-x-auto">
+ 358:           <button
+ 359:             onClick={() => setActiveTab('export')}
+ 360:             className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+ 361:               activeTab === 'export'
+ 362:                 ? 'bg-steel text-bone '
+ 363:                 : 'text-solder hover:text-bone hover:bg-deck'
+ 364:             }`}
+ 365:           >
+ 366:             <span className="text-amber font-bold font-mono">[ DL ]</span>
+ 367:             <span>Export .apkg / .txt</span>
+ 368:             {audit.length > 0 && (
+ 369:               <span className="px-1.5 py-0.5 bg-amber/30 text-[10px] font-bold text-amber">{audit.length}</span>
+ 370:             )}
+ 371:           </button>
+ 372: 
+ 373:           <button
+ 374:             onClick={() => setActiveTab('mcq')}
+ 375:             className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+ 376:               activeTab === 'mcq'
+ 377:                 ? 'bg-steel text-bone '
+ 378:                 : 'text-solder hover:text-bone hover:bg-deck'
+ 379:             }`}
+ 380:           >
+ 381:             <span className="text-amber font-bold font-mono">[ MCQ ]</span>
+ 382:             <span>MCQ Deck (from your notes)</span>
+ 383:           </button>
+ 384: 
+ 385:           <button
+ 386:             onClick={() => setActiveTab('sync')}
+ 387:             className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+ 388:               activeTab === 'sync'
+ 389:                 ? 'bg-steel text-bone '
+ 390:                 : 'text-solder hover:text-bone hover:bg-deck'
+ 391:             }`}
+ 392:           >
+ 393:             <span className="text-amber font-bold font-mono">[ SYNC ]</span>
+ 394:             <span>Sync (AnkiConnect / Webhook)</span>
+ 395:           </button>
+ 396:         </div>
+ 397: 
+ 398:         {/* Modal Body */}
+ 399:         <div className="p-5 overflow-y-auto flex-1 space-y-4">
+ 400:           {/* Deck Title Input */}
+ 401:           <div className="p-3.5 bg-deck/80 border border-steel flex items-center gap-3">
+ 402:             <span className="text-xs font-bold text-solder shrink-0">Deck Name:</span>
+ 403:             <input
+ 404:               type="text"
+ 405:               value={deckName}
+ 406:               onChange={(e) => setDeckName(e.target.value)}
+ 407:               className="flex-1 px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+ 408:             />
+ 409:           </div>
+ 410: 
+ 411:           {/* TAB 1: Export (.apkg + .txt + card preview + FSRS audit) */}
+ 412:           {activeTab === 'export' && (
+ 413:             <div className="space-y-4">
+ 414:               <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+ 415:                 <div className="font-bold text-bone flex items-center gap-2">
+ 416:                   <span className="text-amber font-bold font-mono">[ OK ]</span>
+ 417:                   Ready to Export {cards.length} DeepEncode Cloze Flashcards
+ 418:                 </div>
+ 419:                 <p>
+ 420:                   Downloads a structured Anki package (<code className="text-bone font-bold">.apkg</code>) pre-configured with Cloze deletion tags, Feynman personal vocabulary, and SM-2 initial scheduling metadata.
+ 421:                 </p>
+ 422:               </div>
+ 423: 
+ 424:               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ 425:                 <button
+ 426:                   onClick={handleDownloadApkg}
+ 427:                   className="py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer"
+ 428:                 >
+ 429:                   <span className="text-amber font-bold font-mono">[ DL ]</span>
+ 430:                   Download .apkg Package
+ 431:                 </button>
+ 432: 
+ 433:                 <button
+ 434:                   onClick={handleDownloadTxt}
+ 435:                   className="py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer"
+ 436:                 >
+ 437:                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
+ 438:                   Download Anki .txt (Tab-Separated)
+ 439:                 </button>
+ 440:               </div>
+ 441: 
+ 442:               {/* Cards Preview */}
+ 443:               <div className="space-y-2">
+ 444:                 <span className="text-xs font-bold text-solder">Card Deck Preview ({cards.length}):</span>
+ 445:                 <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+ 446:                   {cards.map((c, idx) => (
+ 447:                     <div key={c.id || idx} className="p-3 bg-deck/60 border border-steel text-xs space-y-1">
+ 448:                       <div className="flex items-center justify-between text-[11px] text-solder">
+ 449:                         <span className="font-bold text-bone">Card #{idx + 1}</span>
+ 450:                         <div className="flex gap-1">
+ 451:                           {c.tags.map((t) => (
+ 452:                             <span key={t} className="px-1.5 py-0.5 bg-steel text-[10px] text-solder">
+ 453:                               {t}
+ 454:                             </span>
+ 455:                           ))}
+ 456:                         </div>
+ 457:                       </div>
+ 458:                       <div className="font-mono text-[11px] text-bone" dangerouslySetInnerHTML={{ __html: c.front }} />
+ 459:                     </div>
+ 460:                   ))}
+ 461:                 </div>
+ 462:               </div>
+ 463: 
+ 464:               {/* FSRS Card Audit (inline; badge count on the tab) */}
+ 465:               <div className="space-y-2 pt-2 border-t border-steel/60">
+ 466:                 <div className={`p-4 border text-xs leading-relaxed space-y-2 ${
+ 467:                   audit.length > 0
+ 468:                     ? 'bg-amber/30 border-amber/30 text-amber'
+ 469:                     : 'bg-amber950/30 border-amber/30 text-amber200'
+ 470:                 }`}>
+ 471:                   <div className="font-bold flex items-center gap-2">
+ 472:                     <span className="font-bold font-mono">[ ! ]</span>
+ 473:                     FSRS Card Audit : {audit.length} card{audit.length === 1 ? '' : 's'} flagged
+ 474:                   </div>
+ 475:                   {audit.length > 0 ? (
+ 476:                     <p>Dense cloze sentences become <b>D=10 leeches</b> in FSRS. Split them below for cleaner spaced-repetition.</p>
+ 477:                   ) : (
+ 478:                     <p><b>All clear.</b> No too-long or ambiguous cloze cards detected. Your deck is FSRS-ready.</p>
+ 479:                   )}
+ 480:                 </div>
+ 481: 
+ 482:                 {audit.length > 0 && (
+ 483:                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+ 484:                     {audit.map(({ card: c, issues }) => (
+ 485:                       <div key={c.id} className="p-3 bg-deck/60 border border-steel text-xs space-y-2">
+ 486:                         <div className="flex items-start justify-between gap-3">
+ 487:                           <div className="font-mono text-[11px] text-bone leading-relaxed" dangerouslySetInnerHTML={{ __html: c.front }} />
+ 488:                           <button
+ 489:                             onClick={() => handleAutoSplit(c.id)}
+ 490:                             disabled={!issues.some((i) => i.kind === 'too_long')}
+ 491:                             className="shrink-0 px-2.5 py-1 bg-amber/20 hover:bg-amber/30 border border-amber/40 text-amber font-bold flex items-center gap-1.5 transition-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+ 492:                             title={issues.some((i) => i.kind === 'too_long') ? 'Auto-split into two atomic cards' : 'Only too-long cards can be split'}
+ 493:                           >
+ 494:                             <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
+ 495:                             <span>Split</span>
+ 496:                           </button>
+ 497:                         </div>
+ 498:                         <div className="space-y-1">
+ 499:                           {issues.map((issue, idx) => (
+ 500:                             <div
+ 501:                               key={idx}
+ 502:                               className={`flex items-start gap-2 ${
+ 503:                                 issue.kind === 'ambiguous' ? 'text-hazard300' : 'text-amber'
+ 504:                               }`}
+ 505:                             >
+ 506:                               <span className="text-amber font-bold font-mono">[ ! ]</span>
+ 507:                               <span>{issue.message}</span>
+ 508:                             </div>
+ 509:                           ))}
+ 510:                         </div>
+ 511:                       </div>
+ 512:                     ))}
+ 513:                   </div>
+ 514:                 )}
+ 515:               </div>
+ 516:             </div>
+ 517:             </div>
+ 518:           )}
+ 519: 
+ 520:           {/* TAB 3: Sync (AnkiConnect + Webhook, side by side) */}
+ 521:           {activeTab === 'sync' && (
+ 522:             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ 523:               {/* AnkiConnect */}
+ 524:               <div className="space-y-4">
+ 525:                 <div className="p-4 bg-amber/30 border border-amber/30 text-xs text-amber leading-relaxed space-y-2">
+ 526:                   <div className="font-bold text-amber flex items-center gap-2">
+ 527:                     <span className="text-amber font-bold font-mono">[ CPU ]</span>
+ 528:                     Anki Desktop (AnkiConnect)
+ 529:                   </div>
+ 530:                   <p>
+ 531:                     Requires Anki Desktop running locally with the <code className="text-amber font-mono">AnkiConnect</code> add-on enabled on port <code className="text-amber font-mono">8765</code>.
+ 532:                   </p>
+ 533:                 </div>
+ 534: 
+ 535:                 <div className="space-y-2">
+ 536:                   <label className="text-xs font-bold text-solder block">AnkiConnect Endpoint URL:</label>
+ 537:                   <input
+ 538:                     type="text"
+ 539:                     value={ankiConnectUrl}
+ 540:                     onChange={(e) => setAnkiConnectUrl(e.target.value)}
+ 541:                     className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+ 542:                   />
+ 543:                 </div>
+ 544: 
+ 545:                 <button
+ 546:                   onClick={handleSyncAnkiConnect}
+ 547:                   disabled={isSyncingAnkiConnect}
+ 548:                   className="w-full py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
+ 549:                 >
+ 550:                   {isSyncingAnkiConnect ? (
+ 551:                     <>
+ 552:                       <span className="text-amber font-bold font-mono">[ BUSY ]</span>
+ 553:                       Connecting & Pushing to Anki...
+ 554:                     </>
+ 555:                   ) : (
+ 556:                     <>
+ 557:                       <span className="text-amber font-bold font-mono">[ SEND ]</span>
+ 558:                       Push {cards.length} Cards to Anki Desktop
+ 559:                     </>
+ 560:                   )}
+ 561:                 </button>
+ 562: 
+ 563:                 {ankiConnectStatus && (
+ 564:                   <div className={`p-3  text-xs flex items-start gap-2 ${
+ 565:                     ankiConnectStatus.success
+ 566:                       ? 'bg-amber950/40 border border-amber/40 text-amber200'
+ 567:                       : 'bg-hazard950/40 border border-hazard500/40 text-hazard200'
+ 568:                   }`}>
+ 569:                     {ankiConnectStatus.success ? (
+ 570:                       <span className="text-amber font-bold font-mono">[ OK ]</span>
+ 571:                     ) : (
+ 572:                       <span className="text-amber font-bold font-mono">[ ! ]</span>
+ 573:                     )}
+ 574:                     <div className="leading-relaxed">{ankiConnectStatus.message}</div>
+ 575:                   </div>
+ 576:                 )}
+ 577:               </div>
+ 578: 
+ 579:               {/* Webhook */}
+ 580:               <div className="space-y-4">
+ 581:                 <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+ 582:                   <div className="font-bold text-bone flex items-center gap-2">
+ 583:                     <span className="text-amber font-bold font-mono">[ WEB ]</span>
+ 584:                     Custom Webhook
+ 585:                   </div>
+ 586:                   <p>
+ 587:                     Sends the complete card payload with pre-calculated SM-2 ease factors and review timestamps to your server.
+ 588:                   </p>
+ 589:                 </div>
+ 590: 
+ 591:                 <div className="space-y-2">
+ 592:                   <label className="text-xs font-bold text-solder block">Webhook Receiver Endpoint URL:</label>
+ 593:                   <input
+ 594:                     type="url"
+ 595:                     placeholder="https://api.myworkspace.com/v1/anki-sync"
+ 596:                     value={webhookUrl}
+ 597:                     onChange={(e) => setWebhookUrl(e.target.value)}
+ 598:                     className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+ 599:                   />
+ 600:                 </div>
+ 601: 
+ 602:                 <button
+ 603:                   onClick={handleSyncWebhook}
+ 604:                   disabled={!webhookUrl.trim() || isSyncingWebhook}
+ 605:                   className="w-full py-3 px-4 bg-steel hover:bg-steel text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
+ 606:                 >
+ 607:                   {isSyncingWebhook ? (
+ 608:                     <>
+ 609:                       <span className="text-amber font-bold font-mono">[ BUSY ]</span>
+ 610:                       Dispatching Webhook...
+ 611:                     </>
+ 612:                 ) : (
+ 613:                   <>
+ 614:                     <span className="text-amber font-bold font-mono">[ SEND ]</span>
+ 615:                     Dispatch SM-2 Card Payload to Webhook
+ 616:                   </>
+ 617:                 )}
+ 618:               </button>
+ 619: 
+ 620:               {webhookStatus && (
+ 621:                 <div className={`p-3  text-xs flex items-start gap-2 ${
+ 622:                   webhookStatus.success
+ 623:                     ? 'bg-amber950/40 border border-amber/40 text-amber200'
+ 624:                     : 'bg-hazard950/40 border border-hazard500/40 text-hazard200'
+ 625:                 }`}>
+ 626:                   {webhookStatus.success ? (
+ 627:                     <span className="text-amber font-bold font-mono">[ OK ]</span>
+ 628:                   ) : (
+ 629:                     <span className="text-amber font-bold font-mono">[ ! ]</span>
+ 630:                   )}
+ 631:                   <div className="leading-relaxed">{webhookStatus.message}</div>
+ 632:                 </div>
+ 633:               )}
+ 634:             </div>
+ 635: </div>
+ 636: 
+ 637:         {/* TAB 2: Procedural MCQ Deck (authored from the student's notes) */}
+ 638:           {activeTab === 'mcq' && (
+ 639:             <div className="space-y-4">
+ 640:               <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+ 641:                 <div className="font-bold text-bone flex items-center gap-2">
+ 642:                   <span className="text-amber font-bold font-mono">[ FLASK ]</span>
+ 643:                   Procedural MCQs authored from YOUR notes
+ 644:                 </div>
+ 645:                 <p>
+ 646:                   Parametric multiple-choice archetypes written from the notes you provided (not generic presets).
+ 647:                   Every review, the card&apos;s embedded client-side JavaScript rolls fresh numbers, computes the
+ 648:                   answer + 3 conceptual traps, and gives instant interactive feedback with the full
+ 649:                   step-by-step solution : <b>100% offline in Anki Desktop, AnkiDroid &amp; Anki Mobile, zero add-ons,
+ 650:                   zero API keys at review time.</b>
+ 651:                 </p>
+ 652:               </div>
+ 653: 
+ 654:               {/* AI Authoring */}
+ 655:               <div className="p-4 bg-deck/60 border border-steel space-y-3">
+ 656:                 <div className="flex items-center gap-2 text-xs font-bold text-bone">
+ 657:                   <span className="text-amber font-bold font-mono">[ WAND ]</span>
+ 658:                   Author MCQs from this session&apos;s notes
+ 659:                   <span className="text-[10px] text-solder font-normal">
+ 660:                     (validated automatically; broken equations are repaired)
+ 661:                   </span>
+ 662:                 </div>
+ 663:                 <div className="flex flex-col sm:flex-row gap-2">
+ 664:                   <input
+ 665:                     type="text"
+ 666:                     placeholder="Topic (prefilled from your session)"
+ 667:                     value={aiTopic}
+ 668:                     onChange={(e) => setAiTopic(e.target.value)}
+ 669:                     className="flex-1 px-3 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+ 670:                   />
+ 671:                   <select
+ 672:                     value={aiCount}
+ 673:                     onChange={(e) => setAiCount(Number(e.target.value))}
+ 674:                     className="px-3 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel cursor-pointer"
+ 675:                   >
+ 676:                     {[1, 2, 3, 4, 5].map((n) => (
+ 677:                       <option key={n} value={n}>
+ 678:                         {n} archetype{n > 1 ? 's' : ''}
+ 679:                       </option>
+ 680:                     ))}
+ 681:                   </select>
+ 682:                   <button
+ 683:                     onClick={handleGenerateArchetypes}
+ 684:                     disabled={isGeneratingAi || !aiTopic.trim()}
+ 685:                     className="px-4 py-2 bg-steel hover:bg-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-50"
+ 686:                   >
+ 687:                     {isGeneratingAi ? (
+ 688:                       <>
+ 689:                         <span className="text-amber font-bold font-mono">[ BUSY ]</span>
+ 690:                         Authoring &amp; validating...
+ 691:                       </>
+ 692:                     ) : (
+ 693:                       <>
+ 694:                         <span className="text-amber font-bold font-mono">[ * ]</span>
+ 695:                         Generate with AI
+ 696:                       </>
+ 697:                     )}
+ 698:                   </button>
+ 699:                 </div>
+ 700:                 {aiGenStatus && (
+ 701:                   <div className={`p-2.5  text-[11px] flex items-start gap-2 ${
+ 702:                     aiGenStatus.success
+ 703:                       ? 'bg-amber950/40 border border-amber/40 text-amber200'
+ 704:                       : 'bg-hazard950/40 border border-hazard500/40 text-hazard200'
+ 705:                   }`}>
+ 706:                     {aiGenStatus.success ? (
+ 707:                       <span className="text-amber font-bold font-mono">[ OK ]</span>
+ 708:                     ) : (
+ 709:                       <span className="text-amber font-bold font-mono">[ ! ]</span>
+ 710:                     )}
+ 711:                     <div className="leading-relaxed">{aiGenStatus.message}</div>
+ 712:                   </div>
+ 713:                 )}
+ 714:               </div>
+ 715: 
+ 716:               {/* Archetype Selection */}
+ 717:               <div className="space-y-2">
+ 718:                 <div className="flex items-center justify-between">
+ 719:                   <span className="text-xs font-bold text-solder">
+ 720:                     Archetypes ({selectedArchetypes.length} of {availableArchetypes.length} selected):
+ 721:                   </span>
+ 722:                   <button
+ 723:                     onClick={() => setSelectedArchetypeIds(availableArchetypes.map((a) => a.id))}
+ 724:                     className="text-[10px] text-bone hover:text-bone font-bold cursor-pointer"
+ 725:                   >
+ 726:                     Select all
+ 727:                   </button>
+ 728:                 </div>
+ 729:                 <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+ 730:                   {AP_SUBJECT_GROUPS.map((group) => (
+ 731:                     <div key={group.subject} className="space-y-1.5">
+ 732:                       <div className="text-[10px] font-black uppercase tracking-widest text-solder">
+ 733:                         {group.subject}
+ 734:                       </div>
+ 735:                       {availableArchetypes
+ 736:                         .filter((a) => group.archetypeIds.includes(a.id) || a.topic.startsWith(group.subject))
+ 737:                         .map((a) => {
+ 738:                           const isValid = validArchetypeIds.has(a.id);
+ 739:                           const checked = selectedArchetypeIds.includes(a.id);
+ 740:                           return (
+ 741:                             <label
+ 742:                               key={a.id}
+ 743:                               className={`flex items-start gap-2 p-2.5  border cursor-pointer text-xs transition-none ${
+ 744:                                 checked
+ 745:                                   ? 'bg-steel/30 border-steel/40'
+ 746:                                   : 'bg-deck/50 border-steel hover:border-steel'
+ 747:                               }`}
+ 748:                             >
+ 749:                               <input
+ 750:                                 type="checkbox"
+ 751:                                 checked={checked}
+ 752:                                 onChange={() => toggleArchetype(a.id)}
+ 753:                                 className="mt-0.5 accent-purple-500 cursor-pointer"
+ 754:                               />
+ 755:                               <span className="flex-1 leading-snug">
+ 756:                                 <span className="font-bold text-bone">{a.topic}</span>
+ 757:                                 <span className="block text-[10px] text-solder">{a.id}</span>
+ 758:                               </span>
+ 759:                               {isValid ? (
+ 760:                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber950/40 border border-amber/40 text-amber300 text-[10px] font-bold shrink-0">
+ 761:                                   <span className="text-amber font-bold font-mono">[ OK ]</span> Verified
+ 762:                                 </span>
+ 763:                               ) : (
+ 764:                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-hazard950/40 border border-hazard500/40 text-hazard300 text-[10px] font-bold shrink-0">
+ 765:                                   <span className="text-amber font-bold font-mono">[ ! ]</span> Fails validation
+ 766:                                 </span>
+ 767:                               )}
+ 768:                             </label>
+ 769:                           );
+ 770:                         })}
+ 771:                     </div>
+ 772:                   ))}
+ 773:                 </div>
+ 774:               </div>
+ 775:           {/* Live Preview */}
+ 776:               {previewArchetype && (
+ 777:                 <div className="space-y-2">
+ 778:                   <div className="flex items-center justify-between">
+ 779:                     <span className="text-xs font-bold text-solder">Live Browser Preview (front of card):</span>
+ 780:                     <select
+ 781:                       value={previewArchetype.id}
+ 782:                       onChange={(e) => setPreviewArchetypeId(e.target.value)}
+ 783:                       className="px-2 py-1 bg-chassis border border-steel text-[10px] text-solder focus:outline-none cursor-pointer"
+ 784:                     >
+ 785:                       {availableArchetypes.map((a) => (
+ 786:                         <option key={a.id} value={a.id}>
+ 787:                           {a.topic}
+ 788:                         </option>
+ 789:                       ))}
+ 790:                     </select>
+ 791:                   </div>
+ 792:                   <div className=" overflow-hidden border border-steel bg-chassis">
+ 793:                     <iframe
+ 794:                       title="Procedural MCQ Preview"
+ 795:                       srcDoc={buildPreviewSrcdoc(previewArchetype)}
+ 796:                       className="w-full h-72"
+ 797:                       sandbox="allow-scripts"
+ 798:                     />
+ 799:                   </div>
+ 800:                   <p className="text-[10px] text-solder">
+ 801:                     Click an option: correct → green, wrong → red with the exact AP trap you fell for, plus the
+ 802:                     full LaTeX step-by-step solution (rendered by Anki&apos;s built-in MathJax).
+ 803:                   </p>
+ 804:                 </div>
+ 805:               )}
+ 806: 
+ 807:               {/* Export Buttons */}
+ 808:               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ 809:                 <button
+ 810:                   onClick={handleDownloadProceduralApkg}
+ 811:                   disabled={selectedArchetypes.length === 0}
+ 812:                   className="py-3 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
+ 813:                 >
+ 814:                   <span className="text-amber font-bold font-mono">[ DL ]</span>
+ 815:                   Download Procedural MCQ .apkg ({selectedArchetypes.length})
+ 816:                 </button>
+ 817:                 <button
+ 818:                   onClick={handleDownloadProceduralTxt}
+ 819:                   disabled={selectedArchetypes.length === 0}
+ 820:                   className="py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
+ 821:                 >
+ 822:                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
+ 823:                   Download Procedural .txt (Anki Import)
+ 824:                 </button>
+ 825:               </div>
+ 826:             </div>
+ 827:           )}
+ 828:         </div>
+ 829: 
+ 830:         {/* Modal Footer */}
+ 831:         <div className="p-4 border-t border-steel bg-chassis flex items-center justify-between text-xs text-solder">
+ 832:           <span>SuperMemo SM-2 &amp; Cloze Deletion Standard</span>
+ 833:           <button
+ 834:             onClick={onClose}
+ 835:             className="px-4 py-1.5 bg-steel hover:bg-steel text-bone font-bold transition-none cursor-pointer"
+ 836:           >
+ 837:             Close
+ 838:           </button>
+ 839:         </div>
+ 840:       </div>
+ 841:     </div>
+ 842:   );

@@ -7,7 +7,7 @@ import { mockAiApis, mockAuditFlow } from './helpers/mocks';
 // Anki â†’ FSRS Card Audit tab. Verifies the warnings render and that the
 // auto-split button grows the deck by one card.
 
-test.describe('FSRS Card Audit tab', () => {
+test.describe('FSRS Card Audit (inline in Export tab)', () => {
   test('flags ambiguous + too-long clozes and auto-splits the dense one', async ({ page }) => {
     await mockAiApis(page);
     await mockAuditFlow(page);
@@ -26,8 +26,7 @@ test.describe('FSRS Card Audit tab', () => {
     await expect(page.getByText('Anki & SM-2 Spaced Repetition Exporter')).toBeVisible();
     await expect(page.getByText('2 need audit')).toBeVisible();
 
-    // Jump to the audit tab.
-    await page.getByRole('button', { name: /FSRS Card Audit/ }).click();
+    // The FSRS Card Audit is inline in the Export tab (no separate tab anymore).
     await expect(page.getByText(/FSRS Card Audit : 2 cards flagged/)).toBeVisible();
     await expect(page.getByText(/FSRS Card Audit : \d+ cards flagged/)).toBeVisible();
 
@@ -63,8 +62,7 @@ test.describe('FSRS Card Audit tab', () => {
     // No audit badge when nothing is flagged.
     await expect(page.getByText(/need audit/)).not.toBeVisible();
 
-    // Audit tab still renders the "All clear" state.
-    await page.getByRole('button', { name: /FSRS Card Audit/ }).click();
+    // The inline audit renders the "All clear" state.
     await expect(page.getByText(/All clear/)).toBeVisible();
   });
 });

@@ -14,9 +14,19 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
   const [hovered, setHovered] = useState(0);
   const [selected, setSelected] = useState(0);
   const [countdown, setCountdown] = useState(10);
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+
+  if (prevOpen !== isOpen) {
+    setPrevOpen(isOpen);
+    if (!isOpen) {
+      setSelected(0);
+      setHovered(0);
+      setCountdown(10);
+    }
+  }
 
   useEffect(() => {
-    if (!isOpen) { setSelected(0); setHovered(0); setCountdown(10); return; }
+    if (!isOpen) return;
     const t = setInterval(() => setCountdown(c => (c > 0 ? c - 1 : 0)), 1000);
     return () => clearInterval(t);
   }, [isOpen]);
