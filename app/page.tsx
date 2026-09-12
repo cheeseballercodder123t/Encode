@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { sound } from '@/lib/audio';
 import {
@@ -14,7 +14,7 @@ import {
   RoastReport,
   TeachScope
 } from '@/lib/types';
-import { incrementModelCall } from '@/lib/storage';
+import { incrementModelCall, saveGenerationInProgress, clearGenerationInProgress, loadGenerationInProgress, loadStudyPrefs, saveStudyPrefs, recordTopicResult, loadTopicStruggles } from '@/lib/storage';
 import { decompressSchemaFromUrl } from '@/lib/url-share';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
@@ -42,6 +42,7 @@ import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
 import { extractAnkiCardsFromSchema, classifyDeckQuality, buildHierarchicalDeckName, generateAnkiApkgPackage } from '@/lib/anki-exporter';
 import { useSession } from '@/hooks/useSession';
+import { useGenerationProgress } from '@/hooks/useGenerationProgress';
 import { useSettings } from '@/hooks/useSettings';
 import { useInputSource } from '@/hooks/useInputSource';
 import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
@@ -91,7 +92,7 @@ export default function DeepEncodeApp() {
     selectedPreset,
     feynmanResult, setFeynmanResult,
     stageConfidence,
-    stageReflection,
+    stageReflection, setStageReflection,
     stageCheckCount, setStageCheckCount,
     stageErrorAnalysis, setStageErrorAnalysis,
     xp, setXp,
@@ -104,9 +105,39 @@ export default function DeepEncodeApp() {
     loadStageInputs: applyStageInputs,
     resetSession,
     resumeSchema,
+    resumeToEncoding,
     selectModule,
     feynmanPass,
+    undoFields,
+    redoFields,
+    canUndo,
+    canRedo,
   } = useSession();
+
+  // Live elapsed timer + cycling phase message for the loading view.
+  // (Hook is invoked after genStartedAt is declared below — see state block.)
+
+  // Interrupted generation: localStorage flag left behind when a tab was
+  // closed mid-encode. Lazily read on mount (no effect needed) and only
+  // surface as "interrupted" if older than 10s.
+  const [interruptedGen, setInterruptedGen] = useState<ReturnType<typeof loadGenerationInProgress>>(() => {
+    if (typeof window === 'undefined') return null;
+    const leftover = loadGenerationInProgress();
+    return leftover && Date.now() - leftover.startedAt > 10_000 ? leftover : null;
+  });
+
+  // Persist encoding mode subtly (part of study prefs): loads once, saves on change.
+  useEffect(() => {
+    try {
+      setEncodingMode(loadStudyPrefs().encodingMode);
+    } catch { /* keep hook default */ }
+    // Runs once on mount; setEncodingMode is a stable reducer setter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    saveStudyPrefs({ encodingMode });
+  }, [encodingMode]);
 
   // Saved schema history: localStorage + IndexedDB + cloud sync (useSchemaLibrary)
   const {
@@ -193,6 +224,14 @@ export default function DeepEncodeApp() {
 
   // Feynman Evaluator checking state
   const [isEvaluating, setIsEvaluating] = useState(false);
+
+  // Generation progress tracking: start timestamp + abort controller so the
+  // loading view can show live elapsed time and a Cancel button.
+  const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Live elapsed timer + cycling phase message for the loading view.
+  const { elapsed, phase, pct } = useGenerationProgress(genStartedAt);
 
   const field1Ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
@@ -475,6 +514,19 @@ export default function DeepEncodeApp() {
     }
   }, [appState, currentActivityIndex]);
 
+  // Cancel an in-flight generation : aborts the fetch and returns to input.
+  const handleCancelGeneration = () => {
+    abortRef.current?.abort();
+    clearGenerationInProgress();
+    setGenStartedAt(null);
+    abortRef.current = null;
+    setAppState('input');
+    sound.playBeep(220, 'square', 0.08);
+  };
+
+  // (Global keyboard shortcuts live below, after handleNextActivity /
+  // handlePreviousActivity / handleInitiateGenerate are declared.)
+
   // Initiate Generation (no pre-session gate : friction cut. The 1-5 difficulty
   // rating is collected inline after stage 1 instead of blocking startup.)
   const handleInitiateGenerate = () => {
@@ -497,15 +549,20 @@ export default function DeepEncodeApp() {
       setAppState('loading');
       sound.playBeep(440, 'sine', 0.15);
       incrementModelCall(aiSettings.geminiModel || 'gemini-3.7-flash');
+      setGenStartedAt(Date.now());
+      abortRef.current = new AbortController();
+      saveGenerationInProgress({ startedAt: Date.now(), sourceLabel: 'YouTube lecture', sourceType: 'youtube' });
 
       try {
         const response = await fetch('/api/youtube', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: abortRef.current.signal,
           body: JSON.stringify({
             videoUrl: youtubeUrl.trim(),
             mode: encodingMode,
             settings: aiSettings,
+            hiddenTemplates: loadStudyPrefs().hiddenTemplates,
           }),
         });
 
@@ -534,8 +591,16 @@ export default function DeepEncodeApp() {
         }
       } catch (error: any) {
         console.error(error);
+        if (error?.name === 'AbortError') {
+          setAppState('input');
+          return;
+        }
         alert(error?.message || 'Failed to process YouTube video. Please ensure the URL is valid.');
         setAppState('input');
+      } finally {
+        clearGenerationInProgress();
+        setGenStartedAt(null);
+        abortRef.current = null;
       }
       return;
     }
@@ -547,10 +612,19 @@ export default function DeepEncodeApp() {
     sound.playBeep(440, 'sine', 0.15);
     incrementModelCall(aiSettings.geminiModel || 'gemini-3.7-flash');
 
+    setGenStartedAt(Date.now());
+    abortRef.current = new AbortController();
+    saveGenerationInProgress({
+      startedAt: Date.now(),
+      sourceLabel: uploadedFile ? uploadedFile.name : `${rawNotes.slice(0, 60)}${rawNotes.length > 60 ? '…' : ''}`,
+      sourceType: uploadedFile ? 'file' : 'notes',
+    });
+
     // If device is offline, immediately use deterministic client-side cognitive generator
+    // (honors the learner's hidden templates so offline feels identical to online).
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       try {
-        const offlineData = generateOfflineWorkout(rawNotes, encodingMode);
+        const offlineData = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);
         setIsGuidedPathMode(false);
         setGuidedModules([]);
         setActivities(offlineData.activities);
@@ -575,7 +649,8 @@ export default function DeepEncodeApp() {
       const response = await fetch('/api/encode', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        signal: abortRef.current?.signal,
+        body: JSON.stringify({
           notes: rawNotes,
           mode: encodingMode,
           settings: aiSettings,
@@ -584,7 +659,8 @@ export default function DeepEncodeApp() {
           enableGuidedPath: enableGuidedPath || wordCount > 900,
           userConfidence: userConfidenceVal,
           successRate: sRate,
-          interleaveMode
+          interleaveMode,
+          hiddenTemplates: loadStudyPrefs().hiddenTemplates
         }),
       });
 
@@ -630,9 +706,14 @@ export default function DeepEncodeApp() {
         throw new Error('Invalid schema format returned from server');
       }
     } catch (error: any) {
+      // User cancelled : abort the fetch silently and return to input.
+      if (error?.name === 'AbortError') {
+        setAppState('input');
+        return;
+      }
       console.warn('Network or API generation failed, falling back to local offline cognitive generator...', error);
       try {
-        const offlineData = generateOfflineWorkout(rawNotes, encodingMode);
+        const offlineData = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);
         setIsGuidedPathMode(false);
         setGuidedModules([]);
         setActivities(offlineData.activities);
@@ -651,6 +732,10 @@ export default function DeepEncodeApp() {
         alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');
         setAppState('input');
       }
+    } finally {
+      clearGenerationInProgress();
+      setGenStartedAt(null);
+      abortRef.current = null;
     }
   };
 
@@ -720,6 +805,20 @@ export default function DeepEncodeApp() {
       }
 
       const mastered = evalData.grade === 'mastered';
+
+      // "What's hard for me": log needs-work grades per topic so weak areas
+      // surface later (mastered/good clears the topic from the ledger).
+      try {
+        if (evalData.grade) {
+          recordTopicResult({
+            topic: currentActivity.title || topicSummary || 'Untitled stage',
+            templateType: currentActivity.templateType,
+            lastGrade: evalData.grade,
+            lastScore: typeof evalData.score === 'number' ? evalData.score : 0,
+            checkCount: nextCount,
+          });
+        }
+      } catch { /* struggle ledger is best-effort */ }
 
       // Update response record. On mastery, auto-save the full response
       // (fields + confidence + reflection) so "Next" is a single keypress.
@@ -986,6 +1085,73 @@ export default function DeepEncodeApp() {
     }
   };
 
+  // ─── Global keyboard shortcuts ─────────────────────────────────────────────
+  // Escape closes the top-most open modal. Alt/Cmd+Arrow navigates stages.
+  // Ctrl/Cmd+Enter from the input view launches generation.
+  // (Declared after the handlers above so the effect never reads them early.)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // 1) Escape closes open modals (top-most first, roughly by z-order).
+      if (e.key === 'Escape') {
+        if (isTeachOpen) { setIsTeachOpen(false); return; }
+        if (activeDrillSchema) { setActiveDrillSchema(null); return; }
+        if (isReadinessModalOpen) { setIsReadinessModalOpen(false); return; }
+        if (isShareModalOpen) { setIsShareModalOpen(false); return; }
+        if (isInterleavingOpen) { setIsInterleavingOpen(false); return; }
+        if (isAuthOpen) { setIsAuthOpen(false); return; }
+        if (isSettingsOpen) { setIsSettingsOpen(false); return; }
+        if (isHistoryOpen) { setIsHistoryOpen(false); return; }
+        if (isAnalyticsOpen) { setIsAnalyticsOpen(false); return; }
+        if (isPrereqModalOpen) { setIsPrereqModalOpen(false); return; }
+        if (isPretestModalOpen) { setIsPretestModalOpen(false); return; }
+        if (isBlurtingModalOpen) { setIsBlurtingModalOpen(false); return; }
+        if (isSegregateModalOpen) { setIsSegregateModalOpen(false); return; }
+        if (isAnkiExportOpen) { setIsAnkiExportOpen(false); return; }
+        if (isRoastModalOpen) { setIsRoastModalOpen(false); return; }
+        if (isComparativeModalOpen) { setIsComparativeModalOpen(false); return; }
+        if (isEndSessionReviewOpen) { setIsEndSessionReviewOpen(false); return; }
+        return;
+      }
+
+      // 2) Stage navigation (workbench only).
+      if ((e.altKey || e.metaKey) && appState === 'encoding' && !isEvaluating) {
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNextActivity();
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          handlePreviousActivity();
+          return;
+        }
+      }
+
+      // 3) Ctrl/Cmd+Enter from the input view launches generation.
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && appState === 'input') {
+        const anyModalOpen =
+          isTeachOpen || activeDrillSchema !== null || isReadinessModalOpen || isShareModalOpen ||
+          isInterleavingOpen || isAuthOpen || isSettingsOpen ||
+          isHistoryOpen || isAnalyticsOpen || isPrereqModalOpen || isPretestModalOpen ||
+          isBlurtingModalOpen || isSegregateModalOpen || isAnkiExportOpen || isRoastModalOpen ||
+          isComparativeModalOpen || isEndSessionReviewOpen;
+        if (anyModalOpen) return;
+        e.preventDefault();
+        handleInitiateGenerate();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    appState, isEvaluating,
+    isTeachOpen, activeDrillSchema, isReadinessModalOpen, isShareModalOpen,
+    isInterleavingOpen, isAuthOpen, isSettingsOpen,
+    isHistoryOpen, isAnalyticsOpen, isPrereqModalOpen, isPretestModalOpen,
+    isBlurtingModalOpen, isSegregateModalOpen, isAnkiExportOpen, isRoastModalOpen,
+    isComparativeModalOpen, isEndSessionReviewOpen,
+  ]);
+
   const resetApp = () => {
     resetSession();
     setRawNotes('');
@@ -999,6 +1165,56 @@ export default function DeepEncodeApp() {
     }
     sound.playSuccess();
   };
+
+  // The completed view uses a continue button when the schema has unfinished
+  // or low-scoring stages. Compute that here so both the completed view and
+  // the resume path can reference the current schema.
+  const currentSavedSchema = useMemo<SavedSchema | null>(() => {
+    if (appState !== 'completed' && appState !== 'input') return null;
+    if (!activities.length) return null;
+    return {
+      id: `schema_${Date.now()}`,
+      timestamp: Date.now(),
+      topicSummary: topicSummary || 'Synthesized Schema',
+      mode: encodingMode,
+      xpEarned: xp,
+      activities,
+      userResponses,
+      isGuidedPath: isGuidedPathMode,
+      guidedModules: isGuidedPathMode ? guidedModules : undefined,
+      youtubeData: youtubeData || undefined,
+      researchContexts: researchContexts.length > 0 ? researchContexts : undefined,
+    };
+  }, [appState, activities, topicSummary, encodingMode, xp, userResponses, isGuidedPathMode, guidedModules, youtubeData, researchContexts]);
+
+  const hasIncompleteStages = useMemo(() => {
+    if (!currentSavedSchema) return false;
+    const acts = currentSavedSchema.activities || [];
+    const responses = currentSavedSchema.userResponses || {};
+    return acts.some(a => {
+      const r = responses[a.id];
+      if (!r || r.skipped) return true;
+      if (!r.field1?.trim() && !r.field2?.trim()) return true;
+      const review = r.feynmanReview;
+      if (!review) return true;
+      return review.grade === 'needs_elaboration' || (typeof review.score === 'number' && review.score < 65);
+    });
+  }, [currentSavedSchema]);
+
+  // Resume an incomplete schema back into the encoding workbench at its first
+  // unfinished stage. Used by both the input-screen shortcut and the completed
+  // view's "continue where you left off" button.
+  const handleContinueToEncoding = (saved: SavedSchema) => {
+    if (resumeToEncoding(saved)) {
+      setIsReadinessModalOpen(true);
+    }
+    setAppState('encoding');
+    sound.playSuccess();
+  };
+
+  const handleContinueToEncodingWrapper = useCallback(() => {
+    if (currentSavedSchema) handleContinueToEncoding(currentSavedSchema);
+  }, [currentSavedSchema, handleContinueToEncoding]);
 
   const handleDeleteSchema = async (id: string) => {
     await deleteSchemaFromLibrary(id);
@@ -1301,6 +1517,111 @@ export default function DeepEncodeApp() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full flex flex-col gap-6"
           >
+            {/* Interrupted generation notice: the tab was closed mid-encode. */}
+            {interruptedGen && (
+              <div
+                className="flex items-center justify-between gap-3 bg-hazard/10 border border-hazard/40 px-3 py-2"
+                data-testid="interrupted-gen-banner"
+                role="status"
+              >
+                <p className="text-[11px] font-mono text-bone">
+                  <span className="text-hazard400 font-bold uppercase">[ INTERRUPTED ]</span>{' '}
+                  Your last generation ({interruptedGen.sourceLabel || 'untitled source'}) was cut off before it
+                  finished. Nothing was lost &mdash; just hit generate again.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearGenerationInProgress();
+                    setInterruptedGen(null);
+                  }}
+                  className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder hover:text-bone border border-steel transition-none cursor-pointer"
+                  title="Dismiss"
+                >
+                  [ DISMISS ]
+                </button>
+              </div>
+            )}
+
+            {/* Your hard topics: weak areas from past sessions surface here so you
+                can re-drill them before they cost you on a test. */}
+            {(() => {
+              const struggles = typeof window !== 'undefined' ? loadTopicStruggles() : [];
+              if (struggles.length === 0) return null;
+              return (
+                <div className="w-full p-3.5 bg-deck border border-hazard/40">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-hazard block mb-1">
+                    [ ▼ STILL TRICKY FOR YOU ]
+                  </span>
+                  <p className="text-[11px] text-solder font-mono mb-2">
+                    These stages came back “needs work” — paste them back in or drill them again.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {struggles.slice(0, 6).map(s => (
+                      <span
+                        key={`${s.topic}-${s.updatedAt}`}
+                        title={`Last score ${s.lastScore}/100 after ${s.checkCount} check${s.checkCount === 1 ? '' : 's'}`}
+                        className="text-[11px] font-mono px-2 py-1 bg-chassis border border-hazard/50 text-bone"
+                      >
+                        {s.topic} · {s.lastScore}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Resume where you left off: if the most recent saved schema has any
+                unanswered or skipped stages, offer a one-tap return above the
+                launchpad so you don't have to open the history drawer. */}
+            {(() => {
+              if (appState !== 'input') return null;
+              const lastSchema = savedSchemas.find(s => s && s.activities && s.activities.length > 0);
+              if (!lastSchema) return null;
+              const acts = lastSchema.activities || [];
+              const firstUnfinishedIdx = acts.findIndex((a) => {
+                const r = lastSchema.userResponses?.[a.id];
+                return !r || (!r.field1?.trim() && !r.field2?.trim()) || r.skipped;
+              });
+              if (firstUnfinishedIdx === -1) return null;
+              const done = firstUnfinishedIdx;
+              const isLast = done >= acts.length - 1;
+              return (
+                <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-amber/10 border-2 border-amber/70">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber block mb-0.5">
+                      [ ▶ RESUME WHERE YOU LEFT OFF ]
+                    </span>
+                    <p className="text-sm font-bold text-bone leading-snug">
+                      You left off mid-way through <em>{lastSchema.topicSummary}</em>
+                      {isLast ? ' — on the final stage' : ` — stage ${done + 1} of ${acts.length}`}.
+                    </p>
+                    <p className="text-[11px] text-solder font-mono mt-0.5">
+                      {isLast
+                        ? 'You finished everything except the last stage.'
+                        : `You completed ${done} of ${acts.length} stages.`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleContinueToEncoding(lastSchema)}
+                      className="px-4 py-2 bg-amber border border-amber text-chassis text-[11px] font-mono font-bold uppercase tracking-wider hover:bg-amber/90 transition-none cursor-pointer"
+                    >
+                      Resume here
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-2 bg-chassis border border-steel text-solder text-[11px] font-mono font-bold uppercase tracking-wider hover:text-bone transition-none cursor-pointer"
+                      title="Start a fresh topic instead"
+                    >
+                      Start fresh
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Unified Zen Launchpad (Inputs, Mode, Studio Tuning & Inspiration Chips) */}
             <ZenLaunchpad
               notes={rawNotes}
@@ -1465,7 +1786,7 @@ export default function DeepEncodeApp() {
             key="loading"
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full py-28 flex flex-col items-center justify-center text-center"
+            className="w-full py-24 flex flex-col items-center justify-center text-center"
           >
             <div className="mb-6 border border-steel bg-deck px-6 py-2">
               <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber">
@@ -1490,6 +1811,33 @@ export default function DeepEncodeApp() {
                   ? 'Deep Research Agent is analyzing prerequisite foundational context & grounding omissions.'
                   : 'Applying cognitive encoding principles to build your interactive workspace.'}
             </p>
+
+            {/* Live pipeline progress : asymptotic bar + elapsed clock + phase ticker */}
+            <div className="mt-8 w-full max-w-md">
+              <div className="h-1.5 w-full bg-chassis border border-steel overflow-hidden">
+                <div
+                  className="h-full bg-amber transition-all duration-1000 ease-linear"
+                  style={{ width: `${pct}%` }}
+                  role="progressbar"
+                  aria-label="Generation progress"
+                  aria-valuenow={pct}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider">
+                <span className="text-solder" data-testid="gen-phase">{phase}</span>
+                <span className="text-amber" data-testid="gen-elapsed">{elapsed}s elapsed</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelGeneration}
+                title="Cancel this generation and return to the input"
+                className="mt-5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-hazard400 hover:border-hazard400 transition-none cursor-pointer"
+              >
+                [ CANCEL GENERATION ]
+              </button>
+            </div>
           </motion.div>
         )}
 
@@ -1556,6 +1904,14 @@ export default function DeepEncodeApp() {
                 setPreSessionConfidence(stars);
                 setDifficultyRated(true);
               }}
+              onUndoFields={undoFields}
+              onRedoFields={redoFields}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              stageReflection={stageReflection}
+              setStageReflection={setStageReflection}
+              stageCheckCount={stageCheckCount}
+              stageErrorAnalysis={stageErrorAnalysis ?? undefined}
             />
           </motion.div>
         )}
@@ -1584,6 +1940,8 @@ export default function DeepEncodeApp() {
               setShowExportChoice(true);
             }}
             onRestart={resetApp}
+            hasIncompleteStages={hasIncompleteStages}
+            onContinue={handleContinueToEncodingWrapper}
           />
         )}
 

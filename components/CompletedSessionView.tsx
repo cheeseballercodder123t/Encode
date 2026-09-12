@@ -32,6 +32,10 @@ interface CompletedSessionViewProps {
   onOpenSegregate: (report: SegregationReport) => void;
   onTeach: () => void;
   onRestart: () => void;
+  // Continue-this-topic: if the schema has unfinished/low stages, show a button
+  // to resume encoding at the first unfinished stage instead of restarting.
+  onContinue?: () => void;
+  hasIncompleteStages?: boolean;
 }
 
 /**
@@ -56,7 +60,9 @@ export function CompletedSessionView({
   onOpenBlurting,
   onOpenSegregate,
   onTeach,
-  onRestart
+  onRestart,
+  onContinue,
+  hasIncompleteStages,
 }: CompletedSessionViewProps) {
   const { totalCards, fsrsReady, leechCandidates, unfinished, boundaryTraps } = handoffStats;
   return (
@@ -324,8 +330,17 @@ export function CompletedSessionView({
         </div>
       </div>
 
-      {/* Restart Button */}
-      <div className="flex justify-center mt-2 pb-12">
+      {/* Restart / Continue Button */}
+      <div className="flex justify-center items-center gap-3 mt-2 pb-12">
+        {hasIncompleteStages && onContinue ? (
+          <button
+            onClick={onContinue}
+            className="flex items-center gap-2 px-7 py-3 bg-amber border border-amber hover:bg-amber text-chassis text-xs font-bold uppercase tracking-wider transition-none-colors cursor-pointer"
+          >
+            <span className="font-bold font-mono">[ ▶ CONTINUE ]</span>
+            Continue where you left off
+          </button>
+        ) : null}
         <button
           onClick={onRestart}
           className="flex items-center gap-2 px-7 py-3 bg-steel border border-steel hover:bg-steel text-bone text-xs font-bold uppercase tracking-wider transition-none-colors  cursor-pointer"

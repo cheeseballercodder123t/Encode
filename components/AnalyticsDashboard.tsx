@@ -75,7 +75,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Re-read usage stats whenever the modal opens (or REFRESH is pressed).
   const [prevOpen, setPrevOpen] = useState(isOpen);
@@ -105,7 +105,16 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   const paginatedSchemas = useMemo(() => {
     const startIndex = (safePage - 1) * itemsPerPage;
     return filteredSchemas.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredSchemas, safePage]);
+  }, [filteredSchemas, safePage, itemsPerPage]);
+
+  // Windowed page numbers : at most 5 buttons, ellipsed around the current page.
+  const pageButtons = useMemo(() => {
+    const total = totalPages;
+    if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1);
+    const windowStart = Math.max(1, Math.min(safePage - 2, total - 4));
+    const btns = Array.from({ length: 5 }, (_, i) => windowStart + i);
+    return btns;
+  }, [totalPages, safePage]);
 
   if (!isOpen) return null;
 
@@ -289,14 +298,47 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
         {filteredSchemas.length > 0 && (
           <Card className="mt-3">
             <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <p className="text-[10px] text-solder uppercase tracking-wider">SESSION HISTORY</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-solder">Page {safePage} of {totalPages}</span>
-                  <div className="flex gap-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="flex items-center gap-1 text-[10px] text-solder uppercase tracking-wider">
+                    Per page
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value) || 10);
+                        setCurrentPage(1);
+                      }}
+                      className="bg-chassis border border-steel text-bone text-[10px] px-1 py-0.5 cursor-pointer"
+                      aria-label="Sessions per page"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(1)} disabled={safePage === 1} title="First page">[&lt;&lt;]</Button>
                     <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}>[&lt;]</Button>
+                    {pageButtons.map(pn => (
+                      <button
+                        key={pn}
+                        type="button"
+                        onClick={() => setCurrentPage(pn)}
+                        className={`px-1.5 py-0.5 text-[10px] font-mono border transition-none cursor-pointer ${
+                          pn === safePage ? 'bg-amber border-amber text-chassis font-bold' : 'border-transparent text-solder hover:text-bone'
+                        }`}
+                        aria-current={pn === safePage ? 'page' : undefined}
+                      >
+                        {pn}
+                      </button>
+                    ))}
                     <Button variant="ghost" size="xs" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>[&gt;]</Button>
+                    <Button variant="ghost" size="xs" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages} title="Last page">[&gt;&gt;]</Button>
                   </div>
+                  <span className="text-[10px] text-solder">
+                    Page {safePage} of {totalPages} · {filteredSchemas.length} sessions
+                  </span>
                 </div>
               </div>
               <div className="space-y-1">

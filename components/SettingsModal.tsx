@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, AIProvider } from '@/lib/types';
-import { loadAISettings, saveAISettings, DEFAULT_SETTINGS } from '@/lib/storage';
+import { loadAISettings, saveAISettings, DEFAULT_SETTINGS, loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
+import { getAllTemplates } from '@/lib/templates/registry';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -14,14 +15,28 @@ interface SettingsModalProps {
 export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) {
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings());
   const [savedSuccess, setSavedSuccess] = useState(false);
+  // Templates the learner hid (not pulling their weight) — persisted subtly.
+  const [hiddenTemplates, setHiddenTemplates] = useState<string[]>(() => loadStudyPrefs().hiddenTemplates);
 
   const handleOpenInit = () => {
     setSettings(loadAISettings());
+    setHiddenTemplates(loadStudyPrefs().hiddenTemplates);
     setSavedSuccess(false);
+  };
+
+  useEffect(() => {
+    if (isOpen) handleOpenInit();
+    // Sync prefs each time the modal opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const toggleHiddenTemplate = (id: string) => {
+    setHiddenTemplates(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
   };
 
   const handleSave = () => {
     saveAISettings(settings);
+    saveStudyPrefs({ hiddenTemplates });
     onSaved(settings);
     setSavedSuccess(true);
     setTimeout(() => {
@@ -33,6 +48,8 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
   const handleReset = () => {
     setSettings(DEFAULT_SETTINGS);
     saveAISettings(DEFAULT_SETTINGS);
+    setHiddenTemplates([]);
+    saveStudyPrefs({ hiddenTemplates: [] });
     onSaved(DEFAULT_SETTINGS);
   };
 
@@ -306,6 +323,47 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             <div className="flex items-start gap-2 text-[11px] text-solder bg-deck/60 p-3 border border-steel">
               <span className="text-amber font-bold font-mono">[ OK ]</span>
               <span>Keys are stored locally in your browser storage and never logged or exposed to third parties.</span>
+            </div>
+
+            {/* Templates you like / don't: hide any that aren't pulling their weight */}
+            <div>
+              <label className="text-solder font-bold uppercase tracking-wider block mb-1">
+                Stage templates you use:
+              </label>
+              <p className="text-[11px] text-solder mb-2">
+                Hide the ones you never click. Hidden templates are skipped when generating sessions.
+              </p>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {getAllTemplates().map(t => {
+                  const hidden = hiddenTemplates.includes(t.id);
+                  return (
+                    <div
+                      key={t.id}
+                      className={`flex items-start gap-2 p-2 border ${hidden ? 'border-steel/50 bg-chassis opacity-60' : 'border-steel bg-deck/60'}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleHiddenTemplate(t.id)}
+                        aria-pressed={!hidden}
+                        title={hidden ? `Show ${t.title}` : `Hide ${t.title}`}
+                        className={`mt-0.5 min-w-[52px] px-2 py-1 text-[10px] font-mono font-bold uppercase border cursor-pointer ${
+                          hidden
+                            ? 'border-steel text-solder'
+                            : 'border-amber bg-amber text-chassis'
+                        }`}
+                      >
+                        {hidden ? '[ OFF ]' : '[ ON ]'}
+                      </button>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-bone leading-tight">{t.icon} {t.title}</p>
+                        {t.learnerBenefit && (
+                          <p className="text-[11px] text-solder leading-snug mt-0.5">{t.learnerBenefit}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
           </div>

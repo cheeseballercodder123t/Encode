@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { validateEvaluationResult, validateBatchEvaluation } from "@/lib/ai-output-validation";
 
 const evaluationSchema = {
   type: Type.OBJECT,
@@ -127,7 +128,7 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
         isChecker: true,
       });
 
-      return NextResponse.json(batchResult);
+      return NextResponse.json(validateBatchEvaluation(batchResult));
     }
 
     // Single stage evaluation
@@ -203,7 +204,7 @@ ${field3Label && field3Value ? `- ${field3Label}: "${field3Value}"` : ''}`;
       isChecker: true, // Uses lightweight gemini-2.5-flash-lite or configured checker model
     });
 
-    return NextResponse.json(evaluation);
+    return NextResponse.json(validateEvaluationResult(evaluation));
   } catch (error: any) {
     console.error("Error in /api/evaluate:", error);
     return NextResponse.json({

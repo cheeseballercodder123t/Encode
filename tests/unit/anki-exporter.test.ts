@@ -7,6 +7,7 @@ import JSZip from 'jszip';
 import {
   calculateSM2,
   extractAnkiCardsFromSchema,
+  extractWeakAnkiCardsFromSchema,
   generateAnkiTextDeck,
   generateAnkiTextDecks,
   generateAnkiApkgPackage,
@@ -227,6 +228,70 @@ describe('extractAnkiCardsFromSchema', () => {
 
   it('returns an empty list when given nothing', () => {
     expect(extractAnkiCardsFromSchema(null, null)).toEqual([]);
+  });
+});
+
+describe('extractWeakAnkiCardsFromSchema', () => {
+  const schema: Partial<SavedSchema> = {
+    topicSummary: 'Action Potentials',
+    activities: [
+      {
+        id: 'act_1', stageNumber: 1, title: 'Depolarization', framework: 'F', cognitiveGoal: 'G',
+        contextSnippet: 'Na+ opens at threshold.', keywords: ['sodium'], templateType: 'first_principles',
+        prompt: 'What opens at threshold?', boundaryContrast: { confusableLookalike: 'Potassium', distinguishingRule: 'Na+ at -55mV' },
+        scaffold: { field1Label: 'a', field1Placeholder: 'b', field2Label: 'c', field2Placeholder: 'd', exampleAnswer: 'e' },
+      },
+      {
+        id: 'act_2', stageNumber: 2, title: 'Repolarization', framework: 'F', cognitiveGoal: 'G',
+        contextSnippet: 'K+ channels open.', keywords: ['potassium'], templateType: 'first_principles',
+        prompt: 'What happens next?', boundaryContrast: { confusableLookalike: 'Depolarization', distinguishingRule: 'K+ efflux' },
+        scaffold: { field1Label: 'a', field1Placeholder: 'b', field2Label: 'c', field2Placeholder: 'd', exampleAnswer: 'e' },
+      },
+      {
+        id: 'act_3', stageNumber: 3, title: 'Hyperpolarization', framework: 'F', cognitiveGoal: 'G',
+        contextSnippet: 'Overshoot.', keywords: ['overshoot'], templateType: 'first_principles',
+        prompt: 'Why overshoot?', boundaryContrast: { confusableLookalike: 'Resting', distinguishingRule: 'K+ stays open' },
+        scaffold: { field1Label: 'a', field1Placeholder: 'b', field2Label: 'c', field2Placeholder: 'd', exampleAnswer: 'e' },
+      },
+    ],
+    userResponses: {
+      // act_1: mastered at score 90 — NOT weak
+      act_1: { field1: 'Sodium rushes in.', field2: 'Voltage-gated.', readinessConfirmed: true, feynmanReview: { grade: 'mastered', score: 90, feedback: 'Good', xpBonus: 5 } },
+      // act_2: needs_elaboration — weak
+      act_2: { field1: 'Potassium.', field2: '', readinessConfirmed: true, feynmanReview: { grade: 'needs_elaboration', score: 45, feedback: 'Be precise', xpBonus: 0 } },
+      // act_3: skipped — weak
+      // (no response for act_3)
+    },
+  };
+
+  it('filters to only weak stages (needs_elaboration + skipped)', () => {
+    const weak = extractWeakAnkiCardsFromSchema(schema, null);
+    const ids = weak.map(c => c.id);
+    // act_1 (mastered) cards should be excluded; act_2 (needs_work) and act_3 cue should be included.
+    expect(ids.some(id => id.startsWith('act-act_1-'))).toBe(false);
+    expect(ids.some(id => id.startsWith('act-act_2-'))).toBe(true);
+    expect(ids.some(id => id === 'act-act_3-cue')).toBe(true);
+  });
+
+  it('falls back to all cards when no activities are present', () => {
+    const weak = extractWeakAnkiCardsFromSchema({ topicSummary: 'X', activities: [] }, null);
+    expect(weak).toEqual([]);
+  });
+
+  it('treats low-scoring stages as weak', () => {
+    const low: Partial<SavedSchema> = {
+      topicSummary: 'T',
+      activities: [{
+        id: 'a1', stageNumber: 1, title: 'S', framework: 'F', cognitiveGoal: 'G', contextSnippet: 'c',
+        keywords: ['k'], templateType: 'first_principles', prompt: 'p',
+        scaffold: { field1Label: 'a', field1Placeholder: 'b', field2Label: 'c', field2Placeholder: 'd', exampleAnswer: 'e' },
+      }],
+      userResponses: {
+        a1: { field1: 'x', field2: 'y', readinessConfirmed: true, feynmanReview: { grade: 'good', score: 30, feedback: '', xpBonus: 0 } },
+      },
+    };
+    const weak = extractWeakAnkiCardsFromSchema(low, null);
+    expect(weak.length).toBeGreaterThan(0);
   });
 });
 

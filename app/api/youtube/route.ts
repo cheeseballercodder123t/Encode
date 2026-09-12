@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { validateEncodedSchema } from "@/lib/ai-output-validation";
 
 function extractYouTubeId(url: string): string | null {
   if (!url) return null;
@@ -99,7 +100,13 @@ const youtubeSchemaResponse = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { videoUrl, mode = 'conceptual', settings } = await req.json();
+    const { videoUrl, mode = 'conceptual', settings, hiddenTemplates = [] } = await req.json();
+    const hiddenList: string[] = Array.isArray(hiddenTemplates)
+      ? hiddenTemplates.filter((t: unknown) => typeof t === 'string')
+      : [];
+    const hiddenNote = hiddenList.length > 0
+      ? `\nLEARNER TEMPLATE PREFERENCES: The learner hid these templates in Settings because they don't help them — NEVER use them: (${hiddenList.join(', ')}). Choose only from the remaining catalog.`
+      : '';
 
     const videoId = extractYouTubeId(videoUrl);
     if (!videoId) {
@@ -171,6 +178,7 @@ Target Video:
 - Known Video ID: ${videoId}
 ${oEmbedTitle ? `- Known Video Title: "${oEmbedTitle}"` : ''}
 ${oEmbedAuthor ? `- Channel/Author: "${oEmbedAuthor}"` : ''}
+${hiddenNote}
 
 Your tasks:
 1. Deconstruct the lecture into its core progression.
@@ -191,11 +199,13 @@ ${transcriptSnippet ? `VERIFIED VIDEO TRANSCRIPT:\n${transcriptSnippet}` : ''}`;
       userPrompt,
       responseSchema: youtubeSchemaResponse,
       settings,
-      isChecker: false
+      isChecker: false,
+      // Same video + same options served from cache on repeat requests.
+      useCache: true,
     });
 
     const responsePayload = {
-      ...parsedResult,
+      ...validateEncodedSchema(parsedResult, mode),
       youtubeData: {
         videoId,
         videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
@@ -203,7 +213,7 @@ ${transcriptSnippet ? `VERIFIED VIDEO TRANSCRIPT:\n${transcriptSnippet}` : ''}`;
         authorName: parsedResult.authorName || oEmbedAuthor || 'YouTube Educator',
         thumbnailUrl,
         duration: parsedResult.durationEstimated || 'Video Lecture',
-        timestamps: parsedResult.timestamps || []
+        timestamps: Array.isArray(parsedResult.timestamps) ? parsedResult.timestamps : []
       }
     };
 

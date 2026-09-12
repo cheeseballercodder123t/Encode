@@ -1,10 +1,11 @@
-import { AISettings, SavedSchema } from './types';
+import { AISettings, EncodingMode, SavedSchema } from './types';
 import { saveSchemaToIDB, deleteSchemaFromIDB, clearAllSchemasFromIDB, getAllSchemasFromIDB } from './db';
 
 const STORAGE_KEYS = {
   SETTINGS: 'deepencode_ai_settings_v2',
   HISTORY: 'deepencode_saved_schemas_v2',
   STATS: 'deepencode_user_stats_v2',
+  STUDY_PREFS: 'deepencode_study_prefs_v1',
 };
 
 // In-memory cache for synchronous read performance
@@ -44,6 +45,64 @@ export function saveAISettings(settings: AISettings): void {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
   } catch (e) {
     console.error('Failed to save AI settings', e);
+  }
+}
+
+// ─── Study preferences (persisted subtly: no re-configure every session) ────
+// Remembers the learner's last-used input tab, encoding mode, strictness,
+// and generation toggles so "paste notes and go" works on the next visit.
+
+export type StudyPrefsInputTab = 'text' | 'file' | 'youtube';
+export type StudyPrefsStrictness = 'sherpa' | 'feynman' | 'viva';
+
+export interface StudyPrefs {
+  activeTab: StudyPrefsInputTab;
+  encodingMode: EncodingMode;
+  strictnessLevel: StudyPrefsStrictness;
+  enableDeepResearch: boolean;
+  enableGuidedPath: boolean;
+  /** Interleave toggle is intentionally NOT remembered: it re-routes the whole generation. */
+  hiddenTemplates: string[];
+}
+
+export const DEFAULT_STUDY_PREFS: StudyPrefs = {
+  activeTab: 'text',
+  encodingMode: 'conceptual',
+  strictnessLevel: 'feynman',
+  enableDeepResearch: true,
+  enableGuidedPath: false,
+  hiddenTemplates: [],
+};
+
+export function loadStudyPrefs(): StudyPrefs {
+  if (typeof window === 'undefined') return DEFAULT_STUDY_PREFS;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.STUDY_PREFS);
+    if (!raw) return DEFAULT_STUDY_PREFS;
+    const parsed = JSON.parse(raw);
+    const prefs: StudyPrefs = {
+      activeTab: ['text', 'file', 'youtube'].includes(parsed.activeTab) ? parsed.activeTab : DEFAULT_STUDY_PREFS.activeTab,
+      encodingMode: ['conceptual', 'memorization'].includes(parsed.encodingMode) ? parsed.encodingMode : DEFAULT_STUDY_PREFS.encodingMode,
+      strictnessLevel: ['sherpa', 'feynman', 'viva'].includes(parsed.strictnessLevel) ? parsed.strictnessLevel : DEFAULT_STUDY_PREFS.strictnessLevel,
+      enableDeepResearch: typeof parsed.enableDeepResearch === 'boolean' ? parsed.enableDeepResearch : DEFAULT_STUDY_PREFS.enableDeepResearch,
+      enableGuidedPath: typeof parsed.enableGuidedPath === 'boolean' ? parsed.enableGuidedPath : DEFAULT_STUDY_PREFS.enableGuidedPath,
+      hiddenTemplates: Array.isArray(parsed.hiddenTemplates) ? parsed.hiddenTemplates.filter((t: unknown) => typeof t === 'string') : [],
+    };
+    return prefs;
+  } catch (e) {
+    console.error('Failed to load study prefs', e);
+    return DEFAULT_STUDY_PREFS;
+  }
+}
+
+export function saveStudyPrefs(prefs: Partial<StudyPrefs>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = loadStudyPrefs();
+    const merged: StudyPrefs = { ...current, ...prefs };
+    localStorage.setItem(STORAGE_KEYS.STUDY_PREFS, JSON.stringify(merged));
+  } catch (e) {
+    console.error('Failed to save study prefs', e);
   }
 }
 
@@ -155,6 +214,58 @@ export function invalidateSchemaCache(): void {
   cacheInitialized = false;
 }
 
+// ─── "What's hard for me": per-topic struggle ledger ─────────────────────────
+// Records low examiner grades / repeated checks per topic so the tool can
+// surface weak topics and warn the learner before a re-test. Personal,
+// local-only, one entry per topic (latest result wins).
+
+const STRUGGLE_KEY = 'deepencode_topic_struggles_v1';
+
+export interface TopicStruggle {
+  topic: string;
+  templateType?: string;
+  lastGrade: 'mastered' | 'good' | 'needs_elaboration';
+  lastScore: number;
+  checkCount: number;
+  updatedAt: number;
+}
+
+export function loadTopicStruggles(): TopicStruggle[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STRUGGLE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(s => s && typeof s.topic === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Record one graded stage. Only "needs work" grades keep a topic on the list. */
+export function recordTopicResult(entry: Omit<TopicStruggle, 'updatedAt'>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = loadTopicStruggles().filter(
+      s => s.topic.toLowerCase() !== entry.topic.toLowerCase()
+    );
+    if (entry.lastGrade === 'needs_elaboration') {
+      current.unshift({ ...entry, updatedAt: Date.now() });
+    }
+    // Mastered/good clears the topic from the struggle list.
+    localStorage.setItem(STRUGGLE_KEY, JSON.stringify(current.slice(0, 30)));
+  } catch (e) {
+    console.error('Failed to record topic result', e);
+  }
+}
+
+export function clearTopicStruggles(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(STRUGGLE_KEY);
+  } catch { /* non-fatal */ }
+}
+
 export interface UsageStats {
   date: string;
   callsByModel: Record<string, number>;
@@ -197,5 +308,45 @@ export function saveSessionMeta(meta: import('./types').SessionMetacognition): v
   try {
     localStorage.setItem('deepencode_session_meta_v1', JSON.stringify(meta));
   } catch { console.error('Failed to save session meta'); }
+}
+
+// ─── Generation progress persistence ─────────────────────────────────────────
+// Written when a generation kicks off, cleared when it succeeds / fails / is
+// cancelled. On app load we check for a stale entry so a closed tab mid-encode
+// leaves a "your last generation was interrupted" notice instead of silence.
+
+export interface GenerationInProgress {
+  startedAt: number;
+  sourceLabel: string;
+  sourceType: 'notes' | 'file' | 'youtube';
+}
+
+const GENERATION_KEY = 'deepencode_generation_progress_v1';
+
+export function saveGenerationInProgress(info: GenerationInProgress): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(GENERATION_KEY, JSON.stringify({ ...info, savedAt: Date.now() }));
+  } catch { /* non-fatal */ }
+}
+
+export function loadGenerationInProgress(): (GenerationInProgress & { savedAt: number }) | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(GENERATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.startedAt !== 'number') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearGenerationInProgress(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(GENERATION_KEY);
+  } catch { /* non-fatal */ }
 }
 

@@ -414,10 +414,48 @@ export function extractAnkiCardsFromSchema(
 }
 
 /**
+ * Extracts normalized Anki cards from a SavedSchema, filtered to only the
+ * "weak" stages: skipped, empty, graded needs_elaboration, or scored below
+ * the threshold. Report-backed paths are untouched (they have no per-stage
+ * grades), so a weak export of a fresh schema still yields cue cards.
+ *
+ * @param scoreThreshold stages with an examiner score below this count as weak.
+ */
+export function extractWeakAnkiCardsFromSchema(
+  schema?: Partial<SavedSchema> | null,
+  report?: SegregationReport | null,
+  scoreThreshold: number = 65
+): AnkiCardItem[] {
+  const all = extractAnkiCardsFromSchema(schema, report);
+  if (!schema || !schema.activities || schema.activities.length === 0) return all;
+  // Weak stage ids: anything the learner hasn't cleanly encoded yet.
+  const weakIds = new Set<string>();
+  schema.activities.forEach((act) => {
+    if (!act) return;
+    const resp = schema.userResponses?.[act.id];
+    if (!resp || resp.skipped) { weakIds.add(act.id); return; }
+    const f1 = (resp.field1 || '').trim();
+    const f2 = (resp.field2 || '').trim();
+    if (!f1 && !f2) { weakIds.add(act.id); return; }
+    const review = resp.feynmanReview;
+    if (!review) { weakIds.add(act.id); return; }
+    if (review.grade === 'needs_elaboration' || (typeof review.score === 'number' && review.score < scoreThreshold)) {
+      weakIds.add(act.id);
+    }
+  });
+  // User-wording cards carry stage ids as `act-<stageId>-<suffix>`.
+  const weak = all.filter((c) => {
+    const m = /^act-(.+)-(?:main|mech|boundary|cue)$/.exec(c.id || '');
+    if (!m) return true; // report-backed cards have no stage id: keep them
+    return weakIds.has(m[1]);
+  });
+  return weak;
+}
+
+/**
  * Generates Anki Import Text Format (.txt/.tsv). Because Anki maps every row
  * of a file to ONE note type, cloze cards and basic cards are split into
  * separate decks/files:
- *   - cloze file: `#notetype:Cloze`, rows carry real {{cN::}} deletions.
  *   - basic file: `#notetype:Basic`, plain Front/Back rows.
  * This prevents "No cloze 1 found" when a mixed deck is imported as Cloze and
  * avoids field-count mismatches caused by an extra scheduling column.

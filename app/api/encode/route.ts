@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { validateEncodedSchema } from "@/lib/ai-output-validation";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 
 // Allow up to 60s for multi-stage schema generation on Vercel
@@ -420,17 +421,24 @@ const guidedPathResponseSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { 
-      notes, 
-      mode = 'conceptual', 
-      settings, 
-      file, 
-      enableDeepResearch = true, 
+    const {
+      notes,
+      mode = 'conceptual',
+      settings,
+      file,
+      enableDeepResearch = true,
       enableGuidedPath = false,
       userConfidence,
       successRate,
-      interleaveMode = false
+      interleaveMode = false,
+      hiddenTemplates = [],
     } = await req.json();
+
+    // Templates the learner hid in Settings are excluded from the AI catalog
+    // so personal taste sticks for online generations too (offline matches).
+    const hiddenList: string[] = Array.isArray(hiddenTemplates)
+      ? hiddenTemplates.filter((t: unknown) => typeof t === 'string')
+      : [];
 
     const diffLevel = getDifficultyLevel(typeof successRate === 'number' ? successRate : 0.6);
     const difficultyInstruction = getDifficultyPromptModifier(diffLevel);
@@ -448,6 +456,10 @@ export async function POST(req: NextRequest) {
     const wordCount = hasNotes ? notes.trim().split(/\s+/).length : 0;
     const isMassiveText = enableGuidedPath || wordCount > 900;
 
+    const hiddenNote = hiddenList.length > 0
+      ? `\nLEARNER TEMPLATE PREFERENCES: The learner hid these templates in Settings because they don't help them — NEVER use them: (${hiddenList.join(', ')}). Choose only from the remaining catalog.`
+      : '';
+
     let systemPrompt = '';
 
     if (isMassiveText) {
@@ -457,6 +469,7 @@ Decompose this material into 2 to 4 sequential "GUIDED PATH MODULES":
 1. Each module represents a distinct, coherent semantic milestone.
 2. Each module contains 3 active cognitive exercises. For each exercise, select the best visual template from the catalog ('first_principles', 'cause_effect', 'visual_blueprint', 'analogy_matrix', 'concept_hierarchy', 'state_transition', 'boundary_stress_test', 'taxonomic_chunking', 'contrast_grid') and generate appropriate 'visualData'.
 3. Each module ends with a "FEYNMAN CHECKPOINT" question testing intuitive causal mastery.
+${hiddenNote}
 
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 Identify if any vital foundational definitions or causal steps were omitted or rushed in the source text. Synthesize 1-2 missing background concepts into 'researchContexts'.` : ''}`;
@@ -532,6 +545,7 @@ AVAILABLE CONCEPTUAL TEMPLATES CATALOG:
 9. 'broken_model_debug' (Socratic Sabotage & Causal Bug Hunt - HIGHLY RECOMMENDED):
    - Best for: Complex causal mechanisms where students fall for common exam traps or inverted logic.
    - visualData: Populate 'brokenModel' with 3-5 sequential nodes, where 1-2 nodes are INTENTIONALLY SABOTAGED with common misconceptions (set 'isFlawed: true'). Provide 'flawExplanation' explaining what is broken.
+${hiddenNote}
 
 THE GENERATION EFFECT (CRITICAL):
 Information that the user deduces and generates themselves is remembered far better than information passively read.
@@ -576,31 +590,58 @@ CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualDa
       settings,
       isChecker: false,
       file: hasFile ? file : null,
+      // Identical (provider, model, notes, options) requests short-circuit from
+      // the in-memory cache : regenerating the same source costs nothing.
+      useCache: true,
     });
 
     if (isMassiveText && parsedResult.guidedModules && parsedResult.guidedModules.length > 0) {
-      // Mark first module as unlocked, rest locked initially
-      const formattedModules = parsedResult.guidedModules.map((mod: any, idx: number) => ({
-        ...mod,
-        unlocked: idx === 0,
-        completed: false,
-        activities: (mod.activities || []).map((act: any, aIdx: number) => ({
-          ...act,
-          stageNumber: aIdx + 1
-        }))
-      }));
+      // Validate each guided module's activities so a partial model response
+      // never ships a broken module chain. Non-modular malformed output falls
+      // through to the standard validated response below.
+      const validatedGuidedModules = parsedResult.guidedModules
+        .filter((mod: any) => mod && typeof mod === 'object' && Array.isArray(mod.activities))
+        .map((mod: any) => {
+          const validated = validateEncodedSchema({ ...mod, activities: mod.activities }, mode);
+          return {
+            ...mod,
+            title: mod.title || validated.topicSummary,
+            activities: validated.activities,
+          };
+        });
 
-      return NextResponse.json({
-        isGuidedPath: true,
-        topicSummary: parsedResult.topicSummary || 'Guided Path Chapter',
-        guidedModules: formattedModules,
-        researchContexts: parsedResult.researchContexts || [],
-        activities: formattedModules[0].activities || [],
-        currentModuleIndex: 0
-      });
+      if (validatedGuidedModules.length > 0) {
+        // Mark first module as unlocked, rest locked initially
+        const formattedModules = validatedGuidedModules.map((mod: any, idx: number) => ({
+          ...mod,
+          unlocked: idx === 0,
+          completed: false,
+          activities: (mod.activities || []).map((act: any, aIdx: number) => ({
+            ...act,
+            stageNumber: aIdx + 1
+          }))
+        }));
+
+        return NextResponse.json({
+          isGuidedPath: true,
+          topicSummary: parsedResult.topicSummary || 'Guided Path Chapter',
+          guidedModules: formattedModules,
+          researchContexts: parsedResult.researchContexts || [],
+          activities: formattedModules[0].activities || [],
+          currentModuleIndex: 0
+        });
+      }
     }
 
-    return NextResponse.json(parsedResult);
+    // Standard / non-modular response : coerce into the shape the workbench
+    // depends on (missing scaffolds get safe defaults, empty activity lists
+    // get a fallback stage).
+    const validated = validateEncodedSchema(parsedResult, mode);
+    return NextResponse.json({
+      topicSummary: validated.topicSummary,
+      activities: validated.activities,
+      researchContexts: validated.researchContexts || parsedResult.researchContexts || [],
+    });
   } catch (error: any) {
     console.error("Error in /api/encode:", error);
     return NextResponse.json({ 

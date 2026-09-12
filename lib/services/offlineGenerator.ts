@@ -50,10 +50,11 @@ function extractTextFeatures(rawText: string): ExtractedFacts {
  */
 export function generateOfflineWorkout(
   rawText: string,
-  mode: EncodingMode = 'conceptual'
+  mode: EncodingMode = 'conceptual',
+  hiddenTemplates: string[] = []
 ): { topicSummary: string; activities: Activity[] } {
   const features = extractTextFeatures(rawText);
-  const selectedTemplates = selectOptimalTemplates(rawText || features.topicTitle, mode, 5);
+  const selectedTemplates = selectOptimalTemplates(rawText || features.topicTitle, mode, 5, hiddenTemplates);
 
   const activities: Activity[] = selectedTemplates.map((candidate, idx) => {
     const stageNum = idx + 1;

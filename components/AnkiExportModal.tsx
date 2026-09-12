@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   AnkiCardItem, 
-  extractAnkiCardsFromSchema, 
+  extractAnkiCardsFromSchema,
+  extractWeakAnkiCardsFromSchema, 
   generateAnkiApkgPackage, 
   generateAnkiTextDeck, 
   generateAnkiTextDecks, 
@@ -42,8 +43,16 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
   // Three tabs only : Export (apkg/txt + audit), MCQ Deck, Sync (AnkiConnect/Webhook).
   const [activeTab, setActiveTab] = useState<'export' | 'mcq' | 'sync'>('export');
 
-  // FSRS Card Audit : recomputed whenever the deck changes.
-  const audit = useMemo(() => auditDeck(cards), [cards]);
+  // Weak-export toggle: when on, only unfinished / low-scoring stages are exported.
+  const [exportWeakOnly, setExportWeakOnly] = useState(false);
+  const displayCards = useMemo(() => {
+    if (!exportWeakOnly) return cards;
+    const weak = extractWeakAnkiCardsFromSchema(schema, report);
+    return weak.length > 0 ? weak : cards;
+  }, [exportWeakOnly, cards, schema, report]);
+
+  // FSRS Card Audit : recomputed whenever the displayed deck changes.
+  const audit = useMemo(() => auditDeck(displayCards), [displayCards]);
 
   // AnkiConnect
   const [ankiConnectUrl, setAnkiConnectUrl] = useState('http://127.0.0.1:8765');
@@ -111,7 +120,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
   const handleDownloadApkg = async () => {
     playSound('click');
     try {
-      const blob = await generateAnkiApkgPackage(cards, deckName);
+      const blob = await generateAnkiApkgPackage(displayCards, deckName);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -128,7 +137,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
   const handleDownloadTxt = () => {
     playSound('click');
-    const decks = generateAnkiTextDecks(cards, deckName);
+    const decks = generateAnkiTextDecks(displayCards, deckName);
     // CloZe + Basic are split into separate files so each maps to a single
     // note type (Anki refuses "No cloze found" or field-count mismatches).
     const files: { name: string; content: string }[] = [];
@@ -155,7 +164,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setIsSyncingAnkiConnect(true);
     setAnkiConnectStatus(null);
 
-    const res = await syncToAnkiConnect(ankiConnectUrl, deckName, cards);
+    const res = await syncToAnkiConnect(ankiConnectUrl, deckName, displayCards);
     setAnkiConnectStatus(res);
     setIsSyncingAnkiConnect(false);
     if (res.success) playSound('success');
@@ -167,7 +176,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setIsSyncingWebhook(true);
     setWebhookStatus(null);
 
-    const res = await syncToCustomWebhook(webhookUrl, deckName, cards);
+    const res = await syncToCustomWebhook(webhookUrl, deckName, displayCards);
     setWebhookStatus(res);
     setIsSyncingWebhook(false);
     if (res.success) playSound('success');
@@ -338,7 +347,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-bone text-base">Anki & SM-2 Spaced Repetition Exporter</h3>
                 <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-steel/20 text-bone border border-steel/30">
-                  {cards.length} Flashcards
+                  {displayCards.length} Flashcards
                 </span>
                 {audit.length > 0 && (
                   <span
@@ -421,10 +430,26 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
           {/* TAB 1: Export (.apkg + .txt + card preview + FSRS audit) */}
           {activeTab === 'export' && (
             <div className="space-y-4">
+              {/* Weak-export toggle: only export unfinished / low-scoring stages. */}
+              <label className="flex items-center gap-2.5 p-3 bg-deck/60 border border-steel cursor-pointer hover:border-steel/80">
+                <input
+                  type="checkbox"
+                  checked={exportWeakOnly}
+                  onChange={e => setExportWeakOnly(e.target.checked)}
+                  className="w-4 h-4 accent-amber cursor-pointer"
+                />
+                <span className="text-xs text-bone font-medium">
+                  Export only unfinished / low-scoring stages
+                  {exportWeakOnly && displayCards.length !== cards.length
+                    ? <span className="text-amber"> · {displayCards.length} of {cards.length}</span>
+                    : null}
+                </span>
+              </label>
+
               <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
                   <span className="text-amber font-bold font-mono">[ OK ]</span>
-                  Ready to Export {cards.length} DeepEncode Cloze Flashcards
+                  Ready to Export {displayCards.length} DeepEncode Cloze Flashcards
                 </div>
                 <p>
                   Downloads a structured Anki package (<code className="text-bone font-bold">.apkg</code>) pre-configured with Cloze deletion tags, Feynman personal vocabulary, and SM-2 initial scheduling metadata.
@@ -451,9 +476,9 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
               {/* Cards Preview */}
               <div className="space-y-2">
-                <span className="text-xs font-bold text-solder">Card Deck Preview ({cards.length}):</span>
+                <span className="text-xs font-bold text-solder">Card Deck Preview ({displayCards.length}):</span>
                 <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
-                  {cards.map((c, idx) => (
+                  {displayCards.map((c, idx) => (
                     <div key={c.id || idx} className="p-3 bg-deck/60 border border-steel text-xs space-y-1">
                       <div className="flex items-center justify-between text-[11px] text-solder">
                         <span className="font-bold text-bone">Card #{idx + 1}</span>

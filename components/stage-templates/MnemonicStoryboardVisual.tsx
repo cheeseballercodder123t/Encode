@@ -130,8 +130,9 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
                       {isRevealed ? tile.mnemonicHook.slice(0, 18) + '...' : 'MNEMONIC HIDDEN'}
                     </span>
                   </div>
-                  <div className="w-10 h-10 border flex items-center justify-center font-mono text-lg font-bold mb-1 ${ isSelected ? 'border-amber text-chassis' : 'border-steel text-bone'
-                  }">
+                  <div className={`w-10 h-10 border flex items-center justify-center font-mono text-lg font-bold mb-1 ${
+                    activeTileIndex === idx ? 'border-amber text-chassis' : 'border-steel text-bone'
+                  }`}>
                     {tile.symbol}
                   </div>
                   <div className="text-xs font-bold text-bone truncate">

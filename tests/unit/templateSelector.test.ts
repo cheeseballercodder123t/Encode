@@ -32,4 +32,10 @@ describe('selectOptimalTemplates', () => {
     const selected = selectOptimalTemplates('zzz qqq vvv', 'conceptual', 5);
     expect(selected).toHaveLength(5);
   });
+
+  it('excludes templates the learner hid', () => {
+    const selected = selectOptimalTemplates('neurons, voltage, hierarchy, cycles', 'conceptual', 20, ['state_transition', 'first_principles']);
+    expect(selected.map(t => t.type)).not.toContain('state_transition');
+    expect(selected.map(t => t.type)).not.toContain('first_principles');
+  });
 });

@@ -95,6 +95,10 @@ export interface StageResponse {
     xpBonus: number;
     depthAlert?: string;
     errorAnalysis?: string;
+    /** Jargon Parroting Buzzer: buzzword-without-mechanism callout. */
+    jargonBuzzer?: string;
+    /** Oxford Oral Defense counter-question (viva strictness mode). */
+    vivaCrossExamination?: string;
   };
   confidenceScore?: number;        // 0-100 slider value
   reflection?: string;             // one-sentence takeaway

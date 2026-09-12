@@ -10,6 +10,12 @@ import {
   clearAllSchemas,
   loadUsageStats,
   incrementModelCall,
+  loadStudyPrefs,
+  saveStudyPrefs,
+  DEFAULT_STUDY_PREFS,
+  loadTopicStruggles,
+  recordTopicResult,
+  clearTopicStruggles,
 } from '@/lib/storage';
 import { makeSchema } from './fixtures';
 
@@ -95,5 +101,61 @@ describe('clearAllSchemas', () => {
     saveSchemaToHistory(makeSchema());
     clearAllSchemas();
     expect(loadSavedSchemas()).toHaveLength(0);
+  });
+});
+
+describe('study prefs (save preferences subtly)', () => {
+  it('returns defaults when nothing stored', () => {
+    expect(loadStudyPrefs()).toEqual(DEFAULT_STUDY_PREFS);
+  });
+
+  it('remembers tab, mode, strictness and toggles across sessions', () => {
+    saveStudyPrefs({ activeTab: 'youtube', encodingMode: 'memorization', strictnessLevel: 'viva' });
+    saveStudyPrefs({ enableDeepResearch: false, enableGuidedPath: true });
+    const prefs = loadStudyPrefs();
+    expect(prefs.activeTab).toBe('youtube');
+    expect(prefs.encodingMode).toBe('memorization');
+    expect(prefs.strictnessLevel).toBe('viva');
+    expect(prefs.enableDeepResearch).toBe(false);
+    expect(prefs.enableGuidedPath).toBe(true);
+  });
+
+  it('rejects invalid values back to defaults', () => {
+    localStorage.setItem('deepencode_study_prefs_v1', JSON.stringify({
+      activeTab: 'carrier-pigeon', encodingMode: 'vibes', strictnessLevel: 'drill-sergeant',
+    }));
+    const prefs = loadStudyPrefs();
+    expect(prefs.activeTab).toBe(DEFAULT_STUDY_PREFS.activeTab);
+    expect(prefs.encodingMode).toBe(DEFAULT_STUDY_PREFS.encodingMode);
+    expect(prefs.strictnessLevel).toBe(DEFAULT_STUDY_PREFS.strictnessLevel);
+  });
+
+  it('persists hidden templates', () => {
+    saveStudyPrefs({ hiddenTemplates: ['memory_palace', 'mnemonic_peg'] });
+    expect(loadStudyPrefs().hiddenTemplates).toEqual(['memory_palace', 'mnemonic_peg']);
+  });
+});
+
+describe('topic struggles (what is hard for me)', () => {
+  it('starts empty and records needs-work grades', () => {
+    expect(loadTopicStruggles()).toEqual([]);
+    recordTopicResult({ topic: 'Action Potentials', lastGrade: 'needs_elaboration', lastScore: 45, checkCount: 3 });
+    const list = loadTopicStruggles();
+    expect(list).toHaveLength(1);
+    expect(list[0].topic).toBe('Action Potentials');
+    expect(list[0].lastScore).toBe(45);
+  });
+
+  it('clears a topic once it is mastered', () => {
+    recordTopicResult({ topic: 'Mitochondria', lastGrade: 'needs_elaboration', lastScore: 40, checkCount: 2 });
+    expect(loadTopicStruggles()).toHaveLength(1);
+    recordTopicResult({ topic: 'Mitochondria', lastGrade: 'mastered', lastScore: 92, checkCount: 3 });
+    expect(loadTopicStruggles()).toEqual([]);
+  });
+
+  it('clears the whole ledger', () => {
+    recordTopicResult({ topic: 'X', lastGrade: 'needs_elaboration', lastScore: 10, checkCount: 1 });
+    clearTopicStruggles();
+    expect(loadTopicStruggles()).toEqual([]);
   });
 });

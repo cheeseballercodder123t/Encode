@@ -153,12 +153,14 @@ export const TEMPLATE_CATALOG: TemplateCandidate[] = [
 export function selectOptimalTemplates(
   textOrTopic: string,
   mode: EncodingMode = 'conceptual',
-  requestedCount: number = 5
+  requestedCount: number = 5,
+  hiddenTemplates: string[] = []
 ): TemplateCandidate[] {
   const normalizedText = (textOrTopic || '').toLowerCase();
-  
-  // Filter by matching mode first
-  const pool = TEMPLATE_CATALOG.filter(t => t.mode === mode);
+  const hidden = new Set(hiddenTemplates);
+
+  // Filter by matching mode first, excluding templates the learner hid.
+  const pool = TEMPLATE_CATALOG.filter(t => t.mode === mode && !hidden.has(t.type));
   
   // Score candidates based on trigger matches and base weights
   const scored = pool.map(candidate => {

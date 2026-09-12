@@ -95,8 +95,9 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
                   : 'border-steel bg-deck text-solder'
               }`}
             >
-              <div className="w-9 h-9 border flex items-center justify-center font-mono text-lg font-bold mb-1 ${ isSelected ? 'border-amber' : 'border-steel'
-              }">
+              <div className={`w-9 h-9 border flex items-center justify-center font-mono text-lg font-bold mb-1 ${
+                isSelected ? 'border-amber' : 'border-steel'
+              }`}>
                 {item.letter}
               </div>
               <span className="text-xs font-bold text-bone text-center truncate max-w-full">

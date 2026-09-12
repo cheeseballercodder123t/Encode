@@ -4,6 +4,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { SketchCanvas } from './SketchCanvas';
 import { Activity, StageResponse, UploadedFileAsset, YouTubeMetadata } from '@/lib/types';
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
+import { getTemplateDefinition } from '@/lib/templates/registry';
 import { generateRemnoteHierarchy } from '@/lib/remnote';
 import { playSound } from '@/lib/audio';
 import { countWords } from '@/lib/fsrs-audit';
@@ -47,6 +48,18 @@ interface StudioWorkbenchProps {
   /** Shown once, right after stage 1 completes : inline 1-5 difficulty rating. */
   showDifficultyRating: boolean;
   onDifficultyRate: (stars: number) => void;
+  // Undo/redo for the stage's scaffold fields
+  onUndoFields?: () => void;
+  onRedoFields?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
+  // Per-stage one-line reflection ("the part that finally clicked...")
+  stageReflection?: string;
+  setStageReflection?: (v: string | ((prev: string) => string)) => void;
+  // How many times the current stage has been checked by the examiner.
+  stageCheckCount?: number;
+  // Examiner error analysis for the current stage (shown in the needs-work hint).
+  stageErrorAnalysis?: string;
 }
 
 export function StudioWorkbench({
@@ -79,6 +92,14 @@ export function StudioWorkbench({
   justMastered,
   showDifficultyRating,
   onDifficultyRate,
+  onUndoFields,
+  onRedoFields,
+  canUndo,
+  canRedo,
+  stageReflection,
+  setStageReflection,
+  stageCheckCount,
+  stageErrorAnalysis,
 }: StudioWorkbenchProps) {
   const [fluffStripperActive, setFluffStripperActive] = useState(false);
   const [copiedRemNote, setCopiedRemNote] = useState(false);
@@ -131,6 +152,34 @@ export function StudioWorkbench({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [field1, field2, feynmanResult, isEvaluating, onCheckAnswer, onNextActivity]);
+
+  // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z : undo / redo the stage's scaffold fields.
+  // Runs even when focus is inside a textarea (prevents double-nesting the
+  // browser's own undo which would fight the reducer's history).
+  useEffect(() => {
+    if (!onUndoFields && !onRedoFields) return;
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y') {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          // Only intercept for our own scaffold fields; leave other inputs alone.
+          const el = e.target as HTMLElement;
+          if (!el.dataset?.dgField) return;
+        }
+        e.preventDefault();
+        if ((e.key === 'z' || e.key === 'Z') && e.shiftKey) {
+          onRedoFields?.();
+        } else if (e.key === 'y' || e.key === 'Y') {
+          onRedoFields?.();
+        } else {
+          onUndoFields?.();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onUndoFields, onRedoFields]);
 
   // Native Speech-to-Text handler
   const toggleSpeechRecognition = () => {
@@ -375,6 +424,58 @@ export function StudioWorkbench({
               </div>
             </div>
 
+            {/* Progress rail: how far through the session you are.
+                Filled = completed, amber = current, dim = remaining. */}
+            <div className="flex items-center gap-1.5 -mt-1">
+              {activities.map((_, i) => {
+                const done = i < currentActivityIndex;
+                const current = i === currentActivityIndex;
+                return (
+                  <div
+                    key={i}
+                    title={`Stage ${i + 1}${done ? ' (completed)' : current ? ' (current)' : ''}`}
+                    className={`h-1.5 flex-1 rounded-full transition-none ${
+                      done ? 'bg-emerald/60' : current ? 'bg-amber' : 'bg-steel/30'
+                    }`}
+                  />
+                );
+              })}
+              <span className="text-[9px] font-mono text-solder ml-1 shrink-0">
+                {currentActivityIndex + 1}/{activities.length}
+              </span>
+            </div>
+
+            {/* YOUR TASK: the single most important line on the screen.
+                One bold sentence — what to figure out or produce right now. */}
+            {(() => {
+              const meta = getTemplateDefinition(currentActivity.templateType || '');
+              const challenge = currentActivity.visualData?.generationChallenge;
+              const yourTask = challenge?.premisePrompt || currentActivity.prompt || meta?.learnerTask;
+              if (!yourTask) return null;
+              return (
+                <div className="p-3.5 bg-amber/10 border-2 border-amber/70" role="note" aria-label="Your task for this stage">
+                  <span className="font-bold text-[10px] text-amber uppercase tracking-wider block mb-1">
+                    [ ★ YOUR TASK ]
+                  </span>
+                  <p className="text-sm font-bold text-bone leading-snug">
+                    {yourTask}
+                  </p>
+                  {meta?.learnerBenefit && (
+                    <p className="text-[11px] text-solder font-mono leading-relaxed mt-1.5">
+                      <span className="text-amber/80 font-bold">Why this works: </span>
+                      {meta.learnerBenefit}
+                    </p>
+                  )}
+                  {meta?.learnerTask && challenge?.premisePrompt && meta.learnerTask !== challenge.premisePrompt && (
+                    <p className="text-[11px] text-solder font-mono leading-relaxed mt-1">
+                      <span className="text-amber/80 font-bold">To do: </span>
+                      {meta.learnerTask}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Target Concept Extract */}
             <div className="p-3 bg-chassis border border-steel text-solder text-xs font-mono leading-relaxed">
               <span className="font-bold text-[10px] text-amber uppercase tracking-wider block mb-0.5">
@@ -405,6 +506,30 @@ export function StudioWorkbench({
 
             {showSketchpad && <SketchCanvas />}
 
+            {/* Undo / Redo for the stage fields (also Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y) */}
+            {(onUndoFields || onRedoFields) && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onUndoFields}
+                  disabled={!canUndo}
+                  title="Undo last edit (Ctrl/Cmd+Z)"
+                  className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone hover:border-solder transition-none disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  [ UNDO ]
+                </button>
+                <button
+                  type="button"
+                  onClick={onRedoFields}
+                  disabled={!canRedo}
+                  title="Redo edit (Ctrl+Y or Ctrl/Cmd+Shift+Z)"
+                  className="px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone hover:border-solder transition-none disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  [ REDO ]
+                </button>
+              </div>
+            )}
+
             {/* Scaffold Input 1 */}
             <div className="space-y-1">
               <label className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider block">
@@ -415,6 +540,7 @@ export function StudioWorkbench({
                 onChange={e => setField1(e.target.value)}
                 placeholder={currentActivity.scaffold.field1Placeholder}
                 rows={2}
+                data-dg-field="field1"
                 className="w-full p-3 bg-chassis border border-steel text-bone placeholder-solder text-xs leading-relaxed outline-none focus:border-amber font-mono resize-none transition-none"
               />
               {field1.trim() && wordMeter(f1Words)}
@@ -447,6 +573,7 @@ export function StudioWorkbench({
                 onChange={e => setField2(e.target.value)}
                 placeholder={currentActivity.scaffold.field2Placeholder}
                 rows={2}
+                data-dg-field="field2"
                 className={`w-full p-3 bg-chassis border text-bone placeholder-solder text-xs leading-relaxed outline-none font-mono resize-none transition-none ${
                   isListening ? 'border-hazard' : 'border-steel focus:border-amber'
                 }`}
@@ -465,10 +592,25 @@ export function StudioWorkbench({
                   value={field3}
                   onChange={e => setField3(e.target.value)}
                   placeholder={currentActivity.scaffold.field3Placeholder || ''}
+                  data-dg-field="field3"
                   className="w-full p-2.5 bg-chassis border border-steel text-bone placeholder-solder text-xs outline-none focus:border-amber font-mono transition-none"
                 />
               </div>
             )}
+
+            {/* Pre-check blurt guard: if both fields are filled but very short,
+                nudge the learner to add a real sentence before the examiner grades it. */}
+            {(() => {
+              const bothFilled = field1.trim() && field2.trim();
+              const totalWords = f1Words + f2Words;
+              if (!bothFilled || totalWords >= 15) return null;
+              return (
+                <div className="p-2.5 bg-amber/10 border border-amber/40 text-[11px] font-mono text-bone leading-relaxed">
+                  <span className="text-amber font-bold">[ ⚠ SHORT ANSWER ]</span>{' '}
+                  This looks like a one-word blurt ({totalWords} words). Add a sentence or two — the examiner grades on mechanistic depth, and you'll encode it deeper that way.
+                </div>
+              );
+            })()}
 
             {/* Inline difficulty rating ; collected ONCE, right after stage 1,
                 replacing the old blocking pre-session modal (same 1-5 data). */}
@@ -505,7 +647,9 @@ export function StudioWorkbench({
               </div>
             )}
 
-            {/* Forge Navigation Footer : sticky action bar */}
+            {/* Forge Navigation Footer : sticky action bar.
+                "I'm done thinking" signal: the CHECK button is the primary
+                action until graded, then NEXT pulses as the obvious next step. */}
             <div className="sticky bottom-0 bg-deck/95 backdrop-blur-sm flex items-center justify-between pt-2 pb-1 border-t border-steel gap-2">
               <div className="flex items-center gap-1.5">
                 <button
@@ -545,19 +689,23 @@ export function StudioWorkbench({
                   type="button"
                   onClick={onCheckAnswer}
                   disabled={isEvaluating || (!field1.trim() && !field2.trim())}
-                  title="Check with the examiner (Cmd/Ctrl+Enter)"
-                  className="px-3 py-2 text-[10px] font-mono font-bold uppercase tracking-wider bg-chassis border border-steel text-bone hover:border-amber transition-none disabled:opacity-40 cursor-pointer"
+                  title="I'm done thinking — check my answer with the examiner (Cmd/Ctrl+Enter)"
+                  className={`px-4 py-2.5 text-[11px] font-mono font-bold uppercase tracking-wider transition-none disabled:opacity-40 cursor-pointer border-2 ${
+                    feynmanResult
+                      ? 'bg-chassis border-steel text-solder'
+                      : 'bg-amber border-amber text-chassis shadow-[0_0_12px_rgba(251,191,36,0.35)]'
+                  }`}
                 >
-                  {isEvaluating ? '[ CHECKING... ]' : '[ CHECK ⌘↵ ]'}
+                  {isEvaluating ? '[ CHECKING... ]' : feynmanResult ? '[ ✓ CHECKED — TRY AGAIN OR NEXT ]' : '[ ✓ CHECK MY ANSWER ]'}
                 </button>
 
                 <button
                   type="button"
                   onClick={onSkipStage}
-                  title="Skip for now : exports tagged DeepEncode::Unfinished so a filtered deck catches it"
+                  title="Skip for now — I'll come back: marked visibly so you can resume it later, no guilt"
                   className="px-2.5 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-bone transition-none cursor-pointer"
                 >
-                  [ SKIP ]
+                  [ SKIP — COME BACK LATER ]
                 </button>
 
                 <button
@@ -574,6 +722,23 @@ export function StudioWorkbench({
                 </button>
               </div>
             </div>
+
+            {/* One-line note: "the part that finally clicked for me was..." */}
+            {setStageReflection && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider block">
+                  [ ✎ WHAT CLICKED? ] <span className="normal-case font-medium">(one line, in your own words — optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={stageReflection ?? ''}
+                  onChange={e => setStageReflection(e.target.value)}
+                  placeholder="The part that finally clicked for me was..."
+                  data-dg-field="reflection"
+                  className="w-full p-2.5 bg-chassis border border-steel text-bone placeholder-solder text-xs outline-none focus:border-amber font-mono transition-none"
+                />
+              </div>
+            )}
 
           </div>
         </div>
@@ -676,6 +841,40 @@ export function StudioWorkbench({
                     [ VIVA CHALLENGE ] // {(feynmanResult as any).vivaCrossExamination}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Contextual hint after a "needs work" grade: point the learner at
+                regenerating the stage or being taught it step by step. */}
+            {feynmanResult?.grade === 'needs_elaboration' && (
+              <div className="p-3 bg-amber/10 border border-amber/50 text-[11px] font-mono text-bone leading-relaxed">
+                <span className="text-amber font-bold">[ ? ]</span>{' '}
+                This stage didn't quite click.
+                {stageErrorAnalysis ? <> Checker noted: <em>{stageErrorAnalysis}</em>.</> : null}
+                {' '}Try regenerating it with a different angle, or teach it to you step by step below.
+              </div>
+            )}
+
+            {/* Teach-me fallback after 2 failed checks: if this stage has been
+                checked twice without mastering, promote the teach-me path. */}
+            {(stageCheckCount ?? 0) >= 2 && feynmanResult?.grade !== 'mastered' && (
+              <div className="p-3 bg-amber/10 border-2 border-amber/60 text-xs">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">
+                    [ ★ TEACH ME THIS STAGE ]
+                  </span>
+                  <span className="text-[9px] font-mono text-solder">check #{stageCheckCount}</span>
+                </div>
+                <p className="text-[11px] text-solder font-mono leading-relaxed mb-2">
+                  You've checked this stage {stageCheckCount} times without mastering it. A step-by-step lesson often unsticks what another attempt can't.
+                </p>
+                <button
+                  type="button"
+                  onClick={onTeachStage}
+                  className="px-3.5 py-2 bg-amber border border-amber text-chassis text-[11px] font-mono font-bold uppercase tracking-wider hover:bg-amber/90 transition-none cursor-pointer"
+                >
+                  [ TEACH ME THIS ]
+                </button>
               </div>
             )}
 

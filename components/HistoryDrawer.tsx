@@ -33,6 +33,8 @@ export function HistoryDrawer({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'conceptual' | 'memorization'>('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PAGE_SIZE = 8;
 
   if (!isOpen) return null;
 
@@ -44,6 +46,15 @@ export function HistoryDrawer({
     const matchesMode = filterMode === 'all' || s.mode === filterMode;
     return matchesSearch && matchesMode;
   });
+
+  // Pagination: render a bounded window of schemas so very large histories
+  // (IndexedDB stores everything) don't mount hundreds of cards at once.
+  const historyTotalPages = Math.max(1, Math.ceil(filteredSchemas.length / HISTORY_PAGE_SIZE));
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages);
+  const paginatedSchemas = filteredSchemas.slice(
+    (safeHistoryPage - 1) * HISTORY_PAGE_SIZE,
+    safeHistoryPage * HISTORY_PAGE_SIZE
+  );
 
   const handleCopyRemNote = (s: SavedSchema) => {
     let content = `# ${s.topicSummary}\n\n`;
@@ -168,13 +179,59 @@ export function HistoryDrawer({
                 <p className="text-[11px] text-bone mt-1">Complete a workout to store your encoded schema.</p>
               </div>
             ) : (
-              filteredSchemas.map((schema) => {
+              <>
+                {/* Pick up where you left off: sessions with unanswered or
+                    skipped stages float to the top with a resume affordance. */}
+                {(() => {
+                  const incomplete = filteredSchemas.filter(s => {
+                    const acts = s.activities || [];
+                    if (acts.length === 0) return false;
+                    return acts.some(a => {
+                      const r = s.userResponses?.[a.id];
+                      return !r || (!r.field1?.trim() && !r.field2?.trim()) || r.skipped;
+                    });
+                  });
+                  if (incomplete.length === 0) return null;
+                  const s = incomplete[0];
+                  const acts = s.activities || [];
+                  const done = acts.filter(a => {
+                    const r = s.userResponses?.[a.id];
+                    return r && (r.field1?.trim() || r.field2?.trim()) && !r.skipped;
+                  }).length;
+                  const skipped = acts.filter(a => s.userResponses?.[a.id]?.skipped).length;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectSchemaToResume(s);
+                        onClose();
+                      }}
+                      className="w-full text-left p-4 bg-amber/10 border-2 border-amber/70 hover:bg-amber/15 transition-none cursor-pointer"
+                    >
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber block mb-1">
+                        [ ▶ PICK UP WHERE YOU LEFT OFF ]
+                      </span>
+                      <span className="text-sm font-bold text-bone block truncate">{s.topicSummary}</span>
+                      <span className="text-[11px] text-solder font-mono mt-0.5 block">
+                        Stage {done + 1} of {acts.length}{skipped > 0 ? ` · ${skipped} skipped to revisit` : ''} — tap to resume
+                      </span>
+                    </button>
+                  );
+                })()}
+                {paginatedSchemas.map((schema) => {
                 const dateStr = new Date(schema.timestamp).toLocaleDateString(undefined, {
                   month: 'short',
                   day: 'numeric',
                   hour: '2-digit',
                   minute: '2-digit'
                 });
+                const acts = schema.activities || [];
+                const doneCount = acts.filter(a => {
+                  const r = schema.userResponses?.[a.id];
+                  return r && (r.field1?.trim() || r.field2?.trim()) && !r.skipped;
+                }).length;
+                const skippedCount = acts.filter(a => schema.userResponses?.[a.id]?.skipped).length;
+                const isIncomplete = acts.length > 0 && (doneCount + skippedCount < acts.length || skippedCount > 0);
 
                 return (
                   <div
@@ -199,6 +256,11 @@ export function HistoryDrawer({
                         <h4 className="text-sm font-bold text-bone group-hover:text-bone transition-none-colors">
                           {schema.topicSummary}
                         </h4>
+                        {isIncomplete && (
+                          <span className="inline-block mt-1 text-[10px] font-mono font-bold uppercase tracking-wider text-amber bg-amber/15 border border-amber/50 px-1.5 py-0.5">
+                            [ ◐ {doneCount}/{acts.length} done{skippedCount > 0 ? ` · ${skippedCount} skipped` : ''} — resume ]
+                          </span>
+                        )}
                         {schema.sourceFileName && (
                           <span className="text-[10px] text-solder flex items-center gap-1 mt-0.5">
                             <span className="text-amber font-bold font-mono">[ EXPORT ]</span>
@@ -263,16 +325,41 @@ export function HistoryDrawer({
                             onSelectSchemaToResume(schema);
                             onClose();
                           }}
-                          className="min-h-[44px] px-3.5 bg-steel hover:bg-steel text-bone text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          className="min-h-[44px] px-3.5 bg-amber hover:bg-amber border border-amber text-chassis text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                         >
-                          View
-                          <span className="text-amber font-bold font-mono">[ NEXT ]</span>
+                          {isIncomplete ? 'Resume' : 'View'}
+                          <span className="font-bold font-mono">[ NEXT ]</span>
                         </button>
                       </div>
                     </div>
                   </div>
                 );
-              })
+              })}
+                {/* Pagination controls (only shown when history spans pages) */}
+                {historyTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                      disabled={safeHistoryPage === 1}
+                      className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder border border-steel hover:text-bone disabled:opacity-30 disabled:cursor-not-allowed transition-none cursor-pointer"
+                    >
+                      [ &lt; PREV ]
+                    </button>
+                    <span className="text-[10px] text-solder font-mono">
+                      Page {safeHistoryPage} / {historyTotalPages} · {filteredSchemas.length} schemas
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPage(p => Math.min(historyTotalPages, p + 1))}
+                      disabled={safeHistoryPage === historyTotalPages}
+                      className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder border border-steel hover:text-bone disabled:opacity-30 disabled:cursor-not-allowed transition-none cursor-pointer"
+                    >
+                      [ NEXT &gt; ]
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

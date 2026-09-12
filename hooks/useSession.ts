@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   Activity,
   EncodingMode,
@@ -12,6 +12,18 @@ import {
 } from '@/lib/types';
 
 export type AppState = 'input' | 'loading' | 'encoding' | 'completed';
+
+/** Immutable snapshot of the three scaffold fields + preset picker. */
+export interface FieldSnapshot {
+  field1: string;
+  field2: string;
+  field3: string;
+  selectedPreset: string;
+}
+
+function snapshotFields(s: Pick<SessionState, 'field1' | 'field2' | 'field3' | 'selectedPreset'>): FieldSnapshot {
+  return { field1: s.field1, field2: s.field2, field3: s.field3, selectedPreset: s.selectedPreset };
+}
 
 /**
  * Full session state for the encode flow. Owned by a single reducer so every
@@ -35,6 +47,9 @@ export interface SessionState {
   field2: string;
   field3: string;
   selectedPreset: string;
+  // Undo/redo stacks for the active stage's text fields (snapshot BEFORE a change).
+  fieldUndoStack: FieldSnapshot[];
+  fieldRedoStack: FieldSnapshot[];
   // Feynman Evaluator checking state
   feynmanResult: StageResponse['feynmanReview'] | null;
   stageConfidence: number;
@@ -62,6 +77,8 @@ export const initialSessionState: SessionState = {
   field2: '',
   field3: '',
   selectedPreset: '',
+  fieldUndoStack: [],
+  fieldRedoStack: [],
   feynmanResult: null,
   stageConfidence: 75,
   stageReflection: '',
@@ -87,8 +104,12 @@ export type SessionAction =
   | { type: 'add_xp'; amount: number }
   | { type: 'reset' }
   | { type: 'resume_schema'; schema: SavedSchema }
+  | { type: 'resume_to_encoding'; schema: SavedSchema }
   | { type: 'select_module'; index: number }
-  | { type: 'feynman_pass'; moduleIndex: number; score: number; feedback: string };
+  | { type: 'feynman_pass'; moduleIndex: number; score: number; feedback: string }
+  | { type: 'push_field_snapshot'; snapshot: FieldSnapshot }
+  | { type: 'undo_fields' }
+  | { type: 'redo_fields' };
 
 /** Hydrate the active stage inputs from a saved response (or reset them). */
 function applyLoadedStage(
@@ -116,6 +137,8 @@ function applyLoadedStage(
       stageReflection: saved.reflection || '',
       stageCheckCount: saved.checkCount || 0,
       stageErrorAnalysis: saved.errorAnalysis || null,
+      fieldUndoStack: [],
+      fieldRedoStack: [],
     };
   }
   return {
@@ -129,6 +152,8 @@ function applyLoadedStage(
     stageReflection: '',
     stageCheckCount: 0,
     stageErrorAnalysis: null,
+    fieldUndoStack: [],
+    fieldRedoStack: [],
   };
 }
 
@@ -175,6 +200,38 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         schema.userResponses || {}
       );
     }
+    case 'resume_to_encoding': {
+      // Resume path for incomplete sessions: like resume_schema, but lands in
+      // the encoding workbench at the first unfinished stage so the learner
+      // continues where they stopped instead of viewing a trophy.
+      const schema = action.schema;
+      const acts = schema.activities || [];
+      const responses = schema.userResponses || {};
+      const firstUnfinished = acts.findIndex(a => {
+        const r = responses[a.id];
+        return !r || (!r.field1?.trim() && !r.field2?.trim()) || r.skipped;
+      });
+      const index = firstUnfinished >= 0 ? firstUnfinished : 0;
+      return applyLoadedStage(
+        {
+          ...state,
+          topicSummary: schema.topicSummary,
+          encodingMode: schema.mode,
+          activities: acts,
+          userResponses: responses,
+          xp: schema.xpEarned,
+          isGuidedPathMode: Boolean(schema.isGuidedPath),
+          guidedModules: schema.guidedModules || [],
+          youtubeData: schema.youtubeData || null,
+          researchContexts: schema.researchContexts || [],
+          currentActivityIndex: index,
+          appState: 'encoding',
+        },
+        index,
+        acts,
+        responses
+      );
+    }
     case 'select_module': {
       const mod = state.guidedModules[action.index];
       if (!mod || !mod.unlocked) return state;
@@ -185,6 +242,54 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         modActs,
         state.userResponses
       );
+    }
+    case 'push_field_snapshot': {
+      // Coalesce identical consecutive snapshots and bound stack growth.
+      const stack = state.fieldUndoStack;
+      const last = stack[stack.length - 1];
+      if (
+        last &&
+        last.field1 === action.snapshot.field1 &&
+        last.field2 === action.snapshot.field2 &&
+        last.field3 === action.snapshot.field3 &&
+        last.selectedPreset === action.snapshot.selectedPreset
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        fieldUndoStack: [...stack, action.snapshot].slice(-100),
+        // A new change invalidates the redo branch.
+        fieldRedoStack: [],
+      };
+    }
+    case 'undo_fields': {
+      if (state.fieldUndoStack.length === 0) return state;
+      const prev = state.fieldUndoStack[state.fieldUndoStack.length - 1];
+      const current = snapshotFields(state);
+      return {
+        ...state,
+        field1: prev.field1,
+        field2: prev.field2,
+        field3: prev.field3,
+        selectedPreset: prev.selectedPreset,
+        fieldUndoStack: state.fieldUndoStack.slice(0, -1),
+        fieldRedoStack: [...state.fieldRedoStack, current].slice(-100),
+      };
+    }
+    case 'redo_fields': {
+      if (state.fieldRedoStack.length === 0) return state;
+      const next = state.fieldRedoStack[state.fieldRedoStack.length - 1];
+      const current = snapshotFields(state);
+      return {
+        ...state,
+        field1: next.field1,
+        field2: next.field2,
+        field3: next.field3,
+        selectedPreset: next.selectedPreset,
+        fieldRedoStack: state.fieldRedoStack.slice(0, -1),
+        fieldUndoStack: [...state.fieldUndoStack, current].slice(-100),
+      };
     }
     case 'feynman_pass': {
       const updated = [...state.guidedModules];
@@ -235,10 +340,6 @@ export function useSession() {
     setCurrentModuleIndex: (v: SetterArg<number>) => patch({ currentModuleIndex: v }),
     setYoutubeData: (v: SetterArg<YouTubeMetadata | null>) => patch({ youtubeData: v }),
     setResearchContexts: (v: SetterArg<ResearchContextItem[]>) => patch({ researchContexts: v }),
-    setField1: (v: SetterArg<string>) => patch({ field1: v }),
-    setField2: (v: SetterArg<string>) => patch({ field2: v }),
-    setField3: (v: SetterArg<string>) => patch({ field3: v }),
-    setSelectedPreset: (v: SetterArg<string>) => patch({ selectedPreset: v }),
     setFeynmanResult: (v: SetterArg<StageResponse['feynmanReview'] | null>) => patch({ feynmanResult: v }),
     setStageConfidence: (v: SetterArg<number>) => patch({ stageConfidence: v }),
     setStageReflection: (v: SetterArg<string>) => patch({ stageReflection: v }),
@@ -247,6 +348,34 @@ export function useSession() {
     setXp: (v: SetterArg<number>) => patch({ xp: v }),
     setCombo: (v: SetterArg<number>) => patch({ combo: v }),
   }), [patch]);
+
+  // ─── Undo/redo for the stage's text fields ─────────────────────────────────
+  // Mirrors the live field state so setters can capture a pre-change snapshot
+  // synchronously (before the reducer re-renders).
+  const fieldStateRef = useRef<FieldSnapshot>({ field1: '', field2: '', field3: '', selectedPreset: '' });
+  useEffect(() => {
+    fieldStateRef.current = snapshotFields(state);
+  }, [state.field1, state.field2, state.field3, state.selectedPreset]);
+
+  const makeFieldSetter = useCallback((key: 'field1' | 'field2' | 'field3' | 'selectedPreset') =>
+    (v: SetterArg<string>) => {
+      const cur = fieldStateRef.current[key];
+      const next = typeof v === 'function' ? (v as (prev: string) => string)(cur) : v;
+      if (next === cur) return;
+      const pre = { ...fieldStateRef.current };
+      dispatch({ type: 'push_field_snapshot', snapshot: pre });
+      dispatch({ type: 'patch', payload: { [key]: next } as SessionPatch });
+    }, []);
+
+  const setField1 = useMemo(() => makeFieldSetter('field1'), [makeFieldSetter]);
+  const setField2 = useMemo(() => makeFieldSetter('field2'), [makeFieldSetter]);
+  const setField3 = useMemo(() => makeFieldSetter('field3'), [makeFieldSetter]);
+  const setSelectedPreset = useMemo(() => makeFieldSetter('selectedPreset'), [makeFieldSetter]);
+
+  const undoFields = useCallback(() => dispatch({ type: 'undo_fields' }), []);
+  const redoFields = useCallback(() => dispatch({ type: 'redo_fields' }), []);
+  const canUndo = state.fieldUndoStack.length > 0;
+  const canRedo = state.fieldRedoStack.length > 0;
 
   // Award XP helper
   const addXP = useCallback((amount: number) => {
@@ -280,6 +409,23 @@ export function useSession() {
     dispatch({ type: 'resume_schema', schema });
     const first = schema.activities?.[0];
     const saved = first ? schema.userResponses?.[first.id] : undefined;
+    return !(saved && saved.readinessConfirmed);
+  }, []);
+
+  /**
+   * Resume an incomplete schema back into the ENCODING workbench at its first
+   * unfinished stage (used by the input-screen shortcut + continue button).
+   * Returns whether the readiness modal should open for that stage.
+   */
+  const resumeToEncoding = useCallback((schema: SavedSchema) => {
+    dispatch({ type: 'resume_to_encoding', schema });
+    const acts = schema.activities || [];
+    const responses = schema.userResponses || {};
+    const target = acts.find(a => {
+      const r = responses[a.id];
+      return !r || (!r.field1?.trim() && !r.field2?.trim()) || r.skipped;
+    }) ?? acts[0];
+    const saved = target ? responses[target.id] : undefined;
     return !(saved && saved.readinessConfirmed);
   }, []);
 
@@ -328,6 +474,14 @@ export function useSession() {
   return {
     ...state,
     ...setters,
+    setField1,
+    setField2,
+    setField3,
+    setSelectedPreset,
+    undoFields,
+    redoFields,
+    canUndo,
+    canRedo,
     currentActivity,
     matchedKeywords,
     semanticDepth,
@@ -337,6 +491,7 @@ export function useSession() {
     loadStageInputs,
     resetSession,
     resumeSchema,
+    resumeToEncoding,
     selectModule,
     feynmanPass,
   };
