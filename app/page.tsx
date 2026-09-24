@@ -18,11 +18,9 @@ import { incrementModelCall, saveGenerationInProgress, clearGenerationInProgress
 import { decompressSchemaFromUrl } from '@/lib/url-share';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
-import { DrillModal } from '@/components/DrillModal';
 import { AuthModal } from '@/components/AuthModal';
 import { DeepResearchBadge } from '@/components/DeepResearchBadge';
 import { GuidedPathRoadmap } from '@/components/GuidedPathRoadmap';
-import { InterleavingDrillModal } from '@/components/InterleavingDrillModal';
 import RoastNotesModal from '@/components/RoastNotesModal';
 import StatelessShareModal from '@/components/StatelessShareModal';
 import { PWAInstallHeader } from '@/components/PWAInstallHeader';
@@ -40,6 +38,7 @@ import { ReadinessModal } from '@/components/ReadinessModal';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
+import { hashStringKey } from '@/lib/utils';
 import { extractAnkiCardsFromSchema, classifyDeckQuality, buildHierarchicalDeckName, generateAnkiApkgPackage } from '@/lib/anki-exporter';
 import { useSession } from '@/hooks/useSession';
 import { useGenerationProgress } from '@/hooks/useGenerationProgress';
@@ -49,7 +48,7 @@ import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
 import { CompletedSessionView } from '@/components/CompletedSessionView';
 import { TeachMeModal } from '@/components/TeachMeModal';
 export default function DeepEncodeApp() {
-  const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud, isSyncing, lastSyncedAt, lastSyncError, pendingLocalCount } = useAuth();
+  const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud, isSyncing, lastSyncedAt, lastSyncError, pendingLocalCount, backupSettingsToCloud } = useAuth();
 
   // ─── Extracted state hooks ─────────────────────────────────────────────────
   // Input sources & generation toggles (useInputSource)
@@ -151,8 +150,7 @@ export default function DeepEncodeApp() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isInterleavingOpen, setIsInterleavingOpen] = useState(false);
-  const [activeDrillSchema, setActiveDrillSchema] = useState<SavedSchema | null>(null);
+  // Drill modals were removed : review lives in Anki/RemNote, not here.
 
   // Concept Prerequisites (You Are Not Ready) State
   const [isPrereqModalOpen, setIsPrereqModalOpen] = useState(false);
@@ -502,9 +500,9 @@ export default function DeepEncodeApp() {
     const displayXp = xp + (cloudStats?.totalXp || 0);
     if (displayXp >= 1000) return { title: 'Master Neural Architect', level: 5, color: 'text-amber border-amber/60' };
     if (displayXp >= 750) return { title: 'Cognitive Synthesizer', level: 4, color: 'text-amber border-amber/40' };
-    if (displayXp >= 500) return { title: 'Schema Engineer', level: 3, color: 'text-bone border-steel' };
-    if (displayXp >= 250) return { title: 'Active Encoder', level: 2, color: 'text-bone border-steel' };
-    return { title: 'Passive Reader', level: 1, color: 'text-solder border-steel' };
+    if (displayXp >= 500) return { title: 'Schema Engineer', level: 3, color: 'text-bone border-edge' };
+    if (displayXp >= 250) return { title: 'Active Encoder', level: 2, color: 'text-bone border-edge' };
+    return { title: 'Passive Reader', level: 1, color: 'text-solder border-edge' };
   }, [xp, cloudStats]);
 
 
@@ -586,6 +584,23 @@ export default function DeepEncodeApp() {
           addXP(120);
           sound.playSuccess();
           setAppState('encoding');
+
+          // Seed the library entry for this video now (deterministic id), so
+          // partial progress autosaves land as updates instead of vanishing.
+          const videoKey = data.youtubeData?.videoId || youtubeUrl.trim();
+          if (videoKey) {
+            await saveSchemaToLibrary({
+              id: `yt_${hashStringKey(String(videoKey))}`,
+              timestamp: Date.now(),
+              topicSummary: data.topicSummary || data.videoTitle || 'YouTube Cognitive Schema',
+              mode: encodingMode,
+              xpEarned: 0,
+              activities: data.activities,
+              userResponses: {},
+              youtubeData: data.youtubeData || undefined,
+              researchContexts: data.researchContexts?.length > 0 ? data.researchContexts : undefined,
+            });
+          }
         } else {
           throw new Error('Invalid YouTube schema response format');
         }
@@ -856,6 +871,28 @@ export default function DeepEncodeApp() {
     }
   };
 
+  // In-progress autosave for YouTube sessions : progress lands in the library
+  // under the deterministic per-video id after every stage, so "encode 2 of 9
+  // chapters today" survives a reload and resumes like any text schema.
+  useEffect(() => {
+    const ytSessionId = youtubeData?.videoId ? `yt_${hashStringKey(youtubeData.videoId)}` : null;
+    if (appState !== 'encoding' || !ytSessionId || !youtubeData) return;
+    if (Object.keys(userResponses).length === 0) return;
+    void saveSchemaToLibrary({
+      id: ytSessionId,
+      timestamp: Date.now(),
+      topicSummary: topicSummary || 'YouTube Cognitive Schema',
+      mode: encodingMode,
+      xpEarned: xp,
+      activities,
+      userResponses,
+      youtubeData,
+      researchContexts: researchContexts.length > 0 ? researchContexts : undefined,
+    });
+    // saveSchemaToLibrary identity is stable via useCallback in the hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appState, youtubeData, currentActivityIndex, userResponses]);
+
   // End Session Batch Metacognitive Performance Review
   const handleEndSessionReview = async (customResponses?: Record<string, StageResponse>, customActivities?: Activity[]) => {
     const acts = customActivities || activities;
@@ -1094,10 +1131,9 @@ export default function DeepEncodeApp() {
       // 1) Escape closes open modals (top-most first, roughly by z-order).
       if (e.key === 'Escape') {
         if (isTeachOpen) { setIsTeachOpen(false); return; }
-        if (activeDrillSchema) { setActiveDrillSchema(null); return; }
+        if (isReadinessModalOpen) { setIsReadinessModalOpen(false); return; }
         if (isReadinessModalOpen) { setIsReadinessModalOpen(false); return; }
         if (isShareModalOpen) { setIsShareModalOpen(false); return; }
-        if (isInterleavingOpen) { setIsInterleavingOpen(false); return; }
         if (isAuthOpen) { setIsAuthOpen(false); return; }
         if (isSettingsOpen) { setIsSettingsOpen(false); return; }
         if (isHistoryOpen) { setIsHistoryOpen(false); return; }
@@ -1130,8 +1166,8 @@ export default function DeepEncodeApp() {
       // 3) Ctrl/Cmd+Enter from the input view launches generation.
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && appState === 'input') {
         const anyModalOpen =
-          isTeachOpen || activeDrillSchema !== null || isReadinessModalOpen || isShareModalOpen ||
-          isInterleavingOpen || isAuthOpen || isSettingsOpen ||
+          isTeachOpen || isReadinessModalOpen || isShareModalOpen ||
+          isAuthOpen || isSettingsOpen ||
           isHistoryOpen || isAnalyticsOpen || isPrereqModalOpen || isPretestModalOpen ||
           isBlurtingModalOpen || isSegregateModalOpen || isAnkiExportOpen || isRoastModalOpen ||
           isComparativeModalOpen || isEndSessionReviewOpen;
@@ -1145,8 +1181,8 @@ export default function DeepEncodeApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appState, isEvaluating,
-    isTeachOpen, activeDrillSchema, isReadinessModalOpen, isShareModalOpen,
-    isInterleavingOpen, isAuthOpen, isSettingsOpen,
+    isTeachOpen, isReadinessModalOpen, isShareModalOpen,
+    isAuthOpen, isSettingsOpen,
     isHistoryOpen, isAnalyticsOpen, isPrereqModalOpen, isPretestModalOpen,
     isBlurtingModalOpen, isSegregateModalOpen, isAnkiExportOpen, isRoastModalOpen,
     isComparativeModalOpen, isEndSessionReviewOpen,
@@ -1292,21 +1328,21 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="min-h-screen min-h-dvh bg-chassis text-bone flex flex-col items-center py-4 sm:py-8 px-3 sm:px-6 relative overflow-x-hidden selection:bg-amber/30 selection:text-chassis font-mono mobile-safe-bottom">
+    <main className="min-h-screen min-h-dvh bg-chassis text-bone flex flex-col items-center py-4 sm:py-8 px-3 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/30 selection:text-inset font-sans mobile-safe-bottom">
 
       <div className="w-full max-w-5xl relative z-10 flex-1 flex flex-col">
 
         {/* Top Control Bar : wraps cleanly on phones, full-width rows. */}
-        <header className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border border-steel bg-deck px-3 sm:px-4 py-3">
+        <header className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-deck border border-edge rounded-lg shadow-panel px-4 py-3">
           <div className="flex items-center gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-bone uppercase">DeepEncode</h1>
-                <span className="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest bg-chassis text-amber border border-amber/40">
-                  [ GEMINI 3.7 // FIRESTORE ]
+                <h1 className="text-xl font-bold tracking-tight text-bone">DeepEncode</h1>
+                <span className="hidden sm:inline px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-widest bg-inset text-amber-300 border border-amber-500/30 rounded-full">
+                  Forge
                 </span>
               </div>
-              <p className="text-[10px] text-solder font-mono uppercase tracking-wider">{'// Multimodal cognitive schema architect with adaptive chunking & interleaving'}</p>
+              <p className="text-[11px] text-solder">Multimodal cognitive schema architect with adaptive chunking &amp; interleaving</p>
             </div>
           </div>
 
@@ -1314,35 +1350,37 @@ export default function DeepEncodeApp() {
               so items keep 44px targets instead of wrapping into a tall stack. */}
           <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto max-w-full py-1 [-webkit-overflow-scrolling:touch]">
             {appState !== 'input' && (
-              <div className="shrink-0 flex items-center gap-2.5 bg-chassis border border-steel px-3 py-1.5 min-h-[44px] relative">
-                <span className="text-xs font-bold font-mono tracking-tight text-amber">XP: {String(xp).padStart(4, '0')}</span>
+              <div className="shrink-0 flex items-center gap-2.5 bg-inset border border-edge rounded-lg px-3 py-1.5 min-h-[44px] relative">
+                <span className="text-xs font-semibold text-slate-ink">
+                  Progress <span className="font-mono font-semibold text-amber-300">{String(xp).padStart(4, '0')}</span>
+                </span>
 
-                <div className="h-4 w-px bg-steel" />
+                <div className="h-4 w-px bg-edge" />
 
-                <div className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border bg-deck ${userRank.color}`}>
-                  LVL: {String(userRank.level).padStart(2, '0')} {'//'} {userRank.title}
+                <div className="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider border border-edge bg-deck text-slate-ink rounded-md">
+                  {userRank.title}
                 </div>
 
-                {/* Floating XP Gain Indicator */}
+                {/* Floating Gain Indicator */}
                 <AnimatePresence>
                   {xpGainAnimation && (
                     <motion.div
                       initial={{ opacity: 0, y: 0 }}
                       animate={{ opacity: 1, y: -28 }}
                       exit={{ opacity: 0 }}
-                      className="absolute -top-3 right-4 px-2 py-0.5 bg-amber text-chassis text-[11px] font-mono font-bold z-20"
+                      className="absolute -top-3 right-4 px-2 py-0.5 bg-amber-500 text-inset text-[11px] font-mono font-semibold rounded-md z-20"
                     >
-                      +{xpGainAnimation} XP
+                      +{xpGainAnimation}
                     </motion.div>
                   )}
                 </AnimatePresence>
               </div>
             )}
 
-            {/* PWA Local-First Offline & Install Indicator */}
+            {/* Offline & Install Indicator */}
             {isOffline && (
-              <div className="shrink-0 px-2.5 py-1 min-h-[44px] flex items-center bg-chassis border border-hazard text-solder text-[10px] font-mono font-bold uppercase tracking-wider">
-                [ LINK: OFFLINE ]
+              <div className="shrink-0 px-2.5 py-1 min-h-[44px] flex items-center bg-hazard-950/40 border border-hazard-500/50 text-hazard-300 text-[11px] font-medium rounded-md">
+                Offline
               </div>
             )}
             <PWAInstallHeader />
@@ -1351,30 +1389,20 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsComparativeModalOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
               title="Compare two documents (e.g. Lecture Slides vs Textbook Chapter)"
             >
-              [ COMPARE // 2 DOCS ]
+              Compare 2 docs
             </button>
 
             {/* Anki & SM-2 Exporter Button */}
             <button
               type="button"
               onClick={() => setIsAnkiExportOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
               title="Export .apkg Anki package or sync via SM-2 Webhooks"
             >
-              [ ANKI: SM-2 ]
-            </button>
-
-            {/* Interleaving Multi-Domain Drill Button */}
-            <button
-              type="button"
-              onClick={() => setIsInterleavingOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
-              title="Start Interleaved Multi-Domain Drill (Mix subjects)"
-            >
-              [ DRILL: INTERLEAVE ]
+              Anki / SM-2
             </button>
 
             {/* Stateless Share Button in Top Bar (when active or completed) */}
@@ -1382,10 +1410,10 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleOpenStatelessShare()}
-                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
                 title="Share Stateless URL (Free & Zero DB Required)"
               >
-                [ SHARE ]
+                Share
               </button>
             )}
 
@@ -1393,12 +1421,12 @@ export default function DeepEncodeApp() {
             {(() => {
               const pendingNote = pendingLocalCount > 0 ? ` : ${pendingLocalCount} local` : '';
               let status = 'OFF';
-              let cls = 'border-steel text-solder hover:text-bone';
+              let cls = 'border-edge text-solder hover:text-bone';
               let title = 'Sign in to sync schemas across devices (Firestore)';
               if (user) {
                 if (isSyncing) {
                   status = 'SYNCING';
-                  cls = 'border-amber/40 text-amber';
+                  cls = 'border-amber-500/40 text-amber-300';
                   title = 'Syncing your schemas to the cloud...';
                 } else if (lastSyncError) {
                   status = 'ERROR';
@@ -1406,7 +1434,7 @@ export default function DeepEncodeApp() {
                   title = `Last cloud sync failed: ${lastSyncError} — click to retry from Cloud Sync & Account.`;
                 } else {
                   status = 'SYNCED';
-                  cls = 'border-amber/40 text-amber';
+                  cls = 'border-amber-500/40 text-amber-300';
                   const when = lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : 'just now';
                   title = `Signed in as ${user.displayName || user.email || 'User'}${pendingNote} : last synced ${when}.`;
                 }
@@ -1416,10 +1444,10 @@ export default function DeepEncodeApp() {
               return (
                 <button
                   onClick={() => setIsAuthOpen(true)}
-                  className={`shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border transition-colors duration-150 text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer ${cls}`}
+                  className={`shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border rounded-md transition-colors duration-150 text-xs font-medium cursor-pointer ${cls}`}
                   title={title}
                 >
-                  [ CLOUD: {status} ]
+                  Cloud: {status}
                 </button>
               );
             })()}
@@ -1429,10 +1457,10 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleEndSessionReview()}
-                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-amber border border-amber text-chassis transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-amber-500 border border-amber-500 text-inset text-xs font-semibold rounded-md transition-colors duration-150 cursor-pointer"
                 title="View Metacognitive Performance Review"
               >
-                [ SESSION REVIEW ]
+                Session review
               </button>
             )}
 
@@ -1440,37 +1468,38 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsAnalyticsOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
               title="Metacognitive Analytics & Model Quota Dashboard"
             >
-              [ TELEMETRY ]
+              Analytics
             </button>
 
             {/* Saved Schemas History Button */}
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer relative"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer relative"
               title="View Saved Schemas History"
             >
-              [ LIBRARY{savedSchemas.length > 0 ? `: ${String(savedSchemas.length).padStart(2, '0')}` : ''} ]
+              Library{savedSchemas.length > 0 ? ` · ${savedSchemas.length}` : ''}
             </button>
 
             {/* AI Settings / Multi-Key Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
               title="Configure Models (Gemini 3.7 Flash & 3.5 Flash-Lite)"
             >
-              [ CONFIG ]
+              Settings
             </button>
 
             {/* Audio Toggle */}
             <button
               onClick={toggleSound}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
               title={soundMuted ? 'Unmute audio effects' : 'Mute audio effects'}
+              aria-label={soundMuted ? 'Unmute audio effects' : 'Mute audio effects'}
             >
-              [ SND: {soundMuted ? 'OFF' : 'ON'} ]
+              {soundMuted ? 'Sound off' : 'Sound on'}
             </button>
           </div>
         </header>
@@ -1480,18 +1509,18 @@ export default function DeepEncodeApp() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-deck border border-amber/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+            className="mb-6 p-4 bg-deck border border-amber-500/40 rounded-lg shadow-panel flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
           >
             <div className="flex items-center gap-3">
-              <span className="px-2 py-1 bg-chassis border border-amber/40 text-amber text-[9px] font-mono font-bold uppercase tracking-widest shrink-0">
-                [ STATELESS URL ]
+              <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/40 text-amber-300 text-[10px] font-semibold uppercase tracking-widest rounded-full shrink-0">
+                Shared link
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-bone text-sm font-mono uppercase">Classmate Shared Schema Loaded</span>
+                  <span className="font-bold text-bone text-sm">Classmate Shared Schema Loaded</span>
                 </div>
-                <p className="text-solder text-xs mt-0.5 font-mono">
-                  Loaded <span className="text-amber">&ldquo;{importedShareBanner}&rdquo;</span> completely free with zero database login needed.
+                <p className="text-solder text-xs mt-0.5">
+                  Loaded <span className="text-amber-300 font-medium">&ldquo;{importedShareBanner}&rdquo;</span> — zero database login needed.
                 </p>
               </div>
             </div>
@@ -1523,7 +1552,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => setImportedShareBanner(null)}
-                className="px-2 py-1 text-solder hover:text-bone border border-steel hover:border-solder font-mono text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-none"
+                className="px-2 py-1 text-solder hover:text-bone border border-edge hover:border-solder font-mono text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-none"
               >
                 [ X ]
               </button>
@@ -1559,7 +1588,7 @@ export default function DeepEncodeApp() {
                     clearGenerationInProgress();
                     setInterruptedGen(null);
                   }}
-                  className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder hover:text-bone border border-steel transition-none cursor-pointer"
+                  className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder hover:text-bone border border-edge transition-none cursor-pointer"
                   title="Dismiss"
                 >
                   [ DISMISS ]
@@ -1636,7 +1665,7 @@ export default function DeepEncodeApp() {
                     </button>
                     <button
                       type="button"
-                      className="px-3 py-2 bg-chassis border border-steel text-solder text-[11px] font-mono font-bold uppercase tracking-wider hover:text-bone transition-none cursor-pointer"
+                      className="px-3 py-2 bg-chassis border border-edge text-solder text-[11px] font-mono font-bold uppercase tracking-wider hover:text-bone transition-none cursor-pointer"
                       title="Start a fresh topic instead"
                     >
                       Start fresh
@@ -1672,9 +1701,9 @@ export default function DeepEncodeApp() {
             {/* Quick Diagnostic Power Tools */}
             <div className="flex flex-col items-center gap-2">
               {/* Pre-generation section + target selectors for SEGREGATE */}
-              <div className="flex flex-wrap items-center justify-center gap-2 border border-steel bg-deck px-3 py-2">
-                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-amber">
-                  [ SEGREGATE: ]
+              <div className="flex flex-wrap items-center justify-center gap-2 bg-deck border border-edge rounded-lg px-3 py-2">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">
+                  Segregate
                 </span>
                 {([
                   ['facts', 'Facts'],
@@ -1689,13 +1718,13 @@ export default function DeepEncodeApp() {
                     onClick={() =>
                       setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))
                     }
-                    className={`px-2 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+                    className={`px-2.5 py-1.5 min-h-[36px] text-xs font-medium rounded-full border transition-colors duration-150 cursor-pointer ${
                       segregateOptions[key]
-                        ? 'bg-steel border-steel text-bone'
-                        : 'bg-chassis border-steel text-solder'
+                        ? 'bg-inset border-slate-ink/50 text-bone'
+                        : 'bg-chassis border-edge text-solder hover:text-slate-ink'
                     }`}
                   >
-                    {segregateOptions[key] ? '[X]' : '[ ]'} {label}
+                    {label}
                   </button>
                 ))}
                 <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-solder">→</span>
@@ -1706,94 +1735,94 @@ export default function DeepEncodeApp() {
                     onClick={() =>
                       setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))
                     }
-                    className={`px-2 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+                    className={`px-2.5 py-1.5 min-h-[36px] text-xs font-semibold rounded-full border transition-colors duration-150 cursor-pointer ${
                       segregateOptions[key]
-                        ? 'bg-amber border-amber text-chassis'
-                        : 'bg-chassis border-steel text-solder'
+                        ? 'bg-amber-500 border-amber-500 text-inset'
+                        : 'bg-chassis border-edge text-solder hover:text-slate-ink'
                     }`}
                   >
-                    {segregateOptions[key] ? '[X]' : '[ ]'} {label}
+                    {label}
                   </button>
                 ))}
               </div>
 
               <div className="flex flex-wrap items-center justify-center gap-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder mr-1">
-                {'// DEEP DIAGNOSTICS:'}
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-solder mr-1">
+                Deep diagnostics
               </span>
               <button
                 type="button"
                 onClick={handleAuditPrerequisites}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isAuditingPrereq}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-amber-500/60 text-bone text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
                 title="Concept Prerequisites Check: Diagnoses background fundamentals you need before tackling this topic"
               >
-                {isAuditingPrereq ? '[ AUDITING... ]' : '[ CHECK PREREQUISITES ]'}
+                {isAuditingPrereq ? 'Auditing…' : 'Check prerequisites'}
               </button>
 
               <button
                 type="button"
                 onClick={handleLaunchPretest}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isLoadingPretest}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-amber-500/60 text-bone text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
                 title="Pre-Testing Effect (Productive Failure): 3-question diagnostic failure drill before learning"
               >
-                {isLoadingPretest ? '[ GENERATING... ]' : '[ PRE-TEST DRILL ]'}
+                {isLoadingPretest ? 'Generating…' : 'Pre-test drill'}
               </button>
 
               <button
                 type="button"
                 onClick={handleSegregateNotes}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isSegregating}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-amber-500/60 text-bone text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
                 title="Concept vs Fact Segregator: 4-Quadrant Matrix + Cloze Optimizer / Export to Anki or RemNote"
               >
-                {isSegregating ? '[ SEGREGATING... ]' : '[ SEGREGATE AND EXPORT ]'}
+                {isSegregating ? 'Segregating…' : 'Segregate and export'}
               </button>
 
               <button
                 type="button"
                 onClick={handleRoastNotes}
                 disabled={(!rawNotes.trim() && !uploadedFile) || isRoasting}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-steel hover:border-hazard text-hazard text-[10px] font-mono font-bold uppercase tracking-wider transition-none cursor-pointer"
+                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-hazard-500/60 text-hazard-300 text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
                 title="Strict Professor Audit: Call out fallacies, hand-waving, and missing gaps before encoding"
               >
-                {isRoasting ? '[ AUDITING... ]' : '[ ROAST NOTES ]'}
+                {isRoasting ? 'Auditing…' : 'Roast notes'}
               </button>
             </div>
             </div>
 
             {/* Cognitive framework telemetry */}
-            <div className="bg-deck border border-steel">
-              <div className="px-4 py-2 border-b border-steel bg-chassis">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-solder">{'// COGNITIVE FRAMEWORK TELEMETRY'}</span>
+            <div className="bg-deck border border-edge">
+              <div className="px-4 py-2 border-b border-edge bg-chassis">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-solder">Cognitive framework telemetry</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x divide-y md:divide-y-0 divide-steel">
+              <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x divide-y md:divide-y-0 divide-edge">
                 <div className="p-4">
-                  <div className="text-amber text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
-                    [ 01 ] {encodingMode === 'memorization' ? "Miller's 7±2 Law & Chunking" : "Craik & Lockhart Levels of Processing"}
+                  <div className="text-amber-300 text-xs font-semibold mb-1.5">
+                    01 · {encodingMode === 'memorization' ? "Miller's 7±2 Law & Chunking" : "Craik & Lockhart Levels of Processing"}
                   </div>
-                  <p className="text-[11px] text-solder font-mono leading-relaxed">
+                  <p className="text-xs text-solder leading-relaxed">
                     {encodingMode === 'memorization'
                       ? "Chunking arbitrary items into semantic sub-clusters prevents working memory overload."
                       : "Semantic analysis creates drastically stronger memory traces than passive re-reading."}
                   </p>
                 </div>
                 <div className="p-4">
-                  <div className="text-amber text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
-                    [ 02 ] {encodingMode === 'memorization' ? "Method of Loci (Palace)" : "Paivio Dual Coding (1986)"}
+                  <div className="text-amber-300 text-xs font-semibold mb-1.5">
+                    02 · {encodingMode === 'memorization' ? "Method of Loci (Palace)" : "Paivio Dual Coding (1986)"}
                   </div>
-                  <p className="text-[11px] text-solder font-mono leading-relaxed">
+                  <p className="text-xs text-solder leading-relaxed">
                     {encodingMode === 'memorization'
                       ? "Placing items along a familiar physical path leverages spatial navigation memory."
                       : "Forming both verbal and visual mental spatial codes doubles retrievability during recall."}
                   </p>
                 </div>
                 <div className="p-4">
-                  <div className="text-amber text-[10px] font-mono font-bold uppercase tracking-wider mb-1.5">
-                    [ 03 ] The Interleaving Effect
+                  <div className="text-amber-300 text-xs font-semibold mb-1.5">
+                    03 · The Interleaving Effect
                   </div>
-                  <p className="text-[11px] text-solder font-mono leading-relaxed">
+                  <p className="text-xs text-solder leading-relaxed">
                     Mixing diverse domains forces active neural discrimination, preventing mental fixation and building flexible mastery.
                   </p>
                 </div>
@@ -1812,12 +1841,13 @@ export default function DeepEncodeApp() {
             animate={{ opacity: 1, scale: 1 }}
             className="w-full py-24 flex flex-col items-center justify-center text-center"
           >
-            <div className="mb-6 border border-steel bg-deck px-6 py-2">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber">
-                [ PROCESSING /// ]
+            <div className="mb-6 flex items-center gap-2 px-4 py-1.5 bg-deck border border-edge rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+                Processing
               </span>
             </div>
-            <h2 className="text-lg font-bold text-bone mb-2 tracking-tight font-mono uppercase">
+            <h2 className="text-xl font-bold text-bone mb-2 tracking-tight">
               {activeTab === 'youtube'
                 ? 'Deconstructing YouTube Video Lecture Timestamps...'
                 : uploadedFile
@@ -1828,7 +1858,7 @@ export default function DeepEncodeApp() {
                       ? 'Constructing Mnemonic & Chunking Blueprint...'
                       : 'Deconstructing Semantic Schemas...'}
             </h2>
-            <p className="text-solder max-w-md font-mono text-xs uppercase tracking-wider">
+            <p className="text-solder max-w-md text-sm leading-relaxed">
               {activeTab === 'youtube'
                 ? 'Gemini 3.7 Flash is extracting key lecture milestones, visual animations, and timestamp anchors.'
                 : enableDeepResearch
@@ -1838,9 +1868,9 @@ export default function DeepEncodeApp() {
 
             {/* Live pipeline progress : asymptotic bar + elapsed clock + phase ticker */}
             <div className="mt-8 w-full max-w-md">
-              <div className="h-1.5 w-full bg-chassis border border-steel overflow-hidden">
+              <div className="h-1.5 w-full bg-inset border border-edge rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-amber transition-all duration-1000 ease-linear"
+                  className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
                   style={{ width: `${pct}%` }}
                   role="progressbar"
                   aria-label="Generation progress"
@@ -1857,9 +1887,9 @@ export default function DeepEncodeApp() {
                 type="button"
                 onClick={handleCancelGeneration}
                 title="Cancel this generation and return to the input"
-                className="mt-5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-hazard-400 hover:border-hazard-400 transition-none cursor-pointer"
+                className="mt-5 px-3.5 py-2 text-xs font-medium text-solder bg-inset border border-edge rounded-md hover:text-hazard-300 hover:border-hazard-500/50 transition-colors duration-150 cursor-pointer"
               >
-                [ CANCEL GENERATION ]
+                Cancel generation
               </button>
             </div>
           </motion.div>
@@ -1956,7 +1986,6 @@ export default function DeepEncodeApp() {
             onDownloadApkg={handleDownloadApkg}
             onCopy={copyToClipboard}
             onShare={() => handleOpenStatelessShare()}
-            onStartInterleavedDrill={() => setIsInterleavingOpen(true)}
             onOpenBlurting={() => setIsBlurtingModalOpen(true)}
             onTeach={() => handleOpenTeach('schema')}
             onOpenSegregate={(report) => {
@@ -1982,6 +2011,7 @@ export default function DeepEncodeApp() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
+        backupSettingsToCloud={backupSettingsToCloud}
       />
 
       {/* Saved Schemas History Drawer */}
@@ -1990,7 +2020,6 @@ export default function DeepEncodeApp() {
         onClose={() => setIsHistoryOpen(false)}
         schemas={savedSchemas}
         onSelectSchemaToResume={handleResumeSchema}
-        onStartDrill={(schema: SavedSchema) => setActiveDrillSchema(schema)}
         onShareSchema={(schema: SavedSchema) => handleOpenStatelessShare(schema)}
         onDeleteSchema={handleDeleteSchema}
         onClearAll={handleClearAllHistory}
@@ -1998,24 +2027,6 @@ export default function DeepEncodeApp() {
           setIsHistoryOpen(false);
           setIsAuthOpen(true);
         }}
-      />
-
-      {/* Interactive Active Retrieval Drill Modal */}
-      <DrillModal
-        isOpen={!!activeDrillSchema}
-        schema={activeDrillSchema}
-        onClose={() => setActiveDrillSchema(null)}
-        onDrillComplete={(score: number) => {
-          addXP(score >= 80 ? 100 : 50);
-        }}
-      />
-
-      {/* Interleaving Multi-Domain Drill Modal */}
-      <InterleavingDrillModal
-        isOpen={isInterleavingOpen}
-        onClose={() => setIsInterleavingOpen(false)}
-        savedSchemas={savedSchemas}
-        onAwardXP={(earnedXp: number) => addXP(earnedXp)}
       />
 
       {/* Roast My Notes Strict Professor Modal */}
@@ -2114,7 +2125,7 @@ export default function DeepEncodeApp() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-deck border border-steel p-6 max-w-md w-full mx-4"
+            className="bg-deck border border-edge p-6 max-w-md w-full mx-4"
           >
             <div className="text-center mb-6">
               <span className="inline-block px-3 py-1 bg-chassis border border-amber/40 text-amber text-[10px] font-mono font-bold uppercase tracking-widest mb-3">
@@ -2132,7 +2143,7 @@ export default function DeepEncodeApp() {
                   setShowExportChoice(false);
                   setIsAnkiExportOpen(true);
                 }}
-                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-steel hover:border-amber transition-none cursor-pointer"
+                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-edge hover:border-amber transition-none cursor-pointer"
               >
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-bone">[ ANKI ]</span>
                 <span className="text-[10px] font-mono text-solder">.APKG + SM-2</span>
@@ -2143,7 +2154,7 @@ export default function DeepEncodeApp() {
                   setShowExportChoice(false);
                   setIsSegregateModalOpen(true);
                 }}
-                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-steel hover:border-amber transition-none cursor-pointer"
+                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-edge hover:border-amber transition-none cursor-pointer"
               >
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-bone">[ REMNOTE ]</span>
                 <span className="text-[10px] font-mono text-solder">MARKDOWN + API</span>

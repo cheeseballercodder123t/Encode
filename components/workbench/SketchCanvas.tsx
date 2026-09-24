@@ -177,14 +177,14 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
   };
 
   return (
-    <div className=" border border-steel/30 bg-[#07080D] p-3 space-y-2">
+    <div className=" border border-edge/30 bg-[#07080D] p-3 space-y-2">
       {/* Canvas Toolbar */}
       <div className="flex items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setIsEraser(false)}
-            className={`min-h-[44px] px-2.5 flex items-center border transition-colors ${!isEraser ? 'bg-steel/30 text-bone border-steel/40' : 'bg-deck text-solder border-steel'}`}
+            className={`min-h-[44px] px-2.5 flex items-center border transition-colors ${!isEraser ? 'bg-inset/30 text-bone border-edge/40' : 'bg-deck text-solder border-edge'}`}
             title="Pen"
             aria-pressed={!isEraser}
           >
@@ -194,7 +194,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
           <button
             type="button"
             onClick={() => setIsEraser(true)}
-            className={`min-h-[44px] px-2.5 flex items-center border transition-colors ${isEraser ? 'bg-steel/30 text-bone border-steel/40' : 'bg-deck text-solder border-steel'}`}
+            className={`min-h-[44px] px-2.5 flex items-center border transition-colors ${isEraser ? 'bg-inset/30 text-bone border-edge/40' : 'bg-deck text-solder border-edge'}`}
             title="Eraser"
             aria-pressed={isEraser}
           >
@@ -211,7 +211,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
                   onClick={() => setColor(c)}
                   aria-label={`Sketch color ${c}`}
                   aria-pressed={color === c}
-                  className={`w-7 h-7 min-h-[28px] min-w-[28px] border ${color === c ? 'ring-2 ring-white scale-110' : 'border-steel'}`}
+                  className={`w-7 h-7 min-h-[28px] min-w-[28px] border ${color === c ? 'ring-2 ring-white scale-110' : 'border-edge'}`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -254,7 +254,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
         onTouchEnd={stopDrawing}
         onTouchCancel={stopDrawing}
         onContextMenu={e => e.preventDefault()}
-        className="w-full h-44 sm:h-36 bg-[#0B0D14] border border-steel cursor-crosshair touch-none select-none"
+        className="w-full h-44 sm:h-36 bg-[#0B0D14] border border-edge cursor-crosshair touch-none select-none"
       />
       <span className="text-[10px] text-solder block text-right font-mono">
         Paivio Dual-Coding Mental Sketchpad

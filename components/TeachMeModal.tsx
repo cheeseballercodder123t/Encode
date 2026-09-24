@@ -209,7 +209,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
 
   const renderOptions = () => (
     <div className="p-5 space-y-4">
-      <div className="p-3 bg-deck border border-steel/40 text-xs text-bone leading-relaxed">
+      <div className="p-3 bg-deck border border-edge/40 text-xs text-bone leading-relaxed">
         <p className="font-bold text-bone text-[11px] flex items-center gap-1.5">
           <span className="text-flux font-bold font-mono">[ AI ]</span>
           Lesson Pre-Roll — how should I teach?
@@ -230,7 +230,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
             onClick={() => updateOpt('style', s.id)}
             title={s.blurb}
             className={`px-2 py-1.5 text-left border transition-none cursor-pointer text-[10px] font-mono font-bold uppercase tracking-wider ${
-              options.style === s.id ? 'bg-flux border-flux text-bone' : 'bg-chassis border-steel text-solder'
+              options.style === s.id ? 'bg-flux border-flux text-bone' : 'bg-chassis border-edge text-solder'
             }`}
           >
             [ {s.label.toUpperCase()} ]
@@ -246,7 +246,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
             onClick={() => updateOpt(key, !options[key])}
             title={tip}
             className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
-              options[key] ? 'bg-deck border-flux text-bone' : 'bg-chassis border-steel text-solder'
+              options[key] ? 'bg-deck border-flux text-bone' : 'bg-chassis border-edge text-solder'
             }`}
           >
             [ {label}: {options[key] ? 'ON' : 'OFF'} ]
@@ -269,7 +269,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
             type="button"
             onClick={() => updateOpt('difficulty', d)}
             className={`px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
-              options.difficulty === d ? 'bg-flux border-flux text-bone' : 'bg-chassis border-steel text-solder'
+              options.difficulty === d ? 'bg-flux border-flux text-bone' : 'bg-chassis border-edge text-solder'
             }`}
           >
             {d === 'intro' ? 'INTRO' : d === 'standard' ? 'STANDARD' : 'VIVA ORAL DEFENSE'}
@@ -278,7 +278,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
       </div>
 
       <div className="flex items-center justify-between gap-3 pt-1">
-        <button type="button" onClick={handleClose} className="px-4 py-2 bg-steel text-bone text-xs font-bold">
+        <button type="button" onClick={handleClose} className="px-4 py-2 bg-inset text-bone text-xs font-bold">
           Cancel
         </button>
         <button
@@ -328,7 +328,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
           {activeLesson.segments.map((s, i) => (
             <div
               key={s.id}
-              className={`h-1.5 flex-1 ${i < segmentIndex ? 'bg-amber' : i === segmentIndex ? 'bg-bone' : 'bg-steel/40'}`}
+              className={`h-1.5 flex-1 ${i < segmentIndex ? 'bg-amber' : i === segmentIndex ? 'bg-bone' : 'bg-inset/40'}`}
             />
           ))}
           <span className="text-[10px] font-mono font-bold text-amber ml-1">XP {totalXpEarned}</span>
@@ -344,7 +344,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
           key={seg.id}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-deck border border-steel/50 p-4 space-y-3"
+          className="bg-deck border border-edge/50 p-4 space-y-3"
         >
           {seg.title && <h4 className="font-bold text-bone text-sm font-mono">{seg.title}</h4>}
           {renderSegmentBody(seg)}
@@ -360,11 +360,11 @@ export function TeachMeModal(props: TeachMeModalProps) {
           initial={{ opacity: 0, scale: 0.95, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 14 }}
-          className="w-full max-w-3xl bg-chassis border border-steel overflow-hidden flex flex-col max-h-[92vh]"
+          className="w-full max-w-3xl bg-chassis border border-edge overflow-hidden flex flex-col max-h-[92vh]"
         >
-          <div className="px-4 py-3 border-b border-steel bg-deck flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-edge bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-1.5 bg-steel/10 border border-steel/30 text-bone">
+              <div className="p-1.5 bg-inset/10 border border-edge/30 text-bone">
                 <span className="text-flux font-bold font-mono">[ TEACH ]</span>
               </div>
               <div>
@@ -382,7 +382,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
                 </p>
               </div>
             </div>
-            <button type="button" onClick={handleClose} className="p-2 text-solder hover:text-bone hover:bg-steel">
+            <button type="button" onClick={handleClose} className="p-2 text-solder hover:text-bone hover:bg-inset">
               <span className="text-flux font-bold font-mono">[ X ]</span>
             </button>
           </div>

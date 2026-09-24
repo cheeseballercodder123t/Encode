@@ -5,16 +5,21 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, AIProvider } from '@/lib/types';
 import { loadAISettings, saveAISettings, DEFAULT_SETTINGS, loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
 import { getAllTemplates } from '@/lib/templates/registry';
+import { useAuth } from '@/lib/auth-context';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (settings: AISettings) => void;
+  /** Optional cloud backup hook from AuthContext (undefined when unavailable). */
+  backupSettingsToCloud?: (settings: any) => Promise<void>;
 }
 
-export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud }: SettingsModalProps) {
+  const { settingsRestored: settingsRestoredNotice } = useAuth();
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings());
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [importStatus, setImportStatus] = useState<{ ok: boolean; message: string } | null>(null);
   // Templates the learner hid (not pulling their weight) — persisted subtly.
   const [hiddenTemplates, setHiddenTemplates] = useState<string[]>(() => loadStudyPrefs().hiddenTemplates);
 
@@ -36,14 +41,60 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
   };
 
   const handleSave = () => {
-    saveAISettings(settings);
+    const stamped = { ...settings, savedAt: Date.now() } as any;
+    saveAISettings(stamped);
     saveStudyPrefs({ hiddenTemplates });
-    onSaved(settings);
+    onSaved(stamped);
+    // Fire-and-forget cloud backup (no-op when signed out; failures surface
+    // via the header CLOUD status, never block saving locally).
+    void backupSettingsToCloud?.(stamped);
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
     }, 800);
+  };
+
+  /** Downloads a portable JSON snapshot of settings + hidden templates. */
+  const handleExport = () => {
+    const payload = {
+      kind: 'deepencode-settings-v1',
+      exportedAt: Date.now(),
+      settings: { ...settings, savedAt: (settings as any).savedAt || Date.now() },
+      hiddenTemplates,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `deepencode-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  /** Imports a settings JSON (file picker), validating its kind marker. */
+  const handleImportFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (data?.kind !== 'deepencode-settings-v1' || typeof data.settings !== 'object') {
+        throw new Error('Not a DeepEncode settings export.');
+      }
+      const imported = { ...DEFAULT_SETTINGS, ...data.settings } as AISettings;
+      setSettings(imported);
+      setHiddenTemplates(Array.isArray(data.hiddenTemplates) ? data.hiddenTemplates : []);
+      // Persist immediately so nothing is lost if the user closes without saving.
+      const stamped = { ...imported, savedAt: Date.now() } as any;
+      saveAISettings(stamped);
+      saveStudyPrefs({ hiddenTemplates: Array.isArray(data.hiddenTemplates) ? data.hiddenTemplates : [] });
+      onSaved(stamped);
+      void backupSettingsToCloud?.(stamped);
+      setImportStatus({ ok: true, message: 'Settings imported and saved.' });
+    } catch (err: any) {
+      setImportStatus({ ok: false, message: err?.message || 'Import failed.' });
+    }
   };
 
   const handleReset = () => {
@@ -56,6 +107,10 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
 
   if (!isOpen) return null;
 
+  const restoredNotice = settingsRestoredNotice && !importStatus
+    ? 'Settings restored from your cloud backup.'
+    : null;
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/70 ">
@@ -63,12 +118,12 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="w-full max-w-xl bg-chassis border border-steel overflow-hidden flex flex-col max-h-[90vh]"
+          className="w-full max-w-xl bg-chassis border border-edge overflow-hidden flex flex-col max-h-[90vh]"
         >
           {/* Header */}
-          <div className="p-5 border-b border-steel bg-deck flex items-center justify-between">
+          <div className="p-5 border-b border-edge bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-steel/10 border border-steel/30 text-bone ">
+              <div className="p-2 bg-inset/10 border border-edge/30 text-bone ">
                 <span className="text-amber font-bold font-mono">[ CFG ]</span>
               </div>
               <div>
@@ -78,7 +133,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-solder hover:text-bone hover:bg-steel transition-colors duration-150"
+              className="p-2 text-solder hover:text-bone hover:bg-inset transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
@@ -86,6 +141,18 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
 
           {/* Body */}
           <div className="p-6 overflow-y-auto space-y-6 text-xs">
+            {(importStatus || restoredNotice) && (
+              <div
+                className={`p-3 border text-xs flex items-start gap-2 ${
+                  importStatus && !importStatus.ok
+                    ? 'bg-hazard-950/40 border-hazard/40 text-hazard-300'
+                    : 'bg-signal-950/40 border-signal/40 text-signal-300'
+                }`}
+              >
+                <span className="font-bold font-mono">{importStatus && !importStatus.ok ? '[ ! ]' : '[ OK ]'}</span>
+                <span className="leading-relaxed">{importStatus ? importStatus.message : restoredNotice}</span>
+              </div>
+            )}
             
             {/* Provider Tabs */}
             <div>
@@ -98,8 +165,8 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                   onClick={() => setSettings({ ...settings, provider: 'gemini' })}
                   className={`p-3  border flex flex-col items-center gap-1.5 transition-all ${
                     settings.provider === 'gemini'
-                      ? 'bg-steel/20 border-steel text-bone  '
-                      : 'bg-deck border-steel text-solder hover:text-bone'
+                      ? 'bg-inset/20 border-edge text-bone  '
+                      : 'bg-deck border-edge text-solder hover:text-bone'
                   }`}
                 >
                   <span className="text-amber font-bold font-mono">[ * ]</span>
@@ -112,8 +179,8 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                   onClick={() => setSettings({ ...settings, provider: 'openrouter' })}
                   className={`p-3  border flex flex-col items-center gap-1.5 transition-all ${
                     settings.provider === 'openrouter'
-                      ? 'bg-steel/20 border-steel text-bone  '
-                      : 'bg-deck border-steel text-solder hover:text-bone'
+                      ? 'bg-inset/20 border-edge text-bone  '
+                      : 'bg-deck border-edge text-solder hover:text-bone'
                   }`}
                 >
                   <span className="text-amber font-bold font-mono">[ SERVER ]</span>
@@ -126,8 +193,8 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                   onClick={() => setSettings({ ...settings, provider: 'openai' })}
                   className={`p-3  border flex flex-col items-center gap-1.5 transition-all ${
                     settings.provider === 'openai'
-                      ? 'bg-steel/20 border-steel text-bone  '
-                      : 'bg-deck border-steel text-solder hover:text-bone'
+                      ? 'bg-inset/20 border-edge text-bone  '
+                      : 'bg-deck border-edge text-solder hover:text-bone'
                   }`}
                 >
                   <span className="text-amber font-bold font-mono">[ CPU ]</span>
@@ -139,7 +206,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
 
             {/* Provider-Specific Configuration */}
             {settings.provider === 'gemini' && (
-              <div className="space-y-4 bg-deck p-4 border border-steel">
+              <div className="space-y-4 bg-deck p-4 border border-edge">
                 <div className="flex items-center justify-between">
                   <div className="font-bold text-bone flex items-center gap-1.5">
                     <span className="text-amber font-bold font-mono">[ KEY ]</span>
@@ -157,7 +224,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                   value={settings.geminiApiKey || ''}
                   onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value })}
                   placeholder="AIzaSy... (Leave blank for default)"
-                  className="w-full p-2.5 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                  className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -171,7 +238,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                       value={settings.geminiModel || 'gemini-3.7-flash'}
                       onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
                       placeholder="e.g. gemini-3.7-flash or gemini-2.5-pro"
-                      className="w-full p-2 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                     <datalist id="gemini-models-list">
                       <option value="gemini-3.7-flash" />
@@ -192,7 +259,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                       value={settings.geminiCheckerModel || 'gemini-3.5-flash-lite'}
                       onChange={(e) => setSettings({ ...settings, geminiCheckerModel: e.target.value })}
                       placeholder="e.g. gemini-3.5-flash-lite or gemini-2.5-flash-lite"
-                      className="w-full p-2 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                     <datalist id="gemini-checker-models-list">
                       <option value="gemini-3.5-flash-lite" />
@@ -206,7 +273,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             )}
 
             {settings.provider === 'openrouter' && (
-              <div className="space-y-4 bg-deck p-4 border border-steel">
+              <div className="space-y-4 bg-deck p-4 border border-edge">
                 <div className="flex items-center justify-between">
                   <div className="font-bold text-bone flex items-center gap-1.5">
                     <span className="text-amber font-bold font-mono">[ KEY ]</span>
@@ -226,7 +293,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                   value={settings.openrouterApiKey || ''}
                   onChange={(e) => setSettings({ ...settings, openrouterApiKey: e.target.value })}
                   placeholder="sk-or-v1-..."
-                  className="w-full p-2.5 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                  className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -239,7 +306,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                       value={settings.openrouterModel || 'google/gemini-2.5-flash'}
                       onChange={(e) => setSettings({ ...settings, openrouterModel: e.target.value })}
                       placeholder="e.g. google/gemini-2.5-flash"
-                      className="w-full p-2 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
 
@@ -252,7 +319,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                       value={settings.openrouterCheckerModel || 'google/gemini-2.5-flash-lite'}
                       onChange={(e) => setSettings({ ...settings, openrouterCheckerModel: e.target.value })}
                       placeholder="e.g. google/gemini-2.5-flash-lite"
-                      className="w-full p-2 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -260,7 +327,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             )}
 
             {settings.provider === 'openai' && (
-              <div className="space-y-4 bg-deck p-4 border border-steel">
+              <div className="space-y-4 bg-deck p-4 border border-edge">
                 <div>
                   <div className="font-bold text-bone flex items-center gap-1.5 mb-1">
                     <span className="text-amber font-bold font-mono">[ SERVER ]</span>
@@ -271,7 +338,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                     value={settings.openaiBaseUrl || 'https://api.openai.com/v1'}
                     onChange={(e) => setSettings({ ...settings, openaiBaseUrl: e.target.value })}
                     placeholder="https://api.openai.com/v1 or http://localhost:11434/v1"
-                    className="w-full p-2.5 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                    className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                   />
                   <span className="text-[10px] text-solder mt-1 block">Supports OpenAI, Groq, Ollama, LM Studio, or vLLM</span>
                 </div>
@@ -286,7 +353,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                     value={settings.openaiApiKey || ''}
                     onChange={(e) => setSettings({ ...settings, openaiApiKey: e.target.value })}
                     placeholder="sk-..."
-                    className="w-full p-2.5 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                    className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                   />
                 </div>
 
@@ -300,7 +367,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                       value={settings.openaiModel || 'gpt-4o-mini'}
                       onChange={(e) => setSettings({ ...settings, openaiModel: e.target.value })}
                       placeholder="e.g. gpt-4o-mini"
-                      className="w-full p-2 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
 
@@ -313,7 +380,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                       value={settings.openaiCheckerModel || 'gpt-4o-mini'}
                       onChange={(e) => setSettings({ ...settings, openaiCheckerModel: e.target.value })}
                       placeholder="e.g. gpt-4o-mini"
-                      className="w-full p-2 bg-[#0B0D14] border border-steel text-bone outline-none focus:border-steel font-mono text-xs"
+                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -321,7 +388,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             )}
 
             {/* Privacy note */}
-            <div className="flex items-start gap-2 text-[11px] text-solder bg-deck/60 p-3 border border-steel">
+            <div className="flex items-start gap-2 text-[11px] text-solder bg-deck/60 p-3 border border-edge">
               <span className="text-amber font-bold font-mono">[ OK ]</span>
               <span>Keys are stored locally in your browser storage and never logged or exposed to third parties.</span>
             </div>
@@ -340,7 +407,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                   return (
                     <div
                       key={t.id}
-                      className={`flex items-start gap-2 p-2 border ${hidden ? 'border-steel/50 bg-chassis opacity-60' : 'border-steel bg-deck/60'}`}
+                      className={`flex items-start gap-2 p-2 border ${hidden ? 'border-edge/50 bg-chassis opacity-60' : 'border-edge bg-deck/60'}`}
                     >
                       <button
                         type="button"
@@ -349,7 +416,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                         title={hidden ? `Show ${t.title}` : `Hide ${t.title}`}
                         className={`mt-0.5 min-w-[52px] px-2 py-1 text-[10px] font-mono font-bold uppercase border cursor-pointer ${
                           hidden
-                            ? 'border-steel text-solder'
+                            ? 'border-edge text-solder'
                             : 'border-amber bg-amber text-chassis'
                         }`}
                       >
@@ -370,7 +437,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
           </div>
 
           {/* Footer */}
-          <div className="p-4 border-t border-steel bg-deck flex items-center justify-between">
+          <div className="p-4 border-t border-edge bg-deck flex items-center justify-between">
             <button
               type="button"
               onClick={handleReset}
@@ -382,15 +449,39 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                onClick={handleExport}
+                title="Download settings as a portable JSON file"
+                className="px-3 py-2 bg-deck border border-edge text-solder hover:text-bone font-bold text-xs transition-colors duration-150"
+              >
+                Export
+              </button>
+              <label
+                title="Import a settings JSON file"
+                className="px-3 py-2 bg-deck border border-edge text-solder hover:text-bone font-bold text-xs transition-colors duration-150 cursor-pointer"
+              >
+                Import
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleImportFile(f);
+                    e.currentTarget.value = '';
+                  }}
+                />
+              </label>
+              <button
+                type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-steel text-solder font-bold"
+                className="px-4 py-2 bg-inset text-solder font-bold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex items-center gap-1.5 px-5 py-2 bg-steel text-bone font-bold  "
+                className="flex items-center gap-1.5 px-5 py-2 bg-inset text-bone font-bold  "
               >
                 {savedSuccess ? <span className="text-amber font-bold font-mono">[ OK ]</span> : null}
                 {savedSuccess ? 'Saved!' : 'Save Configuration'}

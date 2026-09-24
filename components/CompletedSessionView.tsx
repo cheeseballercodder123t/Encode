@@ -27,7 +27,6 @@ interface CompletedSessionViewProps {
   onDownloadApkg: () => void;
   onCopy: (format: 'remnote' | 'anki' | 'markdown') => void;
   onShare: () => void;
-  onStartInterleavedDrill: () => void;
   onOpenBlurting: () => void;
   onOpenSegregate: (report: SegregationReport) => void;
   onTeach: () => void;
@@ -56,7 +55,6 @@ export function CompletedSessionView({
   onDownloadApkg,
   onCopy,
   onShare,
-  onStartInterleavedDrill,
   onOpenBlurting,
   onOpenSegregate,
   onTeach,
@@ -73,7 +71,7 @@ export function CompletedSessionView({
       className="w-full flex flex-col gap-6"
     >
       {/* Identity Trophy Hero : the clean handoff is the reward */}
-      <div className="p-8 to-[#0F111A] border border-steel/30   relative overflow-hidden flex flex-col items-center text-center">
+      <div className="p-8 to-[#0F111A] border border-edge/30   relative overflow-hidden flex flex-col items-center text-center">
         <div className="p-3 bg-amber/20 border border-amber/40 text-amber mb-3  ">
           <span className="text-amber font-bold font-mono">[ CARDS ]</span>
         </div>
@@ -92,14 +90,14 @@ export function CompletedSessionView({
             <span className="font-black text-emerald-400">{fsrsReady} / {totalCards}</span>
           </div>
 
-          <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
+          <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
             <span className="text-amber font-bold font-mono">[ TRAP ]</span>
             <span className="text-solder">Boundary Traps:</span>
             <span className="font-bold text-amber">{boundaryTraps}</span>
           </div>
 
           {unfinished > 0 && (
-            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
               <span className="text-solder font-bold font-mono">[ ? ]</span>
               <span className="text-solder">Unfinished:</span>
               <span className="font-bold text-solder">{unfinished}</span>
@@ -107,14 +105,14 @@ export function CompletedSessionView({
           )}
 
           {leechCandidates > 0 && (
-            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
               <span className="text-hazard-400 font-bold font-mono">[ LEECH ]</span>
               <span className="text-solder">Dense (tagged):</span>
               <span className="font-bold text-hazard-400">{leechCandidates}</span>
             </div>
           )}
 
-          <div className="flex items-center gap-1 bg-chassis/60 px-2.5 py-1 border border-steel/50">
+          <div className="flex items-center gap-1 bg-chassis/60 px-2.5 py-1 border border-edge/50">
             <span className="text-solder">XP {xp}</span>
           </div>
         </div>
@@ -139,34 +137,8 @@ export function CompletedSessionView({
         </div>
       </div>
 
-      {/* Interleaving CTA banner on completed screen */}
-      <div className="p-5 border border-steel/30  flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 bg-steel/20 border border-steel/40 text-bone shrink-0">
-            <span className="text-amber font-bold font-mono">[ SHUF ]</span>
-          </div>
-          <div>
-            <h4 className="text-sm font-bold text-bone">
-              Supercharge Retention with an Interleaved Workout
-            </h4>
-            <p className="text-xs text-solder">
-              Mix this schema with other saved subjects in rapid-fire retrieval practice.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onStartInterleavedDrill}
-          className="px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs    flex items-center gap-2 shrink-0 cursor-pointer"
-        >
-          <span className="text-amber font-bold font-mono">[ ZAP ]</span>
-          <span>Start Interleaved Drill</span>
-        </button>
-      </div>
-
       {/* Quick Export Actions (RemNote, Anki, Markdown, Stateless URL Share) */}
-      <div className="bg-chassis border border-steel p-6  flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-chassis border border-edge p-6  flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           <h3 className="text-sm font-bold text-bone flex items-center gap-2">
             <span className="text-amber font-bold font-mono">[ SAVE ]</span>
@@ -180,7 +152,7 @@ export function CompletedSessionView({
           <button
             type="button"
             onClick={onOpenBlurting}
-            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-steel/40 text-bone text-xs font-bold  transition-all cursor-pointer "
+            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-edge/40 text-bone text-xs font-bold  transition-all cursor-pointer "
             title="The Blurting Method: Test free recall from memory on a blank canvas. AI marks missed first principles in red."
           >
             <span className="text-amber font-bold font-mono">[ PEN ]</span>
@@ -220,7 +192,7 @@ export function CompletedSessionView({
                 }))
               });
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-steel/40 text-bone text-xs font-bold  transition-all cursor-pointer "
+            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-edge/40 text-bone text-xs font-bold  transition-all cursor-pointer "
             title="RemNote Hierarchical Matrix & API Push"
           >
             <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
@@ -230,7 +202,7 @@ export function CompletedSessionView({
           <button
             type="button"
             onClick={onShare}
-            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-steel/40 text-bone text-xs font-bold  transition-all cursor-pointer "
+            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-edge/40 text-bone text-xs font-bold  transition-all cursor-pointer "
           >
             <span className="text-amber font-bold font-mono">[ SHARE ]</span>
             Share Link (Stateless)
@@ -238,7 +210,7 @@ export function CompletedSessionView({
 
           <button
             onClick={() => onCopy('remnote')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck border border-steel text-bone text-xs font-bold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck border border-edge text-bone text-xs font-bold transition-all cursor-pointer"
           >
             {copiedFormat === 'remnote' ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
             Copy for RemNote
@@ -246,7 +218,7 @@ export function CompletedSessionView({
 
           <button
             onClick={() => onCopy('anki')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck border border-steel text-bone text-xs font-bold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck border border-edge text-bone text-xs font-bold transition-all cursor-pointer"
           >
             {copiedFormat === 'anki' ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
             Copy Anki Cloze
@@ -254,7 +226,7 @@ export function CompletedSessionView({
 
           <button
             onClick={() => onCopy('markdown')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-steel border border-steel/50 text-bone text-xs font-bold transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-inset border border-edge/50 text-bone text-xs font-bold transition-all cursor-pointer"
           >
             {copiedFormat === 'markdown' ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ FILE ]</span>}
             Copy Full Markdown
@@ -263,8 +235,8 @@ export function CompletedSessionView({
       </div>
 
       {/* Generated Schemas Matrix */}
-      <div className="bg-chassis border border-steel overflow-hidden">
-        <div className="p-5 border-b border-steel bg-deck flex items-center justify-between">
+      <div className="bg-chassis border border-edge overflow-hidden">
+        <div className="p-5 border-b border-edge bg-deck flex items-center justify-between">
           <h3 className="font-bold text-bone text-sm flex items-center gap-2">
             <span className="text-amber font-bold font-mono">[ LAYERS ]</span>
             Your Synthesized Cognitive Schemas ({topicSummary})
@@ -278,7 +250,7 @@ export function CompletedSessionView({
               <div key={act.id} className="p-6 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 bg-steel/20 text-bone border border-steel/40 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="px-2 py-0.5 bg-inset/20 text-bone border border-edge/40 text-[10px] font-bold uppercase tracking-wider">
                       Stage {act.stageNumber}: {act.title}
                     </span>
                     <span className="text-xs text-solder font-mono">({act.framework})</span>
@@ -297,7 +269,7 @@ export function CompletedSessionView({
                 )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
-                  <div className="bg-deck p-4 border border-steel">
+                  <div className="bg-deck p-4 border border-edge">
                     <h5 className="text-[11px] font-bold text-bone uppercase mb-1">
                       {act.scaffold.field1Label}
                     </h5>
@@ -306,7 +278,7 @@ export function CompletedSessionView({
                     </p>
                   </div>
 
-                  <div className="bg-deck p-4 border border-steel">
+                  <div className="bg-deck p-4 border border-edge">
                     <h5 className="text-[11px] font-bold text-bone uppercase mb-1">
                       {act.scaffold.field2Label}
                     </h5>
@@ -317,7 +289,7 @@ export function CompletedSessionView({
                 </div>
 
                 {resp.field3 && (
-                  <div className="bg-chassis/30 p-3.5 border border-dashed border-steel text-xs text-solder font-mono">
+                  <div className="bg-chassis/30 p-3.5 border border-dashed border-edge text-xs text-solder font-mono">
                     <span className="font-mono font-bold text-[10px] text-amber uppercase mr-2">
                       {act.scaffold.field3Label || 'Anchor'}:
                     </span>
@@ -343,7 +315,7 @@ export function CompletedSessionView({
         ) : null}
         <button
           onClick={onRestart}
-          className="flex items-center gap-2 px-7 py-3 bg-steel border border-steel hover:bg-steel text-bone text-xs font-bold uppercase tracking-wider transition-colors duration-150  cursor-pointer"
+          className="flex items-center gap-2 px-7 py-3 bg-inset border border-edge hover:bg-inset text-bone text-xs font-bold uppercase tracking-wider transition-colors duration-150  cursor-pointer"
         >
           <span className="text-amber font-bold font-mono">[ RESET ]</span>
           Encode Another Topic

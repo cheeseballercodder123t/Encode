@@ -92,18 +92,18 @@ export function GuidedPathRoadmap({
   const totalRoadmapXp = modules.reduce((acc, m) => acc + (m.completed ? 150 : 0), 0);
 
   return (
-    <div className="w-full border border-steel/20 bg-deck/90  p-4 sm:p-6  space-y-4">
+    <div className="w-full border border-edge/20 bg-deck/90  p-4 sm:p-6  space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-edge pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-6 h-6 bg-steel/20 text-bone border border-steel/30">
+            <span className="flex items-center justify-center w-6 h-6 bg-inset/20 text-bone border border-edge/30">
               <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
             </span>
             <h3 className="text-sm font-bold text-bone uppercase tracking-wider">
               Miller&apos;s Law Adaptive Guided Path
             </h3>
-            <span className="px-2 py-0.5 bg-steel/20 text-bone text-[10px] font-black uppercase">
+            <span className="px-2 py-0.5 bg-inset/20 text-bone text-[10px] font-black uppercase">
               7±2 Chunked Progression
             </span>
           </div>
@@ -125,9 +125,9 @@ export function GuidedPathRoadmap({
       </div>
 
       {/* Roadmap Progress Bar */}
-      <div className="p-3 bg-chassis border border-steel/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-chassis border border-edge/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
-          <div className="w-36 sm:w-48 h-2 bg-steel overflow-hidden">
+          <div className="w-36 sm:w-48 h-2 bg-inset overflow-hidden">
             <div 
               className="h-full transition-all duration-500"
               style={{ width: `${(completedModulesCount / Math.max(1, modules.length)) * 100}%` }}
@@ -161,17 +161,17 @@ export function GuidedPathRoadmap({
               key={mod.moduleId || idx}
               className={`relative flex flex-col p-4  text-left border transition-all ${
                 isActive
-                  ? 'bg-steel/40 border-steel text-bone ring-2 ring-indigo-500/40  '
+                  ? 'bg-inset/40 border-edge text-bone ring-2 ring-indigo-500/40  '
                   : isCompleted
                   ? 'bg-amber-950/20 hover:bg-amber-950/30 border-amber/40 text-bone'
                   : isUnlocked
-                  ? 'bg-steel/60 hover:bg-steel border-steel text-solder'
-                  : 'bg-chassis/40 border-steel/80 text-bone opacity-60'
+                  ? 'bg-inset/60 hover:bg-inset border-edge text-solder'
+                  : 'bg-chassis/40 border-edge/80 text-bone opacity-60'
               }`}
             >
               {/* Top status */}
               <div className="flex items-center justify-between w-full mb-2">
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-steel/80 border border-steel text-solder">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-inset/80 border border-edge text-solder">
                   Chapter {idx + 1} of {modules.length}
                 </span>
 
@@ -216,7 +216,7 @@ export function GuidedPathRoadmap({
               </p>
 
               {/* Progress footer */}
-              <div className="mt-3 pt-2 border-t border-steel/80 flex items-center justify-between text-[10px] text-solder w-full">
+              <div className="mt-3 pt-2 border-t border-edge/80 flex items-center justify-between text-[10px] text-solder w-full">
                 <span>{mod.activities.length} Encoding Exercises</span>
                 {isUnlocked && !isActive && (
                   <button
@@ -267,7 +267,7 @@ export function GuidedPathRoadmap({
                 <button
                   type="button"
                   onClick={() => setShowCheckpointModal(false)}
-                  className="text-solder hover:text-bone text-xs px-2 py-1 bg-steel cursor-pointer"
+                  className="text-solder hover:text-bone text-xs px-2 py-1 bg-inset cursor-pointer"
                 >
                   [ X ]
                 </button>
@@ -290,7 +290,7 @@ export function GuidedPathRoadmap({
               </div>
 
               {/* Evaluation Rubric Guide */}
-              <div className="grid grid-cols-3 gap-2 text-[10px] text-solder bg-chassis p-2.5 border border-steel">
+              <div className="grid grid-cols-3 gap-2 text-[10px] text-solder bg-chassis p-2.5 border border-edge">
                 <div>
                   <strong className="text-bone block">1. Intuitive Analogy</strong>
                   <span>No memorized jargon</span>
@@ -315,7 +315,7 @@ export function GuidedPathRoadmap({
                   onChange={(e) => setCheckpointAnswer(e.target.value)}
                   placeholder="Explain as if teaching a bright 12-year-old student..."
                   rows={4}
-                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-solder focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-mono"
+                  className="w-full bg-chassis border border-edge p-3 text-sm text-bone placeholder-solder focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-mono"
                 />
               </div>
 

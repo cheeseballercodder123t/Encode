@@ -36,17 +36,17 @@ export const PretestModal: React.FC<PretestModalProps> = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-deck border border-steel/30 p-6   text-bone relative my-8"
+        className="w-full max-w-2xl bg-deck border border-edge/30 p-6   text-bone relative my-8"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-steel pb-4 mb-6">
+        <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-steel/20 border border-steel/40 flex items-center justify-center text-bone">
+            <div className="w-10 h-10 bg-inset/20 border border-edge/40 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ ZAP ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-steel/20 text-bone border border-steel/30">
+                <span className="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-inset/20 text-bone border border-edge/30">
                   The Pre-Testing Effect
                 </span>
                 <span className="text-xs text-solder">Productive Failure Drill</span>
@@ -58,14 +58,14 @@ export const PretestModal: React.FC<PretestModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
         </div>
 
         {/* Cognitive Science Explanation */}
-        <div className=" bg-steel/30 border border-steel/30 p-4 mb-6 text-xs text-bone/90 flex items-start gap-3">
+        <div className=" bg-inset/30 border border-edge/30 p-4 mb-6 text-xs text-bone/90 flex items-start gap-3">
           <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
           <div>
             <p className="font-semibold text-bone">
@@ -86,7 +86,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
             return (
               <div 
                 key={q.id || idx}
-                className=" border border-steel/80 bg-steel/40 p-4 transition-all"
+                className=" border border-edge/80 bg-inset/40 p-4 transition-all"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-bone">
@@ -114,13 +114,13 @@ export const PretestModal: React.FC<PretestModalProps> = ({
                       value={currentGuess}
                       onChange={(e) => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
                       placeholder="Take a guess at the causal mechanism (don't worry about being wrong!)..."
-                      className="w-full h-20 p-3 bg-deck border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none resize-none"
+                      className="w-full h-20 p-3 bg-deck border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-edge transition-none resize-none"
                     />
                     <div className="flex justify-end">
                       <button
                         onClick={() => handleRevealAnswer(q.id)}
                         disabled={!currentGuess.trim()}
-                        className="px-3.5 py-1.5 text-xs font-bold text-bone bg-steel disabled:opacity-50 disabled:cursor-not-allowed transition-none flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-bold text-bone bg-inset disabled:opacity-50 disabled:cursor-not-allowed transition-none flex items-center gap-1.5"
                       >
                         <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                         <span>Lock in Guess & Reveal First Principle</span>
@@ -130,7 +130,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
                 ) : (
                   <div className="space-y-3">
                     {/* User's guess */}
-                    <div className="p-2.5 bg-deck/80 border border-steel text-xs text-solder">
+                    <div className="p-2.5 bg-deck/80 border border-edge text-xs text-solder">
                       <span className="font-semibold text-solder">Your Initial Hypothesis:</span> {currentGuess}
                     </div>
 
@@ -153,7 +153,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="mt-6 pt-4 border-t border-steel flex items-center justify-between">
+        <div className="mt-6 pt-4 border-t border-edge flex items-center justify-between">
           <div className="text-xs text-solder">
             {answeredCount} of {totalQuestions} challenges primed
           </div>
@@ -161,7 +161,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-steel/80 transition-none"
+              className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-inset/80 transition-none"
             >
               Skip
             </button>

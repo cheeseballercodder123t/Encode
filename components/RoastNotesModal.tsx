@@ -88,7 +88,7 @@ export default function RoastNotesModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-colors duration-150 cursor-pointer text-xs"
+            className="text-solder hover:text-bone p-2 bg-inset/80 hover:bg-inset transition-colors duration-150 cursor-pointer text-xs"
           >
             [ X ]
           </button>
@@ -136,7 +136,7 @@ export default function RoastNotesModal({
                 })()}
 
                 {/* Lethal Quote */}
-                <div className="md:col-span-2 p-4 bg-chassis border border-steel flex flex-col justify-between space-y-2">
+                <div className="md:col-span-2 p-4 bg-chassis border border-edge flex flex-col justify-between space-y-2">
                   <div className="flex items-center gap-1.5 text-xs text-hazard-400 font-bold">
                     <span className="text-amber font-bold font-mono">[ QUOTE ]</span>
                     <span>Professor&apos;s Core Verdict</span>
@@ -144,7 +144,7 @@ export default function RoastNotesModal({
                   <p className="text-xs sm:text-sm text-bone font-medium italic leading-relaxed">
                     &ldquo;{report.overallVerdict}&rdquo;
                   </p>
-                  <div className="pt-2 border-t border-steel text-[11px] text-amber/90 font-mono">
+                  <div className="pt-2 border-t border-edge text-[11px] text-amber/90 font-mono">
                     [ FLAME ] &ldquo;{report.lethalQuote}&rdquo;
                   </div>
                 </div>
@@ -168,7 +168,7 @@ export default function RoastNotesModal({
                     return (
                       <div
                         key={critique.id}
-                        className="p-4 bg-chassis border border-steel transition-all space-y-3"
+                        className="p-4 bg-chassis border border-edge transition-all space-y-3"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -192,7 +192,7 @@ export default function RoastNotesModal({
                               className={`flex items-center gap-1 px-2.5 py-1  text-xs font-bold transition-all cursor-pointer ${
                                 isPatched
                                   ? 'bg-amber/20 text-amber-300 border border-amber/40'
-                                  : 'bg-steel text-bone border border-steel'
+                                  : 'bg-inset text-bone border border-edge'
                               }`}
                             >
                               {isPatched ? (
@@ -212,7 +212,7 @@ export default function RoastNotesModal({
 
                         {/* Called out quote */}
                         {critique.quoteOrTarget && (
-                          <div className="text-xs bg-deck border border-steel p-2 text-solder font-mono">
+                          <div className="text-xs bg-deck border border-edge p-2 text-solder font-mono">
                             <span className="text-solder">Target: </span>
                             &ldquo;{critique.quoteOrTarget}&rdquo;
                           </div>
@@ -224,7 +224,7 @@ export default function RoastNotesModal({
                         </p>
 
                         {/* First Principles Fix Tip */}
-                        <div className="p-2.5 bg-steel/30 border border-steel/30 text-xs space-y-1">
+                        <div className="p-2.5 bg-inset/30 border border-edge/30 text-xs space-y-1">
                           <span className="text-[10px] font-black uppercase text-bone block">
                             💡 First Principles Fix:
                           </span>
@@ -246,7 +246,7 @@ export default function RoastNotesModal({
 
               {/* Begrudging Compliment */}
               {report.begrudgingCompliment && (
-                <div className="p-3.5 bg-chassis border border-steel flex items-center gap-3 text-xs">
+                <div className="p-3.5 bg-chassis border border-edge flex items-center gap-3 text-xs">
                   <span className="text-lg">😏</span>
                   <div>
                     <span className="text-[10px] font-bold text-solder uppercase tracking-wider block">
@@ -261,7 +261,7 @@ export default function RoastNotesModal({
 
               {/* Actionable Recommendations */}
               {report.actionableRecommendations?.length > 0 && (
-                <div className="p-4 bg-chassis border border-steel space-y-2">
+                <div className="p-4 bg-chassis border border-edge space-y-2">
                   <span className="text-[10px] font-black uppercase tracking-wider text-solder block">
                     Core Conceptual Injections Recommended:
                   </span>
@@ -282,11 +282,11 @@ export default function RoastNotesModal({
 
         {/* Footer Actions */}
         {report && (
-          <div className="p-4 sm:p-5 bg-chassis border-t border-steel flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="p-4 sm:p-5 bg-chassis border-t border-edge flex flex-col sm:flex-row items-center justify-between gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-deck border border-steel cursor-pointer"
+              className="w-full sm:w-auto px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-deck border border-edge cursor-pointer"
             >
               Close & Edit Manually
             </button>
@@ -304,7 +304,7 @@ export default function RoastNotesModal({
               <button
                 type="button"
                 onClick={onProceedToEncode}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-inset text-bone font-bold text-xs border border-edge cursor-pointer"
               >
                 <span>Encode As-Is</span>
                 <span className="text-amber font-bold font-mono">[ NEXT ]</span>

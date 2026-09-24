@@ -97,17 +97,17 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-4xl bg-deck border border-steel/30 p-6   text-bone relative my-8"
+        className="w-full max-w-4xl bg-deck border border-edge/30 p-6   text-bone relative my-8"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-steel pb-4 mb-4">
+        <div className="flex items-center justify-between border-b border-edge pb-4 mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-steel/20 border border-steel/40 flex items-center justify-center text-bone">
+            <div className="w-10 h-10 bg-inset/20 border border-edge/40 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-steel/20 text-bone border border-steel/30">
+                <span className="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-inset/20 text-bone border border-edge/30">
                   RemNote Hierarchical & Feynman Engine
                 </span>
                 <span className="text-xs text-solder">
@@ -121,14 +121,14 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
         </div>
 
         {/* Feature 86: Contextual Anchoring (Parent-Child Enforcement) Banner */}
-        <div className="mb-4 p-3.5 bg-steel/40 border border-steel/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="mb-4 p-3.5 bg-inset/40 border border-edge/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
           <div className="flex items-start gap-2.5">
             <span className="text-amber font-bold font-mono">[ FORK ]</span>
             <div>
@@ -144,19 +144,19 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               value={parentSystemAnchor}
               onChange={(e) => setParentSystemAnchor(e.target.value)}
               placeholder="e.g. The Nervous System"
-              className="w-full px-3 py-1.5 bg-chassis border border-steel/40 text-xs text-bone focus:outline-none focus:border-steel transition-none"
+              className="w-full px-3 py-1.5 bg-chassis border border-edge/40 text-xs text-bone focus:outline-none focus:border-edge transition-none"
             />
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-steel pb-3 mb-5 overflow-x-auto">
+        <div className="flex items-center gap-2 border-b border-edge pb-3 mb-5 overflow-x-auto">
           <button
             onClick={() => setActiveTab('matrix')}
             className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'matrix'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                ? 'bg-inset text-bone '
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ LAYERS ]</span>
@@ -169,7 +169,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'feynman_cloze'
                 ? 'bg-amber600 text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ ZAP ]</span>
@@ -180,8 +180,8 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             onClick={() => setActiveTab('facts')}
             className={`min-h-[44px] px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'facts'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                ? 'bg-inset text-bone '
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ HASH ]</span>
@@ -192,8 +192,8 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             onClick={() => setActiveTab('drills')}
             className={`min-h-[44px] px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'drills'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                ? 'bg-inset text-bone '
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ PLAY ]</span>
@@ -204,8 +204,8 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             onClick={() => setActiveTab('examples')}
             className={`min-h-[44px] px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'examples'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                ? 'bg-inset text-bone '
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ DEMO ]</span>
@@ -216,8 +216,8 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             onClick={() => setActiveTab('remnote_export')}
             className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'remnote_export'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                ? 'bg-inset text-bone '
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ FILE ]</span>
@@ -228,8 +228,8 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             onClick={() => setActiveTab('api_push')}
             className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === 'api_push'
-                ? 'bg-steel text-bone '
-                : 'text-solder hover:text-bone hover:bg-steel'
+                ? 'bg-inset text-bone '
+                : 'text-solder hover:text-bone hover:bg-inset'
             }`}
           >
             <span className="text-amber font-bold font-mono">[ SEND ]</span>
@@ -241,10 +241,10 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {activeTab === 'matrix' && (
           <div className="space-y-4 max-h-[54vh] overflow-y-auto pr-1">
             {report?.conceptualMechanisms?.map((concept: ConceptualMechanismItem, idx: number) => (
-              <div key={concept.id || idx} className=" border border-steel bg-steel/40 p-4">
-                <div className="flex items-center justify-between border-b border-steel/60 pb-2 mb-3">
+              <div key={concept.id || idx} className=" border border-edge bg-inset/40 p-4">
+                <div className="flex items-center justify-between border-b border-edge/60 pb-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 bg-steel/20 text-bone text-xs font-bold flex items-center justify-center border border-steel/30">
+                    <span className="w-5 h-5 bg-inset/20 text-bone text-xs font-bold flex items-center justify-center border border-edge/30">
                       {idx + 1}
                     </span>
                     <h3 className="font-bold text-sm text-bone">{concept.conceptName}</h3>
@@ -255,25 +255,25 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                 {/* 4 Quadrants Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-3">
                   {/* Quadrant 1: What */}
-                  <div className="p-3 bg-deck/80 border border-steel">
+                  <div className="p-3 bg-deck/80 border border-edge">
                     <span className="font-bold text-bone block mb-1">1. What is it? (Definition):</span>
                     <p className="text-solder leading-relaxed">{concept.whatIsIt}</p>
                   </div>
 
                   {/* Quadrant 2: Why */}
-                  <div className="p-3 bg-deck/80 border border-steel">
+                  <div className="p-3 bg-deck/80 border border-edge">
                     <span className="font-bold text-bone block mb-1">2. Why it matters (Significance):</span>
                     <p className="text-solder leading-relaxed">{concept.whyItMatters}</p>
                   </div>
 
                   {/* Quadrant 3: How */}
-                  <div className="p-3 bg-deck/80 border border-steel">
+                  <div className="p-3 bg-deck/80 border border-edge">
                     <span className="font-bold text-amber block mb-1">3. How it works (Causal Mechanism):</span>
                     <p className="text-solder leading-relaxed">{concept.howItWorks}</p>
                   </div>
 
                   {/* Quadrant 4: What If */}
-                  <div className="p-3 bg-deck/80 border border-steel">
+                  <div className="p-3 bg-deck/80 border border-edge">
                     <span className="font-bold text-amber block mb-1">4. What If (Edge Case / Failure):</span>
                     <p className="text-solder leading-relaxed">{concept.whatIfEdgeCase}</p>
                   </div>
@@ -324,7 +324,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             </div>
 
             {remnotePayload.feynmanClozings?.map((feynman: FeynmanClozeItem, idx: number) => (
-              <div key={feynman.id || idx} className="p-4 bg-deck border border-steel space-y-3 text-xs">
+              <div key={feynman.id || idx} className="p-4 bg-deck border border-edge space-y-3 text-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 bg-amber/20 text-amber text-xs font-bold flex items-center justify-center border border-amber/30">
@@ -350,11 +350,11 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   </div>
 
                   {/* Textbook Academic Jargon */}
-                  <div className="p-3 bg-chassis border border-steel opacity-75">
+                  <div className="p-3 bg-chassis border border-edge opacity-75">
                     <span className="font-bold text-solder block mb-1.5">
                       Dense Academic Textbook Equivalent:
                     </span>
-                    <p className="text-[11px] text-solder italic bg-deck/60 p-2.5 border border-steel leading-relaxed">
+                    <p className="text-[11px] text-solder italic bg-deck/60 p-2.5 border border-edge leading-relaxed">
                       {feynman.textbookJargonComparison}
                     </p>
                   </div>
@@ -367,16 +367,16 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {/* Tab 3: Declarative Facts & Cloze Optimizer */}
         {activeTab === 'facts' && (
           <div className="space-y-3 max-h-[54vh] overflow-y-auto pr-1">
-            <div className="p-3 bg-steel/60 border border-steel text-xs text-solder">
+            <div className="p-3 bg-inset/60 border border-edge text-xs text-solder">
               <span className="font-bold text-bone">Declarative Memory Items:</span> Isolated facts, formulas, and constants optimized with <code className="text-bone bg-deck px-1 py-0.5 ">{"{{cloze deletions}}"}</code> for RemNote flashcards.
             </div>
 
             {report?.declarativeFacts?.map((fact: DeclarativeFactItem, idx: number) => (
-              <div key={fact.id || idx} className="p-3.5 bg-deck/90 border border-steel flex items-start justify-between gap-3 text-xs">
+              <div key={fact.id || idx} className="p-3.5 bg-deck/90 border border-edge flex items-start justify-between gap-3 text-xs">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     {fact.tag && (
-                      <span className="px-2 py-0.5 text-[10px] font-bold bg-steel text-bone border border-steel uppercase">
+                      <span className="px-2 py-0.5 text-[10px] font-bold bg-inset text-bone border border-edge uppercase">
                         {fact.tag}
                       </span>
                     )}
@@ -386,7 +386,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                     <p className="text-amber-200 text-[11px] font-bold mb-1">Q: {fact.question}</p>
                   )}
                   <p className="text-bone mb-1">{fact.factStatement}</p>
-                  <p className="font-mono text-bone/90 text-[11px] bg-chassis p-2 border border-steel/80">
+                  <p className="font-mono text-bone/90 text-[11px] bg-chassis p-2 border border-edge/80">
                     {fact.clozeSuggestion}
                   </p>
                   {fact.memoryHook && (
@@ -401,16 +401,16 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {/* Tab 4: Practice Drills — short rapid-fire Q/A cards */}
         {activeTab === 'drills' && (
           <div className="space-y-3 max-h-[54vh] overflow-y-auto pr-1">
-            <div className="p-3 bg-steel/60 border border-steel text-xs text-solder">
+            <div className="p-3 bg-inset/60 border border-edge text-xs text-solder">
               <span className="font-bold text-bone">Rapid-fire drills:</span> short questions answerable in ~10 seconds, each testing one fact, number, step, or discrimination.
             </div>
 
             {(report?.practiceQuestions?.length ?? 0) === 0 && (
-              <p className="text-xs text-solder p-3 border border-steel bg-deck/60">No drills in this report — regenerate segregation to include them.</p>
+              <p className="text-xs text-solder p-3 border border-edge bg-deck/60">No drills in this report — regenerate segregation to include them.</p>
             )}
 
             {report?.practiceQuestions?.map((pq: PracticeQuestionItem, idx: number) => (
-              <div key={pq.id || idx} className="p-3.5 bg-deck/90 border border-steel text-xs space-y-1.5">
+              <div key={pq.id || idx} className="p-3.5 bg-deck/90 border border-edge text-xs space-y-1.5">
                 <span className="text-solder text-[11px]">Drill #{idx + 1}</span>
                 <p className="text-bone font-bold">{pq.question}</p>
                 <p className="text-amber-200">A: {pq.answer}</p>
@@ -428,16 +428,16 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {/* Tab 5: Worked Examples — step-by-step problem walkthroughs */}
         {activeTab === 'examples' && (
           <div className="space-y-3 max-h-[54vh] overflow-y-auto pr-1">
-            <div className="p-3 bg-steel/60 border border-steel text-xs text-solder">
+            <div className="p-3 bg-inset/60 border border-edge text-xs text-solder">
               <span className="font-bold text-bone">Worked examples:</span> one concrete problem per example, solved in atomic steps.
             </div>
 
             {(report?.workedExamples?.length ?? 0) === 0 && (
-              <p className="text-xs text-solder p-3 border border-steel bg-deck/60">No worked examples in this report — regenerate segregation to include them.</p>
+              <p className="text-xs text-solder p-3 border border-edge bg-deck/60">No worked examples in this report — regenerate segregation to include them.</p>
             )}
 
             {report?.workedExamples?.map((ex: WorkedExampleItem, idx: number) => (
-              <div key={ex.id || idx} className="p-3.5 bg-deck/90 border border-steel text-xs space-y-2">
+              <div key={ex.id || idx} className="p-3.5 bg-deck/90 border border-edge text-xs space-y-2">
                 <p className="text-bone font-bold">{ex.title || `Example #${idx + 1}`}</p>
                 <p className="text-solder">{ex.problem}</p>
                 <ol className="space-y-1 list-decimal list-inside text-bone/90">
@@ -462,7 +462,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               </div>
               <button
                 onClick={handleCopyMarkdown}
-                className="px-3.5 py-1.5 text-xs font-bold text-bone bg-steel flex items-center gap-1.5 transition-none  cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-bold text-bone bg-inset flex items-center gap-1.5 transition-none  cursor-pointer"
               >
                 {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
                 <span>{copied ? "Copied to Clipboard!" : "Copy RemNote Markdown"}</span>
@@ -472,11 +472,11 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             <textarea
               readOnly
               value={remnotePayload.markdown}
-              className="w-full h-72 p-4 bg-chassis border border-steel font-mono text-xs text-bone leading-relaxed focus:outline-none resize-none"
+              className="w-full h-72 p-4 bg-chassis border border-edge font-mono text-xs text-bone leading-relaxed focus:outline-none resize-none"
             />
 
             <p className="text-[11px] text-solder">
-              💡 <strong>RemNote Tip:</strong> Open RemNote, press <kbd className="bg-steel px-1 text-bone">Ctrl+V</kbd> (or <kbd className="bg-steel px-1 text-bone">Cmd+V</kbd>) into any page. RemNote will instantly parse the parent-child bullets, <code className="text-bone">::</code> concept-descriptors, and <code className="text-bone">{"{{}}"}</code> cloze cards!
+              💡 <strong>RemNote Tip:</strong> Open RemNote, press <kbd className="bg-inset px-1 text-bone">Ctrl+V</kbd> (or <kbd className="bg-inset px-1 text-bone">Cmd+V</kbd>) into any page. RemNote will instantly parse the parent-child bullets, <code className="text-bone">::</code> concept-descriptors, and <code className="text-bone">{"{{}}"}</code> cloze cards!
             </p>
           </div>
         )}
@@ -484,7 +484,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {/* Tab 5: Push directly to RemNote API */}
         {activeTab === 'api_push' && (
           <div className="space-y-5 max-w-lg mx-auto py-4">
-            <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone">
+            <div className="p-4 bg-inset/30 border border-edge/30 text-xs text-bone">
               <p className="font-bold text-bone mb-1 flex items-center gap-1.5">
                 <span className="text-amber font-bold font-mono">[ SEND ]</span>
                 Push directly to your RemNote Knowledge Base:
@@ -502,7 +502,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   value={remnoteApiKey}
                   onChange={(e) => setRemnoteApiKey(e.target.value)}
                   placeholder="e.g. rem_api_secret_..."
-                  className="w-full px-3.5 py-2.5 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none"
+                  className="w-full px-3.5 py-2.5 bg-chassis border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-edge transition-none"
                 />
               </div>
 
@@ -515,7 +515,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   value={remnoteUserId}
                   onChange={(e) => setRemnoteUserId(e.target.value)}
                   placeholder="Optional user ID"
-                  className="w-full px-3.5 py-2.5 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none"
+                  className="w-full px-3.5 py-2.5 bg-chassis border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-edge transition-none"
                 />
               </div>
 
@@ -554,13 +554,13 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         )}
 
         {/* Footer */}
-        <div className="mt-6 pt-4 border-t border-steel flex justify-between items-center">
+        <div className="mt-6 pt-4 border-t border-edge flex justify-between items-center">
           <div className="text-xs text-solder">
             RemNote Hierarchical Specification (Miller&apos;s Law + Bjork Desirable Difficulty)
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 text-xs font-bold text-solder hover:text-bone bg-steel transition-none cursor-pointer"
+            className="px-5 py-2 text-xs font-bold text-solder hover:text-bone bg-inset transition-none cursor-pointer"
           >
             Close
           </button>

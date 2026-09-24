@@ -41,7 +41,7 @@ export function EndSessionReviewModal(props: Props) {
     ? 'You overestimated. Common and normal. Revisit weaker stages.'
     : 'Well-calibrated self-assessment. Solid metacognition.';
   const deltaTone = delta > 10 ? 'text-amber' : delta < -10 ? 'text-hazard' : 'text-bone';
-  const deltaBorder = delta > 10 ? 'border-amber' : delta < -10 ? 'border-hazard' : 'border-steel';
+  const deltaBorder = delta > 10 ? 'border-amber' : delta < -10 ? 'border-hazard' : 'border-edge';
   return (
     <Modal
       isOpen={isOpen}

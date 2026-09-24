@@ -63,12 +63,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="w-full max-w-md bg-chassis border border-steel overflow-hidden flex flex-col"
+          className="w-full max-w-md bg-chassis border border-edge overflow-hidden flex flex-col"
         >
           {/* Header */}
-          <div className="p-5 border-b border-steel bg-deck flex items-center justify-between">
+          <div className="p-5 border-b border-edge bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-steel/10 border border-steel/30 text-bone ">
+              <div className="p-2 bg-inset/10 border border-edge/30 text-bone ">
                 <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               </div>
               <div>
@@ -78,7 +78,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-solder hover:text-bone hover:bg-steel transition-colors duration-150"
+              className="p-2 text-solder hover:text-bone hover:bg-inset transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
@@ -95,15 +95,15 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             {user ? (
               <div className="space-y-4">
                 {/* User card */}
-                <div className="p-4 bg-deck border border-steel flex items-center gap-3">
+                <div className="p-4 bg-deck border border-edge flex items-center gap-3">
                   {user.photoURL ? (
                     <img 
                       src={user.photoURL} 
                       alt={user.displayName || 'User'} 
-                      className="w-12 h-12 border border-steel/40"
+                      className="w-12 h-12 border border-edge/40"
                     />
                   ) : (
-                    <div className="w-12 h-12 bg-steel/20 border border-steel/40 flex items-center justify-center text-bone">
+                    <div className="w-12 h-12 bg-inset/20 border border-edge/40 flex items-center justify-center text-bone">
                       <span className="text-amber font-bold font-mono">[ USER ]</span>
                     </div>
                   )}
@@ -123,11 +123,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
                 {/* Cloud stats */}
                 <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="p-3 bg-deck border border-steel ">
+                  <div className="p-3 bg-deck border border-edge ">
                     <span className="text-[10px] uppercase font-bold text-solder block mb-1">Cloud Schemas</span>
                     <span className="text-lg font-black text-bone font-mono">{cloudStats.schemasCompleted}</span>
                   </div>
-                  <div className="p-3 bg-deck border border-steel ">
+                  <div className="p-3 bg-deck border border-edge ">
                     <span className="text-[10px] uppercase font-bold text-solder block mb-1">Total Cloud XP</span>
                     <span className="text-lg font-black text-amber font-mono flex items-center justify-center gap-1">
                       <span className="text-amber font-bold font-mono">[ ZAP ]</span>
@@ -141,7 +141,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleSyncLocal}
                     disabled={isSyncing}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-steel/20 hover:bg-steel/30 border border-steel/40 text-bone font-bold text-xs transition-colors duration-150"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-inset/20 hover:bg-inset/30 border border-edge/40 text-bone font-bold text-xs transition-colors duration-150"
                   >
                     <span className="text-amber font-bold font-mono">[ RESET ]</span>
                     {isSyncing ? 'Syncing...' : 'Sync Local History to Cloud'}
@@ -158,7 +158,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     onClick={async () => {
                       await logOut();
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-steel/60 text-solder hover:text-hazard-400 font-bold text-xs transition-colors duration-150"
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-inset/60 text-solder hover:text-hazard-400 font-bold text-xs transition-colors duration-150"
                   >
                     <span className="text-amber font-bold font-mono">[ LOGOUT ]</span>
                     Sign Out
@@ -168,7 +168,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             ) : (
               <div className="space-y-4">
                 <div className="text-center space-y-2">
-                  <div className="w-12 h-12 bg-steel/10 border border-steel/30 flex items-center justify-center mx-auto text-bone">
+                  <div className="w-12 h-12 bg-inset/10 border border-edge/30 flex items-center justify-center mx-auto text-bone">
                     <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                   </div>
                   <h4 className="font-bold text-bone text-sm">Synchronize Across All Your Devices</h4>
@@ -177,7 +177,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   </p>
                 </div>
 
-                <div className="flex items-center justify-center gap-4 py-1 text-solder text-xs border-y border-steel/80">
+                <div className="flex items-center justify-center gap-4 py-1 text-solder text-xs border-y border-edge/80">
                   <div className="flex items-center gap-1.5">
                     <span className="text-amber font-bold font-mono">[ PHONE ]</span>
                     <span>Phone</span>
@@ -207,7 +207,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleGuestLogin}
                     disabled={isProcessing}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-deck border border-steel text-solder font-bold text-xs transition-colors duration-150"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-deck border border-edge text-solder font-bold text-xs transition-colors duration-150"
                   >
                     <span className="text-amber font-bold font-mono">[ USER ]</span>
                     Quick Guest Session

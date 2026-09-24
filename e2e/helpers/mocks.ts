@@ -182,7 +182,8 @@ export async function startEncodeFromNotes(page: Page, notes: string) {
 }
 
 export async function expectStage(page: Page, stage: number) {
-  await expect(page.getByText(new RegExp(`STAGE: ${String(stage).padStart(2, '0')}/`, 'i'))).toBeVisible();
+  // The workbench header renders a zero-padded stage chip (e.g. "01/02").
+  await expect(page.getByText(new RegExp(`${String(stage).padStart(2, '0')}/[0-9]+`))).toBeVisible();
 }
 
 /** Walk both stages of the mocked workout to the completed view. */
@@ -197,7 +198,7 @@ export async function completeWorkout(page: Page) {
   await page.getByText('Good mechanism : tighten the threshold detail.').waitFor();
 
   // Exact name : /NEXT/ also matches the check button's "... TRY AGAIN OR NEXT" label.
-  await page.getByRole('button', { name: 'NEXT >>' }).click();
+  await page.getByRole('button', { name: 'NEXT →' }).click();
 
   await confirmReadiness(page);
   await expectStage(page, 2);

@@ -38,19 +38,19 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className="border border-steel bg-chassis p-4 space-y-4">
+    <div className="border border-edge bg-chassis p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-steel pb-2.5 mb-3 gap-2">
+      <div className="flex items-center justify-between border-b border-edge pb-2.5 mb-3 gap-2">
         <span className="text-[11px] font-bold uppercase tracking-wider text-amber">
           PHONETIC PEG // ACROSTIC LETTER MATRIX
         </span>
-        <span className="text-[9px] font-mono font-bold text-solder border border-steel px-2 py-0.5">
+        <span className="text-[9px] font-mono font-bold text-solder border border-edge px-2 py-0.5">
           PEG CARDS
         </span>
       </div>
 
       {/* Generation Effect: Mnemonic Challenge Card */}
-      <div className="p-3 border border-steel bg-deck space-y-2">
+      <div className="p-3 border border-edge bg-deck space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
             <span className="text-[10px] font-mono font-bold uppercase text-solder block whitespace-nowrap">
@@ -66,7 +66,7 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
             className={`text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
               showClue
                 ? 'bg-amber border-amber text-chassis'
-                : 'bg-chassis border-steel text-solder'
+                : 'bg-chassis border-edge text-solder'
             }`}
           >
             {showClue ? 'HIDE HINT' : 'GET PEG CLUE'}
@@ -74,7 +74,7 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
         </div>
 
         {showClue && challenge.clue && (
-          <div className="pt-2 border-t border-steel text-[11px] text-solder italic">
+          <div className="pt-2 border-t border-edge text-[11px] text-solder italic">
             MNEMONIC CLUE: {challenge.clue}
           </div>
         )}
@@ -92,11 +92,11 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
               className={`p-3 border cursor-pointer transition-none flex flex-col items-center justify-center ${
                 isSelected
                   ? 'border-amber bg-amber/10 text-chassis'
-                  : 'border-steel bg-deck text-solder'
+                  : 'border-edge bg-deck text-solder'
               }`}
             >
               <div className={`w-9 h-9 border flex items-center justify-center font-mono text-lg font-bold mb-1 ${
-                isSelected ? 'border-amber' : 'border-steel'
+                isSelected ? 'border-amber' : 'border-edge'
               }`}>
                 {item.letter}
               </div>
@@ -115,7 +115,7 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
 
       {/* User Generated Peg Model */}
       {hasUserGenerated && (
-        <div className="p-3 border border-steel bg-deck text-xs space-y-1">
+        <div className="p-3 border border-edge bg-deck text-xs space-y-1">
           <span className="text-[10px] font-mono font-bold uppercase text-amber block">
             YOUR SELF-GENERATED ACROSTIC PEG
           </span>

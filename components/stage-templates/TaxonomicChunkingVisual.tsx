@@ -103,7 +103,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
               className={`p-3.5  border transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
                   ? 'border-amber/80 bg-amber/40 ring-1 ring-teal-400/50 '
-                  : 'border-steel/60 bg-deck/60 hover:border-amber/40'
+                  : 'border-edge/60 bg-deck/60 hover:border-amber/40'
               }`}
             >
               <div>
@@ -125,7 +125,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
                   {bucket.items.map((item, iIdx) => (
                     <span
                       key={iIdx}
-                      className="text-[10px] font-mono px-2 py-0.5 bg-chassis/80 border border-steel text-bone"
+                      className="text-[10px] font-mono px-2 py-0.5 bg-chassis/80 border border-edge text-bone"
                     >
                       {item}
                     </span>

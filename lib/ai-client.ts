@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { AISettings, UploadedFileAsset } from "./types";
 import { safeParseJson } from "./ai-output-validation";
+import { loadAICacheFromIDB, putAICacheEntryIDB, clearAICacheIDB } from "./db";
 
 interface GenerateJSONOptions {
   systemPrompt: string;
@@ -45,11 +46,31 @@ function cacheSet(key: string, value: any): void {
     if (oldestKey) responseCache.delete(oldestKey);
     else break;
   }
+  // L2: persist so a reload (or tomorrow) reuses this generation for free.
+  void putAICacheEntryIDB(key, { at: Date.now(), value });
+}
+
+// Hydrate the in-memory LRU from the IndexedDB L2 once, in the browser.
+// Fire-and-forget: a miss before hydration simply falls through to the API
+// exactly as it did before this layer existed.
+if (typeof window !== 'undefined') {
+  void loadAICacheFromIDB().then((persisted) => {
+    for (const [key, entry] of persisted) {
+      if (!responseCache.has(key)) responseCache.set(key, entry);
+    }
+    // Keep memory bounded after hydration.
+    while (responseCache.size > CACHE_MAX) {
+      const oldestKey = responseCache.keys().next().value as string | undefined;
+      if (oldestKey) responseCache.delete(oldestKey);
+      else break;
+    }
+  });
 }
 
 /** Clears the entire AI response cache (exposed for tests / settings changes). */
 export function clearAICache(): void {
   responseCache.clear();
+  void clearAICacheIDB();
 }
 
 /** Returns the number of entries currently cached (exposed for tests). */

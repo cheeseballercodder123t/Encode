@@ -11,7 +11,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
     return (
       <div
         ref={ref}
-        className={`rounded-none border border-steel bg-deck ${hoverEffect ? 'hover:bg-chassis' : ''} ${className}`}
+        className={`rounded-lg border border-edge bg-deck shadow-panel ${hoverEffect ? 'hover:bg-chassis' : ''} ${className}`}
         {...props}
       >
         {children}
@@ -22,7 +22,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = 'Card';
 
 export function CardHeader({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`p-4 border-b border-steel bg-chassis ${className}`}>{children}</div>;
+  return <div className={`p-4 border-b border-edge bg-chassis ${className}`}>{children}</div>;
 }
 
 export function CardTitle({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -39,7 +39,7 @@ export function CardContent({ children, className = '' }: { children: ReactNode;
 
 export function CardFooter({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`p-3 border-t border-steel bg-chassis flex items-center justify-end gap-2 ${className}`}>
+    <div className={`p-3 border-t border-edge bg-chassis flex items-center justify-end gap-2 ${className}`}>
       {children}
     </div>
   );

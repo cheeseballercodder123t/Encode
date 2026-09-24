@@ -24,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
 import { SavedSchema } from './types';
-import { loadSavedSchemas, saveSchemaToHistory } from './storage';
+import { loadSavedSchemas, saveSchemaToHistory, loadAISettings } from './storage';
 
 interface AuthContextType {
   user: User | null;
@@ -38,12 +38,16 @@ interface AuthContextType {
   lastSyncError: string | null;
   /** Local-only schemas not yet confirmed in the cloud (shown as "pending"). */
   pendingLocalCount: number;
+  /** True once a cloud settings backup has been restored into local storage this session. */
+  settingsRestored: boolean;
   signInGoogle: () => Promise<void>;
   signInAnonymous: () => Promise<void>;
   logOut: () => Promise<void>;
   saveSchemaToCloud: (schema: SavedSchema) => Promise<void>;
   deleteSchemaFromCloud: (schemaId: string) => Promise<void>;
   syncLocalToCloud: () => Promise<number>;
+  /** Backs up AI settings to the user's Firestore profile (merge). */
+  backupSettingsToCloud: (settings: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -56,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [settingsRestored, setSettingsRestored] = useState(false);
 
   // How many local schemas are not yet in the cloud : derived, not state, so
   // the UI can show "N pending" without a cascading render pass.
@@ -92,6 +97,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               totalXp: data.totalXp || 0,
               schemasCompleted: data.schemasCompleted || 0
             });
+            // Restore cloud settings backup over local defaults : a cleared
+            // browser profile re-amputates nothing. Only applied when the
+            // backup is newer than what local storage holds (multi-device safe).
+            const backup = data.settingsBackup;
+            if (backup && typeof backup === 'object' && backup.savedAt) {
+              try {
+                const current = loadAISettings();
+                const localSavedAt = (current as any)?.savedAt || 0;
+                if (backup.savedAt >= localSavedAt) {
+                  const { saveAISettings } = await import('./storage');
+                  saveAISettings({ ...current, ...backup.settings, savedAt: backup.savedAt } as any);
+                  setSettingsRestored(true);
+                }
+              } catch (restoreErr) {
+                console.warn('Settings restore skipped:', restoreErr);
+              }
+            }
           }
         } catch (err) {
           console.error("Error checking user profile in Firestore:", err);
@@ -236,6 +258,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return count;
   };
 
+  /** Backs up AI settings into the user's Firestore profile doc (merge). */
+  const backupSettingsToCloud = async (settingsWithMeta: any): Promise<void> => {
+    if (!user) return;
+    try {
+      const { savedAt, ...settings } = settingsWithMeta || {};
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        settingsBackup: { settings, savedAt: savedAt || Date.now() },
+        updatedAt: Date.now(),
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Settings backup failed:', err);
+    }
+  };
+
   // Auto-push local history to the cloud once per sign-in : a returning user
   // never has to remember the "Import Local" button.
   const autoSyncedRef = React.useRef<string | null>(null);
@@ -260,6 +297,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         lastSyncedAt,
         lastSyncError,
         pendingLocalCount,
+        settingsRestored,
+        backupSettingsToCloud,
         signInGoogle,
         signInAnonymous,
         logOut,

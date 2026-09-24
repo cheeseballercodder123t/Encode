@@ -6,14 +6,19 @@
 
 @layer base {
   html, body {
-    background-color: #141517;
-    color: #D5D2CA;
+    background-color: #0E0F12;
+    color: #E8E6E1;
     /* Space Grotesk carries prose & UI labels; IBM Plex Mono is applied
        explicitly on inputs, badges, and metadata via `font-mono`. */
     font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-    /* Prevent iOS auto-zoom on focus for text fields whose computed size is
-       under 16px : apply an iOS-safe 16px floor on small screens only. */
     -webkit-text-size-adjust: 100%;
+  }
+
+  /* The page itself gets a barely-there vertical vignette so panels sit
+     "on" the surface instead of floating in flat black. */
+  body {
+    background-image: radial-gradient(1200px 600px at 50% -200px, rgba(208, 132, 48, 0.05), transparent 60%);
+    background-repeat: no-repeat;
   }
 
   /* Code-like elements keep the terminal voice. */
@@ -21,58 +26,58 @@
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
   }
 
-  /* Prevent iOS Safari auto-zoom when focusing small monospace inputs. */
+  /* Prevent iOS Safari auto-zoom when focusing small inputs. */
   @media (max-width: 640px) {
     input, textarea, select {
       font-size: 16px !important;
     }
   }
 
+  /* Depth is allowed again: subtle inset top-light on panels, soft ambient
+     shadows for raised elements. No neon glows, no frosted glass. */
   *, *::before, *::after {
-    border-radius: 0 !important;
-    box-shadow: none !important;
     text-shadow: none !important;
     filter: none !important;
     backdrop-filter: none !important;
   }
 
   /* Kill the default outline, but restore keyboard focus as a visible
-     workbench ring. Pointer focus stays clean. */
+     amber ring. Pointer focus stays clean. */
   *:focus {
     outline: none;
   }
 
   *:focus-visible {
-    outline: 2px solid #C8782A;
+    outline: 2px solid #D08430;
     outline-offset: 1px;
   }
 
   ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    background: #141517;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #2B2D31;
+    background: #2A2D35;
+    border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #7A7D82;
+    background: #3A3E48;
   }
 
   input, textarea, select, button {
-    border-radius: 0 !important;
     /* Larger tap targets on coarse-pointer devices without touching layout. */
     touch-action: manipulation;
   }
 
   /* Safe-area + dynamic viewport fallbacks for notched mobile browsers.
      max-h-dvh / min-h-dvh are native Tailwind, but older engines need the
-     vh + env() fallback : apply where marked with .mobile-dvh helpers. */
+     vh + env() fallback : apply where marked with .mobile-* helpers. */
   .mobile-sheet-viewport {
     max-height: 88vh;
     max-height: 88dvh;

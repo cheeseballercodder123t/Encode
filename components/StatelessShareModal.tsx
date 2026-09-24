@@ -85,10 +85,10 @@ export default function StatelessShareModal({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-xl bg-deck border border-steel/40 overflow-hidden my-6 flex flex-col"
+        className="relative w-full max-w-xl bg-deck border border-edge/40 overflow-hidden my-6 flex flex-col"
       >
         {/* Header */}
-        <div className="p-4 sm:p-6 border-b border-steel/30 flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-6 border-b border-edge/30 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 flex items-center justify-center   shrink-0">
               <span className="text-amber font-bold font-mono">[ SHARE ]</span>
@@ -98,7 +98,7 @@ export default function StatelessShareModal({
                 <h2 className="text-lg sm:text-xl font-black text-bone">
                   Stateless URL Sharing
                 </h2>
-                <span className="px-2 py-0.5 bg-steel/20 text-bone border border-steel/30 text-[10px] font-black uppercase tracking-wider">
+                <span className="px-2 py-0.5 bg-inset/20 text-bone border border-edge/30 text-[10px] font-black uppercase tracking-wider">
                   No Database Required
                 </span>
               </div>
@@ -111,7 +111,7 @@ export default function StatelessShareModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-colors duration-150 cursor-pointer text-xs"
+            className="text-solder hover:text-bone p-2 bg-inset/80 hover:bg-inset transition-colors duration-150 cursor-pointer text-xs"
           >
             [ X ]
           </button>
@@ -120,10 +120,10 @@ export default function StatelessShareModal({
         {/* Content */}
         <div className="p-4 sm:p-6 space-y-5 text-bone">
           {/* Target Schema Preview */}
-          <div className="p-3.5 bg-chassis border border-steel space-y-1.5">
+          <div className="p-3.5 bg-chassis border border-edge space-y-1.5">
             <div className="flex items-center justify-between text-[11px] text-solder">
               <span className="font-semibold uppercase tracking-wider text-solder">Schema to Share</span>
-              <span className="px-2 py-0.5 bg-steel/20 text-bone font-bold text-[10px]">
+              <span className="px-2 py-0.5 bg-inset/20 text-bone font-bold text-[10px]">
                 {schema.isGuidedPath ? 'Guided Path Chapter' : '5-Stage Schema'}
               </span>
             </div>
@@ -147,7 +147,7 @@ export default function StatelessShareModal({
                 type="text"
                 readOnly
                 value={shareStats.fullUrl}
-                className="w-full bg-chassis border border-steel px-3.5 py-2.5 text-xs text-bone font-mono focus:outline-none select-all truncate"
+                className="w-full bg-chassis border border-edge px-3.5 py-2.5 text-xs text-bone font-mono focus:outline-none select-all truncate"
               />
               <button
                 type="button"
@@ -175,19 +175,19 @@ export default function StatelessShareModal({
 
           {/* Compression & Privacy Diagnostics */}
           <div className="grid grid-cols-3 gap-2.5 text-center">
-            <div className="p-3 bg-chassis border border-steel">
+            <div className="p-3 bg-chassis border border-edge">
               <span className="text-[10px] text-solder uppercase block font-semibold">Original Payload</span>
               <span className="text-sm font-bold text-solder">
                 {(shareStats.rawBytes / 1024).toFixed(1)} KB
               </span>
             </div>
-            <div className="p-3 bg-chassis border border-steel">
+            <div className="p-3 bg-chassis border border-edge">
               <span className="text-[10px] text-solder uppercase block font-semibold">LZ-Compressed</span>
               <span className="text-sm font-bold text-bone">
                 {(shareStats.compressedBytes / 1024).toFixed(1)} KB
               </span>
             </div>
-            <div className="p-3 bg-chassis border border-steel">
+            <div className="p-3 bg-chassis border border-edge">
               <span className="text-[10px] text-solder uppercase block font-semibold">Compression</span>
               <span className="text-sm font-bold text-amber">
                 {shareStats.savingsPct}% Reduced
@@ -196,7 +196,7 @@ export default function StatelessShareModal({
           </div>
 
           {/* How It Works Explainer */}
-          <div className="p-3.5 bg-steel/30 border border-steel/30 space-y-2 text-xs">
+          <div className="p-3.5 bg-inset/30 border border-edge/30 space-y-2 text-xs">
             <div className="flex items-center gap-1.5 font-bold text-bone">
               <span className="text-amber font-bold font-mono">[ OK ]</span>
               <span>How Stateless URL Sharing Works</span>
@@ -219,7 +219,7 @@ export default function StatelessShareModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-5 bg-chassis border-t border-steel flex items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 bg-chassis border-t border-edge flex items-center justify-between gap-3">
           <span className="text-[11px] text-solder hidden sm:inline">
             Paste in Discord, Slack, WhatsApp, or email
           </span>
@@ -229,7 +229,7 @@ export default function StatelessShareModal({
               <button
                 type="button"
                 onClick={handleNativeShare}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-bone bg-steel border border-steel cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-bone bg-inset border border-edge cursor-pointer"
               >
                 <span className="text-amber font-bold font-mono">[ SEND ]</span>
                 <span>Share Via...</span>

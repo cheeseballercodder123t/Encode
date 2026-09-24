@@ -43,31 +43,31 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-chassis/90 overflow-y-auto">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0" onClick={onClose} />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-inset/80" onClick={onClose} />
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 24 }}
           transition={{ duration: 0.15 }}
-          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-steel rounded-none overflow-hidden mobile-sheet-viewport flex flex-col sm:my-8`}
+          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-edge rounded-lg shadow-raised overflow-hidden mobile-sheet-viewport flex flex-col sm:my-8`}
           onClick={e => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
         >
           {(title || icon) && (
-            <div className="p-4 border-b border-steel bg-chassis flex items-center justify-between gap-3">
+            <div className="p-4 border-b border-edge bg-chassis flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
                 {icon && <div className="shrink-0 text-amber">{icon}</div>}
                 <div className="min-w-0">
-                  {title && <h3 className="font-bold text-bone text-sm uppercase tracking-wider font-mono truncate">{title}</h3>}
-                  {description && <p className="text-[10px] text-solder font-mono truncate mt-0.5">{description}</p>}
+                  {title && <h3 className="font-bold text-bone text-sm truncate">{title}</h3>}
+                  {description && <p className="text-[11px] text-solder truncate mt-0.5">{description}</p>}
                 </div>
               </div>
               {showCloseButton && onClose && (
                 <button
                   type="button"
                   onClick={onClose}
-                  className="min-h-[44px] min-w-[44px] flex items-center justify-center px-3 text-solder hover:text-bone hover:bg-deck rounded-none cursor-pointer font-mono text-xs"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center px-3 text-solder hover:text-bone hover:bg-deck cursor-pointer font-mono text-xs"
                   aria-label="Close modal"
                 >
                   [ X ]
@@ -76,7 +76,7 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
             </div>
           )}
           <div className="p-4 overflow-y-auto max-h-[calc(88vh-130px)] max-h-[calc(88dvh-130px)] overscroll-contain [-webkit-overflow-scrolling:touch]">{children}</div>
-          {footer && <div className="p-3 border-t border-steel bg-chassis flex items-center justify-end gap-2 flex-wrap mobile-safe-bottom">{footer}</div>}
+          {footer && <div className="p-3 border-t border-edge bg-chassis flex items-center justify-end gap-2 flex-wrap mobile-safe-bottom">{footer}</div>}
         </motion.div>
       </div>
     </AnimatePresence>

@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { UploadedFileAsset } from '@/lib/types';
 import { loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
+import { getSessionStateIDB, putSessionStateIDB, deleteSessionStateIDB } from '@/lib/db';
 
 export type InputSourceTab = 'text' | 'file' | 'youtube';
 export type StrictnessLevel = 'sherpa' | 'feynman' | 'viva';
@@ -21,13 +22,42 @@ export function useInputSource() {
   const [uploadedFile, setUploadedFile] = useState<UploadedFileAsset | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
 
+  // Uploaded files survive reloads : the asset (name/type/size/base64) is
+  // mirrored into IndexedDB session state. Skipped until the hydration read
+  // completes so the initial null doesn't overwrite the stored upload.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    getSessionStateIDB<UploadedFileAsset | null>('last_upload').then((stored) => {
+      if (!cancelled && stored && stored.base64Data) {
+        setUploadedFile(stored);
+      }
+      hydratedRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (uploadedFile) {
+      void putSessionStateIDB('last_upload', uploadedFile);
+    } else {
+      void deleteSessionStateIDB('last_upload');
+    }
+  }, [uploadedFile]);
+
   // Feature Toggles
   const [enableDeepResearch, setEnableDeepResearch] = useState(true);
   const [enableGuidedPath, setEnableGuidedPath] = useState(false);
   const [strictnessLevel, setStrictnessLevel] = useState<StrictnessLevel>('feynman');
   const [interleaveMode, setInterleaveMode] = useState(false);
 
-  // Hydrate last-used study prefs once on mount
+  // Hydrate last-used study prefs once on mount. localStorage cannot be read
+  // during render without an SSR hydration mismatch, so syncing from this
+  // external system inside an effect is the sanctioned pattern.
+  /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
   useEffect(() => {
     try {
       const prefs = loadStudyPrefs();
@@ -41,6 +71,7 @@ export function useInputSource() {
       setPrefsLoaded(true);
     }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Persist tab + toggles subtly whenever they change (after initial load)
   useEffect(() => {

@@ -39,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     // Motion token: 150ms ease-out on colors only. Layout stays instant.
     const baseStyles =
-      'inline-flex items-center justify-center font-bold font-mono uppercase tracking-wider border transition-colors duration-150 ease-out focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer rounded-none';
+      'inline-flex items-center justify-center font-medium border transition-colors duration-150 ease-out focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer rounded-md';
 
     const sizeStyles: Record<ButtonSize, string> = {
       xs: 'px-2 py-1 text-[10px] gap-1',
@@ -53,11 +53,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     //   hazard  = destructive · primary/secondary/outline/ghost = neutral chrome
     const variantStyles: Record<ButtonVariant, string> = {
       primary:
-        'bg-chassis border-steel text-bone hover:bg-deck hover:border-solder active:bg-amber active:border-amber active:text-chassis',
+        'bg-chassis border-edge text-bone hover:bg-deck hover:border-solder active:bg-amber active:border-amber active:text-chassis',
       secondary:
-        'bg-deck border-steel text-solder hover:bg-chassis hover:text-bone active:bg-amber active:border-amber active:text-chassis',
+        'bg-deck border-edge text-solder hover:bg-chassis hover:text-bone active:bg-amber active:border-amber active:text-chassis',
       amber:
-        'bg-amber border-amber text-chassis hover:bg-amber-400 hover:border-amber-400 active:bg-amber-600 active:border-amber-600',
+        'bg-amber-500 border-amber-500 text-inset hover:bg-amber-400 hover:border-amber-400 active:bg-amber-600 active:border-amber-600',
       hazard:
         'bg-hazard border-hazard text-bone hover:bg-hazard-400 hover:border-hazard-400 active:bg-hazard-600 active:border-hazard-600',
       signal:
@@ -65,7 +65,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       flux:
         'bg-flux border-flux text-bone hover:bg-flux-400 hover:border-flux-400 active:bg-flux-600 active:border-flux-600',
       outline:
-        'bg-transparent border-steel text-solder hover:bg-deck hover:text-bone active:bg-amber active:border-amber active:text-chassis',
+        'bg-transparent border-edge text-solder hover:bg-deck hover:text-bone active:bg-amber active:border-amber active:text-chassis',
       ghost:
         'bg-transparent border-transparent text-solder hover:bg-deck hover:text-bone active:bg-amber active:border-amber active:text-chassis',
     };

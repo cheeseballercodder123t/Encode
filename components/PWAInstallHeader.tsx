@@ -86,7 +86,7 @@ export const PWAInstallHeader: React.FC = () => {
         {!isInstalled && (deferredPrompt || isIOS) && (
           <button
             onClick={handleInstallClick}
-            className="min-h-[44px] px-3 py-1.5 bg-chassis border border-steel text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+            className="min-h-[44px] px-3 py-1.5 bg-chassis border border-edge text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
             title="Install DeepEncode locally for offline flight/subway use"
           >
             [ INSTALL APP: PWA ]
@@ -100,7 +100,7 @@ export const PWAInstallHeader: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-sm bg-deck border border-steel p-6 mobile-sheet-viewport overflow-y-auto overscroll-contain"
+            className="w-full max-w-sm bg-deck border border-edge p-6 mobile-sheet-viewport overflow-y-auto overscroll-contain"
             role="dialog"
             aria-modal="true"
             aria-label="Install on iOS"
@@ -110,7 +110,7 @@ export const PWAInstallHeader: React.FC = () => {
               <button
                 onClick={() => setShowIOSGuide(false)}
                 aria-label="Close iOS install guide"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center px-2 py-1 text-solder hover:text-bone border border-steel hover:border-solder font-mono text-[10px] font-bold transition-none cursor-pointer"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center px-2 py-1 text-solder hover:text-bone border border-edge hover:border-solder font-mono text-[10px] font-bold transition-none cursor-pointer"
               >
                 [ X ]
               </button>
@@ -118,15 +118,15 @@ export const PWAInstallHeader: React.FC = () => {
 
             <ol className="space-y-3 text-xs text-solder font-mono">
               <li className="flex items-start gap-2.5">
-                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-steel text-amber text-[10px] font-bold">[ 1 ]</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-edge text-amber text-[10px] font-bold">[ 1 ]</span>
                 <span>Tap the <strong className="text-bone">Share</strong> button in Safari toolbar.</span>
               </li>
               <li className="flex items-start gap-2.5">
-                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-steel text-amber text-[10px] font-bold">[ 2 ]</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-edge text-amber text-[10px] font-bold">[ 2 ]</span>
                 <span>Scroll down and select <strong className="text-bone">Add to Home Screen</strong>.</span>
               </li>
               <li className="flex items-start gap-2.5">
-                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-steel text-amber text-[10px] font-bold">[ 3 ]</span>
+                <span className="flex-shrink-0 px-1.5 py-0.5 bg-chassis border border-edge text-amber text-[10px] font-bold">[ 3 ]</span>
                 <span>Launch directly from your home screen for full offline IndexedDB access!</span>
               </li>
             </ol>

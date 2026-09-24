@@ -11,7 +11,6 @@ interface HistoryDrawerProps {
   onClose: () => void;
   schemas: SavedSchema[];
   onSelectSchemaToResume: (schema: SavedSchema) => void;
-  onStartDrill: (schema: SavedSchema) => void;
   onDeleteSchema: (id: string) => void;
   onClearAll: () => void;
   onOpenAuth: () => void;
@@ -23,7 +22,6 @@ export function HistoryDrawer({
   onClose,
   schemas,
   onSelectSchemaToResume,
-  onStartDrill,
   onDeleteSchema,
   onClearAll,
   onOpenAuth,
@@ -79,15 +77,15 @@ export function HistoryDrawer({
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-          className="w-full sm:max-w-md bg-chassis border-l border-steel h-full max-h-screen max-h-dvh flex flex-col"
+          className="w-full sm:max-w-md bg-chassis border-l border-edge h-full max-h-screen max-h-dvh flex flex-col"
           role="dialog"
           aria-modal="true"
           aria-label="Saved schemas"
         >
           {/* Header */}
-          <div className="p-4 sm:p-5 border-b border-steel bg-deck flex items-center justify-between gap-3 mobile-safe-bottom">
+          <div className="p-4 sm:p-5 border-b border-edge bg-deck flex items-center justify-between gap-3 mobile-safe-bottom">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 bg-steel/10 border border-steel/30 text-bone ">
+              <div className="p-2 bg-inset/10 border border-edge/30 text-bone ">
                 <span className="text-amber font-bold font-mono">[ HIST ]</span>
               </div>
               <div className="min-w-0">
@@ -101,7 +99,7 @@ export function HistoryDrawer({
                   ) : (
                     <button 
                       onClick={onOpenAuth}
-                      className="min-h-[44px] px-2.5 bg-steel/10 hover:bg-steel/20 border border-steel/30 text-bone text-[9px] font-bold flex items-center gap-1 transition-colors"
+                      className="min-h-[44px] px-2.5 bg-inset/10 hover:bg-inset/20 border border-edge/30 text-bone text-[9px] font-bold flex items-center gap-1 transition-colors"
                     >
                       <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       Enable Cloud
@@ -114,14 +112,14 @@ export function HistoryDrawer({
             <button
               onClick={onClose}
               aria-label="Close saved schemas"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-solder hover:text-bone hover:bg-steel transition-colors shrink-0"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-solder hover:text-bone hover:bg-inset transition-colors shrink-0"
             >
               <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="p-4 border-b border-steel/80 bg-[#0B0D14] space-y-3">
+          <div className="p-4 border-b border-edge/80 bg-[#0B0D14] space-y-3">
             <div className="relative">
               <span className="text-amber font-bold font-mono text-[10px]">[ SEARCH ]</span>
               <input
@@ -132,7 +130,7 @@ export function HistoryDrawer({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search topics by title..."
                 aria-label="Search saved schemas"
-                className="mt-1 w-full pl-3 pr-3 py-2.5 min-h-[44px] bg-deck border border-steel text-xs text-bone placeholder:text-bone outline-none focus:border-steel"
+                className="mt-1 w-full pl-3 pr-3 py-2.5 min-h-[44px] bg-deck border border-edge text-xs text-bone placeholder:text-bone outline-none focus:border-edge"
               />
             </div>
 
@@ -141,7 +139,7 @@ export function HistoryDrawer({
                 onClick={() => setFilterMode('all')}
                 className={`shrink-0 min-h-[44px] px-3 font-bold transition-colors ${
                   filterMode === 'all'
-                    ? 'bg-steel text-bone'
+                    ? 'bg-inset text-bone'
                     : 'bg-deck text-solder hover:text-bone'
                 }`}
               >
@@ -151,7 +149,7 @@ export function HistoryDrawer({
                 onClick={() => setFilterMode('conceptual')}
                 className={`shrink-0 min-h-[44px] px-3 font-bold transition-colors ${
                   filterMode === 'conceptual'
-                    ? 'bg-steel text-bone'
+                    ? 'bg-inset text-bone'
                     : 'bg-deck text-solder hover:text-bone'
                 }`}
               >
@@ -161,7 +159,7 @@ export function HistoryDrawer({
                 onClick={() => setFilterMode('memorization')}
                 className={`shrink-0 min-h-[44px] px-3 font-bold transition-colors ${
                   filterMode === 'memorization'
-                    ? 'bg-steel text-bone'
+                    ? 'bg-inset text-bone'
                     : 'bg-deck text-solder hover:text-bone'
                 }`}
               >
@@ -236,7 +234,7 @@ export function HistoryDrawer({
                 return (
                   <div
                     key={schema.id}
-                    className="p-4 bg-deck border border-steel space-y-3 transition-all group"
+                    className="p-4 bg-deck border border-edge space-y-3 transition-all group"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -244,7 +242,7 @@ export function HistoryDrawer({
                           <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider  ${
                             schema.mode === 'memorization'
                               ? 'bg-amber/20 text-amber border border-amber/30'
-                              : 'bg-steel/20 text-bone border border-steel/30'
+                              : 'bg-inset/20 text-bone border border-edge/30'
                           }`}>
                             {schema.mode === 'memorization' ? 'Mnemonic Mode' : 'Conceptual'}
                           </span>
@@ -267,12 +265,18 @@ export function HistoryDrawer({
                             {schema.sourceFileName}
                           </span>
                         )}
+                        {schema.youtubeData && (
+                          <span className="text-[10px] text-solder flex items-center gap-1 mt-0.5">
+                            <span className="text-flux font-bold font-mono">[ YT ]</span>
+                            <span className="truncate">{schema.youtubeData.title}</span>
+                          </span>
+                        )}
                       </div>
 
                       <button
                         onClick={() => onDeleteSchema(schema.id)}
                         aria-label={`Delete schema ${schema.topicSummary}`}
-                        className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard-400 hover:bg-steel transition-colors shrink-0"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard-400 hover:bg-inset transition-colors shrink-0"
                         title="Delete schema"
                       >
                         <span className="text-hazard font-bold font-mono">[ DEL ]</span>
@@ -292,7 +296,7 @@ export function HistoryDrawer({
                             onClick={() => {
                               onShareSchema(schema);
                             }}
-                            className="min-h-[44px] px-2.5 bg-deck hover:bg-steel border border-steel/30 hover:border-steel/60 text-bone text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                            className="min-h-[44px] px-2.5 bg-deck hover:bg-inset border border-edge/30 hover:border-edge/60 text-bone text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                             title="Share stateless URL"
                           >
                             <span className="text-amber font-bold font-mono">[ SHARE ]</span>
@@ -302,22 +306,11 @@ export function HistoryDrawer({
 
                         <button
                           onClick={() => handleCopyRemNote(schema)}
-                          className="min-h-[44px] px-3 bg-deck hover:bg-steel border border-steel text-solder text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          className="min-h-[44px] px-3 bg-deck hover:bg-inset border border-edge text-solder text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                           title="Copy RemNote format"
                         >
                           {copiedId === schema.id ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
                           RemNote
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            onStartDrill(schema);
-                            onClose();
-                          }}
-                          className="min-h-[44px] px-3.5 bg-steel text-bone text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                        >
-                          <span className="text-amber font-bold font-mono">[ PLAY ]</span>
-                          Drill
                         </button>
 
                         <button
@@ -342,7 +335,7 @@ export function HistoryDrawer({
                       type="button"
                       onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
                       disabled={safeHistoryPage === 1}
-                      className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder border border-steel hover:text-bone disabled:opacity-30 disabled:cursor-not-allowed transition-none cursor-pointer"
+                      className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder border border-edge hover:text-bone disabled:opacity-30 disabled:cursor-not-allowed transition-none cursor-pointer"
                     >
                       [ &lt; PREV ]
                     </button>
@@ -353,7 +346,7 @@ export function HistoryDrawer({
                       type="button"
                       onClick={() => setHistoryPage(p => Math.min(historyTotalPages, p + 1))}
                       disabled={safeHistoryPage === historyTotalPages}
-                      className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder border border-steel hover:text-bone disabled:opacity-30 disabled:cursor-not-allowed transition-none cursor-pointer"
+                      className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder border border-edge hover:text-bone disabled:opacity-30 disabled:cursor-not-allowed transition-none cursor-pointer"
                     >
                       [ NEXT &gt; ]
                     </button>
@@ -365,7 +358,7 @@ export function HistoryDrawer({
 
           {/* Footer */}
           {displaySchemas.length > 0 && (
-            <div className="p-3.5 border-t border-steel bg-deck flex items-center justify-between gap-3 text-xs mobile-safe-bottom">
+            <div className="p-3.5 border-t border-edge bg-deck flex items-center justify-between gap-3 text-xs mobile-safe-bottom">
               <button
                 onClick={() => {
                   if (confirm('Are you sure you want to clear all schemas?')) {

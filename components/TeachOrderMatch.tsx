@@ -24,7 +24,7 @@ export function OrderingBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
           const ok = submitted && (it.correctIndex ?? -1) === i;
           const bad = submitted && (it.correctIndex ?? -1) !== i;
           return (
-            <div key={it.id} className={`flex items-center gap-2 px-3 py-2 border text-[11px] font-mono ${ok ? 'bg-amber/10 border-amber' : bad ? 'bg-hazard/10 border-hazard' : 'bg-chassis border-steel'}`}>
+            <div key={it.id} className={`flex items-center gap-2 px-3 py-2 border text-[11px] font-mono ${ok ? 'bg-amber/10 border-amber' : bad ? 'bg-hazard/10 border-hazard' : 'bg-chassis border-edge'}`}>
               <div className="flex flex-col gap-0.5">
                 <button type="button" onClick={() => move(i, -1)} className="text-solder hover:text-bone text-[10px] cursor-pointer leading-none" disabled={submitted}>▲</button>
                 <button type="button" onClick={() => move(i, 1)} className="text-solder hover:text-bone text-[10px] cursor-pointer leading-none" disabled={submitted}>▼</button>
@@ -61,7 +61,7 @@ export function MatchingBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
         <div className="space-y-1">
           <span className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider">left</span>
           {pairs.map((p) => (
-            <button key={p.left} type="button" disabled={submitted} onClick={() => setPickLeft(matches[p.left] ? null : p.left)} className={`w-full text-left px-3 py-2 border text-[11px] font-mono cursor-pointer ${pickLeft === p.left ? 'bg-amber/15 border-amber text-bone' : 'bg-chassis border-steel text-bone hover:border-amber'}`}>
+            <button key={p.left} type="button" disabled={submitted} onClick={() => setPickLeft(matches[p.left] ? null : p.left)} className={`w-full text-left px-3 py-2 border text-[11px] font-mono cursor-pointer ${pickLeft === p.left ? 'bg-amber/15 border-amber text-bone' : 'bg-chassis border-edge text-bone hover:border-amber'}`}>
               {p.left}
             </button>
           ))}
@@ -69,7 +69,7 @@ export function MatchingBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
         <div className="space-y-1">
           <span className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider">right</span>
           {rights.map((r: string) => (
-            <button key={r} type="button" disabled={submitted || !pickLeft} onClick={() => { if (!pickLeft) return; const next = { ...matches }; Object.keys(next).forEach((k) => { if (k === pickLeft || next[k] === r) delete next[k]; }); if (matches[pickLeft] !== r) next[pickLeft] = r; setMatches(next); setPickLeft(null); }} className="w-full text-left px-3 py-2 border text-[11px] font-mono cursor-pointer disabled:cursor-default bg-chassis border-steel text-bone hover:border-amber">
+            <button key={r} type="button" disabled={submitted || !pickLeft} onClick={() => { if (!pickLeft) return; const next = { ...matches }; Object.keys(next).forEach((k) => { if (k === pickLeft || next[k] === r) delete next[k]; }); if (matches[pickLeft] !== r) next[pickLeft] = r; setMatches(next); setPickLeft(null); }} className="w-full text-left px-3 py-2 border text-[11px] font-mono cursor-pointer disabled:cursor-default bg-chassis border-edge text-bone hover:border-amber">
               {r}
             </button>
           ))}

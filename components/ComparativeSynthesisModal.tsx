@@ -107,17 +107,17 @@ export function ComparativeSynthesisModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-[#0F1222] border border-steel/30 overflow-hidden flex flex-col max-h-[88vh]">
+      <div className="w-full max-w-4xl bg-[#0F1222] border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-steel flex items-center justify-between ">
+        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-steel/10 border border-steel/30 flex items-center justify-center text-bone">
+            <div className="w-10 h-10 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ COMPARE ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-bone text-base">Multi-Document Comparative Synthesis</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-steel/20 text-bone border border-steel/30">
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-inset/20 text-bone border border-edge/30">
                   Cross-Examination Engine
                 </span>
               </div>
@@ -129,7 +129,7 @@ export function ComparativeSynthesisModal({
 
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none cursor-pointer"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none cursor-pointer"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
@@ -149,7 +149,7 @@ export function ComparativeSynthesisModal({
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Document A Card */}
-                <div className="p-4 bg-deck/80 border border-steel/20 space-y-3">
+                <div className="p-4 bg-deck/80 border border-edge/20 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs text-bone uppercase tracking-wider flex items-center gap-1.5">
                       <span className="text-amber font-bold font-mono">[ FILE ]</span>
@@ -169,7 +169,7 @@ export function ComparativeSynthesisModal({
                       value={docAName}
                       onChange={(e) => setDocAName(e.target.value)}
                       placeholder="e.g. Lecture 4 Slides"
-                      className="w-full px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel"
+                      className="w-full px-3 py-1.5 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge"
                     />
                   </div>
 
@@ -179,12 +179,12 @@ export function ComparativeSynthesisModal({
                       value={docASnippet}
                       onChange={(e) => setDocASnippet(e.target.value)}
                       placeholder="Paste key slide bullet points or notes here..."
-                      className="w-full h-24 p-2.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel resize-none"
+                      className="w-full h-24 p-2.5 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge resize-none"
                     />
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <label className="flex-1 py-1.5 px-2 bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
+                    <label className="flex-1 py-1.5 px-2 bg-inset text-xs font-bold text-bone border border-edge flex items-center justify-center gap-1.5 cursor-pointer transition-none">
                       <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
                       <span>Upload File</span>
                       <input
@@ -197,7 +197,7 @@ export function ComparativeSynthesisModal({
 
                     <button
                       onClick={() => setDriveTargetDoc('A')}
-                      className="py-1.5 px-3 bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
+                      className="py-1.5 px-3 bg-inset/60 text-xs font-bold text-bone border border-edge/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
                       <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       <span>Google Drive</span>
@@ -206,7 +206,7 @@ export function ComparativeSynthesisModal({
                 </div>
 
                 {/* Document B Card */}
-                <div className="p-4 bg-deck/80 border border-steel/20 space-y-3">
+                <div className="p-4 bg-deck/80 border border-edge/20 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs text-bone uppercase tracking-wider flex items-center gap-1.5">
                       <span className="text-amber font-bold font-mono">[ BOOK ]</span>
@@ -226,7 +226,7 @@ export function ComparativeSynthesisModal({
                       value={docBName}
                       onChange={(e) => setDocBName(e.target.value)}
                       placeholder="e.g. Textbook Chapter 4"
-                      className="w-full px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel"
+                      className="w-full px-3 py-1.5 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge"
                     />
                   </div>
 
@@ -236,12 +236,12 @@ export function ComparativeSynthesisModal({
                       value={docBSnippet}
                       onChange={(e) => setDocBSnippet(e.target.value)}
                       placeholder="Paste textbook paragraph or reference excerpt here..."
-                      className="w-full h-24 p-2.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel resize-none"
+                      className="w-full h-24 p-2.5 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge resize-none"
                     />
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <label className="flex-1 py-1.5 px-2 bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
+                    <label className="flex-1 py-1.5 px-2 bg-inset text-xs font-bold text-bone border border-edge flex items-center justify-center gap-1.5 cursor-pointer transition-none">
                       <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
                       <span>Upload File</span>
                       <input
@@ -254,7 +254,7 @@ export function ComparativeSynthesisModal({
 
                     <button
                       onClick={() => setDriveTargetDoc('B')}
-                      className="py-1.5 px-3 bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
+                      className="py-1.5 px-3 bg-inset/60 text-xs font-bold text-bone border border-edge/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
                       <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       <span>Google Drive</span>
@@ -286,7 +286,7 @@ export function ComparativeSynthesisModal({
             /* Results View */
             <div className="space-y-4">
               {/* Header Bar */}
-              <div className="p-3.5 bg-deck border border-steel flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
+              <div className="p-3.5 bg-deck border border-edge flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
                 <div>
                   <h4 className="font-bold text-bone text-sm">{report.synthesisTitle}</h4>
                   <p className="text-solder text-[11px] mt-0.5">
@@ -297,14 +297,14 @@ export function ComparativeSynthesisModal({
                 <div className="flex gap-2">
                   <button
                     onClick={() => setReport(null)}
-                    className="px-3 py-1.5 bg-steel text-solder hover:text-bone font-bold text-[11px] transition-none cursor-pointer"
+                    className="px-3 py-1.5 bg-inset text-solder hover:text-bone font-bold text-[11px] transition-none cursor-pointer"
                   >
                     Compare New Documents
                   </button>
                   {onOpenAnkiExport && (
                     <button
                       onClick={() => onOpenAnkiExport(report)}
-                      className="px-3 py-1.5 bg-steel text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
+                      className="px-3 py-1.5 bg-inset text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
                     >
                       <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                       Export Comparative Anki Cards
@@ -314,7 +314,7 @@ export function ComparativeSynthesisModal({
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex items-center gap-2 border-b border-steel pb-2 overflow-x-auto">
+              <div className="flex items-center gap-2 border-b border-edge pb-2 overflow-x-auto">
                 <button
                   onClick={() => setActiveTab('contradictions')}
                   className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
@@ -331,7 +331,7 @@ export function ComparativeSynthesisModal({
                   onClick={() => setActiveTab('complements')}
                   className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     activeTab === 'complements'
-                      ? 'bg-steel text-bone '
+                      ? 'bg-inset text-bone '
                       : 'text-solder hover:text-bone hover:bg-deck'
                   }`}
                 >
@@ -343,7 +343,7 @@ export function ComparativeSynthesisModal({
                   onClick={() => setActiveTab('matrix')}
                   className={`px-3.5 py-1.5  text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                     activeTab === 'matrix'
-                      ? 'bg-steel text-bone '
+                      ? 'bg-inset text-bone '
                       : 'text-solder hover:text-bone hover:bg-deck'
                   }`}
                 >
@@ -380,18 +380,18 @@ export function ComparativeSynthesisModal({
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="p-3 bg-deck border border-steel/30">
+                        <div className="p-3 bg-deck border border-edge/30">
                           <span className="font-bold text-bone block mb-1">{report.docAName}:</span>
                           <p className="text-solder leading-relaxed">{c.docAClaim}</p>
                         </div>
 
-                        <div className="p-3 bg-deck border border-steel/30">
+                        <div className="p-3 bg-deck border border-edge/30">
                           <span className="font-bold text-bone block mb-1">{report.docBName}:</span>
                           <p className="text-solder leading-relaxed">{c.docBClaim}</p>
                         </div>
                       </div>
 
-                      <div className="p-3 bg-deck/90 border border-steel space-y-1">
+                      <div className="p-3 bg-deck/90 border border-edge space-y-1">
                         <span className="font-bold text-amber block">Reconciliation & Academic Nuance:</span>
                         <p className="text-bone leading-relaxed">{c.resolutionOrNuance}</p>
                       </div>
@@ -411,26 +411,26 @@ export function ComparativeSynthesisModal({
               {activeTab === 'complements' && (
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {report.complements?.map((comp, idx) => (
-                    <div key={comp.id || idx} className="p-4 bg-steel/20 border border-steel/30 text-xs space-y-3">
+                    <div key={comp.id || idx} className="p-4 bg-inset/20 border border-edge/30 text-xs space-y-3">
                       <h5 className="font-bold text-bone text-sm">{comp.conceptName}</h5>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {comp.uniqueInDocA && (
-                          <div className="p-3 bg-deck border border-steel">
+                          <div className="p-3 bg-deck border border-edge">
                             <span className="font-bold text-bone block mb-1">Unique to {report.docAName}:</span>
                             <p className="text-solder">{comp.uniqueInDocA}</p>
                           </div>
                         )}
 
                         {comp.uniqueInDocB && (
-                          <div className="p-3 bg-deck border border-steel">
+                          <div className="p-3 bg-deck border border-edge">
                             <span className="font-bold text-bone block mb-1">Unique to {report.docBName}:</span>
                             <p className="text-solder">{comp.uniqueInDocB}</p>
                           </div>
                         )}
                       </div>
 
-                      <div className="p-3 bg-deck border border-steel/40">
+                      <div className="p-3 bg-deck border border-edge/40">
                         <span className="font-bold text-bone block mb-1">Synthesized Master Takeaway:</span>
                         <p className="text-bone leading-relaxed">{comp.synthesizedTakeaway}</p>
                       </div>
@@ -443,8 +443,8 @@ export function ComparativeSynthesisModal({
               {activeTab === 'matrix' && (
                 <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
                   {report.unifiedMatrix?.map((mech, idx) => (
-                    <div key={mech.id || idx} className="p-4 bg-deck border border-steel space-y-3 text-xs">
-                      <div className="flex items-center justify-between border-b border-steel pb-2">
+                    <div key={mech.id || idx} className="p-4 bg-deck border border-edge space-y-3 text-xs">
+                      <div className="flex items-center justify-between border-b border-edge pb-2">
                         <h5 className="font-bold text-bone text-sm">{mech.conceptName}</h5>
                         <span className="text-[10px] text-bone font-mono">Synthesized Mechanism #{idx + 1}</span>
                       </div>
@@ -476,7 +476,7 @@ export function ComparativeSynthesisModal({
               {activeTab === 'agreed' && (
                 <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-1">
                   {report.agreedCorePrinciples?.map((principle, idx) => (
-                    <div key={idx} className="p-3.5 bg-deck border border-steel text-xs flex items-start gap-2.5 text-bone">
+                    <div key={idx} className="p-3.5 bg-deck border border-edge text-xs flex items-start gap-2.5 text-bone">
                       <span className="text-amber font-bold font-mono">[ OK ]</span>
                       <div className="leading-relaxed">{principle}</div>
                     </div>
@@ -488,11 +488,11 @@ export function ComparativeSynthesisModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-steel bg-chassis flex items-center justify-between text-xs text-solder">
+        <div className="p-4 border-t border-edge bg-chassis flex items-center justify-between text-xs text-solder">
           <span>DeepEncode Multi-Document Cross-Examination Engine</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-steel text-bone font-bold transition-none cursor-pointer"
+            className="px-4 py-1.5 bg-inset text-bone font-bold transition-none cursor-pointer"
           >
             Close
           </button>

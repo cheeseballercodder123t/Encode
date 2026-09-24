@@ -44,7 +44,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
         className="w-full max-w-2xl bg-deck border border-amber/30 p-6   text-bone relative my-8"
       >
         {/* Header Badge */}
-        <div className="flex items-center justify-between border-b border-steel pb-4 mb-6">
+        <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber/20 border border-amber/40 flex items-center justify-center text-amber">
               <span className="text-amber font-bold font-mono">[ ! ]</span>
@@ -63,7 +63,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
@@ -98,13 +98,13 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                     ? 'bg-deck/90 border-amber/40 '
                     : isKnown === false
                     ? 'bg-amber/20 border-amber/40'
-                    : 'bg-steel/40 border-steel/80 hover:border-steel'
+                    : 'bg-inset/40 border-edge/80 hover:border-edge'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 bg-steel text-solder border border-steel text-xs font-bold flex items-center justify-center">
+                      <span className="w-5 h-5 bg-inset text-solder border border-edge text-xs font-bold flex items-center justify-center">
                         {idx + 1}
                       </span>
                       <h4 className="font-bold text-sm text-bone">{prereq.name}</h4>
@@ -119,7 +119,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                       className={`px-3 py-1.5  text-xs font-semibold flex items-center gap-1.5 transition-none ${
                         isKnown === true
                           ? 'bg-amber600 text-bone  '
-                          : 'bg-steel text-solder hover:bg-steel border border-steel'
+                          : 'bg-inset text-solder hover:bg-inset border border-edge'
                       }`}
                     >
                       <span className="text-amber font-bold font-mono">[ OK ]</span>
@@ -130,7 +130,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                       className={`px-3 py-1.5  text-xs font-semibold flex items-center gap-1.5 transition-none ${
                         isKnown === false
                           ? 'bg-amber text-bone  '
-                          : 'bg-steel text-solder hover:bg-steel border border-steel'
+                          : 'bg-inset text-solder hover:bg-inset border border-edge'
                       }`}
                     >
                       <span className="text-amber font-bold font-mono">[ ? ]</span>
@@ -156,7 +156,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: 'auto' }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="mt-2.5 p-3 bg-steel/40 border border-steel/30 text-xs text-bone100 leading-relaxed overflow-hidden"
+                        className="mt-2.5 p-3 bg-inset/40 border border-edge/30 text-xs text-bone100 leading-relaxed overflow-hidden"
                       >
                         <p className="font-semibold text-bone300 mb-1 flex items-center gap-1.5">
                           <span className="text-amber font-bold font-mono">[ * ]</span>
@@ -164,7 +164,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                         </p>
                         <p>{prereq.primerSummary}</p>
                         {prereq.checkQuestion && (
-                          <div className="mt-2 pt-2 border-t border-steel/40 text-[11px] text-bone200/80">
+                          <div className="mt-2 pt-2 border-t border-edge/40 text-[11px] text-bone200/80">
                             <strong>Self-Check Question:</strong> {prereq.checkQuestion}
                           </div>
                         )}
@@ -178,7 +178,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
         </div>
 
         {/* Footer Actions */}
-        <div className="mt-6 pt-4 border-t border-steel flex items-center justify-between">
+        <div className="mt-6 pt-4 border-t border-edge flex items-center justify-between">
           <div className="text-xs text-solder">
             {knownCount} of {totalPrereqs} prerequisites confirmed
           </div>
@@ -186,7 +186,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-steel/80 hover:bg-steel transition-none"
+              className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-inset/80 hover:bg-inset transition-none"
             >
               Cancel
             </button>

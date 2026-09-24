@@ -101,7 +101,7 @@ export function BoundaryStressTestVisual({ activity, field1, field2, field3, sel
               className={`p-3.5  border transition-colors duration-150 ${
                 isOverCritical
                   ? 'border-hazard-500/60 bg-hazard-950/30'
-                  : 'border-steel/60 bg-deck/60'
+                  : 'border-edge/60 bg-deck/60'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -132,13 +132,13 @@ export function BoundaryStressTestVisual({ activity, field1, field2, field3, sel
                   max="100"
                   value={currentVal}
                   onChange={e => handleSliderChange(idx, Number(e.target.value))}
-                  className="w-full h-1.5 bg-steel appearance-none cursor-pointer accent-red-500"
+                  className="w-full h-1.5 bg-inset appearance-none cursor-pointer accent-red-500"
                 />
               </div>
 
               {/* Extreme Case & Breakdown Output */}
               <div className="mt-2 pt-2 border-t border-hazard-500/20 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div className="p-2 bg-chassis/60 border border-steel">
+                <div className="p-2 bg-chassis/60 border border-edge">
                   <span className="text-[9px] font-mono text-solder uppercase block mb-0.5">
                     Extreme Bound Tested
                   </span>
