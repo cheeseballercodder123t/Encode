@@ -49,7 +49,7 @@ import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
 import { CompletedSessionView } from '@/components/CompletedSessionView';
 import { TeachMeModal } from '@/components/TeachMeModal';
 export default function DeepEncodeApp() {
-  const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud } = useAuth();
+  const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud, isSyncing, lastSyncedAt, lastSyncError, pendingLocalCount } = useAuth();
 
   // ─── Extracted state hooks ─────────────────────────────────────────────────
   // Input sources & generation toggles (useInputSource)
@@ -1389,18 +1389,40 @@ export default function DeepEncodeApp() {
               </button>
             )}
 
-            {/* Cloud Sync / Account Button */}
-            <button
-              onClick={() => setIsAuthOpen(true)}
-              className={`shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer ${
-                user
-                  ? 'border-amber/40 text-amber'
-                  : 'border-steel text-solder hover:text-bone'
-              }`}
-              title={user ? `Signed in as ${user.displayName || user.email || 'User'} (Cloud Synced)` : 'Connect Cloud Database (Firestore)'}
-            >
-              [ CLOUD: {user ? 'SYNCED' : 'OFF'} ]
-            </button>
+            {/* Cloud Sync / Account Button : honest live status */}
+            {(() => {
+              const pendingNote = pendingLocalCount > 0 ? ` : ${pendingLocalCount} local` : '';
+              let status = 'OFF';
+              let cls = 'border-steel text-solder hover:text-bone';
+              let title = 'Sign in to sync schemas across devices (Firestore)';
+              if (user) {
+                if (isSyncing) {
+                  status = 'SYNCING';
+                  cls = 'border-amber/40 text-amber';
+                  title = 'Syncing your schemas to the cloud...';
+                } else if (lastSyncError) {
+                  status = 'ERROR';
+                  cls = 'border-hazard-500/60 text-hazard-300';
+                  title = `Last cloud sync failed: ${lastSyncError} — click to retry from Cloud Sync & Account.`;
+                } else {
+                  status = 'SYNCED';
+                  cls = 'border-amber/40 text-amber';
+                  const when = lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : 'just now';
+                  title = `Signed in as ${user.displayName || user.email || 'User'}${pendingNote} : last synced ${when}.`;
+                }
+              } else if (pendingLocalCount > 0) {
+                title = `${pendingLocalCount} schema${pendingLocalCount === 1 ? '' : 's'} saved locally only : sign in to back them up.`;
+              }
+              return (
+                <button
+                  onClick={() => setIsAuthOpen(true)}
+                  className={`shrink-0 min-h-[44px] px-3 py-1.5 bg-chassis border transition-colors duration-150 text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer ${cls}`}
+                  title={title}
+                >
+                  [ CLOUD: {status} ]
+                </button>
+              );
+            })()}
 
             {/* Metacognitive Performance Review Button (when completed) */}
             {appState === 'completed' && (

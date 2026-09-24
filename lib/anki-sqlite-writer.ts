@@ -485,6 +485,33 @@ export function generateAnkiGuid(rand: () => number = Math.random): string {
   return guid;
 }
 
+/**
+ * Deterministic note GUID derived from content: re-exporting the same card
+ * produces the same guid, so Anki updates the existing note instead of
+ * duplicating it (Anki syncs by guid, not by note id).
+ *
+ * The 10-char legacy guid alphabet is limited to 91 chars, so the digest is
+ * encoded by mapping 7 bits per character over a shuffled charset (seeded by
+ * the digest itself, stable across sessions).
+ */
+export function deterministicAnkiGuid(seed: string): string {
+  const digest = sha1Hex(seed);
+  // Shuffle the guid alphabet deterministically from the digest bytes.
+  const charset = GUID_CHARSET.split('');
+  for (let i = charset.length - 1; i > 0; i--) {
+    const j = parseInt(digest[(i * 2) % 40] + digest[(i * 2 + 1) % 40], 16) % (i + 1);
+    const tmp = charset[i];
+    charset[i] = charset[j];
+    charset[j] = tmp;
+  }
+  let guid = '';
+  for (let i = 0; i < 10; i++) {
+    const byte = parseInt(digest.substr(i * 2, 2), 16);
+    guid += charset[byte % GUID_CHARSET.length];
+  }
+  return guid;
+}
+
 /** Compact synchronous SHA-1 (needed for Anki's note csum column). */
 export function sha1Hex(input: string): string {
   const msg = new TextEncoder().encode(input);

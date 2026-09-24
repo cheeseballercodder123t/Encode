@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -15,6 +15,7 @@ import {
   clozeUserWording,
   normalizeClozeTermToAnki,
   computeActivityExportTags,
+  syncToAnkiConnect,
   AnkiCardItem,
 } from '@/lib/anki-exporter';
 import { SavedSchema, SegregationReport } from '@/lib/types';
@@ -488,5 +489,57 @@ describe('generateAnkiTextDecks / generateAnkiTextDeck', () => {
     ];
     const deck = generateAnkiTextDeck(cards, 'Deck');
     expect(deck).toContain('#notetype:Cloze');
+  });
+});
+
+describe('syncToAnkiConnect duplicate-safe push', () => {
+  const card = (id: string): AnkiCardItem => ({
+    id, front: `Front ${id}`, back: `Back ${id}`, isCloze: false,
+    tags: ['DeepEncode'], sm2: { repetitions: 0, interval: 1, easeFactor: 2.5, nextReviewTimestamp: 0 },
+  });
+
+  const ankiFetchMock = (canAdd: boolean[], addIds: (number | null)[]) =>
+    vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse((init?.body as string) || '{}');
+      const result =
+        body.action === 'version' ? 6
+        : body.action === 'createDeck' ? null
+        : body.action === 'canAddNotes' ? canAdd
+        : body.action === 'addNotes' ? addIds
+        : null;
+      return { ok: true, json: async () => ({ result, error: null }) } as Response;
+    });
+
+  it('adds new notes and reports them', async () => {
+    const fetchMock = ankiFetchMock([true, true], [101, 102]);
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await syncToAnkiConnect('http://127.0.0.1:8765', 'D', [card('a'), card('b')]);
+    expect(res.success).toBe(true);
+    expect(res.addedCount).toBe(2);
+    expect(res.message).toContain('2 added');
+    vi.unstubAllGlobals();
+  });
+
+  it('skips duplicates and reports them honestly', async () => {
+    const fetchMock = ankiFetchMock([false, true], [103]);
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await syncToAnkiConnect('http://127.0.0.1:8765', 'D', [card('a'), card('b')]);
+    expect(res.success).toBe(true);
+    expect(res.addedCount).toBe(1);
+    expect(res.message).toContain('1 already in your collection');
+    expect(res.message).toContain('1 added');
+    // Only the acceptable note is sent to addNotes.
+    const addCall = (fetchMock as any).mock.calls.find(([, init]: any[]) =>
+      JSON.parse(init.body).action === 'addNotes');
+    expect(JSON.parse(addCall![1].body).params.notes).toHaveLength(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('fails fast with an honest message when Anki is unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    const res = await syncToAnkiConnect('http://127.0.0.1:8765', 'D', [card('a')]);
+    expect(res.success).toBe(false);
+    expect(res.message).toContain('Could not reach AnkiConnect');
+    vi.unstubAllGlobals();
   });
 });
