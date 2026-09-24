@@ -55,13 +55,13 @@ export function TeachFinishPanel({
         <div className="px-3 py-2 bg-amber/10 border border-amber/40 text-[11px] text-amber font-mono">{lesson.wrapup.summary}</div>
       )}
       {isLast && lesson?.masteryCheck && (
-        <div className="px-3 py-3 bg-deck border border-steel space-y-2">
+        <div className="px-3 py-3 bg-deck border border-edge space-y-2">
           <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">[ MASTERY CHECK ]</span>
           <p className="text-xs text-bone font-mono leading-relaxed">{lesson.masteryCheck.prompt}</p>
           <textarea
             placeholder="Prove you can produce the mechanism yourself..."
             rows={4}
-            className="w-full p-3 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed"
+            className="w-full p-3 bg-chassis border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed"
           />
         </div>
       )}

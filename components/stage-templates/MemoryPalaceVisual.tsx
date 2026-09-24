@@ -100,7 +100,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
               className={`p-3  border transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                 isCurrent
                   ? 'border-amber/80 bg-amber/40 ring-1 ring-amber-400/50 '
-                  : 'border-steel/60 bg-deck/60 hover:border-amber/40'
+                  : 'border-edge/60 bg-deck/60 hover:border-amber/40'
               }`}
             >
               <div className="flex items-start gap-2.5">

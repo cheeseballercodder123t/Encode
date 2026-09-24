@@ -86,18 +86,18 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
           const isSelected = activeStep === index;
           const isUserLinked = index === 0 ? field1 : index === 1 ? field2 : field3;
 
-          let colorClasses = 'border-steel/60 bg-deck/60 text-solder';
-          let badgeColor = 'bg-steel text-solder border-steel';
+          let colorClasses = 'border-edge/60 bg-deck/60 text-solder';
+          let badgeColor = 'bg-inset text-solder border-edge';
 
           if (node.type === 'input') {
             colorClasses = 'border-amber/40 bg-amber-950/30 text-amber-200 hover:border-amber';
             badgeColor = 'bg-amber-950/60 text-amber-300 border-amber/40';
           } else if (node.type === 'mechanism') {
-            colorClasses = 'border-steel/40 bg-steel/30 text-bone hover:border-steel';
-            badgeColor = 'bg-steel/60 text-bone border-steel/40';
+            colorClasses = 'border-edge/40 bg-inset/30 text-bone hover:border-edge';
+            badgeColor = 'bg-inset/60 text-bone border-edge/40';
           } else if (node.type === 'outcome') {
-            colorClasses = 'border-steel/40 bg-steel/30 text-bone hover:border-steel';
-            badgeColor = 'bg-steel/60 text-bone border-steel/40';
+            colorClasses = 'border-edge/40 bg-inset/30 text-bone hover:border-edge';
+            badgeColor = 'bg-inset/60 text-bone border-edge/40';
           }
 
           return (

@@ -3,7 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 
 export const viewport: Viewport = {
-  themeColor: '#C8782A',
+  themeColor: '#D08430',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,

@@ -19,7 +19,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           ref={ref}
           rows={rows}
-          className={`w-full bg-chassis border text-xs text-bone placeholder-solder rounded-none p-3 focus:outline-none resize-none disabled:opacity-50 font-mono ${isOverLimit || error ? 'border-hazard' : 'border-steel focus:border-amber'} ${className}`}
+          className={`w-full bg-chassis border text-xs text-bone placeholder-solder p-3 focus:outline-none resize-none disabled:opacity-50 font-mono ${isOverLimit || error ? 'border-hazard' : 'border-edge focus:border-amber'} ${className}`}
           {...props}
         />
         <div className="flex items-center justify-between text-[10px] font-mono">

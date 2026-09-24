@@ -47,7 +47,7 @@ export function ConceptBody({ seg, onNext }: BodyProps) {
           <span className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider">analogy</span>
           {seg.visual.analogyPairs.map((p, i) => (
             <div key={i} className="flex items-center gap-2 text-[11px] font-mono text-bone">
-              <span className="px-2 py-0.5 bg-chassis border border-steel">{p.source}</span>
+              <span className="px-2 py-0.5 bg-chassis border border-edge">{p.source}</span>
               <span className="text-solder">&#8779;</span>
               <span className="px-2 py-0.5 bg-amber/10 border border-amber/30 text-amber">{p.target}</span>
             </div>
@@ -67,7 +67,7 @@ export function ConceptBody({ seg, onNext }: BodyProps) {
       {seg.keyTerms && seg.keyTerms.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-1">
           {seg.keyTerms.map((t) => (
-            <span key={t} className="px-2 py-0.5 bg-chassis border border-steel text-[10px] text-solder font-mono uppercase tracking-wider">
+            <span key={t} className="px-2 py-0.5 bg-chassis border border-edge text-[10px] text-solder font-mono uppercase tracking-wider">
               {t}
             </span>
           ))}
@@ -90,7 +90,7 @@ export function MemoryHookBody({ seg, onNext }: BodyProps) {
       {seg.linkedList && seg.linkedList.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5">
           {seg.linkedList.map((item, i) => (
-            <div key={i} className="flex items-center gap-2 px-2 py-1 bg-chassis border border-steel text-[11px] text-bone font-mono">
+            <div key={i} className="flex items-center gap-2 px-2 py-1 bg-chassis border border-edge text-[11px] text-bone font-mono">
               <span className="text-amber font-bold">{i + 1}.</span>
               <span>{item}</span>
             </div>

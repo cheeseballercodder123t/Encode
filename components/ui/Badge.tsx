@@ -2,7 +2,7 @@
 
 import React, { ReactNode } from 'react';
 
-export type BadgeVariant = 'amber' | 'hazard' | 'signal' | 'flux' | 'steel' | 'bone';
+export type BadgeVariant = 'amber' | 'hazard' | 'signal' | 'flux' | 'edge' | 'bone';
 export type BadgeSize = 'xs' | 'sm' | 'md';
 
 export interface BadgeProps {
@@ -14,7 +14,7 @@ export interface BadgeProps {
 
 export function Badge({
   children,
-  variant = 'steel',
+  variant = 'edge',
   size = 'sm',
   className = '',
 }: BadgeProps) {
@@ -30,13 +30,13 @@ export function Badge({
     hazard: 'bg-hazard-950/40 text-hazard-300 border-hazard/40',
     signal: 'bg-signal-950/40 text-signal-300 border-signal/40',
     flux: 'bg-flux-950/40 text-flux-300 border-flux/40',
-    steel: 'bg-deck text-solder border-steel',
-    bone: 'bg-chassis text-bone border-steel',
+    edge: 'bg-deck text-solder border-edge',
+    bone: 'bg-chassis text-bone border-edge',
   };
 
   return (
     <span
-      className={`inline-flex items-center font-bold font-mono uppercase tracking-wider border rounded-none ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
+      className={`inline-flex items-center font-bold font-mono uppercase tracking-wider border ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
     >
       {children}
     </span>

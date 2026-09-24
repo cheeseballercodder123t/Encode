@@ -50,9 +50,9 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
   };
 
   return (
-    <div className="border border-steel bg-chassis p-4 space-y-4">
+    <div className="border border-edge bg-chassis p-4 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-steel pb-3 gap-2">
+      <div className="flex items-center justify-between border-b border-edge pb-3 gap-2">
         <div>
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber block">
             MNEMONIC STORYBOARD // INTERACTIVE ELEMENT GRID
@@ -61,7 +61,7 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
             {visualData.questTitle}
           </h4>
         </div>
-        <span className="text-[9px] font-mono font-bold text-solder border border-steel px-2 py-0.5">
+        <span className="text-[9px] font-mono font-bold text-solder border border-edge px-2 py-0.5">
           {tiles.length} TILES
         </span>
       </div>
@@ -69,11 +69,11 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
       {/* Action Controls */}
       <div className="flex items-center gap-2">
         {/* Tab Switcher */}
-        <div className="flex border border-steel bg-chassis">
+        <div className="flex border border-edge bg-chassis">
           <button
             type="button"
             onClick={() => { setActiveTab('grid'); playSound('click'); }}
-            className={`px-3 py-1 text-[11px] font-bold border-r border-steel transition-none ${
+            className={`px-3 py-1 text-[11px] font-bold border-r border-edge transition-none ${
               activeTab === 'grid'
                 ? 'bg-amber text-chassis'
                 : 'bg-deck text-solder'
@@ -100,7 +100,7 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
           className={`text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
             cloakMode
               ? 'bg-hazard border-hazard text-bone'
-              : 'bg-chassis border-steel text-solder'
+              : 'bg-chassis border-edge text-solder'
           }`}
         >
           [ CLOAK: {cloakMode ? 'ON' : 'OFF'} ]
@@ -131,7 +131,7 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
                     </span>
                   </div>
                   <div className={`w-10 h-10 border flex items-center justify-center font-mono text-lg font-bold mb-1 ${
-                    activeTileIndex === idx ? 'border-amber text-chassis' : 'border-steel text-bone'
+                    activeTileIndex === idx ? 'border-amber text-chassis' : 'border-edge text-bone'
                   }`}>
                     {tile.symbol}
                   </div>
@@ -139,7 +139,7 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
                     {tile.name}
                   </div>
                   {tile.categoryTag && (
-                    <span className="inline-block mt-1 text-[9px] font-mono border border-steel px-1 py-0.5 text-solder">
+                    <span className="inline-block mt-1 text-[9px] font-mono border border-edge px-1 py-0.5 text-solder">
                       {tile.categoryTag}
                     </span>
                   )}
@@ -182,11 +182,11 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
 
       {/* VIEW 2: Full Narrative Story Walk */}
       {activeTab === 'story' && (
-        <div className="p-4 border border-steel bg-deck space-y-3">
+        <div className="p-4 border border-edge bg-deck space-y-3">
           <div className="flex items-center gap-2 text-xs font-bold text-amber uppercase tracking-wider">
             THE CONNECTED MNEMONIC NARRATIVE
           </div>
-          <p className="text-sm text-bone leading-relaxed font-mono p-4 border border-steel bg-chassis">
+          <p className="text-sm text-bone leading-relaxed font-mono p-4 border border-edge bg-chassis">
             {visualData.narrativeStory}
           </p>
           <p className="text-[11px] text-solder">
@@ -197,7 +197,7 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
 
       {/* User Deduction / Active Scaffold Output */}
       {(field1 || field2) && (
-        <div className="p-3 border border-steel bg-deck text-xs space-y-1">
+        <div className="p-3 border border-edge bg-deck text-xs space-y-1">
           <span className="text-[10px] font-mono font-bold uppercase text-amber block">
             YOUR PERSONAL MNEMONIC SCHEMA
           </span>

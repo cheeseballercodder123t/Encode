@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { MOCK_NOTES } from './helpers/fixtures';
 import {
   mockAiApis,
@@ -42,9 +42,9 @@ test.describe('Generation resilience', () => {
 
     // Loading view shows live progress + cancel
     await expect(page.getByTestId('gen-elapsed')).toBeVisible();
-    await expect(page.getByRole('button', { name: /CANCEL GENERATION/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /cancel generation/i })).toBeVisible();
 
-    await page.getByRole('button', { name: /CANCEL GENERATION/ }).click();
+    await page.getByRole('button', { name: /cancel generation/i }).click();
 
     // Back on the launchpad, notes intact
     await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();

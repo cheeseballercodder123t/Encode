@@ -12,7 +12,7 @@ export function GuidedProblemBody({ seg, onNext }: BodyProps) {
       {seg.body && <p className="text-xs text-bone font-mono leading-relaxed">{seg.body}</p>}
       <div className="space-y-1.5">
         {steps.map((step, i) => (
-          <div key={i} className={`px-3 py-2 border text-[11px] font-mono ${i < revealed + 1 ? 'bg-chassis border-steel text-bone' : 'bg-deck border-steel/30 text-solder'}`}>
+          <div key={i} className={`px-3 py-2 border text-[11px] font-mono ${i < revealed + 1 ? 'bg-chassis border-edge text-bone' : 'bg-deck border-edge/30 text-solder'}`}>
             <div className="flex items-center gap-2">
               <span className="text-amber font-bold">[{i + 1}]</span>
               <span className="font-bold uppercase tracking-wider">{step.title}</span>
@@ -22,7 +22,7 @@ export function GuidedProblemBody({ seg, onNext }: BodyProps) {
         ))}
       </div>
       {revealed < steps.length - 1 ? (
-        <button type="button" onClick={() => { playSound('pop'); setRevealed((r) => Math.min(steps.length - 1, r + 1)); }} className="px-3 py-1.5 bg-chassis border border-steel text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
+        <button type="button" onClick={() => { playSound('pop'); setRevealed((r) => Math.min(steps.length - 1, r + 1)); }} className="px-3 py-1.5 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
           [ REVEAL NEXT STEP ]
         </button>
       ) : (
@@ -49,12 +49,12 @@ export function YouTryBody({ seg, onCorrect, onNext }: BodyProps) {
       <p className="text-xs text-bone font-mono leading-relaxed">
         {seg.question?.prompt || seg.body || 'Your turn — produce the answer yourself.'}
       </p>
-      <textarea value={attempt} onChange={(e) => setAttempt(e.target.value)} placeholder="Type your answer in plain language..." rows={4} className="w-full p-3 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed" />
+      <textarea value={attempt} onChange={(e) => setAttempt(e.target.value)} placeholder="Type your answer in plain language..." rows={4} className="w-full p-3 bg-chassis border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed" />
       {!revealed && hintIdx >= 0 && hints[hintIdx] && (
         <div className="px-3 py-2 bg-chassis border border-amber/30 text-[11px] text-amber font-mono">{hints[hintIdx]}</div>
       )}
       {!revealed && hints.length > 0 && (
-        <button type="button" onClick={() => { playSound('pop'); setHintIdx((i) => Math.min(hints.length - 1, i + 1)); }} className="px-3 py-1.5 bg-chassis border border-steel text-solder text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
+        <button type="button" onClick={() => { playSound('pop'); setHintIdx((i) => Math.min(hints.length - 1, i + 1)); }} className="px-3 py-1.5 bg-chassis border border-edge text-solder text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
           {hintIdx < 0 ? '[ NEED A HINT? ]' : `[ HINT ${hintIdx + 1} ]`}
         </button>
       )}

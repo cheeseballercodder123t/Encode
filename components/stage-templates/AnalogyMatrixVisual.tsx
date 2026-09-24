@@ -35,11 +35,11 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-all">
+    <div className=" border border-edge/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-edge/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 bg-steel/20 text-bone">
+          <div className="p-1 bg-inset/20 text-bone">
             <span className="text-amber font-bold font-mono">[ COMPARE ]</span>
           </div>
           <span className="text-[11px] font-black uppercase tracking-wider text-bone">
@@ -47,14 +47,14 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-[9px] font-mono font-bold text-bone bg-steel/40 border border-steel/30 px-2 py-0.5 ">
+          <span className="text-[9px] font-mono font-bold text-bone bg-inset/40 border border-edge/30 px-2 py-0.5 ">
             Generation Effect Active
           </span>
         </div>
       </div>
 
       {/* Generation Effect: Partial Schema Challenge Card */}
-      <div className="mb-3.5 p-3 bg-steel/30 border border-steel/30">
+      <div className="mb-3.5 p-3 bg-inset/30 border border-edge/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
             <span className="text-amber font-bold font-mono">[ ? ]</span>
@@ -70,14 +70,14 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-colors duration-150"
+            className="text-[10px] font-mono font-semibold text-bone bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Socratic Hint'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-steel/20 text-[11px] text-bone/90 italic font-mono">
+          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-bone/90 italic font-mono">
             💡 <strong>Socratic Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -90,10 +90,10 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           return (
             <div
               key={idx}
-              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-deck/70 border border-steel/20 hover:border-steel/40 transition-colors duration-150"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-deck/70 border border-edge/20 hover:border-edge/40 transition-colors duration-150"
             >
               {/* Familiar Source Side */}
-              <div className="flex-1 p-2.5 bg-steel/40 border border-steel/30 text-left">
+              <div className="flex-1 p-2.5 bg-inset/40 border border-edge/30 text-left">
                 <span className="text-[9px] font-mono font-bold uppercase text-bone block mb-0.5">
                   Familiar Source Anchor
                 </span>
@@ -109,7 +109,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
               </div>
 
               {/* Target Theory Side (User-Generated or Live Synced) */}
-              <div className="flex-1 p-2.5 bg-steel/40 border border-steel/30 text-left">
+              <div className="flex-1 p-2.5 bg-inset/40 border border-edge/30 text-left">
                 <span className="text-[9px] font-mono font-bold uppercase text-bone block mb-0.5">
                   Target Science Concept
                 </span>
@@ -134,7 +134,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
 
       {/* User Live Analogical Synthesis Preview */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 border border-steel/40 text-xs">
+        <div className="mt-3 p-3 border border-edge/40 text-xs">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-mono font-bold uppercase text-bone flex items-center gap-1.5">
               <span className="text-amber font-bold font-mono">[ * ]</span>
@@ -159,7 +159,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
       )}
 
       {/* Interactive Limits & Breakdown Tab */}
-      <div className="mt-3 pt-2.5 border-t border-steel/20 flex flex-col gap-2">
+      <div className="mt-3 pt-2.5 border-t border-edge/20 flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs">
           <button
             type="button"
@@ -191,7 +191,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
         )}
 
         {showExpertSynthesis && challenge.expertCompletion && (
-          <div className="p-2.5 bg-steel/30 border border-steel/30 text-[11px] text-bone">
+          <div className="p-2.5 bg-inset/30 border border-edge/30 text-[11px] text-bone">
             <strong className="text-bone block mb-0.5">AI Expert Ground Truth Schema:</strong>
             {challenge.expertCompletion}
           </div>

@@ -40,7 +40,7 @@ export function YouTubePlayerEmbed({
   return (
     <div className="w-full border border-hazard-500/20 bg-deck/80  overflow-hidden  p-4 sm:p-5 space-y-4">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-edge pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex items-center justify-center w-8 h-8 bg-hazard-600/20 border border-hazard-500/30 text-hazard-400 shrink-0">
             <span className="text-amber font-bold font-mono">[ PLAY ]</span>
@@ -51,7 +51,7 @@ export function YouTubePlayerEmbed({
             </h3>
             <p className="text-xs text-solder flex items-center gap-2 truncate">
               <span>{youtubeData.authorName || 'YouTube Educator'}</span>
-              <span className="inline-block w-1 h-1 bg-steel" />
+              <span className="inline-block w-1 h-1 bg-inset" />
               <span>{youtubeData.duration || 'Video Lecture'}</span>
             </p>
           </div>
@@ -59,12 +59,12 @@ export function YouTubePlayerEmbed({
 
         <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
           {/* Quick Seek Controls */}
-          <div className="flex items-center gap-1 bg-chassis p-1 border border-steel text-xs">
+          <div className="flex items-center gap-1 bg-chassis p-1 border border-edge text-xs">
             <button
               type="button"
               onClick={() => handleSeekOffset(-10)}
               title="Rewind 10s"
-              className="p-1 hover:bg-steel text-solder hover:text-bone transition-colors duration-150"
+              className="p-1 hover:bg-inset text-solder hover:text-bone transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ REWIND ]</span>
             </button>
@@ -72,7 +72,7 @@ export function YouTubePlayerEmbed({
               type="button"
               onClick={() => handleSeekOffset(10)}
               title="Forward 10s"
-              className="p-1 hover:bg-steel text-solder hover:text-bone transition-colors duration-150"
+              className="p-1 hover:bg-inset text-solder hover:text-bone transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ SKIP ]</span>
             </button>
@@ -82,7 +82,7 @@ export function YouTubePlayerEmbed({
             href={youtubeData.videoUrl} 
             target="_blank" 
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-steel text-xs font-semibold text-solder transition-colors duration-150"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-inset text-xs font-semibold text-solder transition-colors duration-150"
           >
             <span>YouTube</span>
             <span className="text-amber font-bold font-mono">[ EXT ]</span>
@@ -91,7 +91,7 @@ export function YouTubePlayerEmbed({
       </div>
 
       {/* Video Player Box */}
-      <div className="relative w-full aspect-video overflow-hidden bg-chassis border border-steel">
+      <div className="relative w-full aspect-video overflow-hidden bg-chassis border border-edge">
         <iframe
           src={embedUrl}
           title={youtubeData.title}
@@ -125,7 +125,7 @@ export function YouTubePlayerEmbed({
                   className={`flex items-start gap-2.5 p-2.5  text-left border transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-hazard-500/20 border-hazard-500/50 text-bone  '
-                      : 'bg-steel/60 hover:bg-steel border-steel/60 text-solder'
+                      : 'bg-inset/60 hover:bg-inset border-edge/60 text-solder'
                   }`}
                 >
                   <span className="px-2 py-0.5 bg-hazard-600/30 border border-hazard-500/40 text-hazard-300 text-xs font-mono font-bold shrink-0">

@@ -165,7 +165,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   return (
     <div className="fixed inset-0 z-50 bg-chassis overflow-y-auto font-mono">
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-4 border-b border-steel pb-3">
+        <div className="flex items-center justify-between mb-4 border-b border-edge pb-3">
           <div className="flex items-center gap-2">
             <span className="text-amber">[</span>
             <h1 className="text-sm font-bold text-bone uppercase tracking-wider">SYS.07 // ANALYTICS CORE</h1>
@@ -257,11 +257,11 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
               <Button variant="ghost" size="xs" onClick={() => setUsageVersion(v => v + 1)}>[ REFRESH ]</Button>
             </div>
             <div className="grid grid-cols-2 gap-2 mb-2">
-              <div className="bg-chassis p-2 border border-steel">
+              <div className="bg-chassis p-2 border border-edge">
                 <p className="text-[10px] text-solder">TODAY</p>
                 <p className="text-base font-bold text-bone">{totalCalls} <span className="text-[10px] text-solder">calls</span></p>
               </div>
-              <div className="bg-chassis p-2 border border-steel">
+              <div className="bg-chassis p-2 border border-edge">
                 <p className="text-[10px] text-solder">THIS WEEK</p>
                 <p className="text-base font-bold text-bone">{weeklyTotal} <span className="text-[10px] text-solder">calls</span></p>
               </div>
@@ -270,9 +270,9 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
               <div className="space-y-1">
                 <p className="text-[10px] text-solder uppercase tracking-wider">BREAKDOWN BY MODEL (TODAY)</p>
                 {Object.entries(usage.callsByModel).sort((a,b) => b[1]-a[1]).map(([model, count]) => (
-                  <div key={model} className="flex items-center gap-2 bg-chassis border border-steel px-2 py-1">
+                  <div key={model} className="flex items-center gap-2 bg-chassis border border-edge px-2 py-1">
                     <span className="text-[10px] text-solder flex-1 truncate">{model}</span>
-                    <Badge variant="steel" size="xs">{count}</Badge>
+                    <Badge variant="edge" size="xs">{count}</Badge>
                   </div>
                 ))}
               </div>
@@ -309,7 +309,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
                         setItemsPerPage(Number(e.target.value) || 10);
                         setCurrentPage(1);
                       }}
-                      className="bg-chassis border border-steel text-bone text-[10px] px-1 py-0.5 cursor-pointer"
+                      className="bg-chassis border border-edge text-bone text-[10px] px-1 py-0.5 cursor-pointer"
                       aria-label="Sessions per page"
                     >
                       <option value={10}>10</option>
@@ -345,7 +345,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
                 {paginatedSchemas.map((schema) => (
                   <div
                     key={schema.id}
-                    className="flex items-center justify-between p-2 bg-chassis border border-steel hover:border-amber"
+                    className="flex items-center justify-between p-2 bg-chassis border border-edge hover:border-amber"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">

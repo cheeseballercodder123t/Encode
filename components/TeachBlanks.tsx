@@ -20,7 +20,7 @@ export function FillBlankBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
           return (
             <div key={id} className="text-xs text-bone font-mono leading-loose">
               <span className="text-solder">{b.before}</span>
-              <input value={values[id] || ''} disabled={submitted} onChange={(e) => setValues({ ...values, [id]: e.target.value })} className={`mx-1 px-2 py-1 bg-chassis border text-bone focus:outline-none focus:border-amber font-mono text-xs ${correct ? 'border-amber' : wrong ? 'border-hazard' : 'border-steel'}`} placeholder="______" size={Math.max(8, b.answer.length + 2)} />
+              <input value={values[id] || ''} disabled={submitted} onChange={(e) => setValues({ ...values, [id]: e.target.value })} className={`mx-1 px-2 py-1 bg-chassis border text-bone focus:outline-none focus:border-amber font-mono text-xs ${correct ? 'border-amber' : wrong ? 'border-hazard' : 'border-edge'}`} placeholder="______" size={Math.max(8, b.answer.length + 2)} />
               <span className="text-solder">{b.after}</span>
             </div>
           );
@@ -42,9 +42,9 @@ export function FreeResponseBody({ seg, onCorrect, onNext }: BodyProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-bone font-mono leading-relaxed">{q.prompt}</p>
-      <textarea value={attempt} onChange={(e) => setAttempt(e.target.value)} placeholder="Type your answer in plain language..." rows={4} className="w-full p-3 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed" />
+      <textarea value={attempt} onChange={(e) => setAttempt(e.target.value)} placeholder="Type your answer in plain language..." rows={4} className="w-full p-3 bg-chassis border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed" />
       {!revealed && hints.length > 0 && (
-        <button type="button" onClick={() => { playSound('pop'); setHintIdx((i) => Math.min(hints.length - 1, i + 1)); }} className="px-3 py-1.5 bg-chassis border border-steel text-solder text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
+        <button type="button" onClick={() => { playSound('pop'); setHintIdx((i) => Math.min(hints.length - 1, i + 1)); }} className="px-3 py-1.5 bg-chassis border border-edge text-solder text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
           {hintIdx < 0 ? '[ NEED A HINT? ]' : `[ HINT ${hintIdx + 1} ]`}
         </button>
       )}

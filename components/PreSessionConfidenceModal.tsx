@@ -44,7 +44,7 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
       maxWidth="md"
       showCloseButton={false}
       icon={
-        <div className="p-2 bg-steel/10 border border-steel/30 ">
+        <div className="p-2 bg-inset/10 border border-edge/30 ">
           <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
         </div>
       }
@@ -64,21 +64,21 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
       <div className="space-y-4">
         {/* Countdown badge */}
         <div className="flex justify-end">
-          <Badge variant="steel" size="sm">
+          <Badge variant="edge" size="sm">
             <span className="inline-flex items-center gap-1"><span className="text-amber font-bold font-mono">[ TIME ]</span>{countdown}s</span>
           </Badge>
         </div>
 
         {/* Topic preview */}
         {topicPreview && (
-          <div className="bg-steel/40 border border-steel/50 p-3">
+          <div className="bg-inset/40 border border-edge/50 p-3">
             <p className="text-[11px] text-solder uppercase tracking-wider font-semibold mb-1">Target Material</p>
             <p className="text-sm text-bone line-clamp-2">{topicPreview}</p>
           </div>
         )}
 
         {/* Science note */}
-        <div className="bg-steel/5 border border-steel/20 p-3">
+        <div className="bg-inset/5 border border-edge/20 p-3">
           <p className="text-[11px] text-bone leading-relaxed">
             <span className="font-semibold text-bone">Metacognitive Calibration (Nelson & Narens):</span> Assessing what you know before learning primes your memory retrieval systems.
           </p>

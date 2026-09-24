@@ -106,7 +106,7 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
             ? 'border-hazard-500/60 bg-hazard-950/40 text-hazard-200'
             : index === 1 && isPerturbed
             ? 'border-amber/50 bg-amber/30 text-amber'
-            : 'border-steel/60 bg-deck/60 text-solder';
+            : 'border-edge/60 bg-deck/60 text-solder';
 
           return (
             <div

@@ -74,7 +74,7 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
     >
       <div className="space-y-4">
         {stageNumber > 1 && previousPremise && (
-          <div className="bg-steel/40 border border-steel/50 p-3">
+          <div className="bg-inset/40 border border-edge/50 p-3">
             <p className="text-[11px] text-solder uppercase tracking-wider font-semibold mb-1">Previous Stage Challenge</p>
             <p className="text-xs text-solder italic">&quot;{previousPremise}&quot;</p>
           </div>
@@ -95,7 +95,7 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
         <button
           type="button"
           onClick={() => setChecked(c => !c)}
-          className="flex items-start gap-3 w-full text-left group p-2 hover:bg-steel/40 transition-colors duration-150"
+          className="flex items-start gap-3 w-full text-left group p-2 hover:bg-inset/40 transition-colors duration-150"
         >
           <div className="mt-0.5 text-amber group-hover:text-amber-300 transition-colors duration-150 shrink-0">
             {checked ? <span className="text-amber font-bold font-mono">[ CHK ]</span> : <span className="text-amber font-bold font-mono">[ BOX ]</span>}

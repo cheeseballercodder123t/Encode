@@ -118,17 +118,17 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
 
   return (
     <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl bg-chassis border border-steel/30 overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="w-full max-w-2xl bg-chassis border border-edge/30 overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-steel flex items-center justify-between ">
+        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-steel/10 border border-steel/30 flex items-center justify-center text-bone">
+            <div className="w-10 h-10 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-bone text-base">Google Drive Importer</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-steel/20 text-bone border border-steel/30">
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-inset/20 text-bone border border-edge/30">
                   PDF Slides & Notes
                 </span>
               </div>
@@ -140,7 +140,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
 
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-colors duration-150 cursor-pointer"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-colors duration-150 cursor-pointer"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
@@ -158,7 +158,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
           {!accessToken ? (
             /* Unauthenticated View */
             <div className="py-8 px-4 text-center space-y-5 max-w-md mx-auto">
-              <div className="w-16 h-16 mx-auto bg-steel/10 border border-steel/30 flex items-center justify-center text-bone  ">
+              <div className="w-16 h-16 mx-auto bg-inset/10 border border-edge/30 flex items-center justify-center text-bone  ">
                 <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               </div>
 
@@ -187,7 +187,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                 )}
               </button>
 
-              <div className="pt-2 border-t border-steel">
+              <div className="pt-2 border-t border-edge">
                 <button
                   type="button"
                   onClick={() => setShowManualInput(!showManualInput)}
@@ -198,7 +198,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                 </button>
 
                 {showManualInput && (
-                  <div className="mt-3 p-3 bg-deck border border-steel text-left space-y-2">
+                  <div className="mt-3 p-3 bg-deck border border-edge text-left space-y-2">
                     <label className="text-[11px] font-bold text-solder block">
                       Google OAuth Access Token:
                     </label>
@@ -208,11 +208,11 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                         placeholder="ya29.a0A..."
                         value={manualToken}
                         onChange={(e) => setManualToken(e.target.value)}
-                        className="flex-1 px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel"
+                        className="flex-1 px-3 py-1.5 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge"
                       />
                       <button
                         onClick={handleApplyManualToken}
-                        className="px-3 py-1.5 bg-steel text-bone font-bold text-xs hover:bg-steel transition-none cursor-pointer"
+                        className="px-3 py-1.5 bg-inset text-bone font-bold text-xs hover:bg-inset transition-none cursor-pointer"
                       >
                         Apply
                       </button>
@@ -234,12 +234,12 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                       placeholder="Search PDF slides, lectures, diagrams..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-deck border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none"
+                      className="w-full pl-9 pr-3 py-2 bg-deck border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-edge transition-none"
                     />
                   </div>
                   <button
                     type="submit"
-                    className="px-3 py-2 bg-steel/20 text-bone border border-steel/30 hover:bg-steel/30 text-xs font-bold transition-none cursor-pointer"
+                    className="px-3 py-2 bg-inset/20 text-bone border border-edge/30 hover:bg-inset/30 text-xs font-bold transition-none cursor-pointer"
                   >
                     Search
                   </button>
@@ -249,14 +249,14 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                   <button
                     onClick={() => loadFiles(accessToken, searchQuery)}
                     disabled={isLoading}
-                    className="p-2 bg-deck border border-steel text-solder hover:text-bone transition-none cursor-pointer"
+                    className="p-2 bg-deck border border-edge text-solder hover:text-bone transition-none cursor-pointer"
                     title="Refresh file list"
                   >
                     <span className="text-amber font-bold font-mono">[ RESET ]</span>
                   </button>
                   <button
                     onClick={handleDisconnect}
-                    className="px-2.5 py-1.5 bg-deck border border-steel text-solder hover:text-hazard-400 text-[11px] font-bold transition-none cursor-pointer"
+                    className="px-2.5 py-1.5 bg-deck border border-edge text-solder hover:text-hazard-400 text-[11px] font-bold transition-none cursor-pointer"
                   >
                     Disconnect
                   </button>
@@ -270,7 +270,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                   <p className="text-xs">Fetching Google Drive slides and notes...</p>
                 </div>
               ) : files.length === 0 ? (
-                <div className="py-12 text-center border-2 border-dashed border-steel space-y-2">
+                <div className="py-12 text-center border-2 border-dashed border-edge space-y-2">
                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
                   <p className="text-xs font-bold text-solder">No PDF slides or images found in your Google Drive.</p>
                   <p className="text-[11px] text-solder">Upload slides to Google Drive or adjust your search term.</p>
@@ -286,9 +286,9 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                       <div
                         key={file.id}
                         onClick={() => !isDownloading && handleSelectFile(file)}
-                        className="p-3.5 bg-deck/80 hover:bg-steel/40 border border-steel/40 transition-none flex items-start gap-3 group cursor-pointer"
+                        className="p-3.5 bg-deck/80 hover:bg-inset/40 border border-edge/40 transition-none flex items-start gap-3 group cursor-pointer"
                       >
-                        <div className="w-9 h-9 bg-steel/10 border border-steel/20 flex items-center justify-center text-bone shrink-0 group-hover:bg-steel/20 group-hover:text-bone transition-none">
+                        <div className="w-9 h-9 bg-inset/10 border border-edge/20 flex items-center justify-center text-bone shrink-0 group-hover:bg-inset/20 group-hover:text-bone transition-none">
                           {file.thumbnailLink ? (
                             <img src={file.thumbnailLink} alt={file.name} className="w-9 h-9 object-cover " />
                           ) : isPdf ? (
@@ -327,14 +327,14 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-steel bg-chassis flex items-center justify-between text-xs text-solder">
+        <div className="p-4 border-t border-edge bg-chassis flex items-center justify-between text-xs text-solder">
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="text-amber font-bold font-mono">[ LOCK ]</span>
             <span>Read-only Google Drive OAuth Connection</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-steel text-solder font-bold transition-none cursor-pointer"
+            className="px-4 py-1.5 bg-inset text-solder font-bold transition-none cursor-pointer"
           >
             Close
           </button>

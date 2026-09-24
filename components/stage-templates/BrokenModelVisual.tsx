@@ -114,7 +114,7 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
         {/* Bug Score Counter */}
         <div className="flex items-center gap-2">
-          <div className="px-2.5 py-1 bg-chassis border border-steel text-[11px] font-mono">
+          <div className="px-2.5 py-1 bg-chassis border border-edge text-[11px] font-mono">
             <span className="text-solder">Bugs Spotted: </span>
             <span className="font-bold text-amber">{bugsFoundCount}</span>
             <span className="text-solder">/{brokenData.flawCount}</span>
@@ -155,7 +155,7 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
                     ? 'border-hazard-400 bg-hazard-950/40 '
                     : isFlagged
                     ? 'border-amber/60 bg-amber/20'
-                    : 'border-steel bg-deck/70 hover:border-steel'
+                    : 'border-edge bg-deck/70 hover:border-edge'
                 }`}
               >
                 <div>
@@ -196,8 +196,8 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
       {/* Selected Node Inspection & Correction Workbench */}
       {selectedNode && (
-        <div className="p-4 bg-chassis/90 border border-steel space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel/80 pb-2.5">
+        <div className="p-4 bg-chassis/90 border border-edge space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-edge/80 pb-2.5">
             <div>
               <span className="text-[10px] font-mono text-solder uppercase block">
                 Inspecting Step 0{selectedNodeIndex + 1}
@@ -214,7 +214,7 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
                 className={`flex items-center gap-1.5 px-3 py-1.5  text-xs font-bold transition-colors duration-150 cursor-pointer ${
                   flaggedBugs[selectedNode.id]
                     ? 'bg-hazard-600 text-bone '
-                    : 'bg-deck border border-steel text-solder hover:text-bone'
+                    : 'bg-deck border border-edge text-solder hover:text-bone'
                 }`}
               >
                 <span className="text-amber font-bold font-mono">[ BUG ]</span>
@@ -225,7 +225,7 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
                 <button
                   type="button"
                   onClick={() => handleRevealFlaw(selectedNode.id)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-steel/60 border border-steel/30 text-bone text-xs font-bold hover:bg-steel/60 transition-colors duration-150"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-inset/60 border border-edge/30 text-bone text-xs font-bold hover:bg-inset/60 transition-colors duration-150"
                 >
                   <span className="text-amber font-bold font-mono">[ EYE ]</span>
                   <span>Reveal Flaw</span>
@@ -260,7 +260,7 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
 
       {/* User Scaffold Output */}
       {(field1 || field2) && (
-        <div className="p-3 bg-chassis border border-steel text-xs space-y-1">
+        <div className="p-3 bg-chassis border border-edge text-xs space-y-1">
           <span className="text-[10px] font-mono font-bold text-hazard-400 uppercase block">
             Your Causal Debug Deduction
           </span>

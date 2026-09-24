@@ -22,7 +22,7 @@ export function Tooltip({ content, children, position = 'top', className = '' }:
       {children}
       {isVisible && (
         <div
-          className={`absolute z-50 pointer-events-none px-2 py-1 text-[10px] text-bone bg-chassis border border-steel rounded-none whitespace-nowrap font-mono ${positionStyles[position]}`}
+          className={`absolute z-50 pointer-events-none px-2 py-1 text-[10px] text-bone bg-chassis border border-edge whitespace-nowrap font-mono ${positionStyles[position]}`}
         >
           {content}
         </div>

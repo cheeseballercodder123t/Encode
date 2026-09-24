@@ -22,7 +22,7 @@ export function MetaReflectionPrompt({ stageTitle, savedReflection, onSave }: Pr
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-4 border border-steel/25  p-4 space-y-3 "
+      className="mt-4 border border-edge/25  p-4 space-y-3 "
     >
       <div className="flex items-center gap-2">
         <span className="text-amber font-bold font-mono">[ IDEA ]</span>
@@ -38,7 +38,7 @@ export function MetaReflectionPrompt({ stageTitle, savedReflection, onSave }: Pr
           value={value}
           onChange={e => { setValue(e.target.value); setSaved(false); }}
           placeholder="The key insight I'm taking away is..."
-          className="flex-1 bg-steel/60 border border-steel px-3 py-2 text-xs text-bone placeholder-solder focus:outline-none focus:border-flux transition-colors duration-150"
+          className="flex-1 bg-inset/60 border border-edge px-3 py-2 text-xs text-bone placeholder-solder focus:outline-none focus:border-flux transition-colors duration-150"
           onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
         />
         <button
@@ -48,7 +48,7 @@ export function MetaReflectionPrompt({ stageTitle, savedReflection, onSave }: Pr
           className={`px-3.5 py-2  text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
             saved
               ? 'bg-amber600/20 border border-amber/40 text-amber'
-              : 'bg-steel text-bone disabled:opacity-40 disabled:cursor-not-allowed'
+              : 'bg-inset text-bone disabled:opacity-40 disabled:cursor-not-allowed'
           }`}
         >
           {saved ? (

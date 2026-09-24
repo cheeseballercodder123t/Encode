@@ -336,17 +336,17 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
   return (
     <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl bg-chassis border border-steel/30 overflow-hidden flex flex-col max-h-[88vh]">
+      <div className="w-full max-w-3xl bg-chassis border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-steel flex items-center justify-between ">
+        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-steel/10 border border-steel/30 flex items-center justify-center text-bone">
+            <div className="w-10 h-10 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ ZAP ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-bone text-base">Anki & SM-2 Spaced Repetition Exporter</h3>
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-steel/20 text-bone border border-steel/30">
+                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-inset/20 text-bone border border-edge/30">
                   {displayCards.length} Flashcards
                 </span>
                 {audit.length > 0 && (
@@ -366,19 +366,19 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none cursor-pointer"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none cursor-pointer"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
         </div>
 
         {/* Modal Navigation Tabs : Export / MCQ Deck / Sync */}
-        <div className="p-3 border-b border-steel bg-chassis flex items-center gap-2 overflow-x-auto">
+        <div className="p-3 border-b border-edge bg-chassis flex items-center gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('export')}
             className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'export'
-                ? 'bg-steel text-bone '
+                ? 'bg-inset text-bone '
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
@@ -393,7 +393,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
             onClick={() => setActiveTab('mcq')}
             className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'mcq'
-                ? 'bg-steel text-bone '
+                ? 'bg-inset text-bone '
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
@@ -405,7 +405,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
             onClick={() => setActiveTab('sync')}
             className={`px-3.5 py-1.5 min-h-[44px] text-xs font-bold transition-none flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'sync'
-                ? 'bg-steel text-bone '
+                ? 'bg-inset text-bone '
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
@@ -417,13 +417,13 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
           {/* Deck Title Input */}
-          <div className="p-3.5 bg-deck/80 border border-steel flex items-center gap-3">
+          <div className="p-3.5 bg-deck/80 border border-edge flex items-center gap-3">
             <span className="text-xs font-bold text-solder shrink-0">Deck Name:</span>
             <input
               type="text"
               value={deckName}
               onChange={(e) => setDeckName(e.target.value)}
-              className="flex-1 px-3 py-1.5 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+              className="flex-1 px-3 py-1.5 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge font-mono"
             />
           </div>
 
@@ -431,7 +431,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
           {activeTab === 'export' && (
             <div className="space-y-4">
               {/* Weak-export toggle: only export unfinished / low-scoring stages. */}
-              <label className="flex items-center gap-2.5 p-3 bg-deck/60 border border-steel cursor-pointer hover:border-solder">
+              <label className="flex items-center gap-2.5 p-3 bg-deck/60 border border-edge cursor-pointer hover:border-solder">
                 <input
                   type="checkbox"
                   checked={exportWeakOnly}
@@ -446,7 +446,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 </span>
               </label>
 
-              <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+              <div className="p-4 bg-inset/30 border border-edge/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
                   <span className="text-signal font-bold font-mono">[ OK ]</span>
                   Ready to Export {displayCards.length} DeepEncode Cloze Flashcards
@@ -459,7 +459,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   onClick={handleDownloadApkg}
-                  className="py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer"
+                  className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer"
                 >
                   <span className="text-amber font-bold font-mono">[ DL ]</span>
                   Download .apkg Package
@@ -467,7 +467,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
                 <button
                   onClick={handleDownloadTxt}
-                  className="py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer"
+                  className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer"
                 >
                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
                   Download Anki .txt (Tab-Separated)
@@ -479,12 +479,12 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 <span className="text-xs font-bold text-solder">Card Deck Preview ({displayCards.length}):</span>
                 <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
                   {displayCards.map((c, idx) => (
-                    <div key={c.id || idx} className="p-3 bg-deck/60 border border-steel text-xs space-y-1">
+                    <div key={c.id || idx} className="p-3 bg-deck/60 border border-edge text-xs space-y-1">
                       <div className="flex items-center justify-between text-[11px] text-solder">
                         <span className="font-bold text-bone">Card #{idx + 1}</span>
                         <div className="flex gap-1">
                           {c.tags.map((t) => (
-                            <span key={t} className="px-1.5 py-0.5 bg-steel text-[10px] text-solder">
+                            <span key={t} className="px-1.5 py-0.5 bg-inset text-[10px] text-solder">
                               {t}
                             </span>
                           ))}
@@ -497,7 +497,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               </div>
 
               {/* FSRS Card Audit (inline; badge count on the tab) */}
-              <div className="space-y-2 pt-2 border-t border-steel/60">
+              <div className="space-y-2 pt-2 border-t border-edge/60">
                 <div className={`p-4 border text-xs leading-relaxed space-y-2 ${
                   audit.length > 0
                     ? 'bg-amber-950/40 border-amber/40 text-amber-300'
@@ -517,7 +517,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 {audit.length > 0 && (
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                     {audit.map(({ card: c, issues }) => (
-                      <div key={c.id} className="p-3 bg-deck/60 border border-steel text-xs space-y-2">
+                      <div key={c.id} className="p-3 bg-deck/60 border border-edge text-xs space-y-2">
                         <div className="flex items-start justify-between gap-3">
                           <div className="font-mono text-[11px] text-bone leading-relaxed" dangerouslySetInnerHTML={{ __html: c.front }} />
                           <button
@@ -571,14 +571,14 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                     type="text"
                     value={ankiConnectUrl}
                     onChange={(e) => setAnkiConnectUrl(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+                    className="w-full px-3.5 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge font-mono"
                   />
                 </div>
 
                 <button
                   onClick={handleSyncAnkiConnect}
                   disabled={isSyncingAnkiConnect}
-                  className="w-full py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
                 >
                   {isSyncingAnkiConnect ? (
                     <>
@@ -611,7 +611,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
               {/* Webhook */}
               <div className="space-y-4">
-                <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+                <div className="p-4 bg-inset/30 border border-edge/30 text-xs text-bone leading-relaxed space-y-2">
                   <div className="font-bold text-bone flex items-center gap-2">
                     <span className="text-amber font-bold font-mono">[ WEB ]</span>
                     Custom Webhook
@@ -628,14 +628,14 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                     placeholder="https://api.myworkspace.com/v1/anki-sync"
                     value={webhookUrl}
                     onChange={(e) => setWebhookUrl(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+                    className="w-full px-3.5 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge font-mono"
                   />
                 </div>
 
                 <button
                   onClick={handleSyncWebhook}
                   disabled={!webhookUrl.trim() || isSyncingWebhook}
-                  className="w-full py-3 px-4 bg-steel hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 px-4 bg-inset hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
                 >
                   {isSyncingWebhook ? (
                     <>
@@ -671,7 +671,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
         {/* TAB 2: Procedural MCQ Deck (authored from the student's notes) */}
           {activeTab === 'mcq' && (
             <div className="space-y-4">
-              <div className="p-4 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed space-y-2">
+              <div className="p-4 bg-inset/30 border border-edge/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
                   <span className="text-flux font-bold font-mono">[ FLASK ]</span>
                   Procedural Trap-Engine MCQ Deck
@@ -686,7 +686,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               </div>
 
               {/* AI Authoring */}
-              <div className="p-4 bg-deck/60 border border-steel space-y-3">
+              <div className="p-4 bg-deck/60 border border-edge space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-bone">
                   <span className="text-flux font-bold font-mono">[ WAND ]</span>
                   Author MCQs from this session&apos;s notes
@@ -700,12 +700,12 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                     placeholder="e.g. AP Physics C: Rotational Motion"
                     value={aiTopic}
                     onChange={(e) => setAiTopic(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel font-mono"
+                    className="flex-1 px-3 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge font-mono"
                   />
                   <select
                     value={aiCount}
                     onChange={(e) => setAiCount(Number(e.target.value))}
-                    className="px-3 py-2 bg-chassis border border-steel text-xs text-bone focus:outline-none focus:border-steel cursor-pointer"
+                    className="px-3 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge cursor-pointer"
                   >
                     {[1, 2, 3, 4, 5].map((n) => (
                       <option key={n} value={n}>
@@ -716,7 +716,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   <button
                     onClick={handleGenerateArchetypes}
                     disabled={isGeneratingAi || !aiTopic.trim()}
-                    className="px-4 py-2 bg-steel hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2 bg-inset hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
                   >
                     {isGeneratingAi ? (
                       <>
@@ -776,8 +776,8 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                               key={a.id}
                               className={`flex items-start gap-2 p-2.5  border cursor-pointer text-xs transition-none ${
                                 checked
-                                  ? 'bg-steel/30 border-steel/40'
-                                  : 'bg-deck/50 border-steel hover:border-steel'
+                                  ? 'bg-inset/30 border-edge/40'
+                                  : 'bg-deck/50 border-edge hover:border-edge'
                               }`}
                             >
                               <input
@@ -814,7 +814,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                     <select
                       value={previewArchetype.id}
                       onChange={(e) => setPreviewArchetypeId(e.target.value)}
-                      className="px-2 py-1 bg-chassis border border-steel text-[10px] text-solder focus:outline-none cursor-pointer"
+                      className="px-2 py-1 bg-chassis border border-edge text-[10px] text-solder focus:outline-none cursor-pointer"
                     >
                       {availableArchetypes.map((a) => (
                         <option key={a.id} value={a.id}>
@@ -823,7 +823,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                       ))}
                     </select>
                   </div>
-                  <div className=" overflow-hidden border border-steel bg-chassis">
+                  <div className=" overflow-hidden border border-edge bg-chassis">
                     <iframe
                       title="Procedural MCQ Preview"
                       srcDoc={buildPreviewSrcdoc(previewArchetype)}
@@ -843,7 +843,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 <button
                   onClick={handleDownloadProceduralApkg}
                   disabled={selectedArchetypes.length === 0}
-                  className="py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40"
+                  className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40"
                 >
                   <span className="text-amber font-bold font-mono">[ DL ]</span>
                   Download Procedural MCQ .apkg ({selectedArchetypes.length})
@@ -851,7 +851,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 <button
                   onClick={handleDownloadProceduralTxt}
                   disabled={selectedArchetypes.length === 0}
-                  className="py-3 px-4 bg-deck hover:bg-steel border border-steel text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
+                  className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
                 >
                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
                   Download Procedural .txt (Anki Import)
@@ -862,11 +862,11 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 border-t border-steel bg-chassis flex items-center justify-between text-xs text-solder">
+        <div className="p-4 border-t border-edge bg-chassis flex items-center justify-between text-xs text-solder">
           <span>SuperMemo SM-2 &amp; Cloze Deletion Standard</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-steel hover:bg-deck text-bone font-bold transition-colors duration-150 cursor-pointer"
+            className="px-4 py-1.5 bg-inset hover:bg-deck text-bone font-bold transition-colors duration-150 cursor-pointer"
           >
             Close
           </button>

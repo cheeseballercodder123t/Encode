@@ -23,7 +23,7 @@ export function McqBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
       <div className="space-y-1.5">
         {options.map((opt) => {
           const isSel = selected === opt.id;
-          let cls = 'bg-chassis border-steel text-bone hover:border-amber';
+          let cls = 'bg-chassis border-edge text-bone hover:border-amber';
           if (submitted && isSel) cls = opt.correct ? 'bg-amber/15 border-amber text-bone' : 'bg-hazard/15 border-hazard text-bone';
           else if (submitted && opt.correct) cls = 'bg-amber/10 border-amber/50 text-bone';
           return (
@@ -43,7 +43,7 @@ export function McqBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
         <div className="px-3 py-2 bg-hazard/10 border border-hazard/30 text-[11px] text-hazard font-mono">{seg.trapNote}</div>
       )}
       {!submitted && (q.hints?.length || 0) > 0 && (
-        <button type="button" onClick={() => setHintIdx((i) => Math.min((q.hints?.length || 1) - 1, i + 1))} className="px-3 py-1.5 bg-chassis border border-steel text-solder text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
+        <button type="button" onClick={() => setHintIdx((i) => Math.min((q.hints?.length || 1) - 1, i + 1))} className="px-3 py-1.5 bg-chassis border border-edge text-solder text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
           {hintIdx < 0 ? '[ NEED A HINT? ]' : `[ HINT ${hintIdx + 1} ]`}
         </button>
       )}
@@ -53,7 +53,7 @@ export function McqBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
       <div className="flex items-center gap-2 pt-1">
         {submitted && picked?.correct && <ContinueButton onNext={onNext} />}
         {submitted && !picked?.correct && isMultiTry && (
-          <button type="button" onClick={() => { setSelected(null); setSubmitted(false); }} className="px-4 py-2 bg-chassis border border-steel text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
+          <button type="button" onClick={() => { setSelected(null); setSubmitted(false); }} className="px-4 py-2 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer">
             [ TRY AGAIN ]
           </button>
         )}

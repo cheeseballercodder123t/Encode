@@ -19,7 +19,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {leftIcon && <div className="absolute left-2 text-solder pointer-events-none shrink-0">{leftIcon}</div>}
           <input
             ref={ref}
-            className={`w-full bg-chassis border text-xs text-bone placeholder-solder rounded-none px-3 py-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed font-mono ${leftIcon ? 'pl-7' : ''} ${rightIcon ? 'pr-7' : ''} ${error ? 'border-hazard' : 'border-steel focus:border-amber'} ${className}`}
+            className={`w-full bg-chassis border text-xs text-bone placeholder-solder px-3 py-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed font-mono ${leftIcon ? 'pl-7' : ''} ${rightIcon ? 'pr-7' : ''} ${error ? 'border-hazard' : 'border-edge focus:border-amber'} ${className}`}
             {...props}
           />
           {rightIcon && <div className="absolute right-2 text-solder pointer-events-none shrink-0">{rightIcon}</div>}

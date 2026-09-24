@@ -34,7 +34,7 @@ test.describe('Stateless URL sharing', () => {
   });
 });
 
-test.describe('History & drills', () => {
+test.describe('History & resume', () => {
   test('resume a seeded schema from the history drawer', async ({ page }) => {
     const schema = makeSavedSchema();
     await page.addInitScript((s) => {
@@ -52,7 +52,7 @@ test.describe('History & drills', () => {
     await expect(page.getByText('seeded one')).toBeVisible();
   });
 
-  test('launch a drill from the history drawer', async ({ page }) => {
+  test('history drawer offers resume and share for a seeded schema', async ({ page }) => {
     const schema = makeSavedSchema();
     await page.addInitScript((s) => {
       (window as any).localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify([s]));
@@ -60,8 +60,12 @@ test.describe('History & drills', () => {
 
     await page.goto('/');
     await page.locator('button[title^="View Saved Schemas History"]').click();
-    await page.getByRole('button', { name: '[ PLAY ] Drill' }).click();
-    await expect(page.getByText('Active Retrieval Drill')).toBeVisible();
+    await expect(page.getByText('Saved Schemas')).toBeVisible();
+
+    // Drill modals were removed : review lives in Anki/RemNote, so the drawer
+    // surfaces View (resume) + share instead of an in-app drill button.
+    await expect(page.getByRole('button', { name: 'View' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Share' }).first()).toBeVisible();
   });
 });
 

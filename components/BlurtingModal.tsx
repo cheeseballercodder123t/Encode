@@ -69,17 +69,17 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-deck border border-steel/30 p-6   text-bone relative my-8"
+        className="w-full max-w-2xl bg-deck border border-edge/30 p-6   text-bone relative my-8"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-steel pb-4 mb-6">
+        <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-steel/20 border border-steel/40 flex items-center justify-center text-bone">
+            <div className="w-10 h-10 bg-inset/20 border border-edge/40 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ PEN ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-steel/20 text-bone border border-steel/30">
+                <span className="px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-inset/20 text-bone border border-edge/30">
                   The Blurting Method
                 </span>
                 <span className="text-xs text-solder">Free Recall Diagnostic</span>
@@ -91,7 +91,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none"
+            className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
@@ -100,7 +100,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
         {!evaluation ? (
           /* Blank Canvas Input Phase */
           <div className="space-y-4">
-            <div className="p-3.5 bg-steel/30 border border-steel/30 text-xs text-bone leading-relaxed">
+            <div className="p-3.5 bg-inset/30 border border-edge/30 text-xs text-bone leading-relaxed">
               <p className="font-bold text-bone mb-1 flex items-center gap-1.5">
                 <span className="text-amber font-bold font-mono">[ BRAIN ]</span>
                 The Rule of Pure Retrieval:
@@ -116,7 +116,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
                 value={blurtText}
                 onChange={(e) => setBlurtText(e.target.value)}
                 placeholder="Start typing from memory... What are the key stages? Why does it happen? What triggers each step?"
-                className="w-full h-48 p-4 bg-chassis border border-steel text-sm text-bone placeholder-solder focus:outline-none focus:border-steel transition-none resize-none font-mono leading-relaxed"
+                className="w-full h-48 p-4 bg-chassis border border-edge text-sm text-bone placeholder-solder focus:outline-none focus:border-edge transition-none resize-none font-mono leading-relaxed"
                 autoFocus
               />
               <div className="flex justify-between items-center text-xs text-solder mt-1.5">
@@ -125,10 +125,10 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
               </div>
             </div>
 
-            <div className="pt-4 border-t border-steel flex justify-end gap-3">
+            <div className="pt-4 border-t border-edge flex justify-end gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-steel transition-none"
+                className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-inset transition-none"
               >
                 Close
               </button>
@@ -155,7 +155,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
           /* Analysis & Differential Gap Highlights */
           <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
             {/* Score Banner */}
-            <div className="p-4 border border-steel/40 flex items-center justify-between">
+            <div className="p-4 border border-edge/40 flex items-center justify-between">
               <div>
                 <span className="text-xs text-bone font-semibold uppercase tracking-wider">
                   Retrieval Completeness
@@ -166,7 +166,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
                 <p className="text-xs text-solder mt-1">{evaluation.feedback}</p>
               </div>
               <div className="text-right">
-                <span className="px-3 py-1 text-xs font-bold bg-steel/20 text-bone border border-steel/30">
+                <span className="px-3 py-1 text-xs font-bold bg-inset/20 text-bone border border-edge/30">
                   {evaluation.recalledCount} Recalled • {evaluation.missedCount} Gaps
                 </span>
               </div>
@@ -222,10 +222,10 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
             </div>
 
             {/* Actions */}
-            <div className="pt-4 border-t border-steel flex justify-between items-center">
+            <div className="pt-4 border-t border-edge flex justify-between items-center">
               <button
                 onClick={handleReset}
-                className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-steel flex items-center gap-1.5 transition-none"
+                className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-inset flex items-center gap-1.5 transition-none"
               >
                 <span className="text-amber font-bold font-mono">[ RESET ]</span>
                 <span>Blurt Again</span>

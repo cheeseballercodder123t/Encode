@@ -36,24 +36,24 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-all">
+    <div className=" border border-edge/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-edge/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 bg-steel/20 text-bone">
+          <div className="p-1 bg-inset/20 text-bone">
             <span className="text-amber font-bold font-mono">[ COMPASS ]</span>
           </div>
           <span className="text-[11px] font-black uppercase tracking-wider text-bone">
             Paivio Dual-Coding & Mental Spatial Blueprint
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-bone bg-steel/40 border border-steel/30 px-2 py-0.5 flex items-center gap-1">
+        <span className="text-[9px] font-mono font-bold text-bone bg-inset/40 border border-edge/30 px-2 py-0.5 flex items-center gap-1">
           <span className="text-amber font-bold font-mono">[ LAYERS ]</span> Spatial Anchors
         </span>
       </div>
 
       {/* Generation Effect: Dual-Coding Challenge Card */}
-      <div className="mb-3.5 p-3 bg-steel/30 border border-steel/30">
+      <div className="mb-3.5 p-3 bg-inset/30 border border-edge/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
             <span className="text-amber font-bold font-mono">[ ? ]</span>
@@ -69,14 +69,14 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-colors duration-150"
+            className="text-[10px] font-mono font-semibold text-bone bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Spatial Clue'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-steel/20 text-[11px] text-bone/90 italic font-mono">
+          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-bone/90 italic font-mono">
             💡 <strong>Spatial Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -93,12 +93,12 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
               onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
               className={`p-3.5  border transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
-                  ? 'border-steel/80 bg-steel/50 ring-1 ring-violet-400/50 '
-                  : 'border-steel/60 bg-deck/60 hover:border-steel/40'
+                  ? 'border-edge/80 bg-inset/50 ring-1 ring-violet-400/50 '
+                  : 'border-edge/60 bg-deck/60 hover:border-edge/40'
               }`}
             >
               <div>
-                <span className="text-[9px] font-mono font-bold uppercase text-bone bg-steel/60 border border-steel/30 px-1.5 py-0.5 block w-fit mb-1.5">
+                <span className="text-[9px] font-mono font-bold uppercase text-bone bg-inset/60 border border-edge/30 px-1.5 py-0.5 block w-fit mb-1.5">
                   Spatial Anchor: {anchor.spatialPosition}
                 </span>
 
@@ -117,13 +117,13 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
 
       {/* User Generated Dual-Coding Synthesis */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 border border-steel/40 text-xs">
+        <div className="mt-3 p-3 border border-edge/40 text-xs">
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] font-mono font-bold uppercase text-bone flex items-center gap-1.5">
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Mental Spatial Blueprint
             </span>
-            <span className="text-[9px] font-mono text-bone bg-steel/60 border border-steel/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-bone bg-inset/60 border border-edge/30 px-1.5 py-0.5 ">
               Image Encoded
             </span>
           </div>
