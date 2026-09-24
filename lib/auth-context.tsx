@@ -32,6 +32,12 @@ interface AuthContextType {
   cloudSchemas: SavedSchema[];
   cloudStats: { totalXp: number; schemasCompleted: number };
   isSyncing: boolean;
+  /** Epoch ms of the last successful cloud write, or null if none yet. */
+  lastSyncedAt: number | null;
+  /** Set when the latest cloud write failed : surfaces sync problems in the UI. */
+  lastSyncError: string | null;
+  /** Local-only schemas not yet confirmed in the cloud (shown as "pending"). */
+  pendingLocalCount: number;
   signInGoogle: () => Promise<void>;
   signInAnonymous: () => Promise<void>;
   logOut: () => Promise<void>;
@@ -48,6 +54,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [cloudSchemas, setCloudSchemas] = useState<SavedSchema[]>([]);
   const [cloudStats, setCloudStats] = useState({ totalXp: 0, schemasCompleted: 0 });
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+
+  // How many local schemas are not yet in the cloud : derived, not state, so
+  // the UI can show "N pending" without a cascading render pass.
+  const pendingLocalCount = React.useMemo(() => {
+    const local = loadSavedSchemas();
+    if (!user) return local.length;
+    const cloudIds = new Set(cloudSchemas.map((s) => s.id));
+    return local.filter((s) => !cloudIds.has(s.id)).length;
+  }, [user, cloudSchemas]);
 
   // Listen to Auth State
   useEffect(() => {
@@ -156,6 +173,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userId: user.uid,
         updatedAt: Date.now()
       });
+      setLastSyncedAt(Date.now());
+      setLastSyncError(null);
 
       // Update user stats
       const userRef = doc(db, 'users', user.uid);
@@ -169,6 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     } catch (err) {
       console.error("Failed to sync schema to cloud:", err);
+      setLastSyncError(err instanceof Error ? err.message : 'Cloud sync failed.');
     } finally {
       setIsSyncing(false);
     }
@@ -203,13 +223,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         count++;
       }
       await batch.commit();
+      if (count > 0) {
+        setLastSyncedAt(Date.now());
+        setLastSyncError(null);
+      }
     } catch (err) {
       console.error("Error bulk syncing local schemas:", err);
+      setLastSyncError(err instanceof Error ? err.message : 'Cloud sync failed.');
     } finally {
       setIsSyncing(false);
     }
     return count;
   };
+
+  // Auto-push local history to the cloud once per sign-in : a returning user
+  // never has to remember the "Import Local" button.
+  const autoSyncedRef = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    if (autoSyncedRef.current === user.uid) return;
+    autoSyncedRef.current = user.uid;
+    syncLocalToCloud().catch(() => {
+      // failure surfaces via lastSyncError inside syncLocalToCloud
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   return (
     <AuthContext.Provider
@@ -219,6 +257,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         cloudSchemas,
         cloudStats,
         isSyncing,
+        lastSyncedAt,
+        lastSyncError,
+        pendingLocalCount,
         signInGoogle,
         signInAnonymous,
         logOut,

@@ -7,8 +7,29 @@ import {
   buildAnkiCollectionSqlite,
   sha1Hex,
   generateAnkiGuid,
+  deterministicAnkiGuid,
   AnkiCollectionSpec,
 } from '@/lib/anki-sqlite-writer';
+
+describe('deterministicAnkiGuid', () => {
+  it('is stable for the same seed (re-export updates instead of duplicating)', () => {
+    expect(deterministicAnkiGuid('DeepEncode::Topic::act-1-main')).toBe(
+      deterministicAnkiGuid('DeepEncode::Topic::act-1-main')
+    );
+  });
+
+  it('differs for different seeds (no cross-card collisions)', () => {
+    const guids = new Set(
+      Array.from({ length: 200 }, (_, i) => deterministicAnkiGuid(`deck::card-${i}`))
+    );
+    expect(guids.size).toBe(200);
+  });
+
+  it('stays inside Anki\'s legacy 10-char guid alphabet', () => {
+    const guid = deterministicAnkiGuid('any seed');
+    expect(guid).toMatch(/^[a-zA-Z0-9!#$%&()*+,-./:;<=>?@[\]^_`{|}~]{10}$/);
+  });
+});
 
 const spec: AnkiCollectionSpec = {
   conf: '{"nextPos":1,"curDeck":1,"curModel":"1770000000000"}',

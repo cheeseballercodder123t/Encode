@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { SavedSchema, SegregationReport, ProceduralMCQArchetype, StageResponse, Activity } from './types';
-import { buildAnkiCollectionSqlite, generateAnkiGuid, AnkiNoteRow } from './anki-sqlite-writer';
+import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from './anki-sqlite-writer';
 import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
 
 export { classifyDeckQuality };
@@ -83,6 +83,27 @@ function appendLeechTag(card: AnkiCardItem): void {
 }
 
 /** Export tag set for one activity + response (Unfinished gate lives here). */
+/**
+ * Context tags added to every card of a schema: deck-level traceability that
+ * survives the Anki hop (find which schema/stage a review came from).
+ */
+function buildSchemaContextTags(schema?: Partial<SavedSchema> | null): string[] {
+  const tags: string[] = [];
+  const topic = sanitizeTopicSegment(schema?.topicSummary || '');
+  if (topic) tags.push(`Topic::${topic.replace(/\s+/g, '_')}`);
+  if (schema?.mode) tags.push(`Mode:${schema.mode}`);
+  return tags;
+}
+
+/** Merges schema-level context tags into every card (no duplicates). */
+function applyContextTags(cards: AnkiCardItem[], contextTags: string[]): AnkiCardItem[] {
+  if (contextTags.length === 0) return cards;
+  return cards.map((c) => ({
+    ...c,
+    tags: [...c.tags, ...contextTags.filter((t) => !c.tags.includes(t))],
+  }));
+}
+
 export function computeActivityExportTags(resp: StageResponse | undefined): string[] {
   const hasWording = Boolean(resp && !resp.skipped && (resp.field1?.trim() || resp.field2?.trim()));
   if (!hasWording || !resp) return ['DeepEncode', 'SchemaActivity', 'Unfinished'];
@@ -278,6 +299,7 @@ export function extractAnkiCardsFromSchema(
 ): AnkiCardItem[] {
   const initialSM2 = calculateSM2(4); // Default initialized with 1-day initial SM2 interval
   const activities: Activity[] = schema?.activities || [];
+  const contextTags = buildSchemaContextTags(schema);
 
   // 1. USER WORDING — primary path. Every activity, encoded or not.
   const userCards: AnkiCardItem[] = [];
@@ -285,7 +307,7 @@ export function extractAnkiCardsFromSchema(
     if (!act) return;
     userCards.push(...buildUserWordingCards(act, schema?.userResponses?.[act.id], idx, initialSM2));
   });
-  if (userCards.length > 0) return userCards;
+  if (userCards.length > 0) return applyContextTags(userCards, contextTags);
 
   const cards: AnkiCardItem[] = [];
 
@@ -410,7 +432,7 @@ export function extractAnkiCardsFromSchema(
     });
   }
 
-  return cards;
+  return applyContextTags(cards, contextTags);
 }
 
 /**
@@ -636,7 +658,9 @@ export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: s
     const nid = modMs + i;
     const isCloze = card.isCloze && card.front.includes('{{c');
     return {
-      guid: generateAnkiGuid(),
+      // Deterministic per (deck, card id): re-exports UPDATE the Anki note
+      // instead of duplicating it, while distinct cards can never collide.
+      guid: deterministicAnkiGuid(`${deckName}::${card.id}`),
       mid: isCloze ? clozeModelId : basicModelId,
       tags: card.tags.join(' '),
       flds: isCloze ? [card.front, card.back] : [card.front, card.back, ''],
@@ -688,23 +712,36 @@ export async function syncToAnkiConnect(
   deckName: string,
   cards: AnkiCardItem[]
 ): Promise<{ success: boolean; addedCount: number; message: string }> {
-  try {
-    // 1. Create deck if missing
-    const createDeckRes = await fetch(ankiConnectUrl, {
+  /** One AnkiConnect call with timeout so a dead endpoint fails fast. */
+  const call = async (action: string, params?: unknown): Promise<any> => {
+    const res = await fetch(ankiConnectUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'createDeck',
-        version: 6,
-        params: { deck: deckName },
-      }),
+      body: JSON.stringify({ action, version: 6, params }),
+      signal: AbortSignal.timeout(5000),
     });
+    if (!res.ok) {
+      throw new Error(`AnkiConnect HTTP ${res.status}. Ensure Anki desktop is open with the AnkiConnect add-on enabled.`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(`AnkiConnect error: ${data.error}`);
+    return data.result;
+  };
 
-    if (!createDeckRes.ok) {
-      throw new Error(`AnkiConnect HTTP ${createDeckRes.status}. Ensure Anki desktop is open with AnkiConnect plugin installed.`);
+  try {
+    // 0. Reachability probe first : distinguish "Anki closed" from any
+    // later per-note failure with an honest, actionable message.
+    try {
+      await call('version');
+    } catch {
+      throw new Error('Could not reach AnkiConnect. Open Anki desktop and make sure the AnkiConnect add-on is running (default 127.0.0.1:8765).');
     }
 
-    // 2. Add notes
+    // 1. Create deck if missing
+    await call('createDeck', { deck: deckName });
+
+    // 2. Pre-flight: ask Anki which notes it would actually accept, so the
+    // summary can distinguish "added" from "already existed".
     const notesPayload = cards.map((c) => ({
       deckName,
       modelName: c.isCloze ? 'Cloze' : 'Basic',
@@ -714,32 +751,34 @@ export async function syncToAnkiConnect(
       tags: c.tags,
     }));
 
-    const addNotesRes = await fetch(ankiConnectUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'addNotes',
-        version: 6,
-        params: { notes: notesPayload },
-      }),
-    });
+    const canAdd: boolean[] = await call('canAddNotes', { notes: notesPayload });
+    const pending = cards.filter((_, i) => canAdd[i]);
 
-    const data = await addNotesRes.json();
-    if (data.error) {
-      throw new Error(`AnkiConnect error: ${data.error}`);
+    // 3. Add only the notes Anki reported as acceptable (duplicates skipped).
+    let added = 0;
+    if (pending.length > 0) {
+      const pendingPayload = notesPayload.filter((_, i) => canAdd[i]);
+      const ids: (number | null)[] = await call('addNotes', { notes: pendingPayload });
+      added = (ids || []).filter((id) => id !== null).length;
     }
 
-    const added = (data.result || []).filter((id: number | null) => id !== null).length;
-    return {
-      success: true,
-      addedCount: added,
-      message: `Successfully pushed ${added} flashcards to Anki deck "${deckName}"!`,
-    };
+    const duplicates = cards.length - pending.length;
+    const skipped = pending.length - added;
+    const parts: string[] = [];
+    if (added > 0) parts.push(`${added} added`);
+    if (duplicates > 0) parts.push(`${duplicates} already in your collection`);
+    if (skipped > 0) parts.push(`${skipped} rejected (invalid fields or note type)`);
+
+    const message = parts.length > 0
+      ? `Synced to "${deckName}" : ${parts.join(', ')}.`
+      : 'Nothing to sync : every card already exists in your collection.';
+
+    return { success: true, addedCount: added, message };
   } catch (err: any) {
     return {
       success: false,
       addedCount: 0,
-      message: err.message || 'Could not connect to AnkiConnect. Ensure Anki desktop is running.',
+      message: err?.message || 'Could not connect to AnkiConnect. Ensure Anki desktop is running.',
     };
   }
 }
@@ -1177,7 +1216,8 @@ export async function generateProceduralApkgPackage(
   const colJson = buildProceduralColJson(deckId, safeDeck, modSec);
 
   const notes: AnkiNoteRow[] = archetypes.map((archetype, i) => ({
-    guid: generateAnkiGuid(),
+    // Deterministic per (deck, archetype id): re-exports update in place.
+    guid: deterministicAnkiGuid(`${safeDeck}::${archetype.id}`),
     mid: modelId,
     tags: `DeepEncode ProceduralMCQ ${archetype.topic.split(':')[0].replace(/[^a-zA-Z0-9_]/g, '')}`,
     flds: [buildProceduralFieldData(archetype), archetype.topic, archetype.unit || ''],
