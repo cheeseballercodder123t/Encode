@@ -44,7 +44,7 @@ export class TemplateErrorBoundary extends Component<Props, State> {
           </p>
           <button
             onClick={this.handleReset}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber/20 hover:bg-amber/30 text-amber text-xs font-medium transition-none-colors border border-amber/30"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber/20 hover:bg-amber/30 text-amber text-xs font-medium transition-colors duration-150 border border-amber/30"
           >
             <span className="text-amber font-bold font-mono">[ RESET ]</span>
             Retry Interactive Render

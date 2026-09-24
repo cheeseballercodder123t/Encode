@@ -95,7 +95,7 @@ export function PreSessionConfidenceModal({ isOpen, topicPreview, onConfirm, onS
                 onClick={() => setSelected(n)}
                 onMouseEnter={() => setHovered(n)}
                 onMouseLeave={() => setHovered(0)}
-                className="transition-none-transform hover:scale-125 focus:outline-none p-1"
+                className="transition-transform hover:scale-125 focus:outline-none p-1"
               >
                 <span className="text-amber font-bold font-mono">[ STAR ]</span>
               </button>

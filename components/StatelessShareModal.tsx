@@ -111,7 +111,7 @@ export default function StatelessShareModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-none-colors cursor-pointer text-xs"
+            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-colors duration-150 cursor-pointer text-xs"
           >
             [ X ]
           </button>
@@ -152,10 +152,10 @@ export default function StatelessShareModal({
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className={`flex items-center gap-1.5 px-4 py-2.5  font-bold text-xs transition-none-all shrink-0 cursor-pointer  ${
+                className={`flex items-center gap-1.5 px-4 py-2.5  font-bold text-xs transition-all shrink-0 cursor-pointer  ${
                   copied
                     ? 'bg-amber600 text-bone '
-                    : '   hover: hover: text-bone '
+                    : '   hover:bg-deck text-bone '
                 }`}
               >
                 {copied ? (
@@ -229,7 +229,7 @@ export default function StatelessShareModal({
               <button
                 type="button"
                 onClick={handleNativeShare}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-bone bg-steel hover:bg-steel border border-steel cursor-pointer"
+                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-bone bg-steel border border-steel cursor-pointer"
               >
                 <span className="text-amber font-bold font-mono">[ SEND ]</span>
                 <span>Share Via...</span>
@@ -239,7 +239,7 @@ export default function StatelessShareModal({
             <button
               type="button"
               onClick={handleCopyLink}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 hover: hover: text-bone font-bold text-xs   cursor-pointer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs   cursor-pointer"
             >
               {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
               <span>{copied ? 'Copied to Clipboard!' : 'Copy Share URL'}</span>

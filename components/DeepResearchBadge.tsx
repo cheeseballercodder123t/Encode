@@ -12,7 +12,7 @@ export function DeepResearchBadge({ context }: DeepResearchBadgeProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="w-full border border-amber/30 bg-amber/10 p-3.5 space-y-2 transition-none-all">
+    <div className="w-full border border-amber/30 bg-amber/10 p-3.5 space-y-2 transition-all">
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between cursor-pointer select-none"
@@ -33,7 +33,7 @@ export function DeepResearchBadge({ context }: DeepResearchBadgeProps) {
 
         <button 
           type="button"
-          className="text-amber hover:text-amber p-1 text-xs font-bold flex items-center gap-1"
+          className="text-amber p-1 text-xs font-bold flex items-center gap-1"
         >
           <span className="text-[11px] hidden sm:inline">{isExpanded ? 'Hide Details' : 'Why this was added'}</span>
           {isExpanded ? <span className="text-amber font-bold font-mono">[ ^ ]</span> : <span className="text-amber font-bold font-mono">[ v ]</span>}

@@ -130,7 +130,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-bone text-xs truncate">{selectedFile.name}</span>
-                <span className="px-1.5 py-0.5 bg-amber/20 text-amber300 text-[9px] font-bold ">
+                <span className="px-1.5 py-0.5 bg-amber/20 text-amber-300 text-[9px] font-bold ">
                   Multimodal Ready
                 </span>
               </div>
@@ -143,7 +143,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           <button
             type="button"
             onClick={clearFile}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard400 hover:bg-steel transition-none-colors shrink-0"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard-400 hover:bg-steel transition-colors duration-150 shrink-0"
             title="Remove attachment"
             aria-label="Remove attached file"
           >
@@ -168,10 +168,10 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
-          className={`p-4 border-2 border-dashed  transition-none-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-3 ${
+          className={`p-4 border-2 border-dashed  transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-3 ${
             isDragging
               ? 'border-steel bg-steel/10'
-              : 'border-steel hover:border-steel bg-chassis/80 hover:bg-deck'
+              : 'border-steel bg-chassis/80 hover:bg-deck'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -200,7 +200,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
                 e.stopPropagation();
                 setIsDriveModalOpen(true);
               }}
-              className="px-3 py-1.5 bg-steel/60 hover:bg-steel/60 border border-steel/40 text-bone text-xs font-bold transition-none-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-steel/60 border border-steel/40 text-bone text-xs font-bold transition-colors duration-150 shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
               <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               Import Google Drive
@@ -208,7 +208,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
 
             <button
               type="button"
-              className="px-3 py-1.5 bg-deck hover:bg-steel border border-steel text-bone text-xs font-bold transition-none-colors shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-deck hover:bg-steel border border-steel text-bone text-xs font-bold transition-colors duration-150 shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
               <span className="text-amber font-bold font-mono">[ IMG ]</span>
               Browse Local
@@ -218,7 +218,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
       )}
 
       {errorMessage && (
-        <div className="flex items-center gap-1.5 text-xs text-hazard400 px-1">
+        <div className="flex items-center gap-1.5 text-xs text-hazard-400 px-1">
           <span className="text-amber font-bold font-mono">[ ! ]</span>
           <span>{errorMessage}</span>
         </div>

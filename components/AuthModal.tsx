@@ -78,7 +78,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-solder hover:text-bone hover:bg-steel transition-none-colors"
+              className="p-2 text-solder hover:text-bone hover:bg-steel transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
@@ -87,7 +87,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* Content */}
           <div className="p-6 space-y-5">
             {errorMsg && (
-              <div className="p-3 bg-hazard500/10 border border-hazard500/30 text-hazard300 text-xs ">
+              <div className="p-3 bg-hazard-500/10 border border-hazard-500/30 text-hazard-300 text-xs ">
                 {errorMsg}
               </div>
             )}
@@ -141,7 +141,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleSyncLocal}
                     disabled={isSyncing}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-steel/20 hover:bg-steel/30 border border-steel/40 text-bone font-bold text-xs transition-none-all"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-steel/20 hover:bg-steel/30 border border-steel/40 text-bone font-bold text-xs transition-colors duration-150"
                   >
                     <span className="text-amber font-bold font-mono">[ RESET ]</span>
                     {isSyncing ? 'Syncing...' : 'Sync Local History to Cloud'}
@@ -158,7 +158,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     onClick={async () => {
                       await logOut();
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-steel/60 text-solder hover:text-hazard400 font-bold text-xs transition-none-all"
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-steel/60 text-solder hover:text-hazard-400 font-bold text-xs transition-colors duration-150"
                   >
                     <span className="text-amber font-bold font-mono">[ LOGOUT ]</span>
                     Sign Out
@@ -193,7 +193,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleGoogleLogin}
                     disabled={isProcessing}
-                    className="w-full flex items-center justify-center gap-2.5 py-3 bg-bone hover:bg-solder text-bone font-bold text-xs transition-none-all"
+                    className="w-full flex items-center justify-center gap-2.5 py-3 bg-bone hover:bg-solder text-bone font-bold text-xs transition-colors duration-150"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -207,7 +207,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   <button
                     onClick={handleGuestLogin}
                     disabled={isProcessing}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-deck hover:bg-deck border border-steel text-solder font-bold text-xs transition-none-all"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-deck border border-steel text-solder font-bold text-xs transition-colors duration-150"
                   >
                     <span className="text-amber font-bold font-mono">[ USER ]</span>
                     Quick Guest Session

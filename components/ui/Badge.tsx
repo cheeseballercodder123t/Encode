@@ -2,7 +2,7 @@
 
 import React, { ReactNode } from 'react';
 
-export type BadgeVariant = 'amber' | 'hazard' | 'steel' | 'bone';
+export type BadgeVariant = 'amber' | 'hazard' | 'signal' | 'flux' | 'steel' | 'bone';
 export type BadgeSize = 'xs' | 'sm' | 'md';
 
 export interface BadgeProps {
@@ -25,8 +25,11 @@ export function Badge({
   };
 
   const variantStyles: Record<BadgeVariant, string> = {
-    amber: 'bg-amber/10 text-amber border-amber/40',
-    hazard: 'bg-hazard/10 text-hazard border-hazard/40',
+    // [OK]/verified → signal, AI/Teach → flux, warnings → amber, errors → hazard.
+    amber: 'bg-amber-950/40 text-amber-300 border-amber/40',
+    hazard: 'bg-hazard-950/40 text-hazard-300 border-hazard/40',
+    signal: 'bg-signal-950/40 text-signal-300 border-signal/40',
+    flux: 'bg-flux-950/40 text-flux-300 border-flux/40',
     steel: 'bg-deck text-solder border-steel',
     bone: 'bg-chassis text-bone border-steel',
   };

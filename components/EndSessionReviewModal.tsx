@@ -87,7 +87,7 @@ export function EndSessionReviewModal(props: Props) {
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: aiScore + '%' }}
-                      transition-none={{ duration: 1, ease: 'easeOut' }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
                       className="h-2 bg-amber"
                     />
                   </div>

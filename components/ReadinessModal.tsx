@@ -95,9 +95,9 @@ export function ReadinessModal({ isOpen, stageNumber, stageTitle, previousPremis
         <button
           type="button"
           onClick={() => setChecked(c => !c)}
-          className="flex items-start gap-3 w-full text-left group p-2 hover:bg-steel/40 transition-none-colors"
+          className="flex items-start gap-3 w-full text-left group p-2 hover:bg-steel/40 transition-colors duration-150"
         >
-          <div className="mt-0.5 text-amber group-hover:text-amber300 transition-none-colors shrink-0">
+          <div className="mt-0.5 text-amber group-hover:text-amber-300 transition-colors duration-150 shrink-0">
             {checked ? <span className="text-amber font-bold font-mono">[ CHK ]</span> : <span className="text-amber font-bold font-mono">[ BOX ]</span>}
           </div>
           <p className="text-xs text-solder leading-relaxed">

@@ -116,7 +116,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
                 value={blurtText}
                 onChange={(e) => setBlurtText(e.target.value)}
                 placeholder="Start typing from memory... What are the key stages? Why does it happen? What triggers each step?"
-                className="w-full h-48 p-4 bg-chassis border border-steel text-sm text-bone placeholder-slate-500 focus:outline-none focus:border-steel transition-none resize-none font-mono leading-relaxed"
+                className="w-full h-48 p-4 bg-chassis border border-steel text-sm text-bone placeholder-solder focus:outline-none focus:border-steel transition-none resize-none font-mono leading-relaxed"
                 autoFocus
               />
               <div className="flex justify-between items-center text-xs text-solder mt-1.5">
@@ -135,7 +135,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
               <button
                 onClick={handleAnalyzeBlurt}
                 disabled={!blurtText.trim() || isAnalyzing}
-                className="px-5 py-2.5 text-xs font-bold text-bone    hover: hover:   flex items-center gap-2 transition-none disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center gap-2 transition-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
                   <>
@@ -180,12 +180,12 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
               </h4>
               <div className="space-y-2">
                 {evaluation.recalledPrinciples?.map((r, i) => (
-                  <div key={i} className="p-3 bg-amber950/20 border border-amber/30 text-xs text-amber100 flex items-start gap-2">
+                  <div key={i} className="p-3 bg-amber-950/20 border border-amber/30 text-xs text-amber-100 flex items-start gap-2">
                     <span className="w-2 h-2 bg-amber mt-1.5 flex-shrink-0" />
                     <div>
                       <strong className="text-bone">{r.principle}</strong>
                       {r.studentMentioned && (
-                        <p className="text-amber300/80 text-[11px] mt-0.5">
+                        <p className="text-amber-300/80 text-[11px] mt-0.5">
                           Matched: &ldquo;{r.studentMentioned}&rdquo;
                         </p>
                       )}
@@ -197,22 +197,22 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
 
             {/* Forgotten / Missed Principles (Red - High Priority) */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-hazard400 mb-2 flex items-center gap-1.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-hazard-400 mb-2 flex items-center gap-1.5">
                 <span className="text-amber font-bold font-mono">[ ! ]</span>
                 Forgotten First Principles ({evaluation.missedPrinciples?.length || 0})
               </h4>
               <div className="space-y-2">
                 {evaluation.missedPrinciples?.map((m, i) => (
-                  <div key={i} className="p-3 bg-hazard950/30 border border-hazard500/40 text-xs text-hazard100">
+                  <div key={i} className="p-3 bg-hazard-950/30 border border-hazard-500/40 text-xs text-hazard-100">
                     <div className="flex items-center justify-between mb-1">
                       <strong className="text-bone font-bold">{m.principle}</strong>
-                      <span className="text-[10px] font-bold text-hazard300 px-2 py-0.5 bg-hazard900/50 border border-hazard700">
+                      <span className="text-[10px] font-bold text-hazard300 px-2 py-0.5 bg-hazard-900/50 border border-hazard-700">
                         CRITICAL GAP
                       </span>
                     </div>
-                    <p className="text-hazard200/90 leading-relaxed mb-2">{m.whyCrucial}</p>
+                    <p className="text-hazard-200/90 leading-relaxed mb-2">{m.whyCrucial}</p>
                     {m.flashcardTrigger && (
-                      <div className="p-2 bg-deck/90 border border-hazard500/20 text-[11px] text-solder">
+                      <div className="p-2 bg-deck/90 border border-hazard-500/20 text-[11px] text-solder">
                         <span className="text-amber font-semibold">[ ZAP ] Spaced Trigger:</span> {m.flashcardTrigger}
                       </div>
                     )}
@@ -225,7 +225,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
             <div className="pt-4 border-t border-steel flex justify-between items-center">
               <button
                 onClick={handleReset}
-                className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-steel hover:bg-steel flex items-center gap-1.5 transition-none"
+                className="px-4 py-2 text-xs font-semibold text-solder hover:text-bone bg-steel flex items-center gap-1.5 transition-none"
               >
                 <span className="text-amber font-bold font-mono">[ RESET ]</span>
                 <span>Blurt Again</span>
@@ -233,7 +233,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="px-5 py-2.5 text-xs font-bold text-bone    hover: hover:  transition-none"
+                className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck  transition-none"
               >
                 Done Reviewing
               </button>

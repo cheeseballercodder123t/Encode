@@ -50,7 +50,7 @@ export default function RoastNotesModal({
   };
 
   const getScoreColor = (score: number) => {
-    if (score < 40) return { text: 'text-hazard400', bg: 'bg-hazard500/20', border: 'border-hazard500/40', label: 'Critical Academic CPR Required' };
+    if (score < 40) return { text: 'text-hazard-400', bg: 'bg-hazard-500/20', border: 'border-hazard-500/40', label: 'Critical Academic CPR Required' };
     if (score < 70) return { text: 'text-amber', bg: 'bg-amber/20', border: 'border-amber/40', label: 'Passable (If Grader Has Cataracts)' };
     return { text: 'text-amber', bg: 'bg-amber/20', border: 'border-amber/40', label: 'Suspiciously Rigorous' };
   };
@@ -61,10 +61,10 @@ export default function RoastNotesModal({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-3xl bg-deck border border-hazard500/40 overflow-hidden my-6 flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-3xl bg-deck border border-hazard-500/40 overflow-hidden my-6 flex flex-col max-h-[90vh]"
       >
         {/* Animated Fire Header */}
-        <div className="p-4 sm:p-6 border-b border-hazard500/30 flex items-start justify-between gap-4">
+        <div className="p-4 sm:p-6 border-b border-hazard-500/30 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 flex items-center justify-center   shrink-0">
               <span className="text-amber font-bold font-mono">[ FLAME ]</span>
@@ -74,7 +74,7 @@ export default function RoastNotesModal({
                 <h2 className="text-lg sm:text-xl font-black text-bone flex items-center gap-1.5">
                   <span>Roast My Notes</span>
                 </h2>
-                <span className="px-2 py-0.5 bg-hazard500/20 text-hazard300 border border-hazard500/30 text-[10px] font-black uppercase tracking-wider">
+                <span className="px-2 py-0.5 bg-hazard-500/20 text-hazard-300 border border-hazard-500/30 text-[10px] font-black uppercase tracking-wider">
                   Strict Professor Mode
                 </span>
               </div>
@@ -88,7 +88,7 @@ export default function RoastNotesModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-none-colors cursor-pointer text-xs"
+            className="text-solder hover:text-bone p-2 bg-steel/80 hover:bg-steel transition-colors duration-150 cursor-pointer text-xs"
           >
             [ X ]
           </button>
@@ -98,7 +98,7 @@ export default function RoastNotesModal({
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-bone">
           {loading ? (
             <div className="py-16 text-center space-y-4">
-              <div className="w-14 h-14 mx-auto bg-hazard500/20 border border-hazard500/40 flex items-center justify-center ">
+              <div className="w-14 h-14 mx-auto bg-hazard-500/20 border border-hazard-500/40 flex items-center justify-center ">
                 <span className="text-amber font-bold font-mono">[ FLAME ]</span>
               </div>
               <div className="space-y-1">
@@ -137,7 +137,7 @@ export default function RoastNotesModal({
 
                 {/* Lethal Quote */}
                 <div className="md:col-span-2 p-4 bg-chassis border border-steel flex flex-col justify-between space-y-2">
-                  <div className="flex items-center gap-1.5 text-xs text-hazard400 font-bold">
+                  <div className="flex items-center gap-1.5 text-xs text-hazard-400 font-bold">
                     <span className="text-amber font-bold font-mono">[ QUOTE ]</span>
                     <span>Professor&apos;s Core Verdict</span>
                   </div>
@@ -168,16 +168,16 @@ export default function RoastNotesModal({
                     return (
                       <div
                         key={critique.id}
-                        className="p-4 bg-chassis border border-steel hover:border-steel transition-none-all space-y-3"
+                        className="p-4 bg-chassis border border-steel transition-all space-y-3"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wide bg-hazard500/20 text-hazard300 border border-hazard500/30">
+                            <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wide bg-hazard-500/20 text-hazard-300 border border-hazard-500/30">
                               {critique.categoryLabel}
                             </span>
                             <span className={`px-2 py-0.5  text-[10px] font-bold uppercase ${
                               critique.severity === 'brutal' 
-                                ? 'bg-hazard500/20 text-hazard300 border border-hazard500/30' 
+                                ? 'bg-hazard-500/20 text-hazard-300 border border-hazard-500/30' 
                                 : 'bg-amber/20 text-amber border border-amber/30'
                             }`}>
                               {critique.severity === 'brutal' ? '[ FLAME ] Fatal Gap' : '[ ! ] Vague'}
@@ -189,10 +189,10 @@ export default function RoastNotesModal({
                               type="button"
                               onClick={() => handleInjectSingle(critique)}
                               disabled={isPatched}
-                              className={`flex items-center gap-1 px-2.5 py-1  text-xs font-bold transition-none-all cursor-pointer ${
+                              className={`flex items-center gap-1 px-2.5 py-1  text-xs font-bold transition-all cursor-pointer ${
                                 isPatched
-                                  ? 'bg-amber/20 text-amber300 border border-amber/40'
-                                  : 'bg-steel hover:bg-steel text-bone border border-steel'
+                                  ? 'bg-amber/20 text-amber-300 border border-amber/40'
+                                  : 'bg-steel text-bone border border-steel'
                               }`}
                             >
                               {isPatched ? (
@@ -295,7 +295,7 @@ export default function RoastNotesModal({
               <button
                 type="button"
                 onClick={handleApplyAll}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 hover: hover: text-bone font-bold text-xs   transition-none-all cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 hover:bg-deck text-bone font-bold text-xs   transition-all cursor-pointer"
               >
                 <span className="text-amber font-bold font-mono">[ * ]</span>
                 <span>Auto-Patch Notes & Encode</span>
@@ -304,7 +304,7 @@ export default function RoastNotesModal({
               <button
                 type="button"
                 onClick={onProceedToEncode}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-steel hover:bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
               >
                 <span>Encode As-Is</span>
                 <span className="text-amber font-bold font-mono">[ NEXT ]</span>

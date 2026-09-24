@@ -18,17 +18,18 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
   // Templates the learner hid (not pulling their weight) — persisted subtly.
   const [hiddenTemplates, setHiddenTemplates] = useState<string[]>(() => loadStudyPrefs().hiddenTemplates);
 
-  const handleOpenInit = () => {
+  // Re-sync from storage each time the modal opens. Done as a during-render
+  // reset (the same pattern AnkiExportModal uses) so opening never needs a
+  // cascading setState-in-effect pass.
+  const [wasOpen, setWasOpen] = useState(false);
+  if (isOpen && !wasOpen) {
+    setWasOpen(true);
     setSettings(loadAISettings());
     setHiddenTemplates(loadStudyPrefs().hiddenTemplates);
     setSavedSuccess(false);
-  };
-
-  useEffect(() => {
-    if (isOpen) handleOpenInit();
-    // Sync prefs each time the modal opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  } else if (!isOpen && wasOpen) {
+    setWasOpen(false);
+  }
 
   const toggleHiddenTemplate = (id: string) => {
     setHiddenTemplates(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
@@ -77,7 +78,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-solder hover:text-bone hover:bg-steel transition-none-colors"
+              className="p-2 text-solder hover:text-bone hover:bg-steel transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
@@ -95,7 +96,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, provider: 'gemini' })}
-                  className={`p-3  border flex flex-col items-center gap-1.5 transition-none-all ${
+                  className={`p-3  border flex flex-col items-center gap-1.5 transition-all ${
                     settings.provider === 'gemini'
                       ? 'bg-steel/20 border-steel text-bone  '
                       : 'bg-deck border-steel text-solder hover:text-bone'
@@ -109,7 +110,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, provider: 'openrouter' })}
-                  className={`p-3  border flex flex-col items-center gap-1.5 transition-none-all ${
+                  className={`p-3  border flex flex-col items-center gap-1.5 transition-all ${
                     settings.provider === 'openrouter'
                       ? 'bg-steel/20 border-steel text-bone  '
                       : 'bg-deck border-steel text-solder hover:text-bone'
@@ -123,7 +124,7 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
                 <button
                   type="button"
                   onClick={() => setSettings({ ...settings, provider: 'openai' })}
-                  className={`p-3  border flex flex-col items-center gap-1.5 transition-none-all ${
+                  className={`p-3  border flex flex-col items-center gap-1.5 transition-all ${
                     settings.provider === 'openai'
                       ? 'bg-steel/20 border-steel text-bone  '
                       : 'bg-deck border-steel text-solder hover:text-bone'
@@ -382,14 +383,14 @@ export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) 
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-steel hover:bg-steel text-solder font-bold"
+                className="px-4 py-2 bg-steel text-solder font-bold"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex items-center gap-1.5 px-5 py-2 bg-steel hover:bg-steel text-bone font-bold  "
+                className="flex items-center gap-1.5 px-5 py-2 bg-steel text-bone font-bold  "
               >
                 {savedSuccess ? <span className="text-amber font-bold font-mono">[ OK ]</span> : null}
                 {savedSuccess ? 'Saved!' : 'Save Configuration'}

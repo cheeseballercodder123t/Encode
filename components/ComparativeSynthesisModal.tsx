@@ -138,7 +138,7 @@ export function ComparativeSynthesisModal({
         {/* Main Content Area */}
         <div className="p-5 overflow-y-auto flex-1 space-y-5">
           {errorMessage && (
-            <div className="p-3.5 bg-hazard950/40 border border-hazard500/40 text-xs text-hazard300 flex items-start gap-2">
+            <div className="p-3.5 bg-hazard-950/40 border border-hazard-500/40 text-xs text-hazard-300 flex items-start gap-2">
               <span className="text-amber font-bold font-mono">[ ! ]</span>
               <div className="flex-1 leading-relaxed">{errorMessage}</div>
             </div>
@@ -156,7 +156,7 @@ export function ComparativeSynthesisModal({
                       Source Document A
                     </span>
                     {docAFile && (
-                      <span className="px-2 py-0.5 text-[10px] bg-amber950 text-amber300 border border-amber/30 font-bold">
+                      <span className="px-2 py-0.5 text-[10px] bg-amber-950 text-amber-300 border border-amber/30 font-bold">
                         File Attached
                       </span>
                     )}
@@ -184,7 +184,7 @@ export function ComparativeSynthesisModal({
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <label className="flex-1 py-1.5 px-2 bg-steel hover:bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
+                    <label className="flex-1 py-1.5 px-2 bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
                       <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
                       <span>Upload File</span>
                       <input
@@ -197,7 +197,7 @@ export function ComparativeSynthesisModal({
 
                     <button
                       onClick={() => setDriveTargetDoc('A')}
-                      className="py-1.5 px-3 bg-steel/60 hover:bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
+                      className="py-1.5 px-3 bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
                       <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       <span>Google Drive</span>
@@ -213,7 +213,7 @@ export function ComparativeSynthesisModal({
                       Source Document B
                     </span>
                     {docBFile && (
-                      <span className="px-2 py-0.5 text-[10px] bg-amber950 text-amber300 border border-amber/30 font-bold">
+                      <span className="px-2 py-0.5 text-[10px] bg-amber-950 text-amber-300 border border-amber/30 font-bold">
                         File Attached
                       </span>
                     )}
@@ -241,7 +241,7 @@ export function ComparativeSynthesisModal({
                   </div>
 
                   <div className="flex gap-2 pt-1">
-                    <label className="flex-1 py-1.5 px-2 bg-steel hover:bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
+                    <label className="flex-1 py-1.5 px-2 bg-steel text-xs font-bold text-bone border border-steel flex items-center justify-center gap-1.5 cursor-pointer transition-none">
                       <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
                       <span>Upload File</span>
                       <input
@@ -254,7 +254,7 @@ export function ComparativeSynthesisModal({
 
                     <button
                       onClick={() => setDriveTargetDoc('B')}
-                      className="py-1.5 px-3 bg-steel/60 hover:bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
+                      className="py-1.5 px-3 bg-steel/60 text-xs font-bold text-bone border border-steel/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
                       <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       <span>Google Drive</span>
@@ -267,7 +267,7 @@ export function ComparativeSynthesisModal({
               <button
                 onClick={handleRunSynthesis}
                 disabled={isSynthesizing}
-                className="w-full py-3.5 px-4 hover: hover: text-bone font-bold text-xs   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 px-4 hover:bg-deck text-bone font-bold text-xs   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
               >
                 {isSynthesizing ? (
                   <>
@@ -304,7 +304,7 @@ export function ComparativeSynthesisModal({
                   {onOpenAnkiExport && (
                     <button
                       onClick={() => onOpenAnkiExport(report)}
-                      className="px-3 py-1.5 bg-steel hover:bg-steel text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
+                      className="px-3 py-1.5 bg-steel text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
                     >
                       <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                       Export Comparative Anki Cards
@@ -396,10 +396,10 @@ export function ComparativeSynthesisModal({
                         <p className="text-bone leading-relaxed">{c.resolutionOrNuance}</p>
                       </div>
 
-                      <div className="p-2.5 bg-hazard950/30 border border-hazard500/30 text-hazard200 flex items-start gap-2">
+                      <div className="p-2.5 bg-hazard-950/30 border border-hazard-500/30 text-hazard-200 flex items-start gap-2">
                         <span className="text-amber font-bold font-mono">[ ! ]</span>
                         <div>
-                          <strong className="text-hazard300">Exam Trap Warning:</strong> {c.examTrapWarning}
+                          <strong className="text-hazard-300">Exam Trap Warning:</strong> {c.examTrapWarning}
                         </div>
                       </div>
                     </div>
@@ -459,7 +459,7 @@ export function ComparativeSynthesisModal({
                           <p className="text-solder">{mech.whyItMatters}</p>
                         </div>
                         <div className="p-2.5 bg-chassis">
-                          <span className="font-bold text-amber300 block mb-0.5">How it works?</span>
+                          <span className="font-bold text-amber-300 block mb-0.5">How it works?</span>
                           <p className="text-solder">{mech.howItWorks}</p>
                         </div>
                         <div className="p-2.5 bg-chassis">
@@ -492,7 +492,7 @@ export function ComparativeSynthesisModal({
           <span>DeepEncode Multi-Document Cross-Examination Engine</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-steel hover:bg-steel text-bone font-bold transition-none cursor-pointer"
+            className="px-4 py-1.5 bg-steel text-bone font-bold transition-none cursor-pointer"
           >
             Close
           </button>

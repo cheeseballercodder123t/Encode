@@ -211,11 +211,11 @@ export function TeachMeModal(props: TeachMeModalProps) {
     <div className="p-5 space-y-4">
       <div className="p-3 bg-deck border border-steel/40 text-xs text-bone leading-relaxed">
         <p className="font-bold text-bone text-[11px] flex items-center gap-1.5">
-          <span className="text-amber font-bold font-mono">[ AI ]</span>
+          <span className="text-flux font-bold font-mono">[ AI ]</span>
           Lesson Pre-Roll — how should I teach?
         </p>
         <p className="text-solder mt-1">
-          Style, pacing, difficulty and humor are all <span className="text-amber">soft preferences</span> — the AI
+          Style, pacing, difficulty and humor are all          <span className="text-flux-300">soft preferences</span> — the AI
           is free to override them if a better pedagogy occurs to it. Every lesson teaches the concept first, then
           walks you through a real problem step-by-step.
         </p>
@@ -230,7 +230,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
             onClick={() => updateOpt('style', s.id)}
             title={s.blurb}
             className={`px-2 py-1.5 text-left border transition-none cursor-pointer text-[10px] font-mono font-bold uppercase tracking-wider ${
-              options.style === s.id ? 'bg-amber border-amber text-chassis' : 'bg-chassis border-steel text-solder'
+              options.style === s.id ? 'bg-flux border-flux text-bone' : 'bg-chassis border-steel text-solder'
             }`}
           >
             [ {s.label.toUpperCase()} ]
@@ -246,7 +246,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
             onClick={() => updateOpt(key, !options[key])}
             title={tip}
             className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
-              options[key] ? 'bg-deck border-amber text-bone' : 'bg-chassis border-steel text-solder'
+              options[key] ? 'bg-deck border-flux text-bone' : 'bg-chassis border-steel text-solder'
             }`}
           >
             [ {label}: {options[key] ? 'ON' : 'OFF'} ]
@@ -269,7 +269,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
             type="button"
             onClick={() => updateOpt('difficulty', d)}
             className={`px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
-              options.difficulty === d ? 'bg-amber border-amber text-chassis' : 'bg-chassis border-steel text-solder'
+              options.difficulty === d ? 'bg-flux border-flux text-bone' : 'bg-chassis border-steel text-solder'
             }`}
           >
             {d === 'intro' ? 'INTRO' : d === 'standard' ? 'STANDARD' : 'VIVA ORAL DEFENSE'}
@@ -284,7 +284,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
         <button
           type="button"
           onClick={handleGenerate}
-          className="flex items-center gap-2 px-6 py-2.5 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider cursor-pointer"
+          className="flex items-center gap-2 px-6 py-2.5 bg-flux border border-flux text-bone text-xs font-mono font-bold uppercase tracking-wider transition-colors duration-150 cursor-pointer hover:bg-flux-400 hover:border-flux-400"
         >
           <span>[ GO ]</span>
           <span>Generate Lesson</span>
@@ -298,7 +298,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ repeat: Infinity, duration: 1.2, ease: 'linear' }}
-        className="w-12 h-12 border-2 border-amber border-t-transparent rounded-full"
+        className="w-12 h-12 border-2 border-flux border-t-transparent rounded-full"
       />
       <p className="text-xs text-bone font-mono uppercase tracking-wider">
         {scope === 'stage' && targetActivity
@@ -365,7 +365,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
           <div className="px-4 py-3 border-b border-steel bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="p-1.5 bg-steel/10 border border-steel/30 text-bone">
-                <span className="text-amber font-bold font-mono">[ TEACH ]</span>
+                <span className="text-flux font-bold font-mono">[ TEACH ]</span>
               </div>
               <div>
                 <h3 className="font-bold text-bone text-sm font-mono uppercase tracking-tight">
@@ -383,7 +383,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
               </div>
             </div>
             <button type="button" onClick={handleClose} className="p-2 text-solder hover:text-bone hover:bg-steel">
-              <span className="text-amber font-bold font-mono">[ X ]</span>
+              <span className="text-flux font-bold font-mono">[ X ]</span>
             </button>
           </div>
 
