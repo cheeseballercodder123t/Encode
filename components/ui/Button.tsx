@@ -2,7 +2,15 @@
 
 import React, { forwardRef, ButtonHTMLAttributes, ReactNode } from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'amber' | 'hazard' | 'outline' | 'ghost';
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'amber'
+  | 'hazard'
+  | 'signal'
+  | 'flux'
+  | 'outline'
+  | 'ghost';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,8 +37,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
+    // Motion token: 150ms ease-out on colors only. Layout stays instant.
     const baseStyles =
-      'inline-flex items-center justify-center font-bold font-mono uppercase tracking-wider border transition-none duration-0 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer rounded-none';
+      'inline-flex items-center justify-center font-bold font-mono uppercase tracking-wider border transition-colors duration-150 ease-out focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed select-none cursor-pointer rounded-none';
 
     const sizeStyles: Record<ButtonSize, string> = {
       xs: 'px-2 py-1 text-[10px] gap-1',
@@ -39,19 +48,26 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       lg: 'px-6 py-2.5 text-sm gap-2',
     };
 
+    // Semantic roles:
+    //   amber   = primary action · signal = success/verify · flux = AI/Teach
+    //   hazard  = destructive · primary/secondary/outline/ghost = neutral chrome
     const variantStyles: Record<ButtonVariant, string> = {
       primary:
-        'bg-chassis border-steel text-bone hover:bg-deck active:bg-amber active:text-chassis',
+        'bg-chassis border-steel text-bone hover:bg-deck hover:border-solder active:bg-amber active:border-amber active:text-chassis',
       secondary:
-        'bg-deck border-steel text-solder hover:bg-chassis active:bg-amber active:text-chassis',
+        'bg-deck border-steel text-solder hover:bg-chassis hover:text-bone active:bg-amber active:border-amber active:text-chassis',
       amber:
-        'bg-amber border-amber text-chassis hover:bg-amber active:bg-hazard active:text-bone',
+        'bg-amber border-amber text-chassis hover:bg-amber-400 hover:border-amber-400 active:bg-amber-600 active:border-amber-600',
       hazard:
-        'bg-hazard border-hazard text-bone hover:bg-hazard active:bg-amber active:text-chassis',
+        'bg-hazard border-hazard text-bone hover:bg-hazard-400 hover:border-hazard-400 active:bg-hazard-600 active:border-hazard-600',
+      signal:
+        'bg-signal border-signal text-chassis hover:bg-signal-400 hover:border-signal-400 active:bg-signal-600 active:border-signal-600',
+      flux:
+        'bg-flux border-flux text-bone hover:bg-flux-400 hover:border-flux-400 active:bg-flux-600 active:border-flux-600',
       outline:
-        'bg-transparent border-steel text-solder hover:bg-deck active:bg-amber active:text-chassis',
+        'bg-transparent border-steel text-solder hover:bg-deck hover:text-bone active:bg-amber active:border-amber active:text-chassis',
       ghost:
-        'bg-transparent border-transparent text-solder hover:bg-deck active:bg-amber active:text-chassis',
+        'bg-transparent border-transparent text-solder hover:bg-deck hover:text-bone active:bg-amber active:border-amber active:text-chassis',
     };
 
     return (

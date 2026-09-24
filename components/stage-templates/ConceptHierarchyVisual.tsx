@@ -43,7 +43,7 @@ export function ConceptHierarchyVisual({ activity, field1, field2, field3, selec
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export function ConceptHierarchyVisual({ activity, field1, field2, field3, selec
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone hover:text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Subsumption Hint'}
           </button>
@@ -110,7 +110,7 @@ export function ConceptHierarchyVisual({ activity, field1, field2, field3, selec
               <div key={bIdx} className=" bg-chassis/60 border border-steel p-2.5">
                 <div
                   onClick={() => toggleBranch(bIdx)}
-                  className="flex items-center justify-between cursor-pointer text-xs font-bold text-bone hover:text-bone transition-none-colors"
+                  className="flex items-center justify-between cursor-pointer text-xs font-bold text-bone transition-colors duration-150"
                 >
                   <div className="flex items-center gap-1.5">
                     {isExpanded ? <span className="text-amber font-bold font-mono">[ v ]</span> : <span className="text-amber font-bold font-mono">[ NEXT ]</span>}

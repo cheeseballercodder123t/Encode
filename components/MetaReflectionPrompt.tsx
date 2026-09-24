@@ -38,17 +38,17 @@ export function MetaReflectionPrompt({ stageTitle, savedReflection, onSave }: Pr
           value={value}
           onChange={e => { setValue(e.target.value); setSaved(false); }}
           placeholder="The key insight I'm taking away is..."
-          className="flex-1 bg-steel/60 border border-steel px-3 py-2 text-xs text-bone placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-steel/50 transition-none-colors"
+          className="flex-1 bg-steel/60 border border-steel px-3 py-2 text-xs text-bone placeholder-solder focus:outline-none focus:border-flux transition-colors duration-150"
           onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
         />
         <button
           type="button"
           onClick={handleSave}
           disabled={!value.trim()}
-          className={`px-3.5 py-2  text-xs font-bold transition-none-all flex items-center gap-1.5 cursor-pointer ${
+          className={`px-3.5 py-2  text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
             saved
               ? 'bg-amber600/20 border border-amber/40 text-amber'
-              : 'bg-steel hover:bg-steel text-bone disabled:opacity-40 disabled:cursor-not-allowed'
+              : 'bg-steel text-bone disabled:opacity-40 disabled:cursor-not-allowed'
           }`}
         >
           {saved ? (

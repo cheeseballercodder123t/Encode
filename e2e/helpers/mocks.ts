@@ -196,7 +196,8 @@ export async function completeWorkout(page: Page) {
   await page.getByRole('button', { name: 'Check' }).click();
   await page.getByText('Good mechanism : tighten the threshold detail.').waitFor();
 
-  await page.getByRole('button', { name: /NEXT/ }).click();
+  // Exact name : /NEXT/ also matches the check button's "... TRY AGAIN OR NEXT" label.
+  await page.getByRole('button', { name: 'NEXT >>' }).click();
 
   await confirmReadiness(page);
   await expectStage(page, 2);

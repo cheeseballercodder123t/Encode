@@ -34,32 +34,32 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
           <div className="p-1 bg-amber/20 text-amber">
             <span className="text-amber font-bold font-mono">[ NET ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-amber300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
             Axiomatic Causal Reduction & Causal Dominoes
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-amber300 bg-amber950/40 border border-amber/30 px-2 py-0.5 ">
+        <span className="text-[9px] font-mono font-bold text-amber-300 bg-amber-950/40 border border-amber/30 px-2 py-0.5 ">
           Generation Effect Active
         </span>
       </div>
 
       {/* Generation Effect: Partial Causal Premise Challenge */}
-      <div className="mb-3.5 p-3 bg-amber950/30 border border-amber/30">
+      <div className="mb-3.5 p-3 bg-amber-950/30 border border-amber/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
             <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-amber300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-amber-300 block">
                 First-Principles Deduction Challenge
               </span>
-              <p className="text-xs text-amber100 font-medium mt-0.5">
+              <p className="text-xs text-amber-100 font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -67,14 +67,14 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-amber hover:text-amber300 bg-amber900/30 px-2 py-1 border border-amber/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-amber-300 bg-amber-900/30 px-2 py-1 border border-amber/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Axiom Clue'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber200/90 italic font-mono">
+          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber-200/90 italic font-mono">
             💡 <strong>Axiomatic Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -90,8 +90,8 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
           let badgeColor = 'bg-steel text-solder border-steel';
 
           if (node.type === 'input') {
-            colorClasses = 'border-amber/40 bg-amber950/30 text-amber200 hover:border-amber';
-            badgeColor = 'bg-amber950/60 text-amber300 border-amber/40';
+            colorClasses = 'border-amber/40 bg-amber-950/30 text-amber-200 hover:border-amber';
+            badgeColor = 'bg-amber-950/60 text-amber-300 border-amber/40';
           } else if (node.type === 'mechanism') {
             colorClasses = 'border-steel/40 bg-steel/30 text-bone hover:border-steel';
             badgeColor = 'bg-steel/60 text-bone border-steel/40';
@@ -104,7 +104,7 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
             <div
               key={node.id || index}
               onClick={() => setActiveStep(isSelected ? null : index)}
-              className={`p-3  border transition-none-all cursor-pointer relative flex flex-col justify-between ${colorClasses} ${
+              className={`p-3  border transition-all cursor-pointer relative flex flex-col justify-between ${colorClasses} ${
                 isSelected ? 'ring-2 ring-emerald-400 scale-[1.02] ' : ''
               }`}
             >
@@ -131,7 +131,7 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
 
               {/* Dynamic User Generation Link Slot */}
               {isUserLinked && (
-                <div className="mt-2 pt-1.5 border-t border-amber/20 text-[10px] text-amber300 flex items-center gap-1 font-mono">
+                <div className="mt-2 pt-1.5 border-t border-amber/20 text-[10px] text-amber-300 flex items-center gap-1 font-mono">
                   <span className="text-amber font-bold font-mono">[ OK ]</span>
                   <span className="truncate">Your deduction: &ldquo;{isUserLinked}&rdquo;</span>
                 </div>
@@ -145,11 +145,11 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
       {hasUserGenerated && (
         <div className="mt-3 p-3 border border-amber/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-amber300 flex items-center gap-1.5">
+            <span className="text-[10px] font-mono font-bold uppercase text-amber-300 flex items-center gap-1.5">
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Live Axiomatic Deduction
             </span>
-            <span className="text-[9px] font-mono text-amber bg-amber950/60 border border-amber/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-amber bg-amber-950/60 border border-amber/30 px-1.5 py-0.5 ">
               Generated Model
             </span>
           </div>

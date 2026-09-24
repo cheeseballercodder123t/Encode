@@ -607,7 +607,7 @@ export function StudioWorkbench({
               return (
                 <div className="p-2.5 bg-amber/10 border border-amber/40 text-[11px] font-mono text-bone leading-relaxed">
                   <span className="text-amber font-bold">[ ⚠ SHORT ANSWER ]</span>{' '}
-                  This looks like a one-word blurt ({totalWords} words). Add a sentence or two — the examiner grades on mechanistic depth, and you'll encode it deeper that way.
+                  This looks like a one-word blurt ({totalWords} words). Add a sentence or two — the examiner grades on mechanistic depth, and you&apos;ll encode it deeper that way.
                 </div>
               );
             })()}
@@ -849,7 +849,7 @@ export function StudioWorkbench({
             {feynmanResult?.grade === 'needs_elaboration' && (
               <div className="p-3 bg-amber/10 border border-amber/50 text-[11px] font-mono text-bone leading-relaxed">
                 <span className="text-amber font-bold">[ ? ]</span>{' '}
-                This stage didn't quite click.
+                This stage didn&apos;t quite click.
                 {stageErrorAnalysis ? <> Checker noted: <em>{stageErrorAnalysis}</em>.</> : null}
                 {' '}Try regenerating it with a different angle, or teach it to you step by step below.
               </div>
@@ -866,7 +866,7 @@ export function StudioWorkbench({
                   <span className="text-[9px] font-mono text-solder">check #{stageCheckCount}</span>
                 </div>
                 <p className="text-[11px] text-solder font-mono leading-relaxed mb-2">
-                  You've checked this stage {stageCheckCount} times without mastering it. A step-by-step lesson often unsticks what another attempt can't.
+                  You&apos;ve checked this stage {stageCheckCount} times without mastering it. A step-by-step lesson often unsticks what another attempt can&apos;t.
                 </p>
                 <button
                   type="button"

@@ -35,7 +35,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -70,7 +70,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone hover:text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Socratic Hint'}
           </button>
@@ -90,7 +90,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           return (
             <div
               key={idx}
-              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-deck/70 border border-steel/20 hover:border-steel/40 transition-none-colors"
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-deck/70 border border-steel/20 hover:border-steel/40 transition-colors duration-150"
             >
               {/* Familiar Source Side */}
               <div className="flex-1 p-2.5 bg-steel/40 border border-steel/30 text-left">
@@ -115,7 +115,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
                 </span>
                 <div className="text-xs font-bold text-bone">
                   {field2 ? (
-                    <span className="text-amber300 flex items-center gap-1">
+                    <span className="text-amber-300 flex items-center gap-1">
                       <span className="text-amber font-bold font-mono">[ * ]</span> {field2}
                     </span>
                   ) : isTargetMissing ? (
@@ -140,7 +140,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Self-Generated Mental Schema
             </span>
-            <span className="text-[9px] font-mono text-amber bg-amber950/60 border border-amber/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-amber bg-amber-950/60 border border-amber/30 px-1.5 py-0.5 ">
               Active Generation
             </span>
           </div>
@@ -164,7 +164,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
           <button
             type="button"
             onClick={() => setShowBreakdown(!showBreakdown)}
-            className="flex items-center gap-1 text-[11px] font-mono text-solder hover:text-bone transition-none-colors"
+            className="flex items-center gap-1 text-[11px] font-mono text-solder hover:text-bone transition-colors duration-150"
           >
             <span className="text-amber font-bold font-mono">[ ! ]</span>
             Where does this analogy break down? (Boundary Test)
@@ -175,7 +175,7 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
             <button
               type="button"
               onClick={() => setShowExpertSynthesis(!showExpertSynthesis)}
-              className="flex items-center gap-1 text-[10px] font-mono text-bone hover:text-bone transition-none-colors"
+              className="flex items-center gap-1 text-[10px] font-mono text-bone transition-colors duration-150"
             >
               {showExpertSynthesis ? <span className="text-amber font-bold font-mono">[ HIDDEN ]</span> : <span className="text-amber font-bold font-mono">[ EYE ]</span>}
               {showExpertSynthesis ? 'Hide Expert Synthesis' : 'Compare with Expert Synthesis'}

@@ -154,13 +154,13 @@ export function MnemonicStoryboardVisual({ activity, field1, field2, field3 }: P
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-amber/20 border border-amber/40 flex flex-col items-center justify-center font-mono shrink-0">
                   <span className="text-[9px] text-solder">{activeTile.numberOrOrder || 1}</span>
-                  <span className="text-lg font-black text-amber300 leading-tight">{activeTile.symbol}</span>
+                  <span className="text-lg font-black text-amber-300 leading-tight">{activeTile.symbol}</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h5 className="font-bold text-bone text-sm">{activeTile.name}</h5>
                     {activeTile.categoryTag && (
-                      <span className="px-1.5 py-0.5 bg-amber950 border border-amber/30 text-[9px] text-amber300 font-mono">
+                      <span className="px-1.5 py-0.5 bg-amber-950 border border-amber/30 text-[9px] text-amber-300 font-mono">
                         {activeTile.categoryTag}
                       </span>
                     )}

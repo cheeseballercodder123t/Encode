@@ -93,7 +93,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
             return (
               <div
                 key={prereq.id || idx}
-                className={` border transition-none-all p-4 ${
+                className={` border transition-all p-4 ${
                   isKnown === true
                     ? 'bg-deck/90 border-amber/40 '
                     : isKnown === false
@@ -143,7 +143,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                 <div className="mt-3 pl-7">
                   <button
                     onClick={() => setExpandedPrimer(isExpanded ? null : prereq.id)}
-                    className="flex items-center gap-1 text-xs text-bone400 hover:text-bone300 font-medium transition-none"
+                    className="flex items-center gap-1 text-xs text-bone font-medium transition-none"
                   >
                     <span className="text-amber font-bold font-mono">[ BOOK ]</span>
                     <span>{isExpanded ? 'Hide 3-Sentence Primer' : 'Read Quick 3-Sentence Primer'}</span>
@@ -195,7 +195,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                 playSound('success');
                 onProceedToEncode();
               }}
-              className="px-5 py-2.5 text-xs font-bold text-bone    hover: hover:   flex items-center gap-2 transition-none"
+              className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center gap-2 transition-none"
             >
               <span>{hasReviewedAll ? "Start Cognitive Encoding" : "Proceed to Encoding"}</span>
               <span className="text-amber font-bold font-mono">[ NEXT ]</span>

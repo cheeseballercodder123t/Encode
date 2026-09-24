@@ -1173,8 +1173,10 @@ export default function DeepEncodeApp() {
     if (appState !== 'completed' && appState !== 'input') return null;
     if (!activities.length) return null;
     return {
-      id: `schema_${Date.now()}`,
-      timestamp: Date.now(),
+      // Transient handle for the in-progress schema (never persisted here),
+      // so stable values keep the memo pure and React keys stable.
+      id: 'schema_current',
+      timestamp: 0,
       topicSummary: topicSummary || 'Synthesized Schema',
       mode: encodingMode,
       xpEarned: xp,
@@ -1525,7 +1527,7 @@ export default function DeepEncodeApp() {
                 role="status"
               >
                 <p className="text-[11px] font-mono text-bone">
-                  <span className="text-hazard400 font-bold uppercase">[ INTERRUPTED ]</span>{' '}
+                  <span className="text-hazard-400 font-bold uppercase">[ INTERRUPTED ]</span>{' '}
                   Your last generation ({interruptedGen.sourceLabel || 'untitled source'}) was cut off before it
                   finished. Nothing was lost &mdash; just hit generate again.
                 </p>
@@ -1833,7 +1835,7 @@ export default function DeepEncodeApp() {
                 type="button"
                 onClick={handleCancelGeneration}
                 title="Cancel this generation and return to the input"
-                className="mt-5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-hazard400 hover:border-hazard400 transition-none cursor-pointer"
+                className="mt-5 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-solder bg-chassis border border-steel hover:text-hazard-400 hover:border-hazard-400 transition-none cursor-pointer"
               >
                 [ CANCEL GENERATION ]
               </button>

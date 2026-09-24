@@ -41,7 +41,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-amber hover:text-amber bg-amber/30 px-2 py-1 border border-amber/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-amber bg-amber/30 px-2 py-1 border border-amber/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Sensory Hint'}
           </button>
@@ -97,7 +97,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
             <div
               key={idx}
               onClick={() => setActiveLocus(idx)}
-              className={`p-3  border transition-none-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+              className={`p-3  border transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                 isCurrent
                   ? 'border-amber/80 bg-amber/40 ring-1 ring-amber-400/50 '
                   : 'border-steel/60 bg-deck/60 hover:border-amber/40'
@@ -134,7 +134,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
                   e.stopPropagation();
                   toggleHook(idx);
                 }}
-                className="text-[10px] font-mono text-amber hover:text-amber bg-amber/50 px-2 py-1 border border-amber/30 shrink-0 self-end sm:self-center transition-none-colors"
+                className="text-[10px] font-mono text-amber bg-amber/50 px-2 py-1 border border-amber/30 shrink-0 self-end sm:self-center transition-colors duration-150"
               >
                 {isRevealed ? 'Hide Image' : 'Reveal Hook'}
               </button>

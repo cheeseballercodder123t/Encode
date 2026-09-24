@@ -108,9 +108,9 @@ export function CompletedSessionView({
 
           {leechCandidates > 0 && (
             <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-steel">
-              <span className="text-hazard400 font-bold font-mono">[ LEECH ]</span>
+              <span className="text-hazard-400 font-bold font-mono">[ LEECH ]</span>
               <span className="text-solder">Dense (tagged):</span>
-              <span className="font-bold text-hazard400">{leechCandidates}</span>
+              <span className="font-bold text-hazard-400">{leechCandidates}</span>
             </div>
           )}
 
@@ -158,7 +158,7 @@ export function CompletedSessionView({
         <button
           type="button"
           onClick={onStartInterleavedDrill}
-          className="px-5 py-2.5 hover: hover: text-bone font-bold text-xs    flex items-center gap-2 shrink-0 cursor-pointer"
+          className="px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs    flex items-center gap-2 shrink-0 cursor-pointer"
         >
           <span className="text-amber font-bold font-mono">[ ZAP ]</span>
           <span>Start Interleaved Drill</span>
@@ -180,7 +180,7 @@ export function CompletedSessionView({
           <button
             type="button"
             onClick={onOpenBlurting}
-            className="flex items-center gap-1.5 px-3.5 py-2 hover: hover: border border-steel/40 text-bone text-xs font-bold  transition-none-all cursor-pointer "
+            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-steel/40 text-bone text-xs font-bold  transition-all cursor-pointer "
             title="The Blurting Method: Test free recall from memory on a blank canvas. AI marks missed first principles in red."
           >
             <span className="text-amber font-bold font-mono">[ PEN ]</span>
@@ -191,7 +191,7 @@ export function CompletedSessionView({
           <button
             type="button"
             onClick={onTeach}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber/10 hover:bg-amber/20 border border-amber/40 text-amber text-xs font-bold transition-none-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber/10 hover:bg-amber/20 border border-amber/40 text-amber text-xs font-bold transition-all cursor-pointer"
             title="Teach Me: Brilliant-style interactive lesson that re-teaches this schema, concept then problem"
           >
             <span className="text-amber font-bold font-mono">[ TEACH ]</span>
@@ -220,7 +220,7 @@ export function CompletedSessionView({
                 }))
               });
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 hover: hover: border border-steel/40 text-bone text-xs font-bold  transition-none-all cursor-pointer "
+            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-steel/40 text-bone text-xs font-bold  transition-all cursor-pointer "
             title="RemNote Hierarchical Matrix & API Push"
           >
             <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
@@ -230,7 +230,7 @@ export function CompletedSessionView({
           <button
             type="button"
             onClick={onShare}
-            className="flex items-center gap-1.5 px-3.5 py-2 hover: hover: border border-steel/40 text-bone text-xs font-bold  transition-none-all cursor-pointer "
+            className="flex items-center gap-1.5 px-3.5 py-2 hover:bg-deck border border-steel/40 text-bone text-xs font-bold  transition-all cursor-pointer "
           >
             <span className="text-amber font-bold font-mono">[ SHARE ]</span>
             Share Link (Stateless)
@@ -238,7 +238,7 @@ export function CompletedSessionView({
 
           <button
             onClick={() => onCopy('remnote')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck hover:bg-deck border border-steel text-bone text-xs font-bold transition-none-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck border border-steel text-bone text-xs font-bold transition-all cursor-pointer"
           >
             {copiedFormat === 'remnote' ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
             Copy for RemNote
@@ -246,7 +246,7 @@ export function CompletedSessionView({
 
           <button
             onClick={() => onCopy('anki')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck hover:bg-deck border border-steel text-bone text-xs font-bold transition-none-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-deck border border-steel text-bone text-xs font-bold transition-all cursor-pointer"
           >
             {copiedFormat === 'anki' ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
             Copy Anki Cloze
@@ -254,7 +254,7 @@ export function CompletedSessionView({
 
           <button
             onClick={() => onCopy('markdown')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-steel hover:bg-steel border border-steel/50 text-bone text-xs font-bold transition-none-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-steel border border-steel/50 text-bone text-xs font-bold transition-all cursor-pointer"
           >
             {copiedFormat === 'markdown' ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ FILE ]</span>}
             Copy Full Markdown
@@ -284,7 +284,7 @@ export function CompletedSessionView({
                     <span className="text-xs text-solder font-mono">({act.framework})</span>
                   </div>
                   {act.videoTimestamp && (
-                    <span className="text-xs text-hazard400 font-mono font-bold">
+                    <span className="text-xs text-hazard-400 font-mono font-bold">
                       ▶ {act.videoTimestamp.formatted}
                     </span>
                   )}
@@ -335,7 +335,7 @@ export function CompletedSessionView({
         {hasIncompleteStages && onContinue ? (
           <button
             onClick={onContinue}
-            className="flex items-center gap-2 px-7 py-3 bg-amber border border-amber hover:bg-amber text-chassis text-xs font-bold uppercase tracking-wider transition-none-colors cursor-pointer"
+            className="flex items-center gap-2 px-7 py-3 bg-amber border border-amber text-chassis text-xs font-bold uppercase tracking-wider transition-colors duration-150 cursor-pointer"
           >
             <span className="font-bold font-mono">[ ▶ CONTINUE ]</span>
             Continue where you left off
@@ -343,7 +343,7 @@ export function CompletedSessionView({
         ) : null}
         <button
           onClick={onRestart}
-          className="flex items-center gap-2 px-7 py-3 bg-steel border border-steel hover:bg-steel text-bone text-xs font-bold uppercase tracking-wider transition-none-colors  cursor-pointer"
+          className="flex items-center gap-2 px-7 py-3 bg-steel border border-steel hover:bg-steel text-bone text-xs font-bold uppercase tracking-wider transition-colors duration-150  cursor-pointer"
         >
           <span className="text-amber font-bold font-mono">[ RESET ]</span>
           Encode Another Topic

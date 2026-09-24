@@ -236,7 +236,7 @@ export function HistoryDrawer({
                 return (
                   <div
                     key={schema.id}
-                    className="p-4 bg-deck border border-steel space-y-3 hover:border-steel transition-none-all group"
+                    className="p-4 bg-deck border border-steel space-y-3 transition-all group"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -253,7 +253,7 @@ export function HistoryDrawer({
                             {dateStr}
                           </span>
                         </div>
-                        <h4 className="text-sm font-bold text-bone group-hover:text-bone transition-none-colors">
+                        <h4 className="text-sm font-bold text-bone transition-colors duration-150">
                           {schema.topicSummary}
                         </h4>
                         {isIncomplete && (
@@ -272,7 +272,7 @@ export function HistoryDrawer({
                       <button
                         onClick={() => onDeleteSchema(schema.id)}
                         aria-label={`Delete schema ${schema.topicSummary}`}
-                        className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard400 hover:bg-steel transition-colors shrink-0"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard-400 hover:bg-steel transition-colors shrink-0"
                         title="Delete schema"
                       >
                         <span className="text-hazard font-bold font-mono">[ DEL ]</span>
@@ -314,7 +314,7 @@ export function HistoryDrawer({
                             onStartDrill(schema);
                             onClose();
                           }}
-                          className="min-h-[44px] px-3.5 bg-steel hover:bg-steel text-bone text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          className="min-h-[44px] px-3.5 bg-steel text-bone text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
                         >
                           <span className="text-amber font-bold font-mono">[ PLAY ]</span>
                           Drill
@@ -372,7 +372,7 @@ export function HistoryDrawer({
                     onClearAll();
                   }
                 }}
-                className="min-h-[44px] px-2 text-solder hover:text-hazard400 text-[11px] font-medium"
+                className="min-h-[44px] px-2 text-solder hover:text-hazard-400 text-[11px] font-medium"
               >
                 Clear All Schemas
               </button>

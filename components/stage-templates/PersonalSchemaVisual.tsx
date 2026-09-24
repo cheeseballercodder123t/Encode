@@ -26,7 +26,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-hazard/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-hazard/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-hazard/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-hazard hover:text-hazard bg-hazard/30 px-2 py-1 border border-hazard/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-hazard bg-hazard/30 px-2 py-1 border border-hazard/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Intuition Hint'}
           </button>
@@ -75,7 +75,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
       {/* Interactive Spaced Repetition Flashcard Preview */}
       <div
         onClick={() => setIsFlipped(!isFlipped)}
-        className="p-4 border border-hazard/40 bg-deck/80 hover:bg-deck transition-none-all cursor-pointer text-center relative "
+        className="p-4 border border-hazard/40 bg-deck/80 hover:bg-deck transition-all cursor-pointer text-center relative "
       >
         <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-hazard">
           <span>{isFlipped ? 'Back (Answer & Mechanism)' : 'Front (Socratic Cue)'}</span>
@@ -85,7 +85,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
         <div className="py-3">
           {isFlipped ? (
             <div className="space-y-1">
-              <span className="text-xs font-bold text-amber300 block">
+              <span className="text-xs font-bold text-amber-300 block">
                 Core Causal Truth:
               </span>
               <p className="text-xs text-bone font-mono leading-relaxed">

@@ -233,7 +233,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
           <button
             type="button"
             onClick={clearCanvas}
-            className="min-h-[44px] flex items-center gap-1 px-2 text-[11px] text-solder hover:text-hazard400 transition-colors"
+            className="min-h-[44px] flex items-center gap-1 px-2 text-[11px] text-solder hover:text-hazard-400 transition-colors"
             title="Clear canvas"
           >
             <span className="text-amber font-bold font-mono">[ RESET ]</span>

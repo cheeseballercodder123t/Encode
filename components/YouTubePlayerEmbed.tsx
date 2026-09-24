@@ -38,11 +38,11 @@ export function YouTubePlayerEmbed({
   const embedUrl = `https://www.youtube-nocookie.com/embed/${youtubeData.videoId}?autoplay=1&start=${currentSeconds}&rel=0`;
 
   return (
-    <div className="w-full border border-hazard500/20 bg-deck/80  overflow-hidden  p-4 sm:p-5 space-y-4">
+    <div className="w-full border border-hazard-500/20 bg-deck/80  overflow-hidden  p-4 sm:p-5 space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-steel pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex items-center justify-center w-8 h-8 bg-hazard600/20 border border-hazard500/30 text-hazard400 shrink-0">
+          <div className="flex items-center justify-center w-8 h-8 bg-hazard-600/20 border border-hazard-500/30 text-hazard-400 shrink-0">
             <span className="text-amber font-bold font-mono">[ PLAY ]</span>
           </div>
           <div className="min-w-0">
@@ -64,7 +64,7 @@ export function YouTubePlayerEmbed({
               type="button"
               onClick={() => handleSeekOffset(-10)}
               title="Rewind 10s"
-              className="p-1 hover:bg-steel text-solder hover:text-bone transition-none-colors"
+              className="p-1 hover:bg-steel text-solder hover:text-bone transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ REWIND ]</span>
             </button>
@@ -72,7 +72,7 @@ export function YouTubePlayerEmbed({
               type="button"
               onClick={() => handleSeekOffset(10)}
               title="Forward 10s"
-              className="p-1 hover:bg-steel text-solder hover:text-bone transition-none-colors"
+              className="p-1 hover:bg-steel text-solder hover:text-bone transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ SKIP ]</span>
             </button>
@@ -82,7 +82,7 @@ export function YouTubePlayerEmbed({
             href={youtubeData.videoUrl} 
             target="_blank" 
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-steel hover:bg-steel text-xs font-semibold text-solder transition-none-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-steel text-xs font-semibold text-solder transition-colors duration-150"
           >
             <span>YouTube</span>
             <span className="text-amber font-bold font-mono">[ EXT ]</span>
@@ -122,13 +122,13 @@ export function YouTubePlayerEmbed({
                   key={idx}
                   type="button"
                   onClick={() => handleJumpToTimestamp(ts)}
-                  className={`flex items-start gap-2.5 p-2.5  text-left border transition-none-all cursor-pointer ${
+                  className={`flex items-start gap-2.5 p-2.5  text-left border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-hazard500/20 border-hazard500/50 text-bone   ring-1 ring-red-500/40'
+                      ? 'bg-hazard-500/20 border-hazard-500/50 text-bone  '
                       : 'bg-steel/60 hover:bg-steel border-steel/60 text-solder'
                   }`}
                 >
-                  <span className="px-2 py-0.5 bg-hazard600/30 border border-hazard500/40 text-hazard300 text-xs font-mono font-bold shrink-0">
+                  <span className="px-2 py-0.5 bg-hazard-600/30 border border-hazard-500/40 text-hazard-300 text-xs font-mono font-bold shrink-0">
                     ▶ {ts.formatted}
                   </span>
                   <div className="min-w-0">

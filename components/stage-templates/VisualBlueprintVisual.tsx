@@ -36,7 +36,7 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-steel/30 via-[#0E111C]  p-4   transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-steel/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -69,7 +69,7 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone hover:text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-bone bg-steel/30 px-2 py-1 border border-steel/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Hint' : 'Get Spatial Clue'}
           </button>
@@ -91,7 +91,7 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
             <div
               key={idx}
               onClick={() => setSelectedAnchor(isSelected ? null : anchor.id)}
-              className={`p-3.5  border transition-none-all cursor-pointer flex flex-col justify-between ${
+              className={`p-3.5  border transition-all cursor-pointer flex flex-col justify-between ${
                 isSelected
                   ? 'border-steel/80 bg-steel/50 ring-1 ring-violet-400/50 '
                   : 'border-steel/60 bg-deck/60 hover:border-steel/40'

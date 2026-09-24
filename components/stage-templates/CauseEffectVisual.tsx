@@ -34,14 +34,14 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-hazard500/30 via-[#0E111C]  p-4   transition-none-all">
+    <div className=" border border-hazard-500/30 via-[#0E111C]  p-4   transition-colors duration-150">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-hazard500/20 pb-2.5 mb-3.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-hazard-500/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
-          <div className="p-1 bg-hazard500/20 text-hazard400">
+          <div className="p-1 bg-hazard-500/20 text-hazard-400">
             <span className="text-amber font-bold font-mono">[ FLAME ]</span>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-wider text-hazard300">
+          <span className="text-[11px] font-black uppercase tracking-wider text-hazard-300">
             Counterfactual Perturbation & Breakdown Dynamics
           </span>
         </div>
@@ -50,7 +50,7 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
         <button
           type="button"
           onClick={() => setIsPerturbed(!isPerturbed)}
-          className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-1 bg-hazard950/50 border border-hazard500/30 text-hazard300 hover:bg-hazard900/40 transition-none-colors"
+          className="flex items-center gap-1.5 text-[10px] font-mono font-bold px-2 py-1 bg-hazard-950/50 border border-hazard-500/30 text-hazard-300 hover:bg-hazard-900/40 transition-colors duration-150"
         >
           {isPerturbed ? (
             <>
@@ -67,15 +67,15 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
       </div>
 
       {/* Generation Effect: Perturbation Challenge Card */}
-      <div className="mb-3.5 p-3 bg-hazard950/30 border border-hazard500/30">
+      <div className="mb-3.5 p-3 bg-hazard-950/30 border border-hazard-500/30">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2">
             <span className="text-amber font-bold font-mono">[ ? ]</span>
             <div>
-              <span className="text-[10px] font-mono font-bold uppercase text-hazard300 block">
+              <span className="text-[10px] font-mono font-bold uppercase text-hazard-300 block">
                 Counterfactual Domino Challenge
               </span>
-              <p className="text-xs text-hazard100 font-medium mt-0.5">
+              <p className="text-xs text-hazard-100 font-medium mt-0.5">
                 {challenge.premisePrompt}
               </p>
             </div>
@@ -83,14 +83,14 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
           <button
             type="button"
             onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-hazard400 hover:text-hazard300 bg-hazard900/30 px-2 py-1 border border-hazard500/20 shrink-0 transition-none-colors"
+            className="text-[10px] font-mono font-semibold text-hazard-400 hover:text-hazard-300 bg-hazard-900/30 px-2 py-1 border border-hazard-500/20 shrink-0 transition-colors duration-150"
           >
             {showClue ? 'Hide Clue' : 'Socratic Clue'}
           </button>
         </div>
 
         {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-hazard500/20 text-[11px] text-hazard200/90 italic font-mono">
+          <div className="mt-2.5 pt-2 border-t border-hazard-500/20 text-[11px] text-hazard-200/90 italic font-mono">
             💡 <strong>Dynamic Clue:</strong> {challenge.clue}
           </div>
         )}
@@ -103,7 +103,7 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
           const isUserMapped = index === 0 ? field1 : index === 1 ? field2 : field3;
 
           let cardClasses = isDanger && isPerturbed
-            ? 'border-hazard500/60 bg-hazard950/40 text-hazard200 ring-1 ring-rose-500/40'
+            ? 'border-hazard-500/60 bg-hazard-950/40 text-hazard-200'
             : index === 1 && isPerturbed
             ? 'border-amber/50 bg-amber/30 text-amber'
             : 'border-steel/60 bg-deck/60 text-solder';
@@ -111,11 +111,11 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
           return (
             <div
               key={node.id || index}
-              className={`p-3  border transition-none-all flex flex-col justify-between ${cardClasses}`}
+              className={`p-3  border transition-colors duration-150 flex flex-col justify-between ${cardClasses}`}
             >
               <div>
                 <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                  <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 border border-hazard500/30 bg-hazard950/50 text-hazard300 flex items-center gap-1">
+                  <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 border border-hazard-500/30 bg-hazard-950/50 text-hazard-300 flex items-center gap-1">
                     {isDanger ? <span className="text-amber font-bold font-mono">[ ! ]</span> : null}
                     Step 0{index + 1}: {index === 0 ? 'Equilibrium' : index === 1 ? 'Perturbation' : 'Consequence'}
                   </span>
@@ -133,7 +133,7 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
               </div>
 
               {isUserMapped && (
-                <div className="mt-2 pt-1.5 border-t border-hazard500/20 text-[10px] text-hazard300 font-mono flex items-center gap-1">
+                <div className="mt-2 pt-1.5 border-t border-hazard-500/20 text-[10px] text-hazard-300 font-mono flex items-center gap-1">
                   <span className="text-amber font-bold font-mono">[ * ]</span>
                   <span className="truncate">Your insight: &ldquo;{isUserMapped}&rdquo;</span>
                 </div>
@@ -145,13 +145,13 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
 
       {/* User Generated Counterfactual Model */}
       {hasUserGenerated && (
-        <div className="mt-3 p-3 border border-hazard500/40 text-xs">
+        <div className="mt-3 p-3 border border-hazard-500/40 text-xs">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-mono font-bold uppercase text-hazard300 flex items-center gap-1.5">
+            <span className="text-[10px] font-mono font-bold uppercase text-hazard-300 flex items-center gap-1.5">
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Counterfactual Synthesis
             </span>
-            <span className="text-[9px] font-mono text-hazard400 bg-hazard950/60 border border-hazard500/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-hazard-400 bg-hazard-950/60 border border-hazard-500/30 px-1.5 py-0.5 ">
               Active Simulation
             </span>
           </div>
@@ -168,7 +168,7 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
           )}
           {field3 && (
             <p className="text-solder text-[11px] mt-1">
-              <strong className="text-hazard300">Failure State: </strong>
+              <strong className="text-hazard-300">Failure State: </strong>
               {field3}
             </p>
           )}

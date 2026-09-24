@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -7,11 +7,18 @@
 @layer base {
   html, body {
     background-color: #141517;
-    color: #7A7D82;
-    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    color: #D5D2CA;
+    /* Space Grotesk carries prose & UI labels; IBM Plex Mono is applied
+       explicitly on inputs, badges, and metadata via `font-mono`. */
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
     /* Prevent iOS auto-zoom on focus for text fields whose computed size is
        under 16px : apply an iOS-safe 16px floor on small screens only. */
     -webkit-text-size-adjust: 100%;
+  }
+
+  /* Code-like elements keep the terminal voice. */
+  code, pre, kbd, samp {
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
   }
 
   /* Prevent iOS Safari auto-zoom when focusing small monospace inputs. */
@@ -29,8 +36,15 @@
     backdrop-filter: none !important;
   }
 
+  /* Kill the default outline, but restore keyboard focus as a visible
+     workbench ring. Pointer focus stays clean. */
   *:focus {
     outline: none;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #C8782A;
+    outline-offset: 1px;
   }
 
   ::-webkit-scrollbar {

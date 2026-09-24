@@ -73,7 +73,7 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-solder hover:text-bone hover:bg-steel transition-none-colors"
+              className="p-2 text-solder hover:text-bone hover:bg-steel transition-colors duration-150"
             >
               <span className="text-amber font-bold font-mono">[ X ]</span>
             </button>
@@ -117,7 +117,7 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
                         setRevealed(true);
                         sound.playBeep(700, 'sine', 0.1);
                       }}
-                      className="flex items-center gap-2 mx-auto px-6 py-3 bg-steel hover:bg-steel text-bone text-xs font-bold uppercase tracking-wider border border-steel/50   transition-none-all cursor-pointer"
+                      className="flex items-center gap-2 mx-auto px-6 py-3 bg-steel text-bone text-xs font-bold uppercase tracking-wider border border-steel/50   transition-colors duration-150 cursor-pointer"
                     >
                       <span className="text-amber font-bold font-mono">[ EYE ]</span>
                       Reveal My Encoded Schema
@@ -171,14 +171,14 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           onClick={() => handleScore(false)}
-                          className="flex items-center justify-center gap-2 p-3 bg-hazard500/10 hover:bg-hazard500/20 border border-hazard500/30 text-hazard300 font-bold text-xs transition-none-all"
+                          className="flex items-center justify-center gap-2 p-3 bg-hazard-500/10 hover:bg-hazard-500/20 border border-hazard-500/30 text-hazard-300 font-bold text-xs transition-colors duration-150"
                         >
                           <span className="text-amber font-bold font-mono">[ - ]</span>
                           Missed / Need Review
                         </button>
                         <button
                           onClick={() => handleScore(true)}
-                          className="flex items-center justify-center gap-2 p-3 bg-amber/10 hover:bg-amber/20 border border-amber/30 text-amber300 font-bold text-xs transition-none-all"
+                          className="flex items-center justify-center gap-2 p-3 bg-amber/10 hover:bg-amber/20 border border-amber/30 text-amber-300 font-bold text-xs transition-colors duration-150"
                         >
                           <span className="text-amber font-bold font-mono">[ + ]</span>
                           Retrieved Successfully!
@@ -221,14 +221,14 @@ export function DrillModal({ schema, isOpen, onClose, onDrillComplete }: DrillMo
                 <div className="flex items-center justify-center gap-3 pt-4">
                   <button
                     onClick={handleRestart}
-                    className="flex items-center gap-1.5 px-5 py-2.5 bg-steel hover:bg-steel text-bone text-xs font-bold"
+                    className="flex items-center gap-1.5 px-5 py-2.5 bg-steel text-bone text-xs font-bold"
                   >
                     <span className="text-amber font-bold font-mono">[ RESET ]</span>
                     Drill Again
                   </button>
                   <button
                     onClick={onClose}
-                    className="px-6 py-2.5 bg-steel hover:bg-steel text-bone text-xs font-bold  "
+                    className="px-6 py-2.5 bg-steel text-bone text-xs font-bold  "
                   >
                     Done
                   </button>

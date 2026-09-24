@@ -140,7 +140,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
 
           <button
             onClick={onClose}
-            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-none-colors cursor-pointer"
+            className="p-1.5 text-solder hover:text-bone hover:bg-steel transition-colors duration-150 cursor-pointer"
           >
             <span className="text-amber font-bold font-mono">[ X ]</span>
           </button>
@@ -149,7 +149,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
         {/* Content Area */}
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           {errorMessage && (
-            <div className="p-3 bg-hazard950/40 border border-hazard500/40 text-xs text-hazard300 flex items-start gap-2">
+            <div className="p-3 bg-hazard-950/40 border border-hazard-500/40 text-xs text-hazard-300 flex items-start gap-2">
               <span className="text-amber font-bold font-mono">[ ! ]</span>
               <div className="flex-1 leading-relaxed">{errorMessage}</div>
             </div>
@@ -172,7 +172,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
               <button
                 onClick={handleConnectOAuth}
                 disabled={isLoading}
-                className="w-full py-3 px-4 font-bold text-xs text-bone    hover: hover:   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
+                className="w-full py-3 px-4 font-bold text-xs text-bone    hover:bg-deck   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -234,7 +234,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                       placeholder="Search PDF slides, lectures, diagrams..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-deck border border-steel text-xs text-bone placeholder-slate-500 focus:outline-none focus:border-steel transition-none"
+                      className="w-full pl-9 pr-3 py-2 bg-deck border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none"
                     />
                   </div>
                   <button
@@ -256,7 +256,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                   </button>
                   <button
                     onClick={handleDisconnect}
-                    className="px-2.5 py-1.5 bg-deck border border-steel text-solder hover:text-hazard400 text-[11px] font-bold transition-none cursor-pointer"
+                    className="px-2.5 py-1.5 bg-deck border border-steel text-solder hover:text-hazard-400 text-[11px] font-bold transition-none cursor-pointer"
                   >
                     Disconnect
                   </button>
@@ -286,7 +286,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                       <div
                         key={file.id}
                         onClick={() => !isDownloading && handleSelectFile(file)}
-                        className="p-3.5 bg-deck/80 hover:bg-steel/40 border border-steel hover:border-steel/40 transition-none flex items-start gap-3 group cursor-pointer"
+                        className="p-3.5 bg-deck/80 hover:bg-steel/40 border border-steel/40 transition-none flex items-start gap-3 group cursor-pointer"
                       >
                         <div className="w-9 h-9 bg-steel/10 border border-steel/20 flex items-center justify-center text-bone shrink-0 group-hover:bg-steel/20 group-hover:text-bone transition-none">
                           {file.thumbnailLink ? (
@@ -334,7 +334,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-steel hover:bg-steel text-solder font-bold transition-none cursor-pointer"
+            className="px-4 py-1.5 bg-steel text-solder font-bold transition-none cursor-pointer"
           >
             Close
           </button>

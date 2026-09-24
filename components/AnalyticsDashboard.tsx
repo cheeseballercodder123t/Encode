@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Button, Card, CardContent, Badge, Input } from './ui/index';
@@ -211,7 +211,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${stats.successRate}%` }}
-                  transition-none={{ duration: 1.2, ease: 'easeOut' }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
                   className={`h-2 ${stats.successRate >= 80 ? 'bg-amber' : stats.successRate >= 60 ? 'bg-amber/70' : 'bg-hazard'}`}
                 />
               </div>

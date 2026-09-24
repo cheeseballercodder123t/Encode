@@ -116,7 +116,7 @@ export function GuidedPathRoadmap({
           <button
             type="button"
             onClick={() => handleOpenCheckpoint()}
-            className="flex items-center gap-2 px-3.5 py-2 hover: hover: text-bone font-bold text-xs   transition-none-all shrink-0  cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 hover:bg-deck text-bone font-bold text-xs   transition-all shrink-0  cursor-pointer"
           >
             <span className="text-amber font-bold font-mono">[ * ]</span>
             <span>Unlock Next Chapter (Feynman Check)</span>
@@ -129,7 +129,7 @@ export function GuidedPathRoadmap({
         <div className="flex items-center gap-3">
           <div className="w-36 sm:w-48 h-2 bg-steel overflow-hidden">
             <div 
-              className="h-full transition-none-all duration-500"
+              className="h-full transition-all duration-500"
               style={{ width: `${(completedModulesCount / Math.max(1, modules.length)) * 100}%` }}
             />
           </div>
@@ -159,11 +159,11 @@ export function GuidedPathRoadmap({
           return (
             <div
               key={mod.moduleId || idx}
-              className={`relative flex flex-col p-4  text-left border transition-none-all ${
+              className={`relative flex flex-col p-4  text-left border transition-all ${
                 isActive
                   ? 'bg-steel/40 border-steel text-bone ring-2 ring-indigo-500/40  '
                   : isCompleted
-                  ? 'bg-amber950/20 hover:bg-amber950/30 border-amber/40 text-bone'
+                  ? 'bg-amber-950/20 hover:bg-amber-950/30 border-amber/40 text-bone'
                   : isUnlocked
                   ? 'bg-steel/60 hover:bg-steel border-steel text-solder'
                   : 'bg-chassis/40 border-steel/80 text-bone opacity-60'
@@ -180,7 +180,7 @@ export function GuidedPathRoadmap({
                     <button
                       type="button"
                       onClick={() => handleOpenCheckpoint(idx)}
-                      className="flex items-center gap-1 text-amber hover:text-amber300 text-xs font-bold bg-amber950/60 border border-amber/30 px-2 py-0.5 cursor-pointer"
+                      className="flex items-center gap-1 text-amber-300 text-xs font-bold bg-amber-950/60 border border-amber/30 px-2 py-0.5 cursor-pointer"
                     >
                       <span className="text-amber font-bold font-mono">[ OK ]</span>
                       <span>Mastered</span>
@@ -222,7 +222,7 @@ export function GuidedPathRoadmap({
                   <button
                     type="button"
                     onClick={() => onSelectModule(idx)}
-                    className="text-bone hover:text-bone font-bold cursor-pointer"
+                    className="text-bone font-bold cursor-pointer"
                   >
                     Switch Module →
                   </button>
@@ -315,7 +315,7 @@ export function GuidedPathRoadmap({
                   onChange={(e) => setCheckpointAnswer(e.target.value)}
                   placeholder="Explain as if teaching a bright 12-year-old student..."
                   rows={4}
-                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-mono"
+                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-solder focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none font-mono"
                 />
               </div>
 
@@ -324,8 +324,8 @@ export function GuidedPathRoadmap({
                 <div
                   className={`p-4  border ${
                     evaluationResult.passed
-                      ? 'bg-amber950/40 border-amber/50 text-amber200'
-                      : 'bg-hazard950/40 border-hazard500/50 text-hazard200'
+                      ? 'bg-amber-950/40 border-amber/50 text-amber-200'
+                      : 'bg-hazard-950/40 border-hazard-500/50 text-hazard-200'
                   } space-y-2`}
                 >
                   <div className="flex items-center justify-between">
@@ -340,7 +340,7 @@ export function GuidedPathRoadmap({
                       )}
                     </span>
                     {evaluationResult.passed && (
-                      <span className="px-2 py-0.5 bg-amber/20 text-amber300 text-xs font-bold">
+                      <span className="px-2 py-0.5 bg-amber/20 text-amber-300 text-xs font-bold">
                         +{evaluationResult.xpBonus} XP Earned!
                       </span>
                     )}
@@ -370,7 +370,7 @@ export function GuidedPathRoadmap({
                         onSelectModule(currentModuleIndex + 1);
                       }
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 hover: hover: text-bone font-bold text-xs   cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs   cursor-pointer"
                   >
                     <span>Enter Next Chapter</span>
                     <span className="text-amber font-bold font-mono">[ NEXT ]</span>
@@ -380,7 +380,7 @@ export function GuidedPathRoadmap({
                     type="button"
                     onClick={handleEvaluateCheckpoint}
                     disabled={evaluating || !checkpointAnswer.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 hover: hover: text-bone font-bold text-xs   disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs   disabled:opacity-50 cursor-pointer"
                   >
                     {evaluating ? (
                       <>

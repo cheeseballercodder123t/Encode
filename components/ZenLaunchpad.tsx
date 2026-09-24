@@ -127,7 +127,7 @@ export function ZenLaunchpad({
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
       {/* Unified Command Center Container */}
-      <div className="relative bg-deck border border-steel focus-within:border-amber transition-none">
+      <div className="relative bg-deck border border-steel focus-within:border-amber transition-colors duration-150">
         
         {/* Top Header: Source Cassette Bay & Mode Rocker */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-steel bg-chassis">
@@ -139,7 +139,7 @@ export function ZenLaunchpad({
             <button
               type="button"
               onClick={() => setSourceType('text')}
-              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-colors duration-150 cursor-pointer ${
                 sourceType === 'text'
                   ? 'bg-amber border-amber text-chassis'
                   : 'bg-deck border-steel text-solder'
@@ -151,7 +151,7 @@ export function ZenLaunchpad({
             <button
               type="button"
               onClick={() => setSourceType('file')}
-              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-colors duration-150 cursor-pointer ${
                 sourceType === 'file'
                   ? 'bg-amber border-amber text-chassis'
                   : 'bg-deck border-steel text-solder'
@@ -163,7 +163,7 @@ export function ZenLaunchpad({
             <button
               type="button"
               onClick={() => setSourceType('youtube')}
-              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+              className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-colors duration-150 cursor-pointer ${
                 sourceType === 'youtube'
                   ? 'bg-amber border-amber text-chassis'
                   : 'bg-deck border-steel text-solder'
@@ -180,7 +180,7 @@ export function ZenLaunchpad({
               playSound('pop');
               setMode(mode === 'conceptual' ? 'memorization' : 'conceptual');
             }}
-            className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
+            className={`px-2.5 py-1 min-h-[44px] text-[10px] font-mono font-bold uppercase tracking-wider border transition-colors duration-150 cursor-pointer ${
               mode === 'conceptual'
                 ? 'bg-deck border-steel text-bone'
                 : 'bg-amber border-amber text-chassis'
@@ -275,7 +275,7 @@ export function ZenLaunchpad({
             type="button"
             onClick={onTeach}
             disabled={!hasContent}
-            className="flex items-center gap-2 px-4 py-2.5 bg-chassis border border-amber text-amber text-xs font-mono font-bold uppercase tracking-wider transition-none disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:bg-amber hover:text-chassis"
+            className="flex items-center gap-2 px-4 py-2.5 bg-chassis border border-flux text-flux-300 text-xs font-mono font-bold uppercase tracking-wider transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:bg-flux hover:text-bone"
             title="Teach Me: Brilliant-style interactive lesson that teaches the concept, then walks a problem step-by-step"
           >
             <span>[ TEACH ME ]</span>
@@ -284,7 +284,7 @@ export function ZenLaunchpad({
             type="button"
             onClick={onGenerate}
             disabled={!hasContent || isLoading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider transition-none disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2.5 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer hover:bg-amber-400 hover:border-amber-400"
           >
             {isLoading ? (
               <span>[ ENCODING... ]</span>

@@ -281,15 +281,15 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
 
                 {/* Boundary & Edge-Case Contrast Generator */}
                 {concept.boundaryContrast && (
-                  <div className="p-3 bg-hazard950/20 border border-hazard500/30 text-xs text-hazard100">
-                    <div className="flex items-center gap-1.5 font-bold text-hazard400 mb-1">
+                  <div className="p-3 bg-hazard-950/20 border border-hazard-500/30 text-xs text-hazard-100">
+                    <div className="flex items-center gap-1.5 font-bold text-hazard-400 mb-1">
                       <span className="text-amber font-bold font-mono">[ ! ]</span>
                       <span>Boundary Contrast (Lookalike Trap):</span>
                     </div>
                     <p className="mb-1">
-                      <strong>Confusable Lookalike:</strong> <span className="text-hazard200">{concept.boundaryContrast.confusableLookalike}</span>
+                      <strong>Confusable Lookalike:</strong> <span className="text-hazard-200">{concept.boundaryContrast.confusableLookalike}</span>
                     </p>
-                    <p className="text-[11px] text-hazard300/80">
+                    <p className="text-[11px] text-hazard-300/80">
                       <strong>Differentiating Test:</strong> {concept.boundaryContrast.distinguishingRule}
                     </p>
                   </div>
@@ -302,9 +302,9 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {/* Feature 83: Tab 2 - The Feynman-to-Cloze Pipeline */}
         {activeTab === 'feynman_cloze' && (
           <div className="space-y-4 max-h-[54vh] overflow-y-auto pr-1">
-            <div className="p-3.5 bg-amber950/30 border border-amber/30 text-xs text-amber200">
+            <div className="p-3.5 bg-amber-950/30 border border-amber/30 text-xs text-amber-200">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-amber300 flex items-center gap-1.5">
+                <span className="font-bold text-amber-300 flex items-center gap-1.5">
                   <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                   The Feynman-to-Cloze Pipeline
                 </span>
@@ -318,7 +318,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   <span className="text-[11px] font-bold text-bone">Prioritize My Vocabulary for Clozes</span>
                 </label>
               </div>
-              <p className="text-[11px] text-amber300/80 leading-relaxed">
+              <p className="text-[11px] text-amber-300/80 leading-relaxed">
                 Spaced repetition is <strong>exponentially faster and more durable</strong> when flashcards are generated from your own plain-English explanations rather than dense academic jargon. Reviewing in your own words eliminates the illusion of competence.
               </p>
             </div>
@@ -332,19 +332,19 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                     </span>
                     <h4 className="font-bold text-bone text-sm">{feynman.stageTitle}</h4>
                   </div>
-                  <span className="px-2 py-0.5 text-[10px] font-bold bg-amber950 border border-amber/30 text-amber300">
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-950 border border-amber/30 text-amber-300">
                     {feynman.cognitiveSpeedAdvantage}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* User's Feynman Clozed Flashcard */}
-                  <div className="p-3 bg-amber950/20 border border-amber/40">
+                  <div className="p-3 bg-amber-950/20 border border-amber/40">
                     <span className="font-bold text-amber block mb-1.5 flex items-center gap-1">
                       <span className="text-amber font-bold font-mono">[ OK ]</span>
                       Generated Flashcard (Your Personal Schema):
                     </span>
-                    <p className="font-mono text-[11px] text-amber200 bg-chassis/80 p-2.5 border border-amber900/50 leading-relaxed">
+                    <p className="font-mono text-[11px] text-amber-200 bg-chassis/80 p-2.5 border border-amber-900/50 leading-relaxed">
                       {feynman.clozedUserText}
                     </p>
                   </div>
@@ -383,7 +383,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                     <span className="text-solder text-[11px]">Fact #{idx + 1}</span>
                   </div>
                   {fact.question && (
-                    <p className="text-amber200 text-[11px] font-bold mb-1">Q: {fact.question}</p>
+                    <p className="text-amber-200 text-[11px] font-bold mb-1">Q: {fact.question}</p>
                   )}
                   <p className="text-bone mb-1">{fact.factStatement}</p>
                   <p className="font-mono text-bone/90 text-[11px] bg-chassis p-2 border border-steel/80">
@@ -413,7 +413,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               <div key={pq.id || idx} className="p-3.5 bg-deck/90 border border-steel text-xs space-y-1.5">
                 <span className="text-solder text-[11px]">Drill #{idx + 1}</span>
                 <p className="text-bone font-bold">{pq.question}</p>
-                <p className="text-amber200">A: {pq.answer}</p>
+                <p className="text-amber-200">A: {pq.answer}</p>
                 {pq.whyCorrect && (
                   <p className="text-solder text-[11px]">Why: {pq.whyCorrect}</p>
                 )}
@@ -446,7 +446,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   ))}
                 </ol>
                 {ex.takeaway && (
-                  <p className="text-amber200 text-[11px]">Takeaway: {ex.takeaway}</p>
+                  <p className="text-amber-200 text-[11px]">Takeaway: {ex.takeaway}</p>
                 )}
               </div>
             ))}
@@ -462,7 +462,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               </div>
               <button
                 onClick={handleCopyMarkdown}
-                className="px-3.5 py-1.5 text-xs font-bold text-bone bg-steel hover:bg-steel flex items-center gap-1.5 transition-none  cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-bold text-bone bg-steel flex items-center gap-1.5 transition-none  cursor-pointer"
               >
                 {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
                 <span>{copied ? "Copied to Clipboard!" : "Copy RemNote Markdown"}</span>
@@ -502,7 +502,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   value={remnoteApiKey}
                   onChange={(e) => setRemnoteApiKey(e.target.value)}
                   placeholder="e.g. rem_api_secret_..."
-                  className="w-full px-3.5 py-2.5 bg-chassis border border-steel text-xs text-bone placeholder-slate-500 focus:outline-none focus:border-steel transition-none"
+                  className="w-full px-3.5 py-2.5 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none"
                 />
               </div>
 
@@ -515,14 +515,14 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                   value={remnoteUserId}
                   onChange={(e) => setRemnoteUserId(e.target.value)}
                   placeholder="Optional user ID"
-                  className="w-full px-3.5 py-2.5 bg-chassis border border-steel text-xs text-bone placeholder-slate-500 focus:outline-none focus:border-steel transition-none"
+                  className="w-full px-3.5 py-2.5 bg-chassis border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none"
                 />
               </div>
 
               <button
                 onClick={handlePushRemnote}
                 disabled={!remnoteApiKey.trim() || isPushing}
-                className="w-full py-2.5 text-xs font-bold text-bone    hover: hover:   flex items-center justify-center gap-2 transition-none disabled:opacity-50 cursor-pointer"
+                className="w-full py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center justify-center gap-2 transition-none disabled:opacity-50 cursor-pointer"
               >
                 {isPushing ? (
                   <>
@@ -541,7 +541,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                 <div
                   className={`p-3  text-xs flex items-start gap-2 ${
                     pushStatus.success
-                      ? 'bg-amber950/40 border border-amber/40 text-amber200'
+                      ? 'bg-amber-950/40 border border-amber/40 text-amber-200'
                       : 'bg-amber/40 border border-amber/40 text-amber'
                   }`}
                 >
@@ -560,7 +560,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 text-xs font-bold text-solder hover:text-bone bg-steel hover:bg-steel transition-none cursor-pointer"
+            className="px-5 py-2 text-xs font-bold text-solder hover:text-bone bg-steel transition-none cursor-pointer"
           >
             Close
           </button>

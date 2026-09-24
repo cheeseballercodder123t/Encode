@@ -86,7 +86,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
             return (
               <div 
                 key={q.id || idx}
-                className=" border border-steel/80 bg-steel/40 p-4 transition-none-all"
+                className=" border border-steel/80 bg-steel/40 p-4 transition-all"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-bone">
@@ -114,13 +114,13 @@ export const PretestModal: React.FC<PretestModalProps> = ({
                       value={currentGuess}
                       onChange={(e) => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
                       placeholder="Take a guess at the causal mechanism (don't worry about being wrong!)..."
-                      className="w-full h-20 p-3 bg-deck border border-steel text-xs text-bone placeholder-slate-500 focus:outline-none focus:border-steel transition-none resize-none"
+                      className="w-full h-20 p-3 bg-deck border border-steel text-xs text-bone placeholder-solder focus:outline-none focus:border-steel transition-none resize-none"
                     />
                     <div className="flex justify-end">
                       <button
                         onClick={() => handleRevealAnswer(q.id)}
                         disabled={!currentGuess.trim()}
-                        className="px-3.5 py-1.5 text-xs font-bold text-bone bg-steel hover:bg-steel disabled:opacity-50 disabled:cursor-not-allowed transition-none flex items-center gap-1.5"
+                        className="px-3.5 py-1.5 text-xs font-bold text-bone bg-steel disabled:opacity-50 disabled:cursor-not-allowed transition-none flex items-center gap-1.5"
                       >
                         <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                         <span>Lock in Guess & Reveal First Principle</span>
@@ -141,7 +141,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
                     </div>
 
                     {/* True First Principle */}
-                    <div className="p-3 bg-amber950/30 border border-amber/30 text-xs text-amber200/90">
+                    <div className="p-3 bg-amber-950/30 border border-amber/30 text-xs text-amber-200/90">
                       <span className="font-bold text-amber block mb-1">✨ True First-Principles Mechanism:</span>
                       {q.firstPrincipleAnswer}
                     </div>
@@ -170,7 +170,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
                 playSound('success');
                 onPretestComplete();
               }}
-              className="px-5 py-2.5 text-xs font-bold text-bone    hover: hover:   flex items-center gap-2 transition-none"
+              className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center gap-2 transition-none"
             >
               <span>{allAnswered ? "Reveal Encoded Schema" : "Continue to Schema"}</span>
               <span className="text-amber font-bold font-mono">[ NEXT ]</span>

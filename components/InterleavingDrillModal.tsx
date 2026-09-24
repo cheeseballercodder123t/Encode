@@ -387,7 +387,7 @@ export function InterleavingDrillModal({
                     key={dom.id}
                     type="button"
                     onClick={() => toggleSchemaSelection(dom.id)}
-                    className={`flex items-start justify-between p-3  text-left border transition-none-all ${
+                    className={`flex items-start justify-between p-3  text-left border transition-all ${
                       isSelected
                         ? 'bg-steel/40 border-steel text-bone ring-1 ring-violet-500/50'
                         : 'bg-steel/60 hover:bg-steel border-steel/60 text-solder'
@@ -434,7 +434,7 @@ export function InterleavingDrillModal({
                   setIsSprintMode(!isSprintMode);
                   playSound('click');
                 }}
-                className={`px-3 py-1.5  text-xs font-bold transition-none-all border ${
+                className={`px-3 py-1.5  text-xs font-bold transition-all border ${
                   isSprintMode
                     ? 'bg-amber/20 border-amber text-amber'
                     : 'bg-steel border-steel text-solder hover:text-bone'
@@ -454,7 +454,7 @@ export function InterleavingDrillModal({
                 type="button"
                 onClick={handleStartWorkout}
                 disabled={selectedSchemaIds.length < 2}
-                className="flex items-center gap-2 px-6 py-2.5 hover: hover: text-bone font-bold text-xs   disabled:opacity-50 transition-none-all cursor-pointer"
+                className="flex items-center gap-2 px-6 py-2.5 hover:bg-deck text-bone font-bold text-xs   disabled:opacity-50 transition-all cursor-pointer"
               >
                 <span className="text-amber font-bold font-mono">[ ZAP ]</span>
                 <span>Begin Interleaved Drill ({selectedSchemaIds.length} Domains)</span>
@@ -481,7 +481,7 @@ export function InterleavingDrillModal({
                 {isSprintMode && (
                   <span className={`px-2 py-0.5  text-[11px] font-mono font-bold border flex items-center gap-1 ${
                     timeLeft <= 7 
-                      ? 'bg-hazard500/20 text-hazard400 border-hazard500/50 ' 
+                      ? 'bg-hazard-500/20 text-hazard-400 border-hazard-500/50 ' 
                       : 'bg-steel text-solder border-steel'
                   }`}>
                     <span className="text-amber font-bold font-mono">[ TIME ]</span>
@@ -489,7 +489,7 @@ export function InterleavingDrillModal({
                   </span>
                 )}
                 {streak > 1 && (
-                  <span className="flex items-center gap-1 text-hazard400 font-bold ">
+                  <span className="flex items-center gap-1 text-hazard-400 font-bold ">
                     <span className="text-amber font-bold font-mono">[ FLAME ]</span>
                     {streak}x Combo!
                   </span>
@@ -504,8 +504,8 @@ export function InterleavingDrillModal({
             {isSprintMode && !isRevealed && (
               <div className="w-full h-1.5 bg-steel overflow-hidden">
                 <div 
-                  className={`h-full transition-none-all duration-1000 ${
-                    timeLeft <= 7 ? 'bg-hazard500' : '  '
+                  className={`h-full transition-all duration-1000 ${
+                    timeLeft <= 7 ? 'bg-hazard-500' : '  '
                   }`}
                   style={{ width: `${(timeLeft / 25) * 100}%` }}
                 />
@@ -542,7 +542,7 @@ export function InterleavingDrillModal({
                   onChange={(e) => setUserAnswer(e.target.value)}
                   placeholder="Type your rapid active recall or think it through..."
                   rows={3}
-                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono"
+                  className="w-full bg-chassis border border-steel p-3 text-sm text-bone placeholder-solder focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none font-mono"
                 />
 
                 {/* Metacognitive Confidence Predictor */}
@@ -554,9 +554,9 @@ export function InterleavingDrillModal({
                     <button
                       type="button"
                       onClick={() => setUserConfidence('certain')}
-                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-none-all ${
+                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-all ${
                         userConfidence === 'certain'
-                          ? 'bg-amber/20 border-amber text-amber300 font-bold '
+                          ? 'bg-amber/20 border-amber text-amber-300 font-bold '
                           : 'bg-deck border-steel text-solder hover:text-bone'
                       }`}
                     >
@@ -565,7 +565,7 @@ export function InterleavingDrillModal({
                     <button
                       type="button"
                       onClick={() => setUserConfidence('moderate')}
-                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-none-all ${
+                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-all ${
                         userConfidence === 'moderate'
                           ? 'bg-amber/20 border-amber text-amber font-bold '
                           : 'bg-deck border-steel text-solder hover:text-bone'
@@ -576,9 +576,9 @@ export function InterleavingDrillModal({
                     <button
                       type="button"
                       onClick={() => setUserConfidence('unsure')}
-                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-none-all ${
+                      className={`flex-1 py-1.5 px-2  text-xs font-semibold border transition-all ${
                         userConfidence === 'unsure'
-                          ? 'bg-hazard500/20 border-hazard500 text-hazard300 font-bold '
+                          ? 'bg-hazard-500/20 border-hazard-500 text-hazard-300 font-bold '
                           : 'bg-deck border-steel text-solder hover:text-bone'
                       }`}
                     >
@@ -598,7 +598,7 @@ export function InterleavingDrillModal({
                       setIsRevealed(true);
                       playSound('pop');
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-steel hover:bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-steel text-bone font-bold text-xs border border-steel cursor-pointer"
                   >
                     <span>Check Mechanism</span>
                     <span className="text-amber font-bold font-mono">[ NEXT ]</span>
@@ -608,7 +608,7 @@ export function InterleavingDrillModal({
             ) : (
               <div className="space-y-4">
                 {/* Correct Mechanism Box */}
-                <div className="p-4 bg-amber950/30 border border-amber/40 space-y-2">
+                <div className="p-4 bg-amber-950/30 border border-amber/40 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-wider text-amber block">
                       Core Mechanism / Target Answer:
@@ -617,14 +617,14 @@ export function InterleavingDrillModal({
                       Confidence: {userConfidence.toUpperCase()}
                     </span>
                   </div>
-                  <p className="text-xs sm:text-sm text-amber100 font-medium leading-relaxed">
+                  <p className="text-xs sm:text-sm text-amber-100 font-medium leading-relaxed">
                     {currentQ.correctMechanism}
                   </p>
 
                   {currentQ.keyKeywords && currentQ.keyKeywords.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">
                       {currentQ.keyKeywords.map((kw, i) => (
-                        <span key={i} className="px-1.5 py-0.5 bg-amber900/60 text-amber300 text-[10px] font-semibold">
+                        <span key={i} className="px-1.5 py-0.5 bg-amber-900/60 text-amber-300 text-[10px] font-semibold">
                           #{kw}
                         </span>
                       ))}
@@ -644,7 +644,7 @@ export function InterleavingDrillModal({
                   <button
                     type="button"
                     onClick={() => handleGrade(false)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-hazard950/40 hover:bg-hazard900/60 text-hazard300 border border-hazard500/40 font-bold text-xs transition-none-colors cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-hazard-950/40 hover:bg-hazard-900/60 text-hazard-300 border border-hazard-500/40 font-bold text-xs transition-colors duration-150 cursor-pointer"
                   >
                     <span className="text-amber font-bold font-mono">[ X ]</span>
                     <span>Missed / Hesitated (+10 XP)</span>
@@ -653,7 +653,7 @@ export function InterleavingDrillModal({
                   <button
                     type="button"
                     onClick={() => handleGrade(true)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 hover: hover: text-bone font-bold text-xs   transition-none-all cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-deck text-bone font-bold text-xs   transition-all cursor-pointer"
                   >
                     <span className="text-amber font-bold font-mono">[ OK ]</span>
                     <span>Mastered Mechanism (+{35 + ((streak + 1) * 10)} XP)</span>
@@ -736,7 +736,7 @@ export function InterleavingDrillModal({
                             {stats.passed} / {stats.total}
                           </span>
                           <span className={`px-1.5 py-0.5  text-[10px] font-bold ${
-                            pct >= 80 ? 'bg-amber/20 text-amber300' : 'bg-amber/20 text-amber'
+                            pct >= 80 ? 'bg-amber/20 text-amber-300' : 'bg-amber/20 text-amber'
                           }`}>
                             {pct}%
                           </span>
@@ -752,7 +752,7 @@ export function InterleavingDrillModal({
               <button
                 type="button"
                 onClick={() => setDrillState('select')}
-                className="px-5 py-2.5 bg-steel hover:bg-steel text-xs font-bold text-bone flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 bg-steel text-xs font-bold text-bone flex items-center gap-2 cursor-pointer"
               >
                 <span className="text-amber font-bold font-mono">[ RESET ]</span>
                 <span>New Drill</span>
@@ -761,7 +761,7 @@ export function InterleavingDrillModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-6 py-2.5 hover: hover: text-bone font-bold text-xs   cursor-pointer"
+                className="px-6 py-2.5 hover:bg-deck text-bone font-bold text-xs   cursor-pointer"
               >
                 Back to Dashboard
               </button>
