@@ -709,7 +709,7 @@ export function StudioWorkbench({
                   setShowPrime(!showPrime);
                   playSound('click');
                 }}
-                title="Priming warm-up: commit to the curve's shape, the density source, the units, or an extreme case before trusting the formula"
+                title="Priming warm-up: pick the drill — draw the curve's shape, run the source→sink polarity check, assemble the units, or sweep a variable to its extremes — before trusting the formula"
               >
                 Prime {showPrime ? 'on' : 'off'}
               </ToolToggle>
