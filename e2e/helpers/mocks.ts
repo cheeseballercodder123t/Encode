@@ -18,6 +18,7 @@ import {
   PRETEST_RESPONSE,
   TRIAGE_RESPONSE,
   PRIMING_RESPONSE,
+  PRIMING_RESPONSES,
 } from './fixtures';
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
@@ -65,14 +66,17 @@ export async function mockAiApis(page: Page) {
     })
   );
 
-  // Priming warm-ups: shape / gradient / dimensional / extremum.
-  await page.route('**/api/priming', (route) =>
-    route.fulfill({
+  // Priming warm-ups: the learner picks the archetype, so the mock serves the
+  // payload for the requested kind (auto falls back to the extremum sweep).
+  await page.route('**/api/priming', (route) => {
+    const body = route.request().postDataJSON() as { kind?: string } | null;
+    const payload = (body?.kind && PRIMING_RESPONSES[body.kind]) || PRIMING_RESPONSE;
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(PRIMING_RESPONSE),
-    })
-  );
+      body: JSON.stringify(payload),
+    });
+  });
 
   await page.route('**/api/prerequisites', (route) =>
     route.fulfill({

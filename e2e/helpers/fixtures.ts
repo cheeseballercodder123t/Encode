@@ -404,26 +404,164 @@ export const TRIAGE_RESPONSE = {
   ],
 };
 
-// ─── Priming warm-up (/api/priming) ────────────────────────────────────────
-// Option 'b' is the intuitive trap: viscosity felt as a fluid property rather
-// than a term that can force the flow to zero.
+// ─── Priming warm-ups (/api/priming) ───────────────────────────────────────
+// One payload per archetype: the mock serves whichever kind the learner picked,
+// so the selector can be driven end to end. Every probe's option B (index 1) is
+// the intuitive-but-wrong answer.
 
-export const PRIMING_RESPONSE = {
+// extremum · a 3-probe sweep. Probe 1's trap is the linear extrapolation
+// ("double r, double the flow"), which the fourth power kills.
+export const PRIMING_EXTREMUM_RESPONSE = {
   kind: 'extremum',
   setup: 'Poiseuille flow through a vessel of radius r at a fixed pressure gradient.',
-  prompt: 'What must happen to the flow Q as the fluid viscosity tends to infinity?',
-  choices: [
-    { id: 'a', label: 'Flow stops entirely' },
-    { id: 'b', label: 'Flow is unchanged' },
-    { id: 'c', label: 'Flow doubles' },
-    { id: 'd', label: 'Flow reverses' },
+  steps: [
+    {
+      prompt: 'What must happen to the flow Q if the vessel radius r is doubled?',
+      choices: [
+        { id: 'a', label: 'Flow increases 16x' },
+        { id: 'b', label: 'Flow doubles' },
+        { id: 'c', label: 'Flow halves' },
+        { id: 'd', label: 'Flow is unchanged' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'Flow feels like it should scale with the pipe the way circumference does, so doubling feels safe.',
+      reveal: 'r enters to the fourth power, so 2^4 = 16 and the flow rises 16x.',
+    },
+    {
+      prompt: 'What must happen to the flow Q as the fluid viscosity tends to infinity?',
+      choices: [
+        { id: 'a', label: 'Flow stops entirely' },
+        { id: 'b', label: 'Flow is unchanged' },
+        { id: 'c', label: 'Flow doubles' },
+        { id: 'd', label: 'Flow reverses' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'Viscosity feels like a property of the fluid, not a term that can forbid flow.',
+      reveal: 'An infinite denominator forces Q to zero, so viscosity can only live under the line.',
+    },
+    {
+      prompt: 'What must happen to the resistance as the vessel length L tends to zero?',
+      choices: [
+        { id: 'a', label: 'Resistance vanishes' },
+        { id: 'b', label: 'Resistance becomes infinite' },
+        { id: 'c', label: 'Resistance is unchanged' },
+        { id: 'd', label: 'Resistance doubles' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'A zero-length pipe feels degenerate and unphysical, so blowing the resistance up feels like the safer answer.',
+      reveal: 'R = 8 eta L / pi r^4, so L -> 0 gives R -> 0: length belongs in the numerator of resistance.',
+    },
   ],
-  correctChoiceId: 'a',
-  trapChoiceId: 'b',
-  trapExplanation: 'Viscosity feels like a property of the fluid, not a term that can forbid flow.',
-  reveal: 'An infinite denominator forces Q to zero, so viscosity can only live under the line.',
+  sketch: null,
   principle: 'Flow scales with r^4 and inversely with viscosity, so doubling the radius multiplies flow 16x.',
   cardFront: 'Why must viscosity sit in the denominator of Poiseuille?',
   cardBack: 'Because {{c1::infinite viscosity stops the flow entirely}}, so viscosity must divide.',
+};
+
+/** The default payload: what the mock serves when the learner keeps AUTO. */
+export const PRIMING_RESPONSE = PRIMING_EXTREMUM_RESPONSE;
+
+// gradient · the 2-step polarity check: locate the source, then the sink.
+export const PRIMING_GRADIENT_RESPONSE = {
+  kind: 'gradient',
+  setup: 'Nucleophilic attack on the carbonyl carbon of an acyl chloride.',
+  steps: [
+    {
+      prompt: 'Where is the electron density concentrated in the acyl chloride C=O group?',
+      choices: [
+        { id: 'a', label: 'On the oxygen lone pairs' },
+        { id: 'b', label: 'On the carbonyl carbon' },
+        { id: 'c', label: 'Evenly across both atoms' },
+        { id: 'd', label: 'On the chlorine' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'The dipole makes the carbon feel like the charged end, but the density itself sits on oxygen.',
+      reveal: 'Oxygen keeps the lone pairs and carries the partial negative charge: that is the source.',
+    },
+    {
+      prompt: 'Which atom is the electron-poor sink the nucleophile must attack?',
+      choices: [
+        { id: 'a', label: 'The carbonyl carbon' },
+        { id: 'b', label: 'The carbonyl oxygen' },
+        { id: 'c', label: 'The chlorine' },
+        { id: 'd', label: 'The alkyl chain' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'Oxygen looks reactive because it owns the electrons, but a nucleophile needs the opposite: the stripped carbon.',
+      reveal: 'The carbon is stripped by both oxygen and chlorine, so the arrow can only run source to sink.',
+    },
+  ],
+  sketch: null,
+  principle: 'Arrow pushing is not memorization: draw from the electron-rich source to the electron-poor sink and it can only point one way.',
+  cardFront: 'Why does the nucleophile attack the carbonyl carbon and not the oxygen?',
+  cardBack: 'Because the carbon is the {{c1::electron-poor sink}}, while oxygen holds the electron density.',
+};
+
+// dimensional · one probe: the units pin the exponent.
+export const PRIMING_DIMENSIONAL_RESPONSE = {
+  kind: 'dimensional',
+  setup: 'Dynamic pressure of a moving fluid, in pascals.',
+  steps: [
+    {
+      prompt: 'Density rho (kg/m^3) and velocity v (m/s) are all you have. How MUST velocity enter to land on kg/(m s^2)?',
+      choices: [
+        { id: 'a', label: 'Squared (v^2)' },
+        { id: 'b', label: 'Linearly (v)' },
+        { id: 'c', label: 'Cubed (v^3)' },
+        { id: 'd', label: 'Inverted (1/v)' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'Pressure and kinetic energy both seem to "scale with speed", so the linear form feels sufficient.',
+      reveal: 'kg/m^3 * m^2/s^2 = kg/(m s^2), so velocity must be squared: the dynamic pressure is 0.5 rho v^2.',
+    },
+  ],
+  sketch: null,
+  principle: 'A quantity that must appear squared announces itself in the units: match them and the exponent is forced.',
+  cardFront: 'Why is dynamic pressure 0.5 rho v^2 and not 0.5 rho v?',
+  cardBack: 'Because only v^2 makes the units come out as {{c1::kg/(m s^2)}}, i.e. pascals.',
+};
+
+// shape · the learner DRAWS the curve first, then commits to its limiting
+// behaviour. The shape label must not be on screen before the commit.
+export const PRIMING_SHAPE_RESPONSE = {
+  kind: 'shape',
+  setup: 'Michaelis-Menten rate against substrate concentration, at fixed enzyme.',
+  steps: [
+    {
+      prompt: 'As the substrate concentration grows without bound, what must the rate do?',
+      choices: [
+        { id: 'a', label: 'Plateau at Vmax' },
+        { id: 'b', label: 'Keep rising linearly' },
+        { id: 'c', label: 'Fall back to zero' },
+        { id: 'd', label: 'Double with each doubling' },
+      ],
+      correctChoiceId: 'a',
+      trapChoiceId: 'b',
+      trapExplanation: 'Nothing else on the graph stops scaling, so a straight line feels like the safe extrapolation.',
+      reveal: 'Binding sites are a finite resource, so above Km the enzyme is saturated and the rate tends to Vmax.',
+    },
+  ],
+  sketch: {
+    prompt: 'Sketch the rate against substrate concentration before you see the equation.',
+    axes: 'x = [S] (mM), y = v0 (umol/s)',
+    shapeLabel: 'Saturating hyperbola: first-order at low [S], zero-order at high [S].',
+    shapeHint: 'Enzyme molecules are a finite resource: once every active site is occupied the rate cannot rise, however much substrate you add.',
+  },
+  principle: 'A finite resource upstream of the output forces a plateau: the curve must saturate.',
+  cardFront: 'Why does the Michaelis-Menten curve bend over instead of rising forever?',
+  cardBack: 'Because the enzyme is a {{c1::finite resource}}: once the sites are saturated the rate can only plateau.',
+};
+
+export const PRIMING_RESPONSES: Record<string, unknown> = {
+  shape: PRIMING_SHAPE_RESPONSE,
+  gradient: PRIMING_GRADIENT_RESPONSE,
+  dimensional: PRIMING_DIMENSIONAL_RESPONSE,
+  extremum: PRIMING_EXTREMUM_RESPONSE,
 };
 

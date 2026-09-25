@@ -23,6 +23,7 @@ Instead of re-reading, you reconstruct: every AI-generated stage asks you to ded
 - **Taboo constraint engine** — the source's 5 highest-jargon terms are surfaced as banned chips in the workbench, flagged live as they leak into your wording, and enforced by the examiner prompt too
 - **Delta feedback** — the examiner returns *what you nailed* plus the single *missing link*, with an inline "patch the gap" field that appends the one sentence straight into your mechanism answer
 - **Blind prediction gate (Predict · Observe · Explain)** — before the schema is generated you commit to a confidence tier (*guessing / 50-50 / bet my life*) and then to one of four concrete predictions. Getting it wrong after betting your life is the **Hypercorrection Effect**: the reveal goes hazard-red, you must explain the physical flaw in one sentence, and the mistake is saved as an interference-trap card that leads the Anki deck
+- **Priming warm-ups (pick the archetype)** — four pre-flight drills that make an equation or mechanism non-arbitrary before you touch it, each as long as the physics says: `Qualitative shape` opens a canvas and makes you **draw** the curve before the algebra, then commit to its limiting behaviour — the shape it had to have is named only after your hand has committed; `Source → sink` is a two-probe polarity check (where the density is concentrated, then which atom is stripped), after which the arrow can only point one way; `Unit puzzle` makes you assemble the units to discover whether it is v or v²; `Extremal check` is a three-probe sweep pushing each variable to 0 / ∞ in turn, which pins numerator vs denominator. `Auto` lets the examiner choose, picking a chip demands the drill. Every probe is one committed choice on a ten-second timescale, each step carries its own planted misconception, and the transferable rule lands in the stage answer with one click
 - **Why-ladder ([ PROBE DEEPER ])** — interrogates your own wording one layer at a time until the chain bottoms out at something that cannot be reduced further: a conservation law, a finite resource, geometry, a dimensional necessity. Each layer answers the one question the layer above it dodged; the axiom is one click from becoming the card's anchor
 - **Spot the inverted step** — adversarial discriminative repair for drained days: the examiner writes the mechanism as four causal steps and quietly falsifies exactly one (SNAREs zipping vs. disassembling, bond breaking releasing energy). You click the lie and write the one-sentence fix — recognition first, production second
 - **Local-first storage** — IndexedDB with localStorage fallback and Firestore cloud sync (optional)
@@ -67,8 +68,8 @@ Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip)
 
 ## Testing
 
-- **Unit** — `lib/` logic (storage, analytics, adaptive difficulty, template selection, Anki export, Wozniak sanitization, cognitive telemetry, interference traps, URL share, knowledge graph, streaming parser) is covered by Vitest in `tests/unit/`.
-- **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons, YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), and quick diagnostics. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
+- **Unit** — `lib/` logic (storage, analytics, adaptive difficulty, template selection, Anki export, Wozniak sanitization, cognitive telemetry, interference traps, priming drills, URL share, knowledge graph, streaming parser) is covered by Vitest in `tests/unit/`.
+- **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons, YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), the four priming archetypes (archetype selection, the 2-probe source→sink check, the 3-probe extremal sweep, and the shape drill that draws the curve before naming it), and quick diagnostics. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
   - Run: `bun run test:e2e` (boots `next dev` on port 4310 automatically)
   - On this filesystem, run with `--workers=3`: full parallelism races Playwright's trace-file writes and produces bogus ENOENT failures.
   - Debug a failure: `npx playwright show-trace test-results/<failing-test>/trace.zip`
@@ -112,6 +113,7 @@ components/
   PretestModal.tsx         # Predict–Observe–Explain gate + hypercorrection traps
   workbench/ProbeLadder.tsx    # Recursive why-ladder drill
   workbench/InvertedStepDrill.tsx  # Spot the falsified causal step
+  workbench/PrimingWarmup.tsx      # Archetype selector + probe sequence + shape canvas
   *Modal.tsx               # Feature modals (roast, pretest, blurt, export, ...)
 hooks/                     # useSession, useSettings, useInputSource, useSchemaLibrary,
                            # useGenerationProgress
@@ -128,6 +130,7 @@ lib/
                            # duplicate counting, actionable CORS/offline errors)
   wozniak.ts               # 1-idea rule, two-way cloze, 20-word ceiling
   cognitive-telemetry.ts   # Compression / atomicity / jargon deflation + taboo engine
+  priming.ts               # Four warming archetypes: probe sequences + shape sketch
   interference-traps.ts    # Hypercorrection trap cards captured at prediction-error time
   procedural-archetypes.ts # Parametric MCQ archetypes + 50-trial validator
   fsrs-audit.ts            # Dense-cloze audit + auto-split
