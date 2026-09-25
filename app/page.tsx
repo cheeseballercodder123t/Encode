@@ -39,7 +39,13 @@ import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSes
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
 import { hashStringKey } from '@/lib/utils';
-import { extractAnkiCardsFromSchema, classifyDeckQuality, buildHierarchicalDeckName, generateAnkiApkgPackage } from '@/lib/anki-exporter';
+import {
+  extractSanitizedCardsFromSchema,
+  classifyDeckQuality,
+  buildHierarchicalDeckName,
+  generateAnkiApkgPackage,
+} from '@/lib/anki-exporter';
+import { computeSessionTelemetry, detectTabooTerms } from '@/lib/cognitive-telemetry';
 import { useSession } from '@/hooks/useSession';
 import { useGenerationProgress } from '@/hooks/useGenerationProgress';
 import { useSettings } from '@/hooks/useSettings';
@@ -804,6 +810,13 @@ export default function DeepEncodeApp() {
           expertCompletion: currentActivity.visualData?.generationChallenge?.expertCompletion || currentActivity.scaffold.exampleAnswer,
           premisePrompt: currentActivity.visualData?.generationChallenge?.premisePrompt,
           strictnessLevel,
+          // Taboo terms shown in the workbench for this stage: the examiner
+          // enforces the same ban, so the feedback can't contradict the chips.
+          tabooTerms: detectTabooTerms(
+            rawNotes.trim() || currentActivity.contextSnippet,
+            currentActivity.keywords || [],
+            5
+          ),
           settings: aiSettings,
         }),
       });
@@ -871,7 +884,7 @@ export default function DeepEncodeApp() {
     }
   };
 
-  // In-progress autosave for YouTube sessions : progress lands in the library
+  // In-progress autosave for YouTube sessions (kept alive across reloads) : progress lands in the library
   // under the deterministic per-video id after every stage, so "encode 2 of 9
   // chapters today" survives a reload and resumes like any text schema.
   useEffect(() => {
@@ -1265,11 +1278,36 @@ export default function DeepEncodeApp() {
   // ─── Identity trophy: handoff quality (NOT XP) ────────────────────────────
   // "I convert messy notes to clean cards." The reward is the clean handoff:
   // N FSRS-ready cards, X leech candidates, Y unfinished, Z boundary traps.
-  const handoffCards = useMemo(
-    () => extractAnkiCardsFromSchema({ topicSummary, activities, userResponses }),
+  // The deck the learner actually ships is the Wozniak-enforced deck, so the
+  // counts here match the .apkg — cards over the 20-word ceiling are reported
+  // separately instead of vanishing into a bigger number.
+  const handoffDeck = useMemo(
+    () =>
+      extractSanitizedCardsFromSchema(
+        { topicSummary, activities, userResponses },
+        null,
+        // Interference-trap cards from the prediction gate ship at the front:
+        // confident-and-wrong is the memory that needs the most rehearsal.
+        { includeInterferenceTraps: true }
+      ),
     [activities, userResponses, topicSummary]
   );
-  const handoffStats = useMemo(() => classifyDeckQuality(handoffCards), [handoffCards]);
+  const handoffCards = handoffDeck.cards;
+  // ─── Cognitive telemetry: measurable encoding quality, not points ────────
+  // Travels on the handoff report so the completion trophy can show real
+  // numbers (compression, atomicity, jargon deflation) instead of XP.
+  const telemetry = useMemo(
+    () => computeSessionTelemetry({ rawNotes, activities, userResponses, cards: handoffCards }),
+    [rawNotes, activities, userResponses, handoffCards]
+  );
+  const handoffStats = useMemo(
+    () => ({
+      ...classifyDeckQuality(handoffCards),
+      telemetry,
+      heldBackCount: handoffDeck.heldBack.length,
+    }),
+    [handoffCards, telemetry, handoffDeck]
+  );
 
   // One-click FSRS-ready .apkg download (real collection.anki2, no import maze)
   const handleDownloadApkg = async () => {

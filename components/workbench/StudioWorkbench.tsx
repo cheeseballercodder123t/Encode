@@ -1,13 +1,24 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { SketchCanvas } from './SketchCanvas';
 import { Activity, StageResponse, UploadedFileAsset, YouTubeMetadata } from '@/lib/types';
 import { StageVisualRenderer } from '@/components/stage-templates/StageVisualRenderer';
 import { getTemplateDefinition } from '@/lib/templates/registry';
 import { generateRemnoteHierarchy } from '@/lib/remnote';
+import {
+  buildHierarchicalDeckName,
+  extractStageAnkiCards,
+  sanitizeExtracted,
+  withHeldBackCards,
+} from '@/lib/anki-exporter';
+import { pushCardsToAnki, formatPushStatus, describePushError, loadAnkiEndpoint } from '@/lib/anki-connect';
 import { playSound } from '@/lib/audio';
 import { countWords } from '@/lib/fsrs-audit';
+import { detectTabooTerms, findTabooHits } from '@/lib/cognitive-telemetry';
+import { ProbeLadder } from './ProbeLadder';
+import { InvertedStepDrill } from './InvertedStepDrill';
+import { PrimingWarmup } from './PrimingWarmup';
 
 const FLUFF_PATTERNS = [
   /\b(it is important to note that|as we can clearly see|in other words|basically|essentially|it should be remembered that|in this regard|furthermore, we notice that|it is worth mentioning that|needless to say)\b/gi,
@@ -60,6 +71,48 @@ interface StudioWorkbenchProps {
   stageCheckCount?: number;
   // Examiner error analysis for the current stage (shown in the needs-work hint).
   stageErrorAnalysis?: string;
+}
+
+/**
+ * Taboo chips: the source's highest-jargon terms for this stage, banned during
+ * encoding so the mechanism gets described physically instead of parroted.
+ * Derived locally from the source text and the stage keywords (which are
+ * allowed — they are what the learner SHOULD say).
+ */
+function TabooStrip({ leaked, terms }: { leaked: string[]; terms: string[] }) {
+  if (terms.length === 0) return null;
+  return (
+    <div className="p-3 bg-inset border border-edge rounded-md space-y-1.5">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+          Taboo terms
+        </span>
+        <span className="text-[10px] font-mono text-solder">
+          {leaked.length > 0 ? `${leaked.length} leaked` : 'none leaked yet'}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {terms.map((t) => {
+          const hit = leaked.includes(t);
+          return (
+            <span
+              key={t}
+              className={`px-2 py-0.5 text-[11px] font-mono rounded border ${
+                hit
+                  ? 'bg-hazard-500/15 border-hazard-500/50 text-hazard-300 line-through'
+                  : 'bg-deck border-edge text-slate-ink'
+              }`}
+            >
+              {t}
+            </span>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-solder leading-relaxed">
+        Explain these physically — what moves, what collides, what changes shape — instead of naming them.
+      </p>
+    </div>
+  );
 }
 
 /** Compact uppercase section label — sans, calm, one voice for all zones. */
@@ -153,6 +206,12 @@ export function StudioWorkbench({
 
   // Canvas Toggle
   const [showSketchpad, setShowSketchpad] = useState(false);
+  // Recursive why-ladder (5-Whys drilldown to a systemic necessity)
+  const [showProbe, setShowProbe] = useState(false);
+  // Adversarial discriminative-repair drill (find the falsified step)
+  const [showInvert, setShowInvert] = useState(false);
+  // Priming warm-ups: shape / gradient / dimensional / extremum pre-flight
+  const [showPrime, setShowPrime] = useState(false);
 
   const currentActivity = activities[currentActivityIndex];
 
@@ -170,6 +229,104 @@ export function StudioWorkbench({
         </span>
       </div>
     );
+  };
+
+  // ─── Taboo constraint engine (jargon stripping) ───────────────────────────
+  // The source's highest-jargon terms, minus this stage's own keywords (those
+  // are what the learner SHOULD say). Recomputed per stage; nothing blocks
+  // typing — leaks are flagged so the shortcut stays tempting, not punitive.
+  const tabooTerms = useMemo(() => {
+    if (!currentActivity) return [];
+    // The bans come from the SOURCE material (where the jargon actually lives),
+    // with the stage's own text as a fallback for thin-note sessions.
+    const source = [
+      rawNotes,
+      currentActivity.contextSnippet,
+      currentActivity.prompt,
+      currentActivity.framework,
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return detectTabooTerms(source, currentActivity.keywords || [], 5);
+  }, [currentActivity, rawNotes]);
+
+  const tabooLeaks = useMemo(
+    () => findTabooHits(`${field1} ${field2} ${field3}`, tabooTerms),
+    [field1, field2, field3, tabooTerms]
+  );
+
+  // ─── AnkiConnect push (finish the stage, ship the card, move on) ──────────
+  // The stage's own cards are sanitized by the same Wozniak pass the export
+  // funnel uses, so a stage pushed from here is identical to the same stage
+  // pushed later from the export modal — AnkiConnect dedupes it either way.
+  const [ankiStatus, setAnkiStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [isPushingAnki, setIsPushingAnki] = useState(false);
+
+  const pushStageToAnki = useCallback(async () => {
+    if (!currentActivity || isPushingAnki) return;
+    setIsPushingAnki(true);
+    try {
+      const deckName = buildHierarchicalDeckName(topicSummary);
+      // What you see in the fields is what ships: an unsubmitted stage must not
+      // export an empty cue card just because the examiner never ran. Stored
+      // wording is the fallback, the live fields win, and re-encoding a skipped
+      // stage clears the Unfinished tag it was carrying.
+      const stored = userResponses[currentActivity.id];
+      const response: StageResponse = {
+        ...(stored || { field1: '', field2: '' }),
+        field1: field1.trim() || stored?.field1 || '',
+        field2: field2.trim() || stored?.field2 || '',
+        field3: field3.trim() || stored?.field3,
+        skipped: false,
+      };
+      // Sanitized like the export funnel, but ceiling overflow still ships
+      // (tagged WozniakOverflow): a shortcut that silently exported zero cards
+      // on a wordy answer would be worse than a flagged one. The receipt names
+      // the overflow so the 20-word rule stays visible.
+      const deck = sanitizeExtracted(
+        extractStageAnkiCards(currentActivity, response, currentActivityIndex, topicSummary)
+      );
+      const cards = withHeldBackCards(deck, true);
+      const result = await pushCardsToAnki(cards, deckName, { url: loadAnkiEndpoint() });
+      setAnkiStatus({ ok: true, text: formatPushStatus(result, { overflow: deck.heldBack.length }) });
+      playSound('success');
+    } catch (err) {
+      setAnkiStatus({ ok: false, text: describePushError(err) });
+      playSound('wrong');
+    } finally {
+      setIsPushingAnki(false);
+    }
+  }, [currentActivity, currentActivityIndex, field1, field2, field3, isPushingAnki, topicSummary, userResponses]);
+
+  // The status flash is a receipt, not a panel: it clears itself.
+  useEffect(() => {
+    if (!ankiStatus) return;
+    const timer = setTimeout(() => setAnkiStatus(null), 9000);
+    return () => clearTimeout(timer);
+  }, [ankiStatus]);
+
+  // Cmd/Ctrl+Shift+A : push this stage's cards without leaving the forge.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        void pushStageToAnki();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [pushStageToAnki]);
+
+  // "Insert missing link" : the examiner's one missing causal step is appended
+  // to the mechanism field instead of making the learner rewrite the paragraph.
+  const [missingLinkDraft, setMissingLinkDraft] = useState('');
+  const submitMissingLink = () => {
+    const sentence = missingLinkDraft.trim();
+    if (!sentence) return;
+    // Appended, never replacing: the learner's own wording stays theirs.
+    setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${sentence}` : sentence));
+    setMissingLinkDraft('');
+    playSound('success');
   };
 
   // Cmd/Ctrl+Enter : check the stage, and if it's already checked, advance.
@@ -512,6 +669,9 @@ export function StudioWorkbench({
               &ldquo;{currentActivity.contextSnippet}&rdquo;
             </div>
 
+            {/* Taboo terms: the jargon this stage bans, flagged live as you type. */}
+            <TabooStrip terms={tabooTerms} leaked={tabooLeaks} />
+
             {/* Interactive Visual Canvas / Storyboard / Sabotage */}
             <StageVisualRenderer
               activity={currentActivity}
@@ -521,8 +681,38 @@ export function StudioWorkbench({
               selectedPreset={selectedPreset}
             />
 
-            {/* Optional Dual-Coding Sketchpad Toggle */}
-            <div className="flex justify-end">
+            {/* Optional Dual-Coding Sketchpad Toggle + why-ladder */}
+            <div className="flex justify-end gap-1.5">
+              <ToolToggle
+                active={showProbe}
+                onClick={() => {
+                  setShowProbe(!showProbe);
+                  playSound('click');
+                }}
+                title="Climb the why-ladder: forces each claim down to the physical or mathematical property beneath it"
+              >
+                Probe deeper {showProbe ? 'on' : 'off'}
+              </ToolToggle>
+              <ToolToggle
+                active={showInvert}
+                onClick={() => {
+                  setShowInvert(!showInvert);
+                  playSound('click');
+                }}
+                title="Adversarial bug hunt: the examiner rigs a 4-step chain with exactly one fatal flaw — find it and fix it"
+              >
+                Spot the flaw {showInvert ? 'on' : 'off'}
+              </ToolToggle>
+              <ToolToggle
+                active={showPrime}
+                onClick={() => {
+                  setShowPrime(!showPrime);
+                  playSound('click');
+                }}
+                title="Priming warm-up: commit to the curve's shape, the density source, the units, or an extreme case before trusting the formula"
+              >
+                Prime {showPrime ? 'on' : 'off'}
+              </ToolToggle>
               <ToolToggle
                 active={showSketchpad}
                 onClick={() => setShowSketchpad(!showSketchpad)}
@@ -530,9 +720,71 @@ export function StudioWorkbench({
               >
                 Sketchpad {showSketchpad ? 'on' : 'off'}
               </ToolToggle>
+              <ToolToggle
+                active={isPushingAnki}
+                onClick={() => void pushStageToAnki()}
+                title="Push this stage's cards straight into Anki via AnkiConnect (Cmd/Ctrl+Shift+A) — no downloads, no import dialogs"
+              >
+                {isPushingAnki ? 'Forging\u2026' : 'Anki push'}
+              </ToolToggle>
             </div>
 
+            {ankiStatus && (
+              <div
+                data-testid="anki-stage-status"
+                className={`p-2.5 border text-[11px] leading-relaxed ${
+                  ankiStatus.ok
+                    ? 'bg-signal-950/40 border-signal/40 text-signal-300 font-mono'
+                    : 'bg-hazard-950/40 border-hazard/40 text-hazard-300'
+                }`}
+              >
+                {ankiStatus.text}
+              </div>
+            )}
+
             {showSketchpad && <SketchCanvas />}
+
+            {showInvert && (
+              <InvertedStepDrill
+                key={currentActivity.id}
+                activity={currentActivity}
+                topicSummary={topicSummary}
+                onFix={(oneSentenceFix) =>
+                  setField2((prev: string) =>
+                    prev.trim() ? `${prev.trim()} ${oneSentenceFix}` : oneSentenceFix
+                  )
+                }
+              />
+            )}
+
+            {showPrime && (
+              <PrimingWarmup
+                key={currentActivity.id}
+                activity={currentActivity}
+                topicSummary={topicSummary}
+                onAdopt={(rule) =>
+                  setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${rule}` : rule))
+                }
+              />
+            )}
+
+            {showProbe && (
+              <ProbeLadder
+                key={currentActivity.id}
+                activity={currentActivity}
+                topicSummary={topicSummary}
+                seed={[field1, field2, field3].map((f) => f.trim()).filter(Boolean).join(' ')}
+                onAdopt={(axiom) => {
+                  // The anchor slot is where a necessity belongs; stages without
+                  // one get it appended to the mechanism answer instead.
+                  if (currentActivity.scaffold.field3Label) {
+                    setField3(axiom);
+                  } else {
+                    setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${axiom}` : axiom));
+                  }
+                }}
+              />
+            )}
 
             {/* Undo / Redo for the stage fields (also Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y) */}
             {(onUndoFields || onRedoFields) && (
@@ -823,6 +1075,26 @@ export function StudioWorkbench({
                 </div>
                 <p className="leading-relaxed text-xs">{feynmanResult.feedback}</p>
 
+                {/* Delta feedback: what you nailed + the ONE missing causal step,
+                    with an inline field that patches it straight into the
+                    mechanism answer instead of making you rewrite everything. */}
+                {((feynmanResult as any).nailedIt || (feynmanResult as any).missingLink) && (
+                  <div className="space-y-2">
+                    {(feynmanResult as any).nailedIt && (
+                      <div className="p-2.5 bg-signal-950/30 border border-signal-500/40 rounded-md text-xs text-signal-300 leading-relaxed">
+                        <span className="font-semibold">You nailed: </span>
+                        {(feynmanResult as any).nailedIt}
+                      </div>
+                    )}
+                    {(feynmanResult as any).missingLink && (
+                      <div className="p-2.5 bg-amber-500/[0.07] border border-amber-500/50 rounded-md text-xs text-bone leading-relaxed space-y-1.5">
+                        <span className="font-semibold text-amber-300">Missing link: </span>
+                        {(feynmanResult as any).missingLink}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Jargon Buzzer */}
                 {(feynmanResult as any).jargonBuzzer && (
                   <div className="p-2.5 bg-hazard-950/40 border border-hazard-500/40 rounded-md text-xs text-hazard-300 leading-relaxed">
@@ -838,6 +1110,46 @@ export function StudioWorkbench({
                     {(feynmanResult as any).vivaCrossExamination}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Insert-missing-link loop: one sentence, Enter, done. */}
+            {feynmanResult && feynmanResult.grade !== 'mastered' && !!(feynmanResult as any).missingLink && (
+              <div className="p-3 bg-inset border border-amber-500/40 rounded-md space-y-2">
+                <label
+                  htmlFor="missing-link-input"
+                  className="text-[11px] font-semibold uppercase tracking-widest text-amber-300 block"
+                >
+                  Patch the gap
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="missing-link-input"
+                    type="text"
+                    value={missingLinkDraft}
+                    onChange={(e) => setMissingLinkDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitMissingLink();
+                      }
+                    }}
+                    placeholder="[ Insert the missing link here — one sentence ]"
+                    data-testid="missing-link-input"
+                    className="flex-1 min-w-0 p-2.5 bg-chassis border border-edge text-bone placeholder-solder text-xs outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 font-sans"
+                  />
+                  <button
+                    type="button"
+                    onClick={submitMissingLink}
+                    disabled={!missingLinkDraft.trim()}
+                    className="px-3 py-2.5 text-xs font-semibold rounded-md bg-amber-500 border border-amber-500 text-inset transition-colors duration-150 hover:bg-amber-400 disabled:opacity-40 cursor-pointer shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+                <p className="text-[10px] text-solder">
+                  Enter appends it to your mechanism answer — no rewriting the whole paragraph.
+                </p>
               </div>
             )}
 

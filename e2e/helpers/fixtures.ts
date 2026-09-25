@@ -151,6 +151,85 @@ export const EVAL_SINGLE = {
   score: 78,
   feedback: 'Good mechanism : tighten the threshold detail.',
   xpBonus: 25,
+  // Delta feedback: what landed + the single missing causal step. The workbench
+  // renders both and offers an inline "patch the gap" field.
+  nailedIt: 'Na+ influx and threshold crossing are both correct.',
+  missingLink: 'S4 segments physically swing outward, which is what opens the pore.',
+  errorAnalysis: 'S4 segments physically swing outward, which is what opens the pore.',
+};
+
+// ─── Predict–Observe–Explain gate (/api/pretest) ────────────────────────────
+// One gate: option 'b' is the intuitive trap (linear thinking on a 4th-power
+// law), option 'c' is the truth.
+
+export const PRETEST_RESPONSE = {
+  topic: 'Action Potentials',
+  scientificRationale:
+    'A committed prediction makes the reveal land as a prediction error, which is what encodes it.',
+  questions: [
+    {
+      id: 'pq-1',
+      questionNumber: 1,
+      questionPrompt:
+        'If a vessel radius doubles at a fixed pressure gradient, what must flow do to stay consistent with Poiseuille?',
+      options: [
+        { id: 'a', label: 'Doubles' },
+        { id: 'b', label: 'Quadruples' },
+        { id: 'c', label: 'Increases 16x' },
+        { id: 'd', label: 'Halves' },
+      ],
+      correctOptionId: 'c',
+      trapOptionId: 'b',
+      subtleTrap:
+        'Resistance feels like it should fall in step with radius, so flow "doubles with the square".',
+      firstPrincipleAnswer:
+        'Resistance falls with the fourth power of radius, so flow rises 2^4 = 16x.',
+      whyAttemptingMatters:
+        'Committing to 4x makes the fourth-power reveal land as a prediction error you will not forget.',
+      trapCardFront: 'Why does doubling a vessel radius raise flow 16x rather than 4x?',
+      trapCardBack:
+        'Resistance falls with {{c1::the fourth power of radius}}, so flow scales as r^4.',
+    },
+  ],
+};
+
+// ─── Recursive why-ladder (/api/probe) ──────────────────────────────────────
+// Round 1 interrogates the learner's own wording; round 2 reports bedrock.
+
+export const PROBE_RESPONSE = {
+  target: 'the membrane crossed threshold, so gates open',
+  question:
+    'What property of the channel protein forces it to open when the field across the membrane changes?',
+  isAxiom: false,
+  axiom: '',
+  depth: 1,
+};
+
+export const PROBE_AXIOM_RESPONSE = {
+  target: 'voltage-gated',
+  question: 'Bedrock reached.',
+  isAxiom: true,
+  axiom:
+    'The pore can only open if the charged S4 segments are physically pulled by the field, so a voltage change is mechanically obliged to move them.',
+  depth: 2,
+};
+
+// ─── Spot the inverted step (/api/invert-step) ──────────────────────────────
+// Step 3 is the lie: inactivation CLOSES the pore, it does not open it.
+
+export const INVERT_RESPONSE = {
+  title: 'Action Potential Chain',
+  steps: [
+    { id: 's1', text: 'The membrane crosses -55 mV.' },
+    { id: 's2', text: 'Voltage-gated Na+ channels snap open.' },
+    { id: 's3', text: 'Na+ channel inactivation opens the pore permanently.' },
+    { id: 's4', text: 'K+ efflux restores the resting charge.' },
+  ],
+  falsifiedStepId: 's3',
+  flawType: 'reversed causality',
+  whyFalsified:
+    'Inactivation closes the pore and ends the spike; it never opens it. Opening is caused by the S4 segments moving in the field.',
+  correctVersion: 'Na+ channel inactivation closes the pore and ends the spike.',
 };
 
 export const EVAL_BATCH = {
@@ -308,5 +387,43 @@ export const TEACH_RESPONSE = {
       connectionPrompt: 'How would this change in a demyelinated neuron?',
     },
   },
+};
+
+// ─── Fluff Guillotine semantic triage (/api/triage) ────────────────────────
+// The spec pastes TRIAGE_NOTE (two paragraphs); the second is pure preamble.
+
+export const TRIAGE_NOTE =
+  'Sodium influx drives the membrane across threshold.\n\n' +
+  'Welcome to lecture four — today we will cover the syllabus and the exam dates.';
+
+export const TRIAGE_RESPONSE = {
+  summary: 'Half of this note is administrative preamble.',
+  units: [
+    { index: 0, kind: 'kernel', note: 'load-bearing causal claim' },
+    { index: 1, kind: 'noise', note: 'administrative preamble' },
+  ],
+};
+
+// ─── Priming warm-up (/api/priming) ────────────────────────────────────────
+// Option 'b' is the intuitive trap: viscosity felt as a fluid property rather
+// than a term that can force the flow to zero.
+
+export const PRIMING_RESPONSE = {
+  kind: 'extremum',
+  setup: 'Poiseuille flow through a vessel of radius r at a fixed pressure gradient.',
+  prompt: 'What must happen to the flow Q as the fluid viscosity tends to infinity?',
+  choices: [
+    { id: 'a', label: 'Flow stops entirely' },
+    { id: 'b', label: 'Flow is unchanged' },
+    { id: 'c', label: 'Flow doubles' },
+    { id: 'd', label: 'Flow reverses' },
+  ],
+  correctChoiceId: 'a',
+  trapChoiceId: 'b',
+  trapExplanation: 'Viscosity feels like a property of the fluid, not a term that can forbid flow.',
+  reveal: 'An infinite denominator forces Q to zero, so viscosity can only live under the line.',
+  principle: 'Flow scales with r^4 and inversely with viscosity, so doubling the radius multiplies flow 16x.',
+  cardFront: 'Why must viscosity sit in the denominator of Poiseuille?',
+  cardBack: 'Because {{c1::infinite viscosity stops the flow entirely}}, so viscosity must divide.',
 };
 

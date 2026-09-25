@@ -12,6 +12,12 @@ import {
   ARCHETYPE_ROUND1,
   ARCHETYPE_ROUND2,
   TEACH_RESPONSE,
+  PROBE_RESPONSE,
+  PROBE_AXIOM_RESPONSE,
+  INVERT_RESPONSE,
+  PRETEST_RESPONSE,
+  TRIAGE_RESPONSE,
+  PRIMING_RESPONSE,
 } from './fixtures';
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
@@ -32,6 +38,42 @@ export async function mockAiApis(page: Page) {
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) });
   });
 
+  // Recursive why-ladder: first probe interrogates the wording, the next
+  // reports bedrock so the ladder can be walked to its axiom in one test.
+  let probeCall = 0;
+  await page.route('**/api/probe', (route) => {
+    probeCall += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(probeCall === 1 ? PROBE_RESPONSE : PROBE_AXIOM_RESPONSE),
+    });
+  });  await page.route('**/api/invert-step', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(INVERT_RESPONSE),
+    })
+  );
+
+  // Fluff Guillotine: the pre-encoding semantic heatmap pass.
+  await page.route('**/api/triage', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(TRIAGE_RESPONSE),
+    })
+  );
+
+  // Priming warm-ups: shape / gradient / dimensional / extremum.
+  await page.route('**/api/priming', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(PRIMING_RESPONSE),
+    })
+  );
+
   await page.route('**/api/prerequisites', (route) =>
     route.fulfill({
       status: 200,
@@ -46,15 +88,12 @@ export async function mockAiApis(page: Page) {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(TEACH_RESPONSE) })
   );
 
+  // Predict–Observe–Explain gate: one commitment with a concrete trap option.
   await page.route('**/api/pretest', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        topic: 'Action Potentials',
-        scientificRationale: 'Pretesting primes schema building.',
-        questions: [],
-      }),
+      body: JSON.stringify(PRETEST_RESPONSE),
     })
   );
 

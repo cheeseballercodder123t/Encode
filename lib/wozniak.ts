@@ -1,4 +1,6 @@
-import { AnkiCardItem } from './anki-exporter';
+// Type-only: anki-exporter imports this module at runtime for the export
+// pipeline, so keep this import erased to avoid a runtime cycle.
+import type { AnkiCardItem } from './anki-exporter';
 import { countWords, stripHtml, splitDenseCloze } from './fsrs-audit';
 
 // ─── Wozniak's 20 Rules : automated card sanitization ───────────────────────
@@ -132,17 +134,43 @@ function enforceCeiling(card: AnkiCardItem, cardsOut: AnkiCardItem[], heldBack: 
 }
 
 /**
+ * Marks a card the ceiling held back so that an explicit "include anyway"
+ * export is self-describing inside Anki (filter on the tag and chunk it there
+ * instead of hunting for it by hand).
+ */
+export function tagOverflowCard(card: AnkiCardItem): AnkiCardItem {
+  return {
+    ...card,
+    id: `${card.id}-overflow`,
+    tags: card.tags.includes('WozniakOverflow') ? card.tags : [...card.tags, 'WozniakOverflow'],
+  };
+}
+
+/**
  * Full sanitizer pass, applied in order:
  * 1-idea split → symmetric reverse cards → 20-word ceiling.
  * Deterministic and offline; safe to run on every export.
  */
-export function sanitizeForWozniak(cards: AnkiCardItem[], opts?: { addSymmetric?: boolean }): WozniakResult {
+export function sanitizeForWozniak(
+  cards: AnkiCardItem[],
+  opts?: { addSymmetric?: boolean; protectTag?: string }
+): WozniakResult {
   const addSymmetric = opts?.addSymmetric !== false;
+  const protectTag = opts?.protectTag;
   const heldBack: WozniakHeldCard[] = [];
   const cardsOut: AnkiCardItem[] = [];
   let addedSymmetric = 0;
 
   for (const card of cards) {
+    // Curated cards (e.g. a hypercorrection trap) are trusted verbatim: the
+    // card IS a discrimination pair — wrong intuition vs. truth — so splitting
+    // it or chunking it under the ceiling would destroy the distinction it
+    // exists to teach. Nothing is dropped; it simply passes through untouched.
+    if (protectTag && card.tags.includes(protectTag)) {
+      cardsOut.push(card);
+      continue;
+    }
+
     for (const piece of splitOneIdea(card)) {
       enforceCeiling(piece, cardsOut, heldBack);
       if (addSymmetric) {

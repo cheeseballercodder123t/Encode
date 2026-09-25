@@ -30,6 +30,14 @@ const evaluationSchema = {
       type: Type.STRING,
       description: "Targeted error analysis: 1 concise sentence highlighting the exact missing logical step or causal bridge compared to expert understanding."
     },
+    nailedIt: {
+      type: Type.STRING,
+      description: "Delta feedback, line 1: name the specific causal links the student DID get right, quoting their own words. Max 1 sentence, no praise padding."
+    },
+    missingLink: {
+      type: Type.STRING,
+      description: "Delta feedback, line 2: the single missing causal step, phrased as the sentence the student should insert (e.g. 'S4 segments physically swing outward, which is what opens the pore'). One sentence. Never a generic 'add more detail'."
+    },
     jargonBuzzer: {
       type: Type.STRING,
       description: "Jargon Parroting Buzzer: Triggered when the student uses textbook buzzwords without articulating the physical/mechanical causality."
@@ -145,6 +153,7 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       field3Value,
       expertCompletion,
       premisePrompt,
+      tabooTerms = [],
       strictnessLevel = 'feynman' // 'sherpa' | 'feynman' | 'viva'
     } = body;
 
@@ -170,16 +179,27 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
 - Reward simple, visual, plain-English mechanical explanations.`;
     }
 
+    // Taboo enforcement: the learner was shown these terms as banned. The
+    // examiner flags them for the same reason the workbench does — naming a
+    // process is not explaining it.
+    const tabooList: string[] = Array.isArray(tabooTerms)
+      ? tabooTerms.filter((t: unknown): t is string => typeof t === 'string' && t.trim().length > 0)
+      : [];
+    const tabooDirective = tabooList.length > 0
+      ? `\nTABOO CONSTRAINT (enforce strictly):\n- The student was told NOT to use these terms: ${tabooList.join(', ')}.\n- Any use of them WITHOUT an accompanying physical/causal description is jargon parroting: populate 'jargonBuzzer' and do not grade above 'good'.\n- A correct use that also explains the underlying motion is fine — the ban is on the label substituting for the mechanism.`
+      : '';
+
     const systemPrompt = `You are the Feynman Cognitive Coach & Socratic Evaluator.
 Your job is to assess a student's active cognitive encoding response to ensure their understanding is deep enough to create high-yield RemNote flashcards.
 
 ${strictnessDirective}
+${tabooDirective}
 
 EVALUATION CRITERIA:
 1. Did the student explain the concept in genuine, clear first-principles language, or did they just copy-paste/parrot textbook buzzwords?
 2. Did they articulate the core mechanism/causality or mnemonic connection?
 3. Check for the 'Illusion of Explanatory Depth' (feeling like they understand because they recognize terms, but unable to explain the inner moving parts).
-4. In 'errorAnalysis', provide 1 targeted sentence highlighting what exact mechanistic link was missed.
+4. Always fill 'nailedIt' (what landed) and 'missingLink' (the one exact causal step that is missing, written as the sentence they should insert). Put the same gap in 'errorAnalysis' so single-line consumers keep working. Never return a vague 2-sentence paragraph in place of these two lines.
 
 ${MNEMONIC_FREEDOM_DIRECTIVE}
 

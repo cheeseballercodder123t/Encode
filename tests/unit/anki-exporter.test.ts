@@ -7,6 +7,7 @@ import JSZip from 'jszip';
 import {
   calculateSM2,
   extractAnkiCardsFromSchema,
+  extractStageAnkiCards,
   extractWeakAnkiCardsFromSchema,
   generateAnkiTextDeck,
   generateAnkiTextDecks,
@@ -15,7 +16,8 @@ import {
   clozeUserWording,
   normalizeClozeTermToAnki,
   computeActivityExportTags,
-  syncToAnkiConnect,
+  sanitizeExtracted,
+  withHeldBackCards,
   AnkiCardItem,
 } from '@/lib/anki-exporter';
 import { SavedSchema, SegregationReport } from '@/lib/types';
@@ -124,6 +126,35 @@ describe('extractAnkiCardsFromSchema', () => {
 
     const boundary = cards.find((c) => c.id === 'act-act_1-boundary')!;
     expect(boundary.tags).toContain('BoundaryContrast');
+  });
+
+  it('extractStageAnkiCards matches the full-deck cards for that stage', () => {
+    const activity = encodedSchema.activities![0];
+    const response = encodedSchema.userResponses!.act_1;
+    const stageCards = extractStageAnkiCards(activity, response, 0, 'Action Potentials');
+    const fullCards = extractAnkiCardsFromSchema(encodedSchema, null);
+
+    expect(stageCards.map((c) => c.id).sort()).toEqual(fullCards.map((c) => c.id).sort());
+    const main = stageCards.find((c) => c.id === 'act-act_1-main')!;
+    expect(main.front).toMatch(/\{\{c1::Sodium\}\}/i);
+    // The topic tag rides along so a stage pushed early is still traceable.
+    expect(main.tags).toContain('Topic::Action_Potentials');
+  });
+
+  it('extractStageAnkiCards yields the Unfinished cue card for an unencoded stage', () => {
+    const cards = extractStageAnkiCards(
+      encodedSchema.activities![0],
+      undefined,
+      0,
+      'Action Potentials'
+    );
+    expect(cards).toHaveLength(1);
+    expect(cards[0].id).toBe('act-act_1-cue');
+    expect(cards[0].tags).toContain('Unfinished');
+  });
+
+  it('extractStageAnkiCards returns nothing without an activity', () => {
+    expect(extractStageAnkiCards(undefined, undefined, 0, 'Topic')).toEqual([]);
   });
 
   it('tags a skipped/blank stage Unfinished (cue card only, no fake encoding)', () => {
@@ -492,54 +523,47 @@ describe('generateAnkiTextDecks / generateAnkiTextDeck', () => {
   });
 });
 
-describe('syncToAnkiConnect duplicate-safe push', () => {
-  const card = (id: string): AnkiCardItem => ({
+describe('sanitizeExtracted (Wozniak-enforced export deck)', () => {
+  const card = (id: string, overrides: Partial<AnkiCardItem> = {}): AnkiCardItem => ({
     id, front: `Front ${id}`, back: `Back ${id}`, isCloze: false,
     tags: ['DeepEncode'], sm2: { repetitions: 0, interval: 1, easeFactor: 2.5, nextReviewTimestamp: 0 },
+    ...overrides,
   });
 
-  const ankiFetchMock = (canAdd: boolean[], addIds: (number | null)[]) =>
-    vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse((init?.body as string) || '{}');
-      const result =
-        body.action === 'version' ? 6
-        : body.action === 'createDeck' ? null
-        : body.action === 'canAddNotes' ? canAdd
-        : body.action === 'addNotes' ? addIds
-        : null;
-      return { ok: true, json: async () => ({ result, error: null }) } as Response;
-    });
-
-  it('adds new notes and reports them', async () => {
-    const fetchMock = ankiFetchMock([true, true], [101, 102]);
-    vi.stubGlobal('fetch', fetchMock);
-    const res = await syncToAnkiConnect('http://127.0.0.1:8765', 'D', [card('a'), card('b')]);
-    expect(res.success).toBe(true);
-    expect(res.addedCount).toBe(2);
-    expect(res.message).toContain('2 added');
-    vi.unstubAllGlobals();
+  it('splits a two-idea back into atomic cards', () => {
+    const deck = sanitizeExtracted(
+      [card('a', { back: 'The membrane crossed threshold and the gates opened wide.' })],
+      { addSymmetric: false }
+    );
+    expect(deck.cards).toHaveLength(2);
+    expect(deck.cards.every((c) => c.tags.includes('WozniakSplit'))).toBe(true);
+    expect(deck.heldBack).toHaveLength(0);
   });
 
-  it('skips duplicates and reports them honestly', async () => {
-    const fetchMock = ankiFetchMock([false, true], [103]);
-    vi.stubGlobal('fetch', fetchMock);
-    const res = await syncToAnkiConnect('http://127.0.0.1:8765', 'D', [card('a'), card('b')]);
-    expect(res.success).toBe(true);
-    expect(res.addedCount).toBe(1);
-    expect(res.message).toContain('1 already in your collection');
-    expect(res.message).toContain('1 added');
-    // Only the acceptable note is sent to addNotes.
-    const addCall = (fetchMock as any).mock.calls.find(([, init]: any[]) =>
-      JSON.parse(init.body).action === 'addNotes');
-    expect(JSON.parse(addCall![1].body).params.notes).toHaveLength(1);
-    vi.unstubAllGlobals();
+  it('reports over-ceiling cards instead of dropping them silently', () => {
+    const long = Array.from({ length: 26 }, (_, i) => `w${i}`).join(' ');
+    const deck = sanitizeExtracted([card('a', { back: long })], { addSymmetric: false });
+    expect(deck.cards).toHaveLength(0);
+    expect(deck.heldBack).toHaveLength(1);
+    expect(deck.before).toBe(1);
+    // The reason is human-readable so the UI can show it verbatim.
+    expect(deck.heldBack[0].reason).toMatch(/words/);
   });
 
-  it('fails fast with an honest message when Anki is unreachable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
-    const res = await syncToAnkiConnect('http://127.0.0.1:8765', 'D', [card('a')]);
-    expect(res.success).toBe(false);
-    expect(res.message).toContain('Could not reach AnkiConnect');
-    vi.unstubAllGlobals();
+  it('counts the raw deck size before the pass for the summary line', () => {
+    const deck = sanitizeExtracted([card('a'), card('b')], { addSymmetric: false });
+    expect(deck.before).toBe(2);
+    expect(deck.cards).toHaveLength(2);
+  });
+
+  it('excludes held-back cards by default and tags them when force-included', () => {
+    const long = Array.from({ length: 26 }, (_, i) => `w${i}`).join(' ');
+    const deck = sanitizeExtracted([card('a'), card('b', { back: long })], { addSymmetric: false });
+    expect(withHeldBackCards(deck, false)).toHaveLength(1);
+    const forced = withHeldBackCards(deck, true);
+    expect(forced).toHaveLength(2);
+    const overflow = forced.find((c) => c.tags.includes('WozniakOverflow'));
+    expect(overflow).toBeTruthy();
+    expect(overflow!.id).toContain('overflow');
   });
 });

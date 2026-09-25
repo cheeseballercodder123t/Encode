@@ -99,6 +99,10 @@ export interface StageResponse {
     jargonBuzzer?: string;
     /** Oxford Oral Defense counter-question (viva strictness mode). */
     vivaCrossExamination?: string;
+    /** Delta feedback: the causal links the answer got right, one line. */
+    nailedIt?: string;
+    /** Delta feedback: the single missing causal step, one line. */
+    missingLink?: string;
   };
   confidenceScore?: number;        // 0-100 slider value
   reflection?: string;             // one-sentence takeaway
@@ -227,6 +231,11 @@ export interface PrerequisitesReport {
   prerequisites: PrerequisiteItem[];
 }
 
+export interface PretestOption {
+  id: string;
+  label: string;
+}
+
 export interface PretestQuestion {
   id: string;
   questionNumber: number;
@@ -236,6 +245,15 @@ export interface PretestQuestion {
   whyAttemptingMatters?: string;
   userHypothesis?: string;
   submitted?: boolean;
+  // ── Predict–Observe–Explain gate ──────────────────────────────────────────
+  /** Exactly 4 concrete predictions to commit to. */
+  options?: PretestOption[];
+  correctOptionId?: string;
+  /** The single most tempting intuitive wrong option. */
+  trapOptionId?: string;
+  /** Cloze-ready interference-trap card that kills the misconception. */
+  trapCardFront?: string;
+  trapCardBack?: string;
 }
 
 export interface PretestSession {

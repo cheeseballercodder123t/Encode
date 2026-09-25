@@ -2,6 +2,8 @@ import JSZip from 'jszip';
 import { SavedSchema, SegregationReport, ProceduralMCQArchetype, StageResponse, Activity } from './types';
 import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from './anki-sqlite-writer';
 import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
+import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
+import { loadInterferenceTraps } from './interference-traps';
 
 export { classifyDeckQuality };
 
@@ -436,6 +438,30 @@ export function extractAnkiCardsFromSchema(
 }
 
 /**
+ * Cards for ONE stage, in the same shape the full-deck extractor produces.
+ *
+ * This is the workbench shortcut's handoff: pressing it at the forge should
+ * push the stage you just finished, not rebuild the whole schema deck. The
+ * per-stage builder underneath is identical to the one
+ * `extractAnkiCardsFromSchema` uses for its primary (user-wording) path, so a
+ * stage pushed early and the same stage pushed later from the export modal
+ * produce the same notes — AnkiConnect dedupes them instead of doubling the
+ * deck.
+ */
+export function extractStageAnkiCards(
+  activity: Activity | undefined,
+  response: StageResponse | undefined,
+  index: number = 0,
+  topicSummary?: string
+): AnkiCardItem[] {
+  if (!activity) return [];
+  const cards = buildUserWordingCards(activity, response, index, calculateSM2(4));
+  const topic = sanitizeTopicSegment(topicSummary || '');
+  const contextTags = topic ? [`Topic::${topic.replace(/\s+/g, '_')}`] : [];
+  return applyContextTags(cards, contextTags);
+}
+
+/**
  * Extracts normalized Anki cards from a SavedSchema, filtered to only the
  * "weak" stages: skipped, empty, graded needs_elaboration, or scored below
  * the threshold. Report-backed paths are untouched (they have no per-stage
@@ -472,6 +498,91 @@ export function extractWeakAnkiCardsFromSchema(
     return weakIds.has(m[1]);
   });
   return weak;
+}
+
+/**
+ * Extraction + Wozniak enforcement in one pass : the deck that actually ships.
+ *
+ * `extractAnkiCardsFromSchema` yields the raw cards; this funnel then applies
+ * Wozniak's minimum-information rules (1-idea split, two-way cloze symmetry,
+ * 20-word ceiling). Cards the ceiling holds back are reported rather than
+ * dropped silently, so the UI can show what still needs chunking and offer an
+ * explicit opt-in that tags them `WozniakOverflow` instead.
+ */
+export interface SanitizedDeck {
+  /** Sanitized deck : split, symmetric, and under the ceiling. */
+  cards: AnkiCardItem[];
+  /** Cards refused by the ceiling (nothing could chunk them safely). */
+  heldBack: WozniakHeldCard[];
+  /** Extra reverse cards added by two-way cloze symmetry. */
+  addedSymmetric: number;
+  /** Raw card count before the pass, for the "N → M cards" summary. */
+  before: number;
+}
+
+/** Marks a curated card the Wozniak pass must not split or chunk. */
+export const INTERFERENCE_TRAP_TAG = 'InterferenceTrap';
+
+/**
+ * Interference-trap cards from the Predict–Observe–Explain gate.
+ *
+ * These are the highest-retention cards the learner will ever own: they mark a
+ * confident prediction that turned out false, which is exactly the shape of
+ * memory the hypercorrection effect makes near-permanent. They ship at the
+ * FRONT of the deck so a filtered study of "what I got wrong" is one click away.
+ * Returns [] outside the browser, so the funnel stays safe to unit-test.
+ */
+export function buildInterferenceTrapCards(): AnkiCardItem[] {
+  const initialSM2 = calculateSM2(4);
+  return loadInterferenceTraps().map((trap) => ({
+    id: `trap-${trap.id}`,
+    front: trap.cardFront,
+    back: trap.cardBack,
+    isCloze: /\{\{c\d+::/.test(trap.cardBack),
+    tags: [
+      'DeepEncode',
+      INTERFERENCE_TRAP_TAG,
+      `Confidence:${trap.confidenceTier}`,
+      `Topic:${trap.topic}`.slice(0, 60),
+    ],
+    sm2: { ...initialSM2 },
+  }));
+}
+
+/** Prepends the stored interference traps to a deck. */
+export function withInterferenceTraps(cards: AnkiCardItem[]): AnkiCardItem[] {
+  const traps = buildInterferenceTrapCards();
+  return traps.length > 0 ? [...traps, ...cards] : cards;
+}
+
+export function sanitizeExtracted(
+  cards: AnkiCardItem[],
+  opts?: { addSymmetric?: boolean }
+): SanitizedDeck {
+  // Traps always pass through the pass untouched, wherever a deck is built.
+  const result = sanitizeForWozniak(cards, { ...opts, protectTag: INTERFERENCE_TRAP_TAG });
+  return {
+    cards: result.cards,
+    heldBack: result.heldBack,
+    addedSymmetric: result.addedSymmetric,
+    before: cards.length,
+  };
+}
+
+export function extractSanitizedCardsFromSchema(
+  schema?: Partial<SavedSchema> | null,
+  report?: SegregationReport | null,
+  opts?: { addSymmetric?: boolean; includeInterferenceTraps?: boolean }
+): SanitizedDeck {
+  const raw = extractAnkiCardsFromSchema(schema, report);
+  const deck = opts?.includeInterferenceTraps ? withInterferenceTraps(raw) : raw;
+  return sanitizeExtracted(deck, opts);
+}
+
+/** Re-adds held-back cards to a deck, tagged so they are findable in Anki. */
+export function withHeldBackCards(deck: SanitizedDeck, includeHeldBack: boolean): AnkiCardItem[] {
+  if (!includeHeldBack) return deck.cards;
+  return [...deck.cards, ...deck.heldBack.map((h) => tagOverflowCard(h.card))];
 }
 
 /**
@@ -702,85 +813,6 @@ export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: s
   zip.file('deepencode_sm2_manifest.json', JSON.stringify(sm2Manifest, null, 2));
 
   return await zip.generateAsync({ type: 'blob' });
-}
-
-/**
- * Connects directly to local AnkiDesktop via AnkiConnect (http://127.0.0.1:8765)
- */
-export async function syncToAnkiConnect(
-  ankiConnectUrl: string = 'http://127.0.0.1:8765',
-  deckName: string,
-  cards: AnkiCardItem[]
-): Promise<{ success: boolean; addedCount: number; message: string }> {
-  /** One AnkiConnect call with timeout so a dead endpoint fails fast. */
-  const call = async (action: string, params?: unknown): Promise<any> => {
-    const res = await fetch(ankiConnectUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, version: 6, params }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) {
-      throw new Error(`AnkiConnect HTTP ${res.status}. Ensure Anki desktop is open with the AnkiConnect add-on enabled.`);
-    }
-    const data = await res.json();
-    if (data.error) throw new Error(`AnkiConnect error: ${data.error}`);
-    return data.result;
-  };
-
-  try {
-    // 0. Reachability probe first : distinguish "Anki closed" from any
-    // later per-note failure with an honest, actionable message.
-    try {
-      await call('version');
-    } catch {
-      throw new Error('Could not reach AnkiConnect. Open Anki desktop and make sure the AnkiConnect add-on is running (default 127.0.0.1:8765).');
-    }
-
-    // 1. Create deck if missing
-    await call('createDeck', { deck: deckName });
-
-    // 2. Pre-flight: ask Anki which notes it would actually accept, so the
-    // summary can distinguish "added" from "already existed".
-    const notesPayload = cards.map((c) => ({
-      deckName,
-      modelName: c.isCloze ? 'Cloze' : 'Basic',
-      fields: c.isCloze
-        ? { Text: c.front, Extra: c.back }
-        : { Front: c.front, Back: c.back },
-      tags: c.tags,
-    }));
-
-    const canAdd: boolean[] = await call('canAddNotes', { notes: notesPayload });
-    const pending = cards.filter((_, i) => canAdd[i]);
-
-    // 3. Add only the notes Anki reported as acceptable (duplicates skipped).
-    let added = 0;
-    if (pending.length > 0) {
-      const pendingPayload = notesPayload.filter((_, i) => canAdd[i]);
-      const ids: (number | null)[] = await call('addNotes', { notes: pendingPayload });
-      added = (ids || []).filter((id) => id !== null).length;
-    }
-
-    const duplicates = cards.length - pending.length;
-    const skipped = pending.length - added;
-    const parts: string[] = [];
-    if (added > 0) parts.push(`${added} added`);
-    if (duplicates > 0) parts.push(`${duplicates} already in your collection`);
-    if (skipped > 0) parts.push(`${skipped} rejected (invalid fields or note type)`);
-
-    const message = parts.length > 0
-      ? `Synced to "${deckName}" : ${parts.join(', ')}.`
-      : 'Nothing to sync : every card already exists in your collection.';
-
-    return { success: true, addedCount: added, message };
-  } catch (err: any) {
-    return {
-      success: false,
-      addedCount: 0,
-      message: err?.message || 'Could not connect to AnkiConnect. Ensure Anki desktop is running.',
-    };
-  }
 }
 
 /**

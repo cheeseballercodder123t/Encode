@@ -7,6 +7,7 @@ import {
   StageResponse,
   YouTubeMetadata
 } from '@/lib/types';
+import type { CognitiveTelemetry } from '@/lib/cognitive-telemetry';
 
 export interface HandoffStats {
   totalCards: number;
@@ -14,10 +15,18 @@ export interface HandoffStats {
   leechCandidates: number;
   unfinished: number;
   boundaryTraps: number;
+  /** Real measurements of encoding quality — this is the trophy, not XP. */
+  telemetry: CognitiveTelemetry;
+  /** Cards the Wozniak ceiling held out of the export until chunked. */
+  heldBackCount: number;
 }
 
 interface CompletedSessionViewProps {
-  xp: number;
+  /**
+   * Session XP. Accepted but deliberately not rendered: the trophy is the
+   * handoff report (cards, telemetry), not a points total.
+   */
+  xp?: number;
   topicSummary: string;
   activities: Activity[];
   userResponses: Record<string, StageResponse>;
@@ -45,7 +54,6 @@ interface CompletedSessionViewProps {
  * clean cards"), not XP. Primary CTA is the one-click FSRS-ready .apkg.
  */
 export function CompletedSessionView({
-  xp,
   topicSummary,
   activities,
   userResponses,
@@ -62,7 +70,17 @@ export function CompletedSessionView({
   onContinue,
   hasIncompleteStages,
 }: CompletedSessionViewProps) {
-  const { totalCards, fsrsReady, leechCandidates, unfinished, boundaryTraps } = handoffStats;
+  const {
+    totalCards,
+    fsrsReady,
+    leechCandidates,
+    unfinished,
+    boundaryTraps,
+    telemetry,
+    heldBackCount,
+  } = handoffStats;
+  const { compression, atomicity, jargon } = telemetry;
+  const hasCompression = compression.rawWords > 0 && compression.atomicCards > 0;
   return (
     <motion.div
       key="completed"
@@ -112,9 +130,46 @@ export function CompletedSessionView({
             </div>
           )}
 
-          <div className="flex items-center gap-1 bg-chassis/60 px-2.5 py-1 border border-edge/50">
-            <span className="text-solder">XP {xp}</span>
+          {hasCompression && (
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
+              <span className="text-amber font-bold font-mono">[ ZIP ]</span>
+              <span className="text-solder">Compression:</span>
+              <span className="font-bold text-bone">
+                {compression.rawWords.toLocaleString()} words → {compression.atomicCards} cards
+              </span>
+              <span className="text-amber font-bold">{compression.noiseStrippedPct}% noise stripped</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
+            <span className="text-amber font-bold font-mono">[ ATOM ]</span>
+            <span className="text-solder">Atomicity:</span>
+            <span className="font-bold text-bone">{atomicity.averageBackWords} words/card</span>
+            {atomicity.overLimit > 0 ? (
+              <span className="text-hazard-400 font-bold">{atomicity.overLimit} over 15</span>
+            ) : (
+              <span className="text-emerald-400 font-bold">all atomic</span>
+            )}
           </div>
+
+          {jargon.detected > 0 && (
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
+              <span className="text-amber font-bold font-mono">[ JARGON ]</span>
+              <span className="text-solder">Deflation:</span>
+              <span className="font-bold text-bone">
+                {jargon.deflated}/{jargon.detected} buzzwords replaced
+              </span>
+              <span className="text-amber font-bold">{jargon.index}%</span>
+            </div>
+          )}
+
+          {heldBackCount > 0 && (
+            <div className="flex items-center gap-1 bg-deck px-3.5 py-1.5 border border-edge">
+              <span className="text-amber font-bold font-mono">[ DENSE ]</span>
+              <span className="text-solder">Held back (over 20 words):</span>
+              <span className="font-bold text-amber">{heldBackCount}</span>
+            </div>
+          )}
         </div>
 
         {/* Primary CTA : one-click FSRS-ready handoff */}
@@ -130,9 +185,11 @@ export function CompletedSessionView({
           </button>
           <p className="text-[10px] text-solder font-mono">
             {'// '}
-            {unfinished + leechCandidates > 0
-              ? `${unfinished + leechCandidates} card${unfinished + leechCandidates === 1 ? '' : 's'} tagged Unfinished/LeechCandidate : build a filtered deck from those tags on day 1.`
-              : 'Zero leeches, zero unfinished : textbook-clean handoff.'}
+            {heldBackCount > 0
+              ? `${heldBackCount} dense card fragment${heldBackCount === 1 ? '' : 's'} stayed out of this deck. Open the exporter to chunk or force-include them.`
+              : unfinished + leechCandidates > 0
+                ? `${unfinished + leechCandidates} card${unfinished + leechCandidates === 1 ? '' : 's'} tagged Unfinished/LeechCandidate : build a filtered deck from those tags on day 1.`
+                : 'Zero leeches, zero unfinished : textbook-clean handoff.'}
           </p>
         </div>
       </div>
