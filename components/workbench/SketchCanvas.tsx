@@ -178,9 +178,9 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
 
   return (
     <div className=" border border-edge/30 bg-[#07080D] p-3 space-y-2">
-      {/* Canvas Toolbar */}
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-1.5">
+      {/* Canvas Toolbar — wraps on phones instead of overflowing. */}
+      <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-2 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => setIsEraser(false)}
