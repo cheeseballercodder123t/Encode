@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileUploader } from './FileUploader';
+import { FluffGuillotineModal } from './FluffGuillotineModal';
 import { UploadedFileAsset, EncodingMode } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 
@@ -145,6 +146,8 @@ export function ZenLaunchpad({
   isLoading
 }: ZenLaunchpadProps) {
   const [showSettings, setShowSettings] = useState(false);
+  // Fluff Guillotine: pre-encoding semantic triage over the pasted notes.
+  const [showTriage, setShowTriage] = useState(false);
 
   // Smart Mnemonic Auto-Detection
   const detectedMnemonic = useMemo(() => {
@@ -315,6 +318,19 @@ export function ZenLaunchpad({
                 {wordCount.toLocaleString()} words
               </span>
             )}
+            {notes.trim().length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  playSound('click');
+                  setShowTriage(true);
+                }}
+                className="px-3 py-2.5 bg-transparent border border-edge text-solder hover:text-bone hover:border-hazard-500/50 text-sm font-medium rounded-md transition-colors duration-150 cursor-pointer"
+                title="Fluff Guillotine: triage the source into causal kernels, evidence and throat-clearing, then strip the noise before encoding"
+              >
+                Strip noise
+              </button>
+            )}
             <button
               type="button"
               onClick={onTeach}
@@ -427,6 +443,17 @@ export function ZenLaunchpad({
           </button>
         ))}
       </div>
+
+      {/* Fluff Guillotine: heatmap the source, then strip the noise in one tap. */}
+      <FluffGuillotineModal
+        isOpen={showTriage}
+        onClose={() => setShowTriage(false)}
+        notes={notes}
+        onApply={(cleaned) => {
+          if (cleaned.trim()) setNotes(cleaned);
+          setShowTriage(false);
+        }}
+      />
     </div>
   );
 }

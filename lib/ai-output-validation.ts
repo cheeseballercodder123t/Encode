@@ -186,7 +186,97 @@ export function validateEvaluationResult(raw: unknown): NonNullable<StageRespons
   if (data.errorAnalysis) result.errorAnalysis = asString(data.errorAnalysis, data.errorAnalysis);
   if (data.jargonBuzzer) result.jargonBuzzer = asString(data.jargonBuzzer);
   if (data.vivaCrossExamination) result.vivaCrossExamination = asString(data.vivaCrossExamination);
+  // Delta feedback: what landed + the one missing causal step. Falls back to
+  // errorAnalysis for the gap so older checker prompts still render the panel.
+  if (data.nailedIt) result.nailedIt = asString(data.nailedIt);
+  const missingLink = asString(data.missingLink) || asString(data.errorAnalysis);
+  if (missingLink) result.missingLink = missingLink;
   return result;
+}
+
+// ─── Recursive why-ladder validation ────────────────────────────────────────
+
+export interface ProbeResult {
+  /** The load-bearing claim in the last layer being interrogated. */
+  target: string;
+  /** The next single why-question, or an acknowledgement at bedrock. */
+  question: string;
+  /** True when the last layer is already a fundamental constraint. */
+  isAxiom: boolean;
+  /** One-sentence systemic necessity (only meaningful when isAxiom). */
+  axiom: string;
+  /** 1-based index of the layer that was interrogated (set by the route). */
+  depth: number;
+}
+
+function asBool(v: unknown): boolean {
+  return v === true || v === 'true';
+}
+
+/**
+ * Coerces a ladder probe into a safe shape. An "axiom" without a sentence is
+ * downgraded to a normal question so the UI never dead-ends on an empty block.
+ */
+export function validateProbeResult(raw: unknown): ProbeResult {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+  const axiom = asString(data.axiom);
+  const isAxiom = asBool(data.isAxiom) && axiom.length > 0;
+  return {
+    target: asString(data.target),
+    question: asString(
+      data.question,
+      isAxiom ? 'Bedrock reached.' : 'What property forces that to be true?'
+    ),
+    isAxiom,
+    axiom: isAxiom ? axiom : '',
+    depth: clampScore(data.depth, 1, 1, 99),
+  };
+}
+
+// ─── Inverted-step drill validation ─────────────────────────────────────────
+
+export interface InvertedStepResult {
+  title: string;
+  /** 3–5 causal steps, exactly one of which is falsified. */
+  steps: { id: string; text: string }[];
+  /** Id of the falsified step; '' when the model's id matched nothing. */
+  falsifiedStepId: string;
+  flawType: string;
+  /** The reveal: what the lie claims vs. the honest mechanism. */
+  whyFalsified: string;
+  /** The honest wording of the falsified step. */
+  correctVersion: string;
+}
+
+/**
+ * Coerces the adversarial drill into something playable. Steps are capped at 5
+ * and given stable ids, and an unmatchable `falsifiedStepId` degrades to the
+ * first step so the drill never becomes unanswerable — the reveal text is what
+ * actually teaches, and it is preserved either way.
+ */
+export function validateInvertedStepResult(raw: unknown): InvertedStepResult {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+  // Filter BEFORE capping: an empty step must not consume one of the five
+  // slots, or a sloppy payload silently shrinks the drill.
+  const steps = (Array.isArray(data.steps) ? data.steps : [])
+    .map((s: any, i: number) => ({
+      id: typeof s?.id === 'string' && s.id.trim() ? s.id.trim() : `s${i + 1}`,
+      text: asString(s?.text),
+    }))
+    .filter((s: { text: string }) => s.text.length > 0)
+    .slice(0, 5);
+
+  const requested = typeof data.falsifiedStepId === 'string' ? data.falsifiedStepId.trim() : '';
+  const matched = steps.some((s: { id: string }) => s.id === requested);
+
+  return {
+    title: asString(data.title, 'Causal chain'),
+    steps,
+    falsifiedStepId: matched ? requested : steps[0]?.id ?? '',
+    flawType: asString(data.flawType, 'fatal flaw'),
+    whyFalsified: asString(data.whyFalsified),
+    correctVersion: asString(data.correctVersion),
+  };
 }
 
 // ─── YouTube validation ──────────────────────────────────────────────────────

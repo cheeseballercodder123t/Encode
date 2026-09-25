@@ -99,6 +99,42 @@ describe('wozniak 20-word ceiling', () => {
   });
 });
 
+describe('wozniak curated-card exemption', () => {
+  const longBack = Array.from({ length: 26 }, (_, i) => `w${i}`).join(' ');
+
+  it('passes a protected card through untouched (no split, no symmetry, no ceiling)', () => {
+    const c = card({
+      id: 'trap',
+      // Joins two ideas AND blows the ceiling : both rules must be bypassed.
+      back: `${longBack} and ${longBack}`,
+      tags: ['DeepEncode', 'InterferenceTrap'],
+    });
+    const res = sanitizeForWozniak([c], { protectTag: 'InterferenceTrap' });
+    expect(res.cards).toHaveLength(1);
+    expect(res.cards[0].id).toBe('trap');
+    expect(res.heldBack).toHaveLength(0);
+    expect(res.addedSymmetric).toBe(0);
+  });
+
+  it('still enforces the rules on unprotected cards in the same deck', () => {
+    const res = sanitizeForWozniak(
+      [card({ id: 'trap', tags: ['InterferenceTrap'], back: longBack }), card({ id: 'plain', back: longBack })],
+      { addSymmetric: false, protectTag: 'InterferenceTrap' }
+    );
+    expect(res.cards.map((c) => c.id)).toEqual(['trap']);
+    expect(res.heldBack).toHaveLength(1);
+    expect(res.heldBack[0].card.id).toBe('plain');
+  });
+
+  it('behaves exactly as before when no protectTag is given', () => {
+    const res = sanitizeForWozniak([card({ id: 'trap', tags: ['InterferenceTrap'], back: longBack })], {
+      addSymmetric: false,
+    });
+    expect(res.cards).toHaveLength(0);
+    expect(res.heldBack).toHaveLength(1);
+  });
+});
+
 describe('wozniak full pass', () => {
   it('splits, adds symmetric cards, and reports counts', () => {
     const res = sanitizeForWozniak([

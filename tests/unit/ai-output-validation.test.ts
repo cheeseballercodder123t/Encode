@@ -6,8 +6,97 @@ import {
   validateEvaluationResult,
   validateBatchEvaluation,
   validateYouTubeResult,
+  validateProbeResult,
+  validateInvertedStepResult,
 } from '../../lib/ai-output-validation';
 import type { Activity } from '../../lib/types';
+
+describe('validateProbeResult (why-ladder)', () => {
+  it('carries a real question through', () => {
+    const out = validateProbeResult({
+      target: 'because packet loss means congestion',
+      question: 'What property of router memory forces a drop rather than a delay?',
+      isAxiom: false,
+      depth: 1,
+    });
+    expect(out.isAxiom).toBe(false);
+    expect(out.question).toMatch(/router memory/);
+    expect(out.axiom).toBe('');
+  });
+
+  it('downgrades an axiom with no sentence so the UI never dead-ends', () => {
+    const out = validateProbeResult({ isAxiom: true, axiom: '   ', question: '' });
+    expect(out.isAxiom).toBe(false);
+    expect(out.axiom).toBe('');
+    expect(out.question.length).toBeGreaterThan(0);
+  });
+
+  it('keeps a real axiom', () => {
+    const out = validateProbeResult({
+      isAxiom: true,
+      axiom: 'Finite queue memory forces a drop: an unbounded buffer is not physical.',
+    });
+    expect(out.isAxiom).toBe(true);
+    expect(out.axiom).toMatch(/Finite queue memory/);
+  });
+
+  it('falls back to a usable question on a null payload', () => {
+    const out = validateProbeResult(null);
+    expect(out.isAxiom).toBe(false);
+    expect(out.question).toMatch(/forces that to be true/);
+    expect(out.depth).toBe(1);
+  });
+});
+
+describe('validateInvertedStepResult (spot the lie)', () => {
+  const good = {
+    title: 'Vesicle fusion',
+    steps: [
+      { id: 's1', text: 'Calcium enters the terminal.' },
+      { id: 's2', text: 'Synaptotagmin binds calcium.' },
+      { id: 's3', text: 'The SNARE complex disassembles to force fusion.' },
+      { id: 's4', text: 'Transmitter enters the cleft.' },
+    ],
+    falsifiedStepId: 's3',
+    flawType: 'inverted physical process',
+    whyFalsified: 'SNAREs zip together to force fusion; disassembly follows.',
+    correctVersion: 'The SNARE complex zips together to force the membranes into apposition.',
+  };
+
+  it('passes a coherent drill through', () => {
+    const out = validateInvertedStepResult(good);
+    expect(out.steps).toHaveLength(4);
+    expect(out.falsifiedStepId).toBe('s3');
+    expect(out.correctVersion).toMatch(/zips together/);
+  });
+
+  it('degrades an unmatchable id to the first step rather than dead-ending', () => {
+    const out = validateInvertedStepResult({ ...good, falsifiedStepId: 's9' });
+    expect(out.falsifiedStepId).toBe('s1');
+    expect(out.whyFalsified).toMatch(/SNAREs zip/);
+  });
+
+  it('drops empty steps and caps runaway chains', () => {
+    const out = validateInvertedStepResult({
+      steps: [
+        { id: 'a', text: 'one' },
+        { id: 'b', text: '   ' },
+        { id: 'c', text: 'two' },
+        { id: 'd', text: 'three' },
+        { id: 'e', text: 'four' },
+        { id: 'f', text: 'five' },
+        { id: 'g', text: 'six' },
+      ],
+      falsifiedStepId: 'd',
+    });
+    expect(out.steps).toHaveLength(5);
+    expect(out.falsifiedStepId).toBe('d');
+  });
+
+  it('returns an empty step list for a null payload (route then 502s)', () => {
+    expect(validateInvertedStepResult(null).steps).toEqual([]);
+  });
+});
 
 describe('extractJson', () => {
   it('strips ```json fences', () => {
@@ -101,6 +190,30 @@ describe('validateEvaluationResult', () => {
   it('downgrades an invalid grade to needs_elaboration', () => {
     const out = validateEvaluationResult({ grade: 'masterful', score: 99, feedback: 'wow' });
     expect(out.grade).toBe('needs_elaboration');
+  });
+
+  it('carries the delta feedback lines through', () => {
+    const out = validateEvaluationResult({
+      grade: 'needs_elaboration',
+      score: 62,
+      feedback: 'Close.',
+      nailedIt: 'Na+ influx and threshold crossing.',
+      missingLink: 'S4 segments swing outward, which is what opens the pore.',
+    });
+    expect(out.nailedIt).toBe('Na+ influx and threshold crossing.');
+    expect(out.missingLink).toBe('S4 segments swing outward, which is what opens the pore.');
+  });
+
+  it('falls back to errorAnalysis for the missing link', () => {
+    const out = validateEvaluationResult({
+      grade: 'good',
+      score: 74,
+      feedback: 'Solid.',
+      errorAnalysis: 'You skipped the physical link between voltage change and pore dilation.',
+    });
+    expect(out.missingLink).toBe(
+      'You skipped the physical link between voltage change and pore dilation.'
+    );
   });
 
   it('clamps out-of-range scores', () => {

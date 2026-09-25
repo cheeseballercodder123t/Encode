@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  AnkiCardItem, 
+  type AnkiCardItem,
   extractAnkiCardsFromSchema,
-  extractWeakAnkiCardsFromSchema, 
+  extractWeakAnkiCardsFromSchema,
+  sanitizeExtracted,
+  withInterferenceTraps,
+  withHeldBackCards,
+  type SanitizedDeck,
   generateAnkiApkgPackage, 
   generateAnkiTextDeck, 
   generateAnkiTextDecks, 
-  syncToAnkiConnect, 
   syncToCustomWebhook, 
   calculateSM2, 
   SM2State,
@@ -25,6 +28,14 @@ import { validateProceduralArchetype } from '@/lib/procedural-validator';
 import { loadAISettings } from '@/lib/storage';
 import { playSound } from '@/lib/audio';
 import { auditDeck, splitDenseCloze } from '@/lib/fsrs-audit';
+import {
+  DEFAULT_ANKI_CONNECT_URL,
+  loadAnkiEndpoint,
+  saveAnkiEndpoint,
+  pushCardsToAnki,
+  formatPushStatus,
+  describePushError,
+} from '@/lib/anki-connect';
 
 interface AnkiExportModalProps {
   isOpen: boolean;
@@ -38,31 +49,58 @@ interface AnkiExportModalProps {
 }
 
 export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includeMcq }: AnkiExportModalProps) {
-  const [cards, setCards] = useState<AnkiCardItem[]>([]);
+  // The Wozniak-enforced deck. Extraction is raw, then sanitized: 1-idea split,
+  // two-way cloze symmetry, 20-word ceiling. Everything downstream (preview,
+  // audit, downloads, webhook) reads this deck, so the count you see is the
+  // count you ship.
+  const [deck, setDeck] = useState<SanitizedDeck>({ cards: [], heldBack: [], addedSymmetric: 0, before: 0 });
+  // Set after a manual FSRS split, which rewrites the deck in place.
+  const [manualCards, setManualCards] = useState<AnkiCardItem[] | null>(null);
+  // Ceiling overflow is excluded by default (Wozniak: chunk it first); this
+  // explicit opt-in ships them tagged `WozniakOverflow` instead of losing them.
+  const [includeHeldBack, setIncludeHeldBack] = useState(false);
   const [deckName, setDeckName] = useState<string>('DeepEncode::Cognitive_Schema');
-  // Three tabs only : Export (apkg/txt + audit), MCQ Deck, Sync (AnkiConnect/Webhook).
+  // Three tabs only : Export (apkg/txt + audit), MCQ Deck, Sync (Webhook).
   const [activeTab, setActiveTab] = useState<'export' | 'mcq' | 'sync'>('export');
 
   // Weak-export toggle: when on, only unfinished / low-scoring stages are exported.
   const [exportWeakOnly, setExportWeakOnly] = useState(false);
-  const displayCards = useMemo(() => {
-    if (!exportWeakOnly) return cards;
+  const weakDeck = useMemo(() => {
+    if (!exportWeakOnly) return null;
     const weak = extractWeakAnkiCardsFromSchema(schema, report);
-    return weak.length > 0 ? weak : cards;
-  }, [exportWeakOnly, cards, schema, report]);
+    // No weak stages → the toggle is a no-op, never an empty deck. Traps from
+    // the prediction gate belong in a weak-only deck too: they are, by
+    // definition, the things the learner already got wrong once.
+    return weak.length > 0 ? sanitizeExtracted(withInterferenceTraps(weak)) : null;
+  }, [exportWeakOnly, schema, report]);
+
+  const activeDeck = weakDeck ?? deck;
+  const baseCards = manualCards ?? activeDeck.cards;
+  const displayCards = useMemo(
+    () => (includeHeldBack ? withHeldBackCards({ ...activeDeck, cards: baseCards }, true) : baseCards),
+    [activeDeck, baseCards, includeHeldBack]
+  );
 
   // FSRS Card Audit : recomputed whenever the displayed deck changes.
   const audit = useMemo(() => auditDeck(displayCards), [displayCards]);
-
-  // AnkiConnect
-  const [ankiConnectUrl, setAnkiConnectUrl] = useState('http://127.0.0.1:8765');
-  const [isSyncingAnkiConnect, setIsSyncingAnkiConnect] = useState(false);
-  const [ankiConnectStatus, setAnkiConnectStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
   // Webhook
   const [webhookUrl, setWebhookUrl] = useState('');
   const [isSyncingWebhook, setIsSyncingWebhook] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  // AnkiConnect : one-tap push straight into a running Anki desktop app, so
+  // finishing an encode never detours through a file system.
+  const [ankiEndpoint, setAnkiEndpoint] = useState<string>(DEFAULT_ANKI_CONNECT_URL);
+  const [isPushing, setIsPushing] = useState(false);
+  const [pushStatus, setPushStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Hydration-safe: localStorage is read after mount, not during render.
+  /* eslint-disable react-hooks/set-state-in-effect -- external-system read on open */
+  useEffect(() => {
+    if (isOpen) setAnkiEndpoint(loadAnkiEndpoint());
+  }, [isOpen]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const [prevIsOpen, setPrevIsOpen] = useState(false);
   const [prevReport, setPrevReport] = useState<SegregationReport | null | undefined>(undefined);
@@ -97,8 +135,9 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setPrevIsOpen(true);
     setPrevReport(report);
     setPrevSchema(schema);
-    const extracted = extractAnkiCardsFromSchema(schema, report);
-    setCards(extracted);
+    setDeck(sanitizeExtracted(withInterferenceTraps(extractAnkiCardsFromSchema(schema, report))));
+    setManualCards(null);
+    setIncludeHeldBack(false);
     const title = report?.topic || schema?.topicSummary || 'Cognitive_Schema';
     setDeckName(`DeepEncode::${title.replace(/[^a-zA-Z0-9_]/g, '_')}`);
     // MCQs default to the CURRENT session topic + notes, not AP presets.
@@ -114,6 +153,47 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
   } else if (!isOpen && prevIsOpen) {
     setPrevIsOpen(false);
   }
+
+  const handlePushToAnki = useCallback(async () => {
+    if (isPushing || displayCards.length === 0) return;
+    playSound('click');
+    setIsPushing(true);
+    setPushStatus(null);
+    try {
+      // Persist whatever endpoint the user typed, normalized.
+      const endpoint = saveAnkiEndpoint(ankiEndpoint);
+      setAnkiEndpoint(endpoint);
+      const result = await pushCardsToAnki(displayCards, deckName, { url: endpoint });
+      setPushStatus({
+        ok: true,
+        message: `${formatPushStatus(result)} — ${result.added} of ${result.attempted} card${
+          result.attempted === 1 ? '' : 's'
+        } landed in ${result.deckName}.`,
+      });
+      playSound('success');
+    } catch (err) {
+      setPushStatus({ ok: false, message: describePushError(err) });
+      playSound('wrong');
+    } finally {
+      setIsPushing(false);
+    }
+  }, [ankiEndpoint, deckName, displayCards, isPushing]);
+
+  // Cmd/Ctrl+Shift+A from anywhere in the modal pushes. The capture-phase
+  // listener (plus stopPropagation for this combo only) keeps the workbench's
+  // own shortcut from also firing at the stage behind the modal.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        e.stopPropagation();
+        void handlePushToAnki();
+      }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isOpen, handlePushToAnki]);
 
   if (!isOpen) return null;
 
@@ -156,18 +236,6 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       URL.revokeObjectURL(url);
     });
     playSound('success');
-  };
-
-  const handleSyncAnkiConnect = async () => {
-    if (isSyncingAnkiConnect) return;
-    playSound('click');
-    setIsSyncingAnkiConnect(true);
-    setAnkiConnectStatus(null);
-
-    const res = await syncToAnkiConnect(ankiConnectUrl, deckName, displayCards);
-    setAnkiConnectStatus(res);
-    setIsSyncingAnkiConnect(false);
-    if (res.success) playSound('success');
   };
 
   const handleSyncWebhook = async () => {
@@ -316,7 +384,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
   };
 
   const handleAutoSplit = (cardId: string) => {
-    const target = cards.find((c) => c.id === cardId);
+    const target = baseCards.find((c) => c.id === cardId);
     if (!target) return;
     const split = splitDenseCloze(target);
     if (!split) {
@@ -324,14 +392,18 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       return;
     }
     playSound('click');
-    setCards((prev) => {
-      const idx = prev.findIndex((c) => c.id === cardId);
-      if (idx === -1) return prev;
-      const next = [...prev];
-      next.splice(idx, 1, ...split);
-      return next;
-    });
+    const idx = baseCards.findIndex((c) => c.id === cardId);
+    if (idx === -1) return;
+    const next = [...baseCards];
+    next.splice(idx, 1, ...split);
+    setManualCards(next);
     playSound('success');
+  };
+
+  /** Flipping the weak-only toggle discards any manual split on the old deck. */
+  const handleToggleWeakOnly = (checked: boolean) => {
+    setExportWeakOnly(checked);
+    setManualCards(null);
   };
 
   return (
@@ -410,7 +482,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
             }`}
           >
             <span className="text-amber font-bold font-mono">[ SYNC ]</span>
-            <span>Sync (AnkiConnect / Webhook)</span>
+            <span>Sync (Webhook)</span>
           </button>
         </div>
 
@@ -435,16 +507,74 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 <input
                   type="checkbox"
                   checked={exportWeakOnly}
-                  onChange={e => setExportWeakOnly(e.target.checked)}
+                  onChange={e => handleToggleWeakOnly(e.target.checked)}
                   className="w-4 h-4 accent-amber cursor-pointer"
                 />
                 <span className="text-xs text-bone font-medium">
                   Export only unfinished / low-scoring stages
-                  {exportWeakOnly && displayCards.length !== cards.length
-                    ? <span className="text-amber"> · {displayCards.length} of {cards.length}</span>
+                  {exportWeakOnly && displayCards.length !== deck.cards.length
+                    ? <span className="text-amber"> · {displayCards.length} of {deck.cards.length}</span>
                     : null}
                 </span>
               </label>
+
+              {/* Wozniak enforcement pass : what the sanitizer changed. */}
+              <div
+                className={`p-3.5 border text-xs leading-relaxed space-y-2 ${
+                  activeDeck.heldBack.length > 0
+                    ? 'bg-amber-950/30 border-amber-500/40 text-amber-200'
+                    : 'bg-inset/40 border-edge text-slate-ink'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-semibold text-amber-300 text-[11px] uppercase tracking-widest">
+                    <span className="font-mono">[ WOZNIAK ]</span> Enforcement pass
+                  </span>
+                  <span className="font-mono text-[11px] text-solder">
+                    {activeDeck.before} raw → {displayCards.length} atomic
+                  </span>
+                </div>
+                <p className="text-solder">
+                  The 1-idea rule, two-way cloze symmetry, and the 20-word information ceiling are applied
+                  to every card before it reaches Anki.
+                  {activeDeck.addedSymmetric > 0
+                    ? ` Added ${activeDeck.addedSymmetric} reverse-direction card${activeDeck.addedSymmetric === 1 ? '' : 's'}.`
+                    : ''}
+                </p>
+
+                {activeDeck.heldBack.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <div className="p-2.5 bg-chassis/60 border border-amber-500/30">
+                      <span className="font-semibold text-amber-300">
+                        {activeDeck.heldBack.length} card fragment{activeDeck.heldBack.length === 1 ? '' : 's'} held back
+                      </span>
+                      <span className="text-solder">
+                        {' '}— auto-splitting could not bring them under the 20-word ceiling, so they are out of
+                        the export until you chunk them in the workbench.
+                      </span>
+                      <ul className="mt-1.5 space-y-0.5 font-mono text-[11px] text-solder">
+                        {activeDeck.heldBack.map((h, i) => (
+                          <li key={`${h.card.id}-${i}`}>
+                            [ ! ] {h.card.front.replace(/<[^>]*>/g, '').slice(0, 64)} — {h.reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={includeHeldBack}
+                        onChange={(e) => setIncludeHeldBack(e.target.checked)}
+                        className="w-4 h-4 accent-amber cursor-pointer"
+                      />
+                      <span className="text-bone">
+                        Export them anyway (tagged{' '}
+                        <code className="text-amber font-mono">WozniakOverflow</code>)
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
 
               <div className="p-4 bg-inset/30 border border-edge/30 text-xs text-bone leading-relaxed space-y-2">
                 <div className="font-bold text-bone flex items-center gap-2">
@@ -472,6 +602,51 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
                   Download Anki .txt (Tab-Separated)
                 </button>
+              </div>
+
+              {/* AnkiConnect: straight into a running Anki, no file system. */}
+              <div className="p-4 bg-deck/60 border border-edge space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-semibold text-[11px] uppercase tracking-widest text-amber-300">
+                    <span className="font-mono">[ ANKI ]</span> One-tap push
+                  </span>
+                  <span className="font-mono text-[11px] text-solder">Cmd/Ctrl+Shift+A</span>
+                </div>
+                <p className="text-xs text-solder leading-relaxed">
+                  Creates the deck and adds {displayCards.length} card{displayCards.length === 1 ? '' : 's'} directly
+                  through AnkiConnect. Requires the Anki desktop app open with the AnkiConnect add-on
+                  (code <code className="text-bone font-mono">2055492159</code>) — duplicates are skipped, never re-added.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    aria-label="AnkiConnect endpoint"
+                    value={ankiEndpoint}
+                    onChange={(e) => setAnkiEndpoint(e.target.value)}
+                    placeholder={DEFAULT_ANKI_CONNECT_URL}
+                    className="flex-1 px-3 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-solder font-mono"
+                  />
+                  <button
+                    onClick={handlePushToAnki}
+                    disabled={isPushing || displayCards.length === 0}
+                    className="px-4 py-2 bg-amber/15 hover:bg-amber/25 border border-amber/50 text-amber font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <span className="font-mono">[ ZAP ]</span>
+                    {isPushing ? 'Forging…' : `Push ${displayCards.length} to Anki`}
+                  </button>
+                </div>
+                {pushStatus && (
+                  <div
+                    data-testid="anki-push-status"
+                    className={`p-3 border text-xs leading-relaxed ${
+                      pushStatus.ok
+                        ? 'bg-signal-950/40 border-signal/40 text-signal-300'
+                        : 'bg-hazard-950/40 border-hazard/40 text-hazard-300'
+                    }`}
+                  >
+                    <span className="font-mono font-bold">{pushStatus.ok ? '[ OK ]' : '[ ! ]'}</span> {pushStatus.message}
+                  </div>
+                )}
               </div>
 
               {/* Cards Preview */}
@@ -550,65 +725,9 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
             </div>
           )}
 
-          {/* TAB 3: Sync (AnkiConnect + Webhook, side by side) */}
+          {/* TAB 3: Sync (Webhook) */}
           {activeTab === 'sync' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* AnkiConnect */}
-              <div className="space-y-4">
-                <div className="p-4 bg-amber/30 border border-amber/30 text-xs text-amber leading-relaxed space-y-2">
-                  <div className="font-bold text-amber flex items-center gap-2">
-                    <span className="text-amber font-bold font-mono">[ CPU ]</span>
-                    Anki Desktop (AnkiConnect)
-                  </div>
-                  <p>
-                    Requires Anki Desktop running locally with the <code className="text-amber font-mono">AnkiConnect</code> add-on enabled on port <code className="text-amber font-mono">8765</code>.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-solder block">AnkiConnect Endpoint URL:</label>
-                  <input
-                    type="text"
-                    value={ankiConnectUrl}
-                    onChange={(e) => setAnkiConnectUrl(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-edge font-mono"
-                  />
-                </div>
-
-                <button
-                  onClick={handleSyncAnkiConnect}
-                  disabled={isSyncingAnkiConnect}
-                  className="w-full py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
-                >
-                  {isSyncingAnkiConnect ? (
-                    <>
-                      <span className="text-amber font-bold font-mono">[ BUSY ]</span>
-                      Connecting & Pushing to Anki...
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-amber font-bold font-mono">[ SEND ]</span>
-                      Push {cards.length} Cards to Anki Desktop
-                    </>
-                  )}
-                </button>
-
-                {ankiConnectStatus && (
-                  <div className={`p-3  text-xs flex items-start gap-2 ${
-                    ankiConnectStatus.success
-                      ? 'bg-signal-950/40 border border-signal/40 text-signal-300'
-                      : 'bg-hazard-950/40 border border-hazard/40 text-hazard-300'
-                  }`}>
-                    {ankiConnectStatus.success ? (
-                      <span className="text-signal font-bold font-mono">[ OK ]</span>
-                    ) : (
-                      <span className="text-hazard font-bold font-mono">[ ! ]</span>
-                    )}
-                    <div className="leading-relaxed">{ankiConnectStatus.message}</div>
-                  </div>
-                )}
-              </div>
-
+            <div className="grid grid-cols-1 gap-4">
               {/* Webhook */}
               <div className="space-y-4">
                 <div className="p-4 bg-inset/30 border border-edge/30 text-xs text-bone leading-relaxed space-y-2">

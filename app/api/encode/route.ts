@@ -456,6 +456,14 @@ export async function POST(req: NextRequest) {
     const wordCount = hasNotes ? notes.trim().split(/\s+/).length : 0;
     const isMassiveText = enableGuidedPath || wordCount > 900;
 
+    // Interleaving (launchpad toggle): the learner chose to alternate
+    // conceptual and rote retrieval practice inside one workout, instead of
+    // grouping every mechanism stage together. Practice that is interleaved
+    // is retained better than practice that is blocked.
+    const interleaveNote = interleaveMode
+      ? `\nINTERLEAVING ENABLED: Alternate template FAMILIES across the sequence — never place two conceptual/mechanism templates back to back. After a conceptual template, place a retrieval-oriented one ('interleaved_srs', 'mnemonic_peg', 'taxonomic_chunking', 'contrast_grid'), then return to conceptual. This forces the learner to switch retrieval strategies between stages.`
+      : '';
+
     const hiddenNote = hiddenList.length > 0
       ? `\nLEARNER TEMPLATE PREFERENCES: The learner hid these templates in Settings because they don't help them — NEVER use them: (${hiddenList.join(', ')}). Choose only from the remaining catalog.`
       : '';
@@ -571,7 +579,7 @@ Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting pote
 CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges and 'generationChallenge', provide clear scaffold labels, domain presets, and concrete example answers, and ALWAYS include 'boundaryContrast' for the stage's concept.`;
     }
 
-    systemPrompt += `\n\n${difficultyInstruction}${confidenceContext}`;
+    systemPrompt += `\n\n${difficultyInstruction}${confidenceContext}${interleaveNote}`;
 
     let userPrompt = '';
     if (hasNotes) {
