@@ -147,7 +147,7 @@ function ToolToggle({
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+      className={`min-h-[40px] sm:min-h-0 px-3 sm:px-2.5 py-2 sm:py-1 text-[11px] font-medium rounded-md border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
         active
           ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
           : 'bg-inset border-edge text-slate-ink hover:text-bone hover:border-slate-ink/40'
@@ -729,7 +729,8 @@ export function StudioWorkbench({
             />
 
             {/* Optional Dual-Coding Sketchpad Toggle + why-ladder */}
-            <div className="flex justify-end gap-1.5">
+            {/* flex-wrap: six toggles overflow a ~360px viewport without it. */}
+            <div className="flex flex-wrap justify-end gap-1.5">
               <ToolToggle
                 active={showProbe}
                 onClick={() => {

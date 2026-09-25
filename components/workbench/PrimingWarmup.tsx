@@ -138,8 +138,16 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
         : 'bg-amber-950/30 border-amber-500/40 text-amber-300'
     : '';
 
+  // Archetype chips: 44px tall on phones so a thumb lands on the right drill.
+  const chip = (pressed: boolean) =>
+    `min-h-[44px] px-3.5 py-2 text-[10px] font-mono uppercase tracking-widest rounded border transition-colors duration-150 cursor-pointer ${
+      pressed
+        ? 'bg-amber-500/20 border-amber-500/60 text-amber-200'
+        : 'bg-inset border-edge text-solder hover:text-bone'
+    }`;
+
   return (
-    <div className="rounded-md border border-amber-500/40 bg-amber-500/[0.05] p-3.5 space-y-3">
+    <div className="rounded-md border border-amber-500/40 bg-amber-500/[0.05] p-3 sm:p-3.5 space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
           Priming warm-up
@@ -159,11 +167,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
           aria-pressed={requestedKind === null}
           onClick={() => selectKind(null)}
           title="Let the examiner choose the archetype that fits this stage"
-          className={`px-2 py-1 text-[10px] font-mono uppercase tracking-widest rounded border transition-colors duration-150 cursor-pointer ${
-            requestedKind === null
-              ? 'bg-amber-500/20 border-amber-500/60 text-amber-200'
-              : 'bg-inset border-edge text-solder hover:text-bone'
-          }`}
+          className={chip(requestedKind === null)}
         >
           Auto
         </button>
@@ -175,11 +179,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
             aria-pressed={requestedKind === kind}
             onClick={() => selectKind(kind)}
             title={PRIMING_KIND_BLURB[kind]}
-            className={`px-2 py-1 text-[10px] font-mono uppercase tracking-widest rounded border transition-colors duration-150 cursor-pointer ${
-              requestedKind === kind
-                ? 'bg-amber-500/20 border-amber-500/60 text-amber-200'
-                : 'bg-inset border-edge text-solder hover:text-bone'
-            }`}
+            className={chip(requestedKind === kind)}
           >
             {PRIMING_KIND_LABEL[kind]}
           </button>
@@ -228,7 +228,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
                   setSketchDone(true);
                   playSound('click');
                 }}
-                className="px-3 py-2 text-[11px] font-semibold rounded-md bg-amber-500 border border-amber-500 text-inset hover:bg-amber-400 transition-colors duration-150 cursor-pointer"
+                className="w-full sm:w-auto px-3 py-3 sm:py-2 text-[11px] font-semibold rounded-md bg-amber-500 border border-amber-500 text-inset hover:bg-amber-400 transition-colors duration-150 cursor-pointer"
               >
                 Commit the shape
               </button>
@@ -267,7 +267,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
                       onClick={() => commitPick(choice.id)}
                       disabled={revealed}
                       data-testid={`prime-choice-${i}`}
-                      className={`text-left p-2.5 rounded-md border text-xs leading-relaxed transition-colors duration-150 cursor-pointer disabled:cursor-default ${
+                      className={`text-left p-3 sm:p-2.5 min-h-[44px] rounded-md border text-xs leading-relaxed transition-colors duration-150 cursor-pointer disabled:cursor-default ${
                         revealed && isTruth
                           ? 'bg-signal-950/40 border-signal-500/50 text-bone'
                           : isPicked
@@ -275,7 +275,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
                             : 'bg-inset border-edge text-slate-ink hover:border-slate-ink/40 hover:text-bone'
                       }`}
                     >
-                      <span className="font-mono text-[10px] text-solder mr-1.5">
+                      <span className="font-mono text-[10px] text-solder shrink-0 mr-1.5">
                         {'ABCDE'[i]}.
                       </span>
                       {choice.label}
@@ -312,7 +312,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
                     type="button"
                     data-testid="prime-next"
                     onClick={advance}
-                    className="px-3 py-2 text-[11px] font-semibold rounded-md bg-inset border border-edge text-bone hover:border-amber-500/50 hover:text-amber-200 transition-colors duration-150 cursor-pointer"
+                    className="w-full sm:w-auto px-3 py-3 sm:py-2 text-[11px] font-semibold rounded-md bg-inset border border-edge text-bone hover:border-amber-500/50 hover:text-amber-200 transition-colors duration-150 cursor-pointer"
                   >
                     {stepIndex + 1 < steps.length ? 'Next probe' : 'See the rule'}
                   </button>
@@ -360,7 +360,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
                       onAdopt(summary.principle);
                       playSound('success');
                     }}
-                    className="px-3 py-1.5 text-[11px] font-semibold rounded-md bg-amber-500 border border-amber-500 text-inset hover:bg-amber-400 transition-colors duration-150 cursor-pointer"
+                    className="w-full sm:w-auto px-3 py-2.5 sm:py-1.5 text-[11px] font-semibold rounded-md bg-amber-500 border border-amber-500 text-inset hover:bg-amber-400 transition-colors duration-150 cursor-pointer"
                   >
                     Send the rule to the answer
                   </button>
@@ -389,7 +389,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
           onClick={build}
           disabled={isBuilding}
           data-testid="prime-build"
-          className="px-3 py-2 text-[11px] font-semibold rounded-md bg-amber-500/15 border border-amber-500/50 text-amber-300 hover:bg-amber-500/25 transition-colors duration-150 disabled:opacity-40 cursor-pointer"
+          className="flex-1 sm:flex-none px-3 py-3 sm:py-2 text-[11px] font-semibold rounded-md bg-amber-500/15 border border-amber-500/50 text-amber-300 hover:bg-amber-500/25 transition-colors duration-150 disabled:opacity-40 cursor-pointer"
         >
           {isBuilding ? 'Finding the non-arbitrary part…' : drill ? 'New warm-up' : 'Prime this stage'}
         </button>
