@@ -305,7 +305,12 @@ const standardResponseSchema = {
                 items: { type: Type.STRING },
                 description: "Helpful suggestions, chunk categories, or domain options"
               },
-              exampleAnswer: { type: Type.STRING, description: "A high-quality example to spark the user's creativity" }
+              exampleAnswer: { type: Type.STRING, description: "A high-quality example to spark the user's creativity" },
+              causalFrame: {
+                type: Type.STRING,
+                description:
+                  "ONE causal sentence template with the markers [[1]], [[2]] and optionally [[3]] standing for the stage's field1/field2/field3 answers, using real causal connectives (when/because/which forces/unless) rather than labels. Example: 'When [[1]], the [[2]] is forced, so [[3]] — UNLESS the pore is blocked.' Never repeat a marker, never use markers other than [[1]]-[[3]], and keep it under 30 words."
+              }
             },
             required: ["field1Label", "field1Placeholder", "field2Label", "field2Placeholder", "exampleAnswer"]
           }
@@ -403,7 +408,12 @@ const guidedPathResponseSchema = {
                       type: Type.ARRAY,
                       items: { type: Type.STRING }
                     },
-                    exampleAnswer: { type: Type.STRING }
+                    exampleAnswer: { type: Type.STRING },
+                    causalFrame: {
+                      type: Type.STRING,
+                      description:
+                        "ONE causal sentence template with the markers [[1]], [[2]] and optionally [[3]] standing for field1/field2/field3, using real causal connectives instead of labels."
+                    }
                   },
                   required: ["field1Label", "field1Placeholder", "field2Label", "field2Placeholder", "exampleAnswer"]
                 }
@@ -519,6 +529,8 @@ If the user's notes miss foundational rules (e.g. forgot why HF is a weak acid o
 
 ATOMIC + BOUNDARY DISCIPLINE: One item-cluster per stage. For EVERY stage populate 'boundaryContrast' (confusableLookalike + distinguishingRule) : the confusable pair in this list (e.g. strong vs weak acid, Na vs K channel) and the one-sentence rule that separates them.
 
+Also write 'scaffold.causalFrame' — ONE sentence templating this stage's deduction with [[1]] / [[2]] / (optional) [[3]] where the learner's field1 / field2 / field3 answers go (real connectives, no labels, no repeated markers).
+
 CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/buckets/palace rooms/acronyms, and provide clear scaffold labels and concrete high-quality example answers.`;
     } else {
       systemPrompt = `You are a world-class Cognitive Science Architect specializing in Semantic Memory Encoding (Craik & Lockhart Levels of Processing, Paivio Dual Coding Theory, Chi's ICAP Framework, and Ausubel's Meaningful Learning).
@@ -566,6 +578,8 @@ For EVERY stage, you MUST populate 'visualData.generationChallenge' with:
 ATOMIC CARD DISCIPLINE (CRITICAL FOR FSRS HANDOFF):
 Each stage teaches exactly ONE mechanism : one idea, one card. Never bundle multiple mechanisms into a single stage.
 Every scaffold label and example answer must be answerable in UNDER 15 WORDS so the learner's generated wording can become one atomic spaced-repetition card.
+
+CAUSAL FRAME: also write 'scaffold.causalFrame' — the ONE sentence this stage is asking the learner to complete, with [[1]] / [[2]] / (optional) [[3]] marking where their field1 / field2 / field3 answers go. It must be a readable causal sentence with real connectives (when … then … which forces … unless …), never a list of labels, never repeating a marker, and the blanks must sit exactly where that stage's deduction breaks down.
 
 BOUNDARY CONTRAST (REQUIRED):
 For EVERY stage, populate 'boundaryContrast' with:

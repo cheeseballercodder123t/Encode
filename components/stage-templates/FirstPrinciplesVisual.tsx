@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Activity, FirstPrinciplesVisualData } from '@/lib/types';
+import { buildCompletion } from '@/lib/visual-completion';
+import { DiagramBlank } from './DiagramBlank';
 
 interface Props {
   activity: Activity;
@@ -9,12 +11,17 @@ interface Props {
   field2: string;
   field3?: string;
   selectedPreset?: string;
+  /** Present when the host can accept the completed link into the answer. */
+  onAdopt?: (text: string) => void;
 }
 
-export function FirstPrinciplesVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
+export function FirstPrinciplesVisual({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const visualData = activity.visualData || {};
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [showClue, setShowClue] = useState(false);
+  // The chain is the exercise, not decoration: one node is blanked and the
+  // learner has to produce the link before the diagram shows it.
+  const blank = onAdopt ? buildCompletion(activity) : null;
 
   const defaultNodes = [
     { id: '1', label: '1. Irreducible Axiom / Input', subtext: 'Fundamental physical constraint or baseline law', type: 'input' as const },
@@ -118,14 +125,20 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
                   </span>
                 </div>
                 
-                <h4 className="text-xs font-bold text-bone mb-1">
-                  {node.label}
-                </h4>
+                {blank && blank.kind === 'causal_node' && blank.index === index ? (
+                  <DiagramBlank slot={blank} onAdopt={onAdopt} accent="amber" />
+                ) : (
+                  <>
+                    <h4 className="text-xs font-bold text-bone mb-1">
+                      {node.label}
+                    </h4>
 
-                {node.subtext && (
-                  <p className="text-[11px] text-solder leading-relaxed font-mono">
-                    {node.subtext}
-                  </p>
+                    {node.subtext && (
+                      <p className="text-[11px] text-solder leading-relaxed font-mono">
+                        {node.subtext}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
 

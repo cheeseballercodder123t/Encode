@@ -389,6 +389,186 @@ export const TEACH_RESPONSE = {
   },
 };
 
+// ─── 10-second discrimination gate (/api/discrimination) ───────────────────
+// One vignette is the concept (dq1) and one the lookalike (dq2); neither names
+// either label, which is what makes the check blind.
+
+export const DISCRIMINATION_RESPONSE = {
+  topic: 'Action Potentials',
+  conceptLabel: 'Depolarisation',
+  lookalikeLabel: 'Repolarisation',
+  questions: [
+    {
+      id: 'dq1',
+      vignette:
+        'Membrane voltage jumps from -70mV to +30mV in under a millisecond, and Na+ permeability rises 500-fold as it does.',
+      answerIsConcept: true,
+      rationale: 'Voltage RISES abruptly: the Na+ conductance leads.',
+    },
+    {
+      id: 'dq2',
+      vignette:
+        'Membrane voltage drifts from +30mV back toward -70mV over several milliseconds, and K+ permeability rises 300-fold as it does.',
+      answerIsConcept: false,
+      rationale: 'Voltage FALLS: the K+ conductance leads once Na+ has inactivated.',
+    },
+  ],
+  operationalRule:
+    'Track the sign of the voltage change: rising means the Na+ conductance leads, falling means the K+ conductance leads.',
+  cardFront: 'When the membrane voltage is falling, which conductance leads?',
+  cardBack: 'The K+ conductance leads, because {{c1::the Na+ inactivation gates have shut}}.',
+};
+
+// Encode payload whose stages carry boundaryContrast, so the export gate has a
+// real concept/lookalike pair to test.
+export const GATE_ENCODE_RESPONSE = {
+  topicSummary: 'Action Potentials',
+  activities: [
+    makeActivity({
+      id: 'gate-1',
+      title: 'Depolarisation',
+      boundaryContrast: {
+        confusableLookalike: 'Repolarisation',
+        distinguishingRule: 'Repolarisation has K+ conductance leading, not Na+.',
+      },
+    }),
+    makeActivity({
+      id: 'gate-2',
+      stageNumber: 2,
+      title: 'Stress-Test the Boundary',
+      scaffold: {
+        field1Label: 'What Happens',
+        field1Placeholder: P2_FIELD1,
+        field2Label: 'Why It Happens',
+        field2Placeholder: P2_FIELD2,
+        exampleAnswer: 'Channels fail and the signal collapses.',
+      },
+      boundaryContrast: {
+        confusableLookalike: 'Refractory period',
+        distinguishingRule: 'Na+ channels inactivate rather than simply closing.',
+      },
+    }),
+  ],
+  researchContexts: [],
+};
+
+// ─── Parsons causal ordering (/api/sequence) ───────────────────────────────
+// Four true steps in canonical order; the drill shuffles them client-side.
+
+export const SEQUENCE_RESPONSE = {
+  title: 'Action Potential Chain',
+  steps: [
+    { id: 's1', text: 'The membrane crosses -55 mV.' },
+    { id: 's2', text: 'Voltage-gated Na+ channels open.' },
+    { id: 's3', text: 'Sodium floods inward and depolarises the cell.' },
+    { id: 's4', text: 'K+ efflux restores the resting charge.' },
+  ],
+  pivotRule: 'The field must move the S4 segments before any pore can open.',
+  summary: 'Threshold opens the gates, influx spikes the voltage, K+ resets it.',
+};
+
+// ─── Causal Mad-Libs + interactive diagram (custom /api/encode payload) ─────
+// Stage 1 carries the examiner's own sentence template AND a visual chain with
+// one blanked node, so both new scaffold surfaces are exercised on one stage.
+
+export const FRAME_STAGE = makeActivity({
+  id: 'frame-1',
+  title: 'Depolarisation Cascade',
+  templateType: 'first_principles',
+  scaffold: {
+    field1Label: 'Threshold Event',
+    field1Placeholder: 'FRAME_FIELD1',
+    field2Label: 'Physical Motion',
+    field2Placeholder: 'FRAME_FIELD2',
+    field3Label: 'Macro Consequence',
+    field3Placeholder: 'FRAME_FIELD3',
+    exampleAnswer: 'Threshold opens the gates.',
+    causalFrame:
+      'When [[1]], the [[2]] is physically forced, so [[3]] — UNLESS the pore is blocked.',
+  },
+  boundaryContrast: {
+    confusableLookalike: 'Refractory period',
+    distinguishingRule: 'Na+ channels inactivate; they do not simply close.',
+  },
+  visualData: {
+    nodes: [
+      { id: 'n1', label: 'Threshold is crossed', type: 'input' },
+      {
+        id: 'n2',
+        label: 'S4 segments swing outward',
+        subtext: 'the charged helices are pulled by the field',
+        type: 'mechanism',
+      },
+      { id: 'n3', label: 'The pore opens', type: 'outcome' },
+    ],
+  },
+});
+
+export const FRAME_ENCODE_RESPONSE = {
+  topicSummary: 'Depolarisation',
+  activities: [FRAME_STAGE],
+  researchContexts: [],
+};
+
+// ─── YouTube session with timestamped chapters ─────────────────────────────
+
+export const YOUTUBE_CHAPTERS_RESPONSE = {
+  topicSummary: 'Neural Networks Lecture',
+  videoTitle: 'Neural Networks Lecture',
+  youtubeData: {
+    videoId: 'aircAruvnKk',
+    videoUrl: 'https://www.youtube.com/watch?v=aircAruvnKk',
+    title: 'Neural Networks Lecture',
+    timestamps: [
+      { seconds: 0, formatted: '00:00', label: 'Visualising Weights' },
+      { seconds: 432, formatted: '07:12', label: 'Gradient Descent' },
+      { seconds: 940, formatted: '15:40', label: 'Backpropagation' },
+    ],
+  },
+  activities: [
+    makeActivity({
+      id: 'yt-ch-1',
+      stageNumber: 1,
+      title: 'Visualising Weights',
+      scaffold: {
+        field1Label: 'What Happens',
+        field1Placeholder: 'YT1_FIELD1',
+        field2Label: 'Why It Happens',
+        field2Placeholder: 'YT1_FIELD2',
+        exampleAnswer: 'Weights are scalars.',
+      },
+      videoTimestamp: { seconds: 0, formatted: '00:00', label: 'Visualising Weights' },
+    }),
+    makeActivity({
+      id: 'yt-ch-2',
+      stageNumber: 2,
+      title: 'Gradient Descent',
+      scaffold: {
+        field1Label: 'What Happens',
+        field1Placeholder: 'YT2_FIELD1',
+        field2Label: 'Why It Happens',
+        field2Placeholder: 'YT2_FIELD2',
+        exampleAnswer: 'Loss slopes point downhill.',
+      },
+      videoTimestamp: { seconds: 432, formatted: '07:12', label: 'Gradient Descent' },
+    }),
+    makeActivity({
+      id: 'yt-ch-3',
+      stageNumber: 3,
+      title: 'Backpropagation',
+      scaffold: {
+        field1Label: 'What Happens',
+        field1Placeholder: 'YT3_FIELD1',
+        field2Label: 'Why It Happens',
+        field2Placeholder: 'YT3_FIELD2',
+        exampleAnswer: 'Credit is assigned backwards.',
+      },
+      videoTimestamp: { seconds: 940, formatted: '15:40', label: 'Backpropagation' },
+    }),
+  ],
+  researchContexts: [],
+};
+
 // ─── Fluff Guillotine semantic triage (/api/triage) ────────────────────────
 // The spec pastes TRIAGE_NOTE (two paragraphs); the second is pure preamble.
 

@@ -18,6 +18,8 @@ import {
   PRETEST_RESPONSE,
   TRIAGE_RESPONSE,
   PRIMING_RESPONSE,
+  SEQUENCE_RESPONSE,
+  DISCRIMINATION_RESPONSE,
 } from './fixtures';
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
@@ -53,6 +55,24 @@ export async function mockAiApis(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(INVERT_RESPONSE),
+    })
+  );
+
+  // Parsons ordering drill: the canonical chain the learner must reconstruct.
+  await page.route('**/api/sequence', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(SEQUENCE_RESPONSE),
+    })
+  );
+
+  // Pre-export discrimination gate: one vignette per side of the pair.
+  await page.route('**/api/discrimination', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(DISCRIMINATION_RESPONSE),
     })
   );
 

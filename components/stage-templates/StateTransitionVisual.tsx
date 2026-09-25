@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Activity, StateTransitionVisualData } from '@/lib/types';
+import { buildCompletion } from '@/lib/visual-completion';
+import { DiagramBlank } from './DiagramBlank';
 
 interface Props {
   activity: Activity;
@@ -9,12 +11,17 @@ interface Props {
   field2: string;
   field3?: string;
   selectedPreset?: string;
+  /** Present when the host can accept the completed trigger into the answer. */
+  onAdopt?: (text: string) => void;
 }
 
-export function StateTransitionVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
+export function StateTransitionVisual({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const visualData = activity.visualData || {};
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [showClue, setShowClue] = useState(false);
+  // The rate-limiting transition is deleted from the cycle, so the learner has
+  // to state the trigger instead of reading it off the diagram.
+  const blank = onAdopt ? buildCompletion(activity) : null;
 
   const defaultSteps = [
     { stepNumber: 1, title: 'State Alpha: Initiation / Priming', mechanism: 'Signal binds or baseline threshold reached' },
@@ -111,10 +118,16 @@ export function StateTransitionVisual({ activity, field1, field2, field3, select
                   {step.title}
                 </h4>
 
-                {step.mechanism && (
-                  <p className="text-[11px] text-solder font-mono leading-relaxed">
-                    {step.mechanism}
-                  </p>
+                {blank && blank.kind === 'transition_trigger' && blank.index === idx ? (
+                  <div className="block mt-1">
+                    <DiagramBlank slot={blank} onAdopt={onAdopt} accent="amber" />
+                  </div>
+                ) : (
+                  step.mechanism && (
+                    <p className="text-[11px] text-solder font-mono leading-relaxed">
+                      {step.mechanism}
+                    </p>
+                  )
                 )}
               </div>
 

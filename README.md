@@ -25,6 +25,12 @@ Instead of re-reading, you reconstruct: every AI-generated stage asks you to ded
 - **Blind prediction gate (Predict · Observe · Explain)** — before the schema is generated you commit to a confidence tier (*guessing / 50-50 / bet my life*) and then to one of four concrete predictions. Getting it wrong after betting your life is the **Hypercorrection Effect**: the reveal goes hazard-red, you must explain the physical flaw in one sentence, and the mistake is saved as an interference-trap card that leads the Anki deck
 - **Why-ladder ([ PROBE DEEPER ])** — interrogates your own wording one layer at a time until the chain bottoms out at something that cannot be reduced further: a conservation law, a finite resource, geometry, a dimensional necessity. Each layer answers the one question the layer above it dodged; the axiom is one click from becoming the card's anchor
 - **Spot the inverted step** — adversarial discriminative repair for drained days: the examiner writes the mechanism as four causal steps and quietly falsifies exactly one (SNAREs zipping vs. disassembling, bond breaking releasing energy). You click the lie and write the one-sentence fix — recognition first, production second
+- **10-second discrimination gate** — cards fail in review because a *neighbour* answers for them (SN1 for SN2, atropine for epinephrine), which self-graded review cannot see. Every export path in the deck modal (`.apkg`, `.txt`, webhook) is gated by two blind vignettes — one the stage's concept, one its lookalike — each classified against a 10-second clock. Ten seconds *is* the mechanism: a discrimination you hold is immediate, while interference forces deliberation, so the hesitation is the evidence. A miss or a timeout flags the pair unstable, asks for the one operational rule that separates them, saves your wording as a trap card that leads the deck, and tags the export `DiscriminationUnstable`. If no blind pair can be built (or the stage has no boundary contrast) the gate says so and stands aside — a missing check is not a failed check. The in-forge `Cmd/Ctrl+Shift+A` push stays ungated on purpose: it captures a single stage mid-workout rather than handing off a deck
+- **Causal Mad-Libs scaffold** — the stage's deduction is presented as ONE sentence with blanks instead of three unrelated boxes. The encoder writes the template (`[[1]]/[[2]]/[[3]]` with real connectives); when it does not, the frame is derived from the stage's own labels, so sentence mode is never unavailable. Tab walks the blanks, Enter submits from the last one, and the boundary contrast rides along as a read-only `UNLESS …` clause
+- **Scrambled causal order (Parsons problems)** — `Order the chain` splits the mechanism into 4–6 true steps and shuffles them deterministically (same puzzle after a reload, seeded on the stage). Grading is positional: the drill names the first broken link and what must precede it, the examiner's pivot rule is captured for the card, and a correct chain locks onto the answer in one click. Zero typing
+- **Interactive diagram completion** — a diagram you only read is recognition, not retrieval: first-principles chains, analogy matrices and state-transition cycles blank one of their own cells (the mechanism node, the missing target mapping, the rate-limiting trigger) and grade the link you produce. A wrong answer reveals the truth immediately; the link lands on the card either way
+- **Chapter progress rail (video sessions)** — a 90-minute lecture is not one sitting. The rail shows which chapters are actually encoded, offers `Resume chapter N` at the first one still open, and clicking any chip jumps to that stage and seeks the embedded player to its timestamp
+- **STEM input** — type ASCII and read notation: `r^{4}`, `_{m}`, `->`, `<=>`, `<=`, `\alpha`, `\sqrt{2gh}` render in a preview under the field, and `Formula input` switches the fields to monospace. The raw ASCII remains the single source of truth — that is what is graded and exported
 - **Local-first storage** — IndexedDB with localStorage fallback and Firestore cloud sync (optional)
 - **PWA** — installable, with an offline fallback generator when you have no network/key
 - **Multi-provider AI** — Gemini, OpenRouter, or any OpenAI-compatible endpoint (bring your own key)
@@ -68,7 +74,7 @@ Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip)
 ## Testing
 
 - **Unit** — `lib/` logic (storage, analytics, adaptive difficulty, template selection, Anki export, Wozniak sanitization, cognitive telemetry, interference traps, URL share, knowledge graph, streaming parser) is covered by Vitest in `tests/unit/`.
-- **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons, YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), and quick diagnostics. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
+- **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons, YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), the Parsons ordering drill, the Mad-Libs sentence scaffold with interactive diagram blanks, video chapter progress/resume, formula input, the pre-export discrimination gate (pass, miss and timeout paths), and quick diagnostics — all with the AI routes, AnkiConnect and the discrimination examiner mocked at the network level. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
   - Run: `bun run test:e2e` (boots `next dev` on port 4310 automatically)
   - On this filesystem, run with `--workers=3`: full parallelism races Playwright's trace-file writes and produces bogus ENOENT failures.
   - Debug a failure: `npx playwright show-trace test-results/<failing-test>/trace.zip`
@@ -102,7 +108,9 @@ app/
   api/                     # AI proxy routes: encode, encode/stream, youtube,
                            # evaluate, prerequisites, pretest, roast, segregate,
                            # blurt, archetype, checkpoint, teach, regenerate-stage,
-                           # probe (why-ladder), invert-step (adversarial drill)
+                           # triage (fluff guillotine), priming, probe (why-ladder),
+                           # invert-step (adversarial drill), sequence (Parsons chain),
+                           # discrimination (pre-export blind pair)
 components/
   ZenLaunchpad.tsx         # Input command center: sources, modes, presets
   workbench/               # 3-zone studio workbench (mic, sketch canvas)
@@ -112,6 +120,11 @@ components/
   PretestModal.tsx         # Predict–Observe–Explain gate + hypercorrection traps
   workbench/ProbeLadder.tsx    # Recursive why-ladder drill
   workbench/InvertedStepDrill.tsx  # Spot the falsified causal step
+  workbench/CausalSentence.tsx     # Mad-Libs scaffold (one sentence, blanks)
+  workbench/CausalSequence.tsx     # Parsons problem (scrambled causal order)
+  workbench/ChapterRail.tsx        # YouTube chapter progress + resume
+  workbench/StemPreview.tsx        # Rendered ASCII notation under a field
+  DiscriminationGate.tsx           # 10-second blind pair in front of export
   *Modal.tsx               # Feature modals (roast, pretest, blurt, export, ...)
 hooks/                     # useSession, useSettings, useInputSource, useSchemaLibrary,
                            # useGenerationProgress
@@ -128,6 +141,12 @@ lib/
                            # duplicate counting, actionable CORS/offline errors)
   wozniak.ts               # 1-idea rule, two-way cloze, 20-word ceiling
   cognitive-telemetry.ts   # Compression / atomicity / jargon deflation + taboo engine
+  causal-frame.ts          # Mad-Libs sentence templates (parse / derive / render)
+  parsons.ts               # Deterministic scramble, positional grading, pivot rule
+  visual-completion.ts     # Which cell of a diagram to blank + loose answer grading
+  chapters.ts              # Per-chapter encoded/pending status + resume pointer
+  stem-text.ts             # ASCII STEM notation renderer (single-pass tokenizer)
+  discrimination.ts        # Gate scoring (clock + misses), trap-card construction
   interference-traps.ts    # Hypercorrection trap cards captured at prediction-error time
   procedural-archetypes.ts # Parametric MCQ archetypes + 50-trial validator
   fsrs-audit.ts            # Dense-cloze audit + auto-split

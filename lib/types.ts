@@ -56,6 +56,13 @@ export interface ActivityScaffold {
   field3Prefix?: string;
   presetOptions?: string[];
   exampleAnswer: string;
+  /**
+   * Causal Mad-Libs sentence template carrying [[1]]/[[2]]/[[3]] markers, e.g.
+   * "When [[1]], the [[2]] is forced, so [[3]] — UNLESS the pore is blocked."
+   * Optional: without it the workbench derives a structural chain from the
+   * labels, so sentence mode is never unavailable.
+   */
+  causalFrame?: string;
 }
 
 export * from './templates/types';
@@ -164,6 +171,45 @@ export interface SavedSchema {
   currentModuleIndex?: number;
   youtubeData?: YouTubeMetadata;
   researchContexts?: ResearchContextItem[];
+}
+
+/** One blind vignette in the 10-second discrimination gate. */
+export interface DiscriminationQuestion {
+  id: string;
+  vignette: string;
+  /** True when the vignette IS the stage's concept, false when it is the lookalike. */
+  answerIsConcept: boolean;
+  rationale: string;
+}
+
+/**
+ * Payload for the pre-export discrimination gate (/api/discrimination): two
+ * blind vignettes (one concept, one lookalike) plus the rule that separates
+ * them, which becomes the trap card when the learner hesitates or misses.
+ */
+export interface DiscriminationCheck {
+  topic: string;
+  conceptLabel: string;
+  lookalikeLabel: string;
+  questions: DiscriminationQuestion[];
+  operationalRule: string;
+  cardFront: string;
+  cardBack: string;
+}
+
+/**
+ * Payload for the Parsons-style causal ordering drill (/api/sequence): the
+ * canonical chain the learner has to reconstruct, plus the one rule that
+ * explains why the chain cannot be in any other order.
+ */
+export interface ParsonsResult {
+  title: string;
+  /** Steps in CANONICAL order — the answer, never to be sent scrambled. */
+  steps: { id: string; text: string }[];
+  /** The pivot rule: why the first broken link is impossible the other way round. */
+  pivotRule: string;
+  /** One line on the mechanism the chain describes. */
+  summary: string;
 }
 
 export interface InterleavedQuestion {
