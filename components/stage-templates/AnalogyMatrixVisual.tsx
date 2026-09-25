@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Activity, AnalogyMatrixVisualData, AnalogyMappingItem } from '@/lib/types';
+import { buildCompletion } from '@/lib/visual-completion';
+import { DiagramBlank } from './DiagramBlank';
 
 interface Props {
   activity: Activity;
@@ -9,13 +11,18 @@ interface Props {
   field2: string;
   field3?: string;
   selectedPreset?: string;
+  /** Present when the host can accept the completed mapping into the answer. */
+  onAdopt?: (text: string) => void;
 }
 
-export function AnalogyMatrixVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
+export function AnalogyMatrixVisual({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const visualData: AnalogyMatrixVisualData = activity.visualData || {};
   const [showClue, setShowClue] = useState(false);
   const [showExpertSynthesis, setShowExpertSynthesis] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  // The familiar side stays; the target side of ONE row is empty and has to be
+  // produced. A diagram you only read is recognition, not retrieval.
+  const blank = onAdopt ? buildCompletion(activity) : null;
 
   const defaultMappings: AnalogyMappingItem[] = [
     { sourceElement: 'Familiar Source Anchor', targetElement: 'Target Mechanism (Abstract Theory)', explanation: 'Structural correspondence' }
@@ -113,19 +120,23 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
                 <span className="text-[9px] font-mono font-bold uppercase text-bone block mb-0.5">
                   Target Science Concept
                 </span>
-                <div className="text-xs font-bold text-bone">
-                  {field2 ? (
-                    <span className="text-amber-300 flex items-center gap-1">
-                      <span className="text-amber font-bold font-mono">[ * ]</span> {field2}
-                    </span>
-                  ) : isTargetMissing ? (
-                    <span className="text-amber italic font-mono text-[11px] ">
-                      ? Type your mapping below...
-                    </span>
-                  ) : (
-                    mapping.targetElement
-                  )}
-                </div>
+                {blank && blank.kind === 'analogy_target' && blank.index === idx ? (
+                  <DiagramBlank slot={blank} onAdopt={onAdopt} accent="amber" />
+                ) : (
+                  <div className="text-xs font-bold text-bone">
+                    {field2 ? (
+                      <span className="text-amber-300 flex items-center gap-1">
+                        <span className="text-amber font-bold font-mono">[ * ]</span> {field2}
+                      </span>
+                    ) : isTargetMissing ? (
+                      <span className="text-amber italic font-mono text-[11px] ">
+                        ? Type your mapping below...
+                      </span>
+                    ) : (
+                      mapping.targetElement
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

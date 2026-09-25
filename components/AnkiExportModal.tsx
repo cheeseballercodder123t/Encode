@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   type AnkiCardItem,
@@ -36,6 +36,9 @@ import {
   formatPushStatus,
   describePushError,
 } from '@/lib/anki-connect';
+import { gateSourceFromActivity } from '@/lib/discrimination';
+import { DiscriminationGate } from '@/components/DiscriminationGate';
+import { DiscriminationCheck } from '@/lib/types';
 
 interface AnkiExportModalProps {
   isOpen: boolean;
@@ -102,6 +105,18 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
   }, [isOpen]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  // ── The 10-second discrimination gate in front of every export path ────────
+  // Cards fail in review because a neighbour answers for them, and review
+  // cannot see that. The gate tests the pair blind, on a clock, before the deck
+  // leaves the app; a miss turns the learner's own rule into a trap card that
+  // leads the deck (and tags it unstable here so Anki shows the same verdict).
+  const [gateStatus, setGateStatus] = useState<'closed' | 'loading' | 'open' | 'error'>('closed');
+  const [gateCheck, setGateCheck] = useState<DiscriminationCheck | null>(null);
+  const [gatePassed, setGatePassed] = useState(false);
+  const [gateUnstable, setGateUnstable] = useState(false);
+  const [gateNote, setGateNote] = useState<string | null>(null);
+  const pendingExportRef = useRef<(() => void) | null>(null);
+
   const [prevIsOpen, setPrevIsOpen] = useState(false);
   const [prevReport, setPrevReport] = useState<SegregationReport | null | undefined>(undefined);
   const [prevSchema, setPrevSchema] = useState<Partial<SavedSchema> | null | undefined>(undefined);
@@ -154,8 +169,84 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setPrevIsOpen(false);
   }
 
+  /** The stage whose concept/lookalike pair the gate should test. */
+  const gateSource = useMemo(() => {
+    const acts = schema?.activities || [];
+    const target = acts.find((a) => a?.boundaryContrast?.confusableLookalike) || acts[0];
+    return gateSourceFromActivity(target, report?.topic || schema?.topicSummary);
+  }, [schema, report]);
+
+  /**
+   * Runs `action` behind the gate. The gate never blocks on its own failure:
+   * an unreachable examiner is reported and the export proceeds, because a
+   * missing check is not the same as a failed check.
+   */
+  const runGate = useCallback(
+    (action: () => void) => {
+      if (gatePassed || !gateSource) {
+        action();
+        return;
+      }
+      pendingExportRef.current = action;
+      if (gateStatus === 'open') return;
+      setGateNote(null);
+      setGateStatus('loading');
+      void (async () => {
+        try {
+          const res = await fetch('/api/discrimination', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              concept: gateSource.conceptLabel,
+              lookalike: gateSource.lookalikeLabel,
+              distinguishingRule: gateSource.distinguishingRule,
+              contextSnippet: gateSource.topic,
+              topicSummary: gateSource.topic,
+              settings: loadAISettings(),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok || !Array.isArray(data?.questions) || data.questions.length < 2) {
+            throw new Error(data?.error || 'The examiner could not build a blind pair.');
+          }
+          setGateCheck(data as DiscriminationCheck);
+          setGateStatus('open');
+        } catch (err: any) {
+          setGateStatus('error');
+          setGateNote(err?.message || 'The discrimination check was unavailable.');
+          const pending = pendingExportRef.current;
+          pendingExportRef.current = null;
+          pending?.();
+        }
+      })();
+    },
+    [gatePassed, gateSource, gateStatus]
+  );
+
+  const handleGateResolved = (result: { passed: boolean; rule: string }) => {
+    setGatePassed(result.passed);
+    if (!result.passed) setGateUnstable(true);
+    setGateStatus('closed');
+    const pending = pendingExportRef.current;
+    pendingExportRef.current = null;
+    pending?.();
+  };
+
+  /**
+   * The deck as it actually ships. Once the gate has flagged this pair unstable,
+   * every card carries the tag so the weakness is visible in Anki instead of
+   * living only in this session's memory.
+   */
+  const exportCards = useMemo(
+    () =>
+      gateUnstable
+        ? displayCards.map((c) => ({ ...c, tags: [...c.tags, 'DiscriminationUnstable'] }))
+        : displayCards,
+    [displayCards, gateUnstable]
+  );
+
   const handlePushToAnki = useCallback(async () => {
-    if (isPushing || displayCards.length === 0) return;
+    if (isPushing || exportCards.length === 0) return;
     playSound('click');
     setIsPushing(true);
     setPushStatus(null);
@@ -163,7 +254,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       // Persist whatever endpoint the user typed, normalized.
       const endpoint = saveAnkiEndpoint(ankiEndpoint);
       setAnkiEndpoint(endpoint);
-      const result = await pushCardsToAnki(displayCards, deckName, { url: endpoint });
+      const result = await pushCardsToAnki(exportCards, deckName, { url: endpoint });
       setPushStatus({
         ok: true,
         message: `${formatPushStatus(result)} — ${result.added} of ${result.attempted} card${
@@ -177,7 +268,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     } finally {
       setIsPushing(false);
     }
-  }, [ankiEndpoint, deckName, displayCards, isPushing]);
+  }, [ankiEndpoint, deckName, exportCards, isPushing]);
 
   // Cmd/Ctrl+Shift+A from anywhere in the modal pushes. The capture-phase
   // listener (plus stopPropagation for this combo only) keeps the workbench's
@@ -188,19 +279,19 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
         e.stopPropagation();
-        void handlePushToAnki();
+        runGate(() => void handlePushToAnki());
       }
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [isOpen, handlePushToAnki]);
+  }, [isOpen, handlePushToAnki, runGate]);
 
   if (!isOpen) return null;
 
   const handleDownloadApkg = async () => {
     playSound('click');
     try {
-      const blob = await generateAnkiApkgPackage(displayCards, deckName);
+      const blob = await generateAnkiApkgPackage(exportCards, deckName);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -217,7 +308,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
   const handleDownloadTxt = () => {
     playSound('click');
-    const decks = generateAnkiTextDecks(displayCards, deckName);
+    const decks = generateAnkiTextDecks(exportCards, deckName);
     // CloZe + Basic are split into separate files so each maps to a single
     // note type (Anki refuses "No cloze found" or field-count mismatches).
     const files: { name: string; content: string }[] = [];
@@ -244,7 +335,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setIsSyncingWebhook(true);
     setWebhookStatus(null);
 
-    const res = await syncToCustomWebhook(webhookUrl, deckName, displayCards);
+    const res = await syncToCustomWebhook(webhookUrl, deckName, exportCards);
     setWebhookStatus(res);
     setIsSyncingWebhook(false);
     if (res.success) playSound('success');
@@ -488,6 +579,65 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
         {/* Modal Body */}
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
+          {/* 10-second discrimination gate: runs before any export path. */}
+          {gateStatus === 'open' && gateCheck && (
+            <div className="p-3.5 bg-hazard-950/20 border border-hazard-500/40 rounded-md">
+              <DiscriminationGate
+                check={gateCheck}
+                onResolved={handleGateResolved}
+                onCancel={() => {
+                  pendingExportRef.current = null;
+                  setGateStatus('closed');
+                }}
+              />
+            </div>
+          )}
+
+          {gateStatus === 'loading' && (
+            <p
+              className="p-3 bg-inset border border-edge rounded-md font-mono text-[11px] text-amber-300"
+              data-testid="discrimination-loading"
+            >
+              [ GATE ] building a blind pair for {gateSource?.conceptLabel} vs{' '}
+              {gateSource?.lookalikeLabel}…
+            </p>
+          )}
+
+          {gateStatus === 'error' && gateNote && (
+            <p className="p-3 bg-inset border border-edge rounded-md text-[11px] text-solder leading-relaxed">
+              Discrimination check skipped: {gateNote}
+            </p>
+          )}
+
+          {gateUnstable && gateStatus !== 'open' && (
+            <p
+              className="p-2.5 bg-hazard-950/30 border border-hazard-500/40 rounded-md text-[11px] text-hazard-300 leading-relaxed"
+              data-testid="discrimination-flag"
+            >
+              This deck is flagged{' '}
+              <code className="font-mono">DiscriminationUnstable</code> — the pair that fooled you now
+              leads the deck as a trap card.
+            </p>
+          )}
+
+          {gatePassed && gateStatus === 'closed' && !gateUnstable && (
+            <div className="flex items-center justify-between gap-2 flex-wrap p-2.5 bg-signal-950/30 border border-signal-500/40 rounded-md">
+              <span className="text-[11px] text-signal-300" data-testid="discrimination-passed">
+                Discrimination gate passed — export unlocked for this session.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setGatePassed(false);
+                  setGateStatus('closed');
+                }}
+                className="text-[10px] font-mono text-solder hover:text-bone transition-colors duration-150 cursor-pointer"
+              >
+                [ re-run check ]
+              </button>
+            </div>
+          )}
+
           {/* Deck Title Input */}
           <div className="p-3.5 bg-deck/80 border border-edge flex items-center gap-3">
             <span className="text-xs font-bold text-solder shrink-0">Deck Name:</span>
@@ -588,7 +738,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
-                  onClick={handleDownloadApkg}
+                  onClick={() => runGate(() => void handleDownloadApkg())}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer"
                 >
                   <span className="text-amber font-bold font-mono">[ DL ]</span>
@@ -596,7 +746,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 </button>
 
                 <button
-                  onClick={handleDownloadTxt}
+                  onClick={() => runGate(handleDownloadTxt)}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer"
                 >
                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
@@ -616,6 +766,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   Creates the deck and adds {displayCards.length} card{displayCards.length === 1 ? '' : 's'} directly
                   through AnkiConnect. Requires the Anki desktop app open with the AnkiConnect add-on
                   (code <code className="text-bone font-mono">2055492159</code>) — duplicates are skipped, never re-added.
+                  Every export path is gated by the 10-second discrimination check.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -627,7 +778,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                     className="flex-1 px-3 py-2 bg-chassis border border-edge text-xs text-bone focus:outline-none focus:border-solder font-mono"
                   />
                   <button
-                    onClick={handlePushToAnki}
+                    onClick={() => runGate(() => void handlePushToAnki())}
                     disabled={isPushing || displayCards.length === 0}
                     className="px-4 py-2 bg-amber/15 hover:bg-amber/25 border border-amber/50 text-amber font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                   >

@@ -19,6 +19,11 @@ import { detectTabooTerms, findTabooHits } from '@/lib/cognitive-telemetry';
 import { ProbeLadder } from './ProbeLadder';
 import { InvertedStepDrill } from './InvertedStepDrill';
 import { PrimingWarmup } from './PrimingWarmup';
+import { CausalSequence } from './CausalSequence';
+import { CausalSentence } from './CausalSentence';
+import { ChapterRail } from './ChapterRail';
+import { StemPreview } from './StemPreview';
+import { buildCausalFrame, frameToSentence, type CausalFieldKey } from '@/lib/causal-frame';
 
 const FLUFF_PATTERNS = [
   /\b(it is important to note that|as we can clearly see|in other words|basically|essentially|it should be remembered that|in this regard|furthermore, we notice that|it is worth mentioning that|needless to say)\b/gi,
@@ -156,6 +161,7 @@ function ToolToggle({
 export function StudioWorkbench({
   activities,
   currentActivityIndex,
+  setCurrentActivityIndex,
   userResponses,
   field1,
   setField1,
@@ -212,6 +218,16 @@ export function StudioWorkbench({
   const [showInvert, setShowInvert] = useState(false);
   // Priming warm-ups: shape / gradient / dimensional / extremum pre-flight
   const [showPrime, setShowPrime] = useState(false);
+  // Parsons-style ordering drill (scrambled causal chain — zero typing)
+  const [showSequence, setShowSequence] = useState(false);
+  // Scaffold presentation. Null = follow the stage: the examiner's own sentence
+  // wins when it wrote one (that is where a mad-lib beats boxes), the classic
+  // fields otherwise. The toggle overrides either way.
+  const [scaffoldOverride, setScaffoldOverride] = useState<'sentence' | 'fields' | null>(null);
+  // Formula input: monospace field type + a rendered notation preview.
+  const [stemMode, setStemMode] = useState(false);
+  // Video sessions: which chapter the embedded player should seek to.
+  const [chapterSeconds, setChapterSeconds] = useState<number | null>(null);
 
   const currentActivity = activities[currentActivityIndex];
 
@@ -254,6 +270,25 @@ export function StudioWorkbench({
     () => findTabooHits(`${field1} ${field2} ${field3}`, tabooTerms),
     [field1, field2, field3, tabooTerms]
   );
+
+  // The scaffold sentence: the examiner's template when it wrote one, else a
+  // structural chain derived from this stage's labels (so sentence mode is
+  // always available, never a degraded empty state).
+  const causalFrame = useMemo(() => buildCausalFrame(currentActivity), [currentActivity]);
+  const scaffoldMode =
+    scaffoldOverride ?? (causalFrame?.source === 'ai' ? 'sentence' : 'fields');
+
+  const setFrameField = (field: CausalFieldKey, value: string) => {
+    if (field === 'field1') setField1(value);
+    else if (field === 'field2') setField2(value);
+    else setField3(value);
+  };
+
+  // Chapter jump: switch stages and seek the video to that chapter's anchor.
+  const jumpToChapter = (index: number, seconds?: number) => {
+    setCurrentActivityIndex(index);
+    setChapterSeconds(typeof seconds === 'number' ? seconds : null);
+  };
 
   // ─── AnkiConnect push (finish the stage, ship the card, move on) ──────────
   // The stage's own cards are sanitized by the same Wozniak pass the export
@@ -540,7 +575,7 @@ export function StudioWorkbench({
                 <div className="space-y-2">
                   <div className="aspect-video overflow-hidden bg-inset border border-edge rounded-md">
                     <iframe
-                      src={`https://www.youtube-nocookie.com/embed/${youtubeData.videoId}?rel=0`}
+                      src={`https://www.youtube-nocookie.com/embed/${youtubeData.videoId}?rel=0${chapterSeconds !== null ? `&autoplay=1&start=${chapterSeconds}` : ''}`}
                       title={youtubeData.title}
                       className="w-full h-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -548,6 +583,13 @@ export function StudioWorkbench({
                     />
                   </div>
                   <p className="font-medium text-bone text-xs truncate">{youtubeData.title}</p>
+                  {/* Chapter progress: which chapters are encoded, and where to pick up. */}
+                  <ChapterRail
+                    activities={activities}
+                    responses={userResponses}
+                    currentIndex={currentActivityIndex}
+                    onJump={jumpToChapter}
+                  />
                 </div>
               )}
 
@@ -679,6 +721,11 @@ export function StudioWorkbench({
               field2={field2}
               field3={field3}
               selectedPreset={selectedPreset}
+              // Interactive completion: a template that blanked one of its own
+              // cells hands the produced link back into the mechanism answer.
+              onAdopt={(text) =>
+                setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${text}` : text))
+              }
             />
 
             {/* Optional Dual-Coding Sketchpad Toggle + why-ladder */}
@@ -719,6 +766,16 @@ export function StudioWorkbench({
                 title="Open the dual-coding sketchpad"
               >
                 Sketchpad {showSketchpad ? 'on' : 'off'}
+              </ToolToggle>
+              <ToolToggle
+                active={showSequence}
+                onClick={() => {
+                  setShowSequence(!showSequence);
+                  playSound('click');
+                }}
+                title="Scrambled causal order: the examiner splits the mechanism into steps and shuffles them — put the chain back in the order the physics forces, zero typing"
+              >
+                Order the chain {showSequence ? 'on' : 'off'}
               </ToolToggle>
               <ToolToggle
                 active={isPushingAnki}
@@ -768,6 +825,17 @@ export function StudioWorkbench({
               />
             )}
 
+            {showSequence && (
+              <CausalSequence
+                key={currentActivity.id}
+                activity={currentActivity}
+                topicSummary={topicSummary}
+                onAdopt={(text) =>
+                  setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${text}` : text))
+                }
+              />
+            )}
+
             {showProbe && (
               <ProbeLadder
                 key={currentActivity.id}
@@ -806,6 +874,46 @@ export function StudioWorkbench({
               </div>
             )}
 
+            {/* Scaffold presentation: one connected sentence, or the classic boxes */}
+            <div className="flex items-center justify-end gap-1.5">
+              <ToolToggle
+                active={stemMode}
+                onClick={() => {
+                  setStemMode(!stemMode);
+                  playSound('click');
+                }}
+                title="Formula input: monospace typing plus a rendered preview of ASCII notation (r^{4}, ->, \\alpha, <=)"
+              >
+                Formula input {stemMode ? 'on' : 'off'}
+              </ToolToggle>
+              <ToolToggle
+                active={scaffoldMode === 'sentence'}
+                onClick={() => setScaffoldOverride(scaffoldMode === 'sentence' ? 'fields' : 'sentence')}
+                title="Provide the syntax of the deduction as one sentence with blanks, or fall back to separate answer boxes"
+              >
+                {scaffoldMode === 'sentence' ? 'Sentence scaffold' : 'Separate boxes'}
+              </ToolToggle>
+            </div>
+
+            {scaffoldMode === 'sentence' && causalFrame && (
+              <>
+                <CausalSentence
+                  frame={causalFrame}
+                  values={{ field1, field2, field3 }}
+                  onChange={setFrameField}
+                  onSubmit={onCheckAnswer}
+                  isEvaluating={isEvaluating}
+                />
+                {/* The assembled sentence, rendered: confirms the notation and
+                    the causal shape at a glance. */}
+                {stemMode && (
+                  <StemPreview value={frameToSentence(causalFrame, { field1, field2, field3 })} />
+                )}
+              </>
+            )}
+
+            {scaffoldMode === 'fields' && (
+              <>
             {/* Scaffold Input 1 */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold text-slate-ink uppercase tracking-widest block">
@@ -817,8 +925,9 @@ export function StudioWorkbench({
                 placeholder={currentActivity.scaffold.field1Placeholder}
                 rows={2}
                 data-dg-field="field1"
-                className="w-full p-3 bg-inset border border-edge text-bone placeholder-solder text-sm leading-relaxed outline-none focus:border-amber-500/60 rounded-md resize-none transition-colors duration-150 font-sans"
+                className={`w-full p-3 bg-inset border border-edge text-bone placeholder-solder text-sm leading-relaxed outline-none focus:border-amber-500/60 rounded-md resize-none transition-colors duration-150 ${stemMode ? 'font-mono' : 'font-sans'}`}
               />
+              <StemPreview value={field1} />
               {field1.trim() && wordMeter(f1Words)}
             </div>
 
@@ -845,10 +954,11 @@ export function StudioWorkbench({
                 placeholder={currentActivity.scaffold.field2Placeholder}
                 rows={2}
                 data-dg-field="field2"
-                className={`w-full p-3 bg-inset border text-bone placeholder-solder text-sm leading-relaxed outline-none rounded-md resize-none transition-colors duration-150 font-sans ${
+                className={`w-full p-3 bg-inset border text-bone placeholder-solder text-sm leading-relaxed outline-none rounded-md resize-none transition-colors duration-150 ${
                   isListening ? 'border-hazard-500/70' : 'border-edge focus:border-amber-500/60'
-                }`}
+                } ${stemMode ? 'font-mono' : 'font-sans'}`}
               />
+              <StemPreview value={field2} />
               {field2.trim() && wordMeter(f2Words)}
             </div>
 
@@ -864,9 +974,12 @@ export function StudioWorkbench({
                   onChange={e => setField3(e.target.value)}
                   placeholder={currentActivity.scaffold.field3Placeholder || ''}
                   data-dg-field="field3"
-                  className="w-full p-2.5 bg-inset border border-edge text-bone placeholder-solder text-sm outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 font-sans"
+                  className={`w-full p-2.5 bg-inset border border-edge text-bone placeholder-solder text-sm outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 ${stemMode ? 'font-mono' : 'font-sans'}`}
                 />
+                <StemPreview value={field3} />
               </div>
+            )}
+              </>
             )}
 
             {/* Pre-check blurt guard */}

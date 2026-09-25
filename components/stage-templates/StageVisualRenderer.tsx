@@ -12,6 +12,12 @@ interface VisualComponentProps {
   field2: string;
   field3?: string;
   selectedPreset?: string;
+  /**
+   * Optional write-back hook. Templates that can blank one of their own cells
+   * (first principles, analogy matrix, state transition) use it to put the
+   * completed link into the stage answer; without it they render statically.
+   */
+  onAdopt?: (text: string) => void;
 }
 
 // All visual components still lazy-loaded for code-splitting
@@ -55,7 +61,7 @@ function TemplateLoadingSkeleton() {
   );
 }
 
-export function StageVisualRenderer({ activity, field1, field2, field3, selectedPreset }: Props) {
+export function StageVisualRenderer({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const type = activity.templateType || '';
   const visualData = activity.visualData;
 
@@ -92,6 +98,7 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
           field2={field2}
           field3={field3}
           selectedPreset={selectedPreset}
+          onAdopt={onAdopt}
         />
       </Suspense>
     </TemplateErrorBoundary>

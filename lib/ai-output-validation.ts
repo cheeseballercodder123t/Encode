@@ -8,7 +8,14 @@
  * crashing the client or corrupting stored schemas.
  */
 
-import { Activity, EncodingMode, StageResponse } from './types';
+import {
+  Activity,
+  DiscriminationCheck,
+  DiscriminationQuestion,
+  EncodingMode,
+  ParsonsResult,
+  StageResponse,
+} from './types';
 
 // ─── JSON sanitizing ─────────────────────────────────────────────────────────
 
@@ -112,6 +119,11 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode): {
               field3Label: asString(scaffold.field3Label),
               field3Placeholder: asString(scaffold.field3Placeholder),
               exampleAnswer: asString(scaffold.exampleAnswer),
+              // Causal Mad-Libs sentence template. Left undefined when the model
+              // skipped it (or wrote something unusable): the workbench derives
+              // a structural frame from the labels instead, so sentence mode
+              // never depends on the model getting this right.
+              causalFrame: asString(scaffold.causalFrame) || undefined,
             },
             // Rich optional context passthroughs.
             researchContext: a.researchContext && typeof a.researchContext === 'object' ? a.researchContext : undefined,
@@ -276,6 +288,76 @@ export function validateInvertedStepResult(raw: unknown): InvertedStepResult {
     flawType: asString(data.flawType, 'fatal flaw'),
     whyFalsified: asString(data.whyFalsified),
     correctVersion: asString(data.correctVersion),
+  };
+}
+
+/**
+ * Coerces the Parsons-style ordering drill into something playable.
+ *
+ * The chain IS the answer, so a malformed payload cannot be repaired by
+ * guessing: empty steps are dropped, the order is preserved as the canonical
+ * sequence, and duplicates are removed (the same step twice would make the
+ * puzzle ambiguous rather than merely hard). Fewer than three usable steps
+ * means the drill is not worth showing, and the route reports that instead.
+ */
+export function validateParsonsResult(raw: unknown): ParsonsResult {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+  const seen = new Set<string>();
+  const steps: ParsonsResult['steps'] = [];
+  (Array.isArray(data.steps) ? data.steps : []).forEach((s: any, i: number) => {
+    const text = asString(s?.text);
+    if (!text) return;
+    const key = text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const id = typeof s?.id === 'string' && s.id.trim() ? s.id.trim() : `s${i + 1}`;
+    steps.push({ id, text });
+  });
+
+  return {
+    title: asString(data.title, 'Causal chain'),
+    steps: steps.slice(0, 6),
+    pivotRule: asString(data.pivotRule),
+    summary: asString(data.summary),
+  };
+}
+
+/**
+ * Coerces the discrimination gate into something playable.
+ *
+ * The gate is only meaningful as a BLIND test, so the validator enforces the
+ * two properties blindness depends on: exactly two vignettes, and one of them
+ * answering `true` while the other answers `false` (two concept items, or two
+ * lookalike items, would be answerable without discriminating anything). When
+ * the payload cannot meet that, it returns an empty check and the UI skips the
+ * gate rather than showing a rigged one.
+ */
+export function validateDiscriminationResult(raw: unknown): DiscriminationCheck {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+  const conceptLabel = asString(data.conceptLabel);
+  const lookalikeLabel = asString(data.lookalikeLabel);
+
+  const questions: DiscriminationQuestion[] = (Array.isArray(data.questions) ? data.questions : [])
+    .map((q: any, i: number) => ({
+      id: typeof q?.id === 'string' && q.id.trim() ? q.id.trim() : `dq${i + 1}`,
+      vignette: asString(q?.vignette),
+      answerIsConcept: q?.answerIsConcept === true,
+      rationale: asString(q?.rationale),
+    }))
+    .filter((q: DiscriminationQuestion) => q.vignette.length > 0)
+    .slice(0, 2);
+
+  const bothSides = questions.some((q) => q.answerIsConcept) && questions.some((q) => !q.answerIsConcept);
+  const playable = questions.length === 2 && bothSides && Boolean(conceptLabel && lookalikeLabel);
+
+  return {
+    topic: asString(data.topic, conceptLabel || 'Concept boundary'),
+    conceptLabel,
+    lookalikeLabel,
+    questions: playable ? questions : [],
+    operationalRule: asString(data.operationalRule),
+    cardFront: asString(data.cardFront),
+    cardBack: asString(data.cardBack),
   };
 }
 
