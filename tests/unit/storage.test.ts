@@ -137,24 +137,24 @@ describe('study prefs (save preferences subtly)', () => {
 });
 
 describe('topic struggles (what is hard for me)', () => {
-  it('starts empty and records needs-work grades', () => {
+  it('starts empty and records stages whose mechanism is still open', () => {
     expect(loadTopicStruggles()).toEqual([]);
-    recordTopicResult({ topic: 'Action Potentials', lastGrade: 'needs_elaboration', lastScore: 45, checkCount: 3 });
+    recordTopicResult({ topic: 'Action Potentials', lastSecured: false, checkCount: 3 });
     const list = loadTopicStruggles();
     expect(list).toHaveLength(1);
     expect(list[0].topic).toBe('Action Potentials');
-    expect(list[0].lastScore).toBe(45);
+    expect(list[0].lastSecured).toBe(false);
   });
 
-  it('clears a topic once it is mastered', () => {
-    recordTopicResult({ topic: 'Mitochondria', lastGrade: 'needs_elaboration', lastScore: 40, checkCount: 2 });
+  it('clears a topic once the mechanism lands', () => {
+    recordTopicResult({ topic: 'Mitochondria', lastSecured: false, checkCount: 2 });
     expect(loadTopicStruggles()).toHaveLength(1);
-    recordTopicResult({ topic: 'Mitochondria', lastGrade: 'mastered', lastScore: 92, checkCount: 3 });
+    recordTopicResult({ topic: 'Mitochondria', lastSecured: true, checkCount: 3 });
     expect(loadTopicStruggles()).toEqual([]);
   });
 
   it('clears the whole ledger', () => {
-    recordTopicResult({ topic: 'X', lastGrade: 'needs_elaboration', lastScore: 10, checkCount: 1 });
+    recordTopicResult({ topic: 'X', lastSecured: false, checkCount: 1 });
     clearTopicStruggles();
     expect(loadTopicStruggles()).toEqual([]);
   });

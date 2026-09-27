@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ComparativeDocumentAsset, 
@@ -131,7 +132,7 @@ export function ComparativeSynthesisModal({
             onClick={onClose}
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none cursor-pointer"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 
@@ -199,7 +200,7 @@ export function ComparativeSynthesisModal({
                       onClick={() => setDriveTargetDoc('A')}
                       className="py-1.5 px-3 bg-inset/60 text-xs font-bold text-bone border border-edge/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
-                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
+                      <BracketTag label="CLOUD" />
                       <span>Google Drive</span>
                     </button>
                   </div>
@@ -256,7 +257,7 @@ export function ComparativeSynthesisModal({
                       onClick={() => setDriveTargetDoc('B')}
                       className="py-1.5 px-3 bg-inset/60 text-xs font-bold text-bone border border-edge/40 flex items-center gap-1.5 cursor-pointer transition-none"
                     >
-                      <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
+                      <BracketTag label="CLOUD" />
                       <span>Google Drive</span>
                     </button>
                   </div>
@@ -306,7 +307,7 @@ export function ComparativeSynthesisModal({
                       onClick={() => onOpenAnkiExport(report)}
                       className="px-3 py-1.5 bg-inset text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
                     >
-                      <span className="text-amber font-bold font-mono">[ ZAP ]</span>
+                      <BracketTag label="ZAP" />
                       Export Comparative Anki Cards
                     </button>
                   )}

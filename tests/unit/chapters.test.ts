@@ -59,7 +59,7 @@ describe('buildChapterSummary', () => {
           field1: '',
           field2: '',
           checkCount: 1,
-          feynmanReview: { grade: 'good', score: 78, feedback: 'solid', xpBonus: 10 },
+          feynmanReview: { secured: true, feedback: 'solid' },
         },
       },
       0

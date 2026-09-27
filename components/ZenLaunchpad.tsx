@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileUploader } from './FileUploader';
 import { FluffGuillotineModal } from './FluffGuillotineModal';
-import { UploadedFileAsset, EncodingMode } from '@/lib/types';
+import { UploadedFileAsset, EncodingMode, EncodingGear } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 
 const MEMORIZATION_TRIGGERS = [
@@ -20,6 +20,46 @@ export interface PresetItem {
   mode: EncodingMode;
   notes: string;
 }
+
+/**
+ * The three gears, in plain language.
+ *
+ * Deeper is not better, it is just deeper: the generation effect holds at
+ * every gear, so a minute of forging on a drained Thursday keeps the habit and
+ * still produces clean cards.
+ */
+export const GEARS: {
+  id: EncodingGear;
+  label: string;
+  cost: string;
+  blurb: string;
+  detail: string;
+}[] = [
+  {
+    id: 1,
+    label: 'Express Forge',
+    cost: 'low energy · about 60s',
+    blurb: 'The AI pulls out the mechanism and blanks 2-3 pivotal words. You supply just those.',
+    detail:
+      'Generating a single missing word buys nearly the same memory boost as writing the whole paragraph (Slamecka & Graf), so this is the full workout with the essay removed.',
+  },
+  {
+    id: 2,
+    label: 'Interactive Puzzles',
+    cost: 'medium energy',
+    blurb: 'Order the causal chain, hunt the planted flaw, separate the lookalike. Click and drag, zero essay.',
+    detail:
+      'Visual templates and discrimination gates do the retrieval for you: you are spotting and sorting the mechanism instead of describing it.',
+  },
+  {
+    id: 3,
+    label: 'Deep Crucible',
+    cost: 'high energy',
+    blurb: 'Full Feynman, spoken aloud, with an adversarial viva on every claim.',
+    detail:
+      'For the Sunday-morning session: explain it out loud and defend it. The examiner probes harder and never settles for a label.',
+  },
+];
 
 export const LAUNCHPAD_PRESETS: PresetItem[] = [
   {
@@ -76,6 +116,8 @@ interface ZenLaunchpadProps {
   setEnableGuidedPath: (val: boolean) => void;
   interleaveMode: boolean;
   setInterleaveMode: (val: boolean) => void;
+  gear: EncodingGear;
+  setGear: (g: EncodingGear) => void;
   onGenerate: () => void;
   onTeach: () => void;
   isLoading: boolean;
@@ -141,10 +183,13 @@ export function ZenLaunchpad({
   setEnableGuidedPath,
   interleaveMode,
   setInterleaveMode,
+  gear,
+  setGear,
   onGenerate,
   onTeach,
   isLoading
 }: ZenLaunchpadProps) {
+  const activeGear = GEARS.find((g) => g.id === gear) ?? GEARS[1];
   const [showSettings, setShowSettings] = useState(false);
   // Fluff Guillotine: pre-encoding semantic triage over the pasted notes.
   const [showTriage, setShowTriage] = useState(false);
@@ -235,7 +280,7 @@ export function ZenLaunchpad({
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Paste study material, complex concepts, or lists to encode (e.g. Periodic Table, action potentials, Krebs cycle)... Optional when a file is attached — your notes steer what the encoder pulls from the file."
+                placeholder="Paste study material, complex concepts, or lists to encode (e.g. Periodic Table, action potentials, Krebs cycle)... Optional when a file is attached; your notes steer what the encoder pulls from the file."
                 rows={6}
                 aria-label="Study notes (optional when a file is attached)"
                 className="w-full bg-inset border border-edge focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none resize-y rounded-md leading-relaxed p-3.5 font-sans transition-colors duration-150"
@@ -293,6 +338,59 @@ export function ZenLaunchpad({
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Gear selector: encoding used to demand the same full workout every
+            day, which is what made a Thursday night feel like homework. Pick
+            how much energy you actually have and the depth follows. */}
+        <div className="px-4 py-3 border-t border-edge">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-solder">
+              Energy today
+            </span>
+            <span className="text-[10px] font-mono text-solder">{activeGear.cost}</span>
+          </div>
+          <div
+            role="group"
+            aria-label="Session depth"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+          >
+            {GEARS.map((g) => {
+              const active = g.id === gear;
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  aria-pressed={active}
+                  title={g.detail}
+                  onClick={() => {
+                    playSound('click');
+                    setGear(g.id);
+                  }}
+                  className={`p-2.5 text-left rounded-md border transition-colors duration-150 cursor-pointer ${
+                    active
+                      ? 'bg-amber-500/10 border-amber-500/50'
+                      : 'bg-deck border-edge hover:border-slate-ink/40'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={`font-mono text-[10px] font-bold ${active ? 'text-amber-300' : 'text-solder'}`}
+                    >
+                      G{g.id}
+                    </span>
+                    <span className={`text-sm font-semibold ${active ? 'text-amber-300' : 'text-bone'}`}>
+                      {g.label}
+                    </span>
+                  </span>
+                  <span className="text-[11px] text-solder block mt-1 leading-snug">
+                    {g.blurb}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Action strip */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-edge bg-inset/60">

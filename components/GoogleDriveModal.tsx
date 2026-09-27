@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { 
   DriveFileItem, 
   requestDriveAccessToken, 
@@ -142,7 +143,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
             onClick={onClose}
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-colors duration-150 cursor-pointer"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 
@@ -193,7 +194,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                   onClick={() => setShowManualInput(!showManualInput)}
                   className="text-[11px] font-semibold text-solder hover:text-bone transition-none flex items-center justify-center gap-1 mx-auto cursor-pointer"
                 >
-                  <span className="text-amber font-bold font-mono">[ KEY ]</span>
+                  <BracketTag label="KEY" />
                   {showManualInput ? 'Hide manual OAuth options' : 'Enter Google OAuth Access Token directly'}
                 </button>
 
@@ -252,7 +253,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                     className="p-2 bg-deck border border-edge text-solder hover:text-bone transition-none cursor-pointer"
                     title="Refresh file list"
                   >
-                    <span className="text-amber font-bold font-mono">[ RESET ]</span>
+                    <BracketTag label="RESET" />
                   </button>
                   <button
                     onClick={handleDisconnect}

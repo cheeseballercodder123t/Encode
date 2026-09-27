@@ -121,10 +121,9 @@ test.describe('Examiner (evaluate) resilience', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          grade: 'good',
-          score: 76,
-          xpBonus: 40,
+          secured: true,
           feedback: 'Good mechanism : tighten the threshold detail.',
+          counterProbe: 'What happens if the pump stalls halfway?',
         }),
       })
     );

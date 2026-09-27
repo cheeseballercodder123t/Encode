@@ -114,7 +114,7 @@ function TabooStrip({ leaked, terms }: { leaked: string[]; terms: string[] }) {
         })}
       </div>
       <p className="text-[10px] text-solder leading-relaxed">
-        Explain these physically — what moves, what collides, what changes shape — instead of naming them.
+        Explain these physically (what moves, what collides, what changes shape) instead of naming them.
       </p>
     </div>
   );
@@ -205,6 +205,8 @@ export function StudioWorkbench({
   // Hands-Free Spoken Feynman State
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  // Which pressure test the committed answer belongs to.
+  const [probeCommittedKey, setProbeCommittedKey] = useState<string>('');
 
   // Card Smoke Test (Cloze masking preview)
   const [smokeTestActive, setSmokeTestActive] = useState(false);
@@ -229,7 +231,18 @@ export function StudioWorkbench({
   // Video sessions: which chapter the embedded player should seek to.
   const [chapterSeconds, setChapterSeconds] = useState<number | null>(null);
 
+  // Socratic pressure test: the lab partner's one probing question, answered
+  // in two words if that is all the answer needs. The committed answer is
+  // tracked against a render-derived key (stage + check count) rather than an
+  // effect, so a fresh check reopens the probe without a cascading render.
+  const [probeDraft, setProbeDraft] = useState('');
+
   const currentActivity = activities[currentActivityIndex];
+
+  // Derived during render (not in an effect): a fresh check or a new stage
+  // reopens the pressure test without a cascading render.
+  const probeKey = `${currentActivity?.id ?? ''}:${stageCheckCount ?? 0}`;
+  const probeAnswerSent = probeCommittedKey === probeKey;
 
   // ─── Atomicity meters (FSRS handoff quality, live) ─────────────────────────
   // Same 15-word threshold the Anki exporter tags as LeechCandidate, so what
@@ -372,6 +385,12 @@ export function StudioWorkbench({
         if (isEvaluating) return;
         const hasInput = field1.trim() && field2.trim();
         if (!hasInput) return;
+        // Once the mechanism has landed there is nothing left to check, so the
+        // same keystroke becomes the hand-off: inject the crystallized cards.
+        if (feynmanResult?.secured) {
+          void pushStageToAnki();
+          return;
+        }
         if (feynmanResult) {
           onNextActivity();
         } else {
@@ -381,7 +400,7 @@ export function StudioWorkbench({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [field1, field2, feynmanResult, isEvaluating, onCheckAnswer, onNextActivity]);
+  }, [field1, field2, feynmanResult, isEvaluating, onCheckAnswer, onNextActivity, pushStageToAnki]);
 
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z : undo / redo the stage's scaffold fields.
   // Runs even when focus is inside a textarea (prevents double-nesting the
@@ -499,6 +518,43 @@ export function StudioWorkbench({
       console.warn('Clipboard write failed');
     }
   };
+
+  // ─── Crystallization: the cards are the exhaust, not the engine ──────────
+  // Nothing is asked of the flashcard until the mechanism has landed. At that
+  // point the cards are read straight off the same fields the exporter ships,
+  // so the preview is the deck, not a decorative copy of it.
+  const crystalCards = useMemo(() => {
+    if (!currentActivity || !feynmanResult?.secured) return [];
+    const response: StageResponse = {
+      ...(userResponses[currentActivity.id] || { field1: '', field2: '' }),
+      field1: field1.trim(),
+      field2: field2.trim(),
+      field3: field3.trim() || undefined,
+      skipped: false,
+    };
+    try {
+      return sanitizeExtracted(
+        extractStageAnkiCards(currentActivity, response, currentActivityIndex, topicSummary)
+      ).cards;
+    } catch {
+      return [];
+    }
+  }, [currentActivity, currentActivityIndex, field1, field2, field3, feynmanResult, topicSummary, userResponses]);
+
+  /** Card text is previewed as plain text: the cloze markers stay visible. */
+  const stripCardTags = (s: string) => s.replace(/<[^>]*>/g, '');
+
+  const submitProbeAnswer = () => {
+    const answer = probeDraft.trim();
+    if (!answer) return;
+    // Their answer joins their own mechanism sentence: a two-word commit is
+    // still a generated link, and it is what the card will carry.
+    setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${answer}` : answer));
+    setProbeDraft('');
+    setProbeCommittedKey(probeKey);
+    playSound('success');
+  };
+
 
   // Text with fluff phrases struck through
   const processedSourceText = useMemo(() => {
@@ -669,6 +725,43 @@ export function StudioWorkbench({
               </span>
             </div>
 
+            {/* THE PARADOX. Definitions are homework; contradictions are
+                irresistible. The stage opens with the thing that cannot be
+                true yet obviously is, so the mechanism gets solved rather
+                than looked up. */}
+            {currentActivity.paradox && (
+              <div
+                className="p-4 bg-flux-950/30 border-l-2 border-flux-500 rounded-r-lg"
+                role="note"
+                aria-label="The paradox this stage resolves"
+                data-testid="stage-paradox"
+              >
+                <span className="font-semibold text-[10px] text-flux-300 uppercase tracking-widest block mb-1">
+                  How is this possible?
+                </span>
+                <p className="text-[15px] font-semibold text-bone leading-snug">
+                  {currentActivity.paradox}
+                </p>
+              </div>
+            )}
+
+            {/* GEDANKENEXPERIMENT: run the extreme case in your head first.
+                Tracking charges, forces and shapes is the encoding; reciting
+                the name of the process is not. */}
+            {currentActivity.gedankenexperiment && (
+              <div
+                className="p-3.5 bg-inset border border-edge rounded-md"
+                data-testid="stage-gedanken"
+              >
+                <span className="font-semibold text-[10px] text-amber-300 uppercase tracking-widest block mb-1">
+                  Thought experiment · run it before you write a word
+                </span>
+                <p className="text-sm text-bone italic leading-relaxed">
+                  {currentActivity.gedankenexperiment}
+                </p>
+              </div>
+            )}
+
             {/* YOUR TASK: the single most important line on the screen. */}
             {(() => {
               const meta = getTemplateDefinition(currentActivity.templateType || '');
@@ -747,7 +840,7 @@ export function StudioWorkbench({
                   setShowInvert(!showInvert);
                   playSound('click');
                 }}
-                title="Adversarial bug hunt: the examiner rigs a 4-step chain with exactly one fatal flaw — find it and fix it"
+                title="Adversarial bug hunt: the examiner rigs a 4-step chain with exactly one fatal flaw. Find it and fix it"
               >
                 Spot the flaw {showInvert ? 'on' : 'off'}
               </ToolToggle>
@@ -757,7 +850,7 @@ export function StudioWorkbench({
                   setShowPrime(!showPrime);
                   playSound('click');
                 }}
-                title="Priming warm-up: pick the drill — draw the curve's shape, run the source→sink polarity check, assemble the units, or sweep a variable to its extremes — before trusting the formula"
+                title="Priming warm-up: pick the drill (draw the curve's shape, run the source→sink polarity check, assemble the units, or sweep a variable to its extremes) before trusting the formula"
               >
                 Prime {showPrime ? 'on' : 'off'}
               </ToolToggle>
@@ -774,14 +867,14 @@ export function StudioWorkbench({
                   setShowSequence(!showSequence);
                   playSound('click');
                 }}
-                title="Scrambled causal order: the examiner splits the mechanism into steps and shuffles them — put the chain back in the order the physics forces, zero typing"
+                title="Scrambled causal order: the examiner splits the mechanism into steps and shuffles them. Put the chain back in the order the physics forces, zero typing"
               >
                 Order the chain {showSequence ? 'on' : 'off'}
               </ToolToggle>
               <ToolToggle
                 active={isPushingAnki}
                 onClick={() => void pushStageToAnki()}
-                title="Push this stage's cards straight into Anki via AnkiConnect (Cmd/Ctrl+Shift+A) — no downloads, no import dialogs"
+                title="Push this stage's cards straight into Anki via AnkiConnect (Cmd/Ctrl+Shift+A), no downloads, no import dialogs"
               >
                 {isPushingAnki ? 'Forging\u2026' : 'Anki push'}
               </ToolToggle>
@@ -991,7 +1084,7 @@ export function StudioWorkbench({
               return (
                 <div className="p-3 bg-amber-500/[0.07] border border-amber-500/30 rounded-md text-xs text-slate-ink leading-relaxed">
                   <span className="text-amber-300 font-semibold">Short answer. </span>
-                  This looks like a one-word blurt ({totalWords} words). Add a sentence or two — the examiner grades on mechanistic depth, and you&apos;ll encode it deeper that way.
+                  This looks like a one-word blurt ({totalWords} words). Add a sentence or two. The examiner grades on mechanistic depth, and you&apos;ll encode it deeper that way.
                 </div>
               );
             })()}
@@ -1070,20 +1163,20 @@ export function StudioWorkbench({
                   type="button"
                   onClick={onCheckAnswer}
                   disabled={isEvaluating || (!field1.trim() && !field2.trim())}
-                  title="I'm done thinking — check my answer with the examiner (Cmd/Ctrl+Enter)"
+                  title="I'm done thinking. Check my answer with the examiner (Cmd/Ctrl+Enter)"
                   className={`px-4 py-2.5 text-xs font-semibold rounded-md transition-colors duration-150 disabled:opacity-40 cursor-pointer border ${
                     feynmanResult
                       ? 'bg-inset border-edge text-slate-ink'
-                      : 'bg-amber-500 border-amber-500 text-inset shadow-glow-amber hover:bg-amber-400 hover:border-amber-400'
+                      : 'bg-amber-500 border-amber-500 text-inset hover:bg-amber-400 hover:border-amber-400'
                   }`}
                 >
-                  {isEvaluating ? 'Checking…' : feynmanResult ? '✓ CHECKED — TRY AGAIN OR NEXT' : '✓ CHECK MY ANSWER'}
+                  {isEvaluating ? 'Checking…' : feynmanResult ? 'CHECKED. TRY AGAIN OR NEXT' : 'CHECK MY ANSWER'}
                 </button>
 
                 <button
                   type="button"
                   onClick={onSkipStage}
-                  title="Skip for now — I'll come back: marked visibly so you can resume it later, no guilt"
+                  title="Skip for now. I'll come back: marked visibly so you can resume it later, no guilt"
                   className="px-3 py-2 text-xs font-medium text-solder bg-inset border border-edge rounded-md hover:text-bone transition-colors duration-150 cursor-pointer"
                 >
                   Skip
@@ -1093,9 +1186,7 @@ export function StudioWorkbench({
                   type="button"
                   onClick={onNextActivity}
                   disabled={!field1.trim() || !field2.trim()}
-                  className={`px-4 py-2.5 text-xs font-semibold bg-amber-500 border border-amber-500 text-inset rounded-md transition-colors duration-150 disabled:opacity-40 cursor-pointer hover:bg-amber-400 hover:border-amber-400 ${
-                    justMastered ? 'animate-pulse shadow-glow-amber' : ''
-                  }`}
+                  className="px-4 py-2.5 text-xs font-semibold bg-amber-500 border border-amber-500 text-inset rounded-md transition-colors duration-150 disabled:opacity-40 cursor-pointer hover:bg-amber-400 hover:border-amber-400"
                 >
                   {justMastered
                     ? (currentActivityIndex === activities.length - 1 ? 'MASTERED! FINISH →' : 'MASTERED! NEXT →')
@@ -1108,7 +1199,7 @@ export function StudioWorkbench({
             {setStageReflection && (
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-slate-ink uppercase tracking-widest block">
-                  What clicked? <span className="normal-case font-normal text-solder">(one line, in your own words — optional)</span>
+                  What clicked? <span className="normal-case font-normal text-solder">(one line, in your own words, optional)</span>
                 </label>
                 <input
                   type="text"
@@ -1146,9 +1237,9 @@ export function StudioWorkbench({
                 className="flex bg-inset border border-edge rounded-md p-0.5"
               >
                 {([
-                  { id: 'sherpa' as const, label: 'Sherpa', title: 'Encouraging guide — nudges, never wounds' },
-                  { id: 'feynman' as const, label: 'Feynman', title: 'Default — grades the mechanism, not the wording' },
-                  { id: 'viva' as const, label: 'Viva', title: 'Oral defense — cross-examines every claim' },
+                  { id: 'sherpa' as const, label: 'Sherpa', title: 'Encouraging guide. Nudges, never wounds' },
+                  { id: 'feynman' as const, label: 'Feynman', title: 'Default. Grades the mechanism, not the wording' },
+                  { id: 'viva' as const, label: 'Viva', title: 'Oral defense. Cross-examines every claim' },
                 ]).map((lvl) => {
                   const active = strictnessLevel === lvl.id;
                   return (
@@ -1177,58 +1268,69 @@ export function StudioWorkbench({
             {/* Socratic Feedback & Jargon Alerts */}
             {feynmanResult && (
               <div className={`p-3.5 rounded-md border text-sm space-y-2 ${
-                feynmanResult.grade === 'mastered'
+                feynmanResult.secured
                   ? 'bg-signal-950/40 border-signal-500/40 text-bone'
                   : 'bg-inset border-edge text-slate-ink'
               }`}>
                 <div className="flex items-center justify-between text-[11px] font-mono font-semibold">
-                  <span className={feynmanResult.grade === 'mastered' ? 'text-signal-300' : 'text-slate-ink'}>
-                    {String(feynmanResult.score)}/100
+                  <span className={feynmanResult.secured ? 'text-signal-300' : 'text-amber-300'}>
+                    {feynmanResult.secured ? 'MENTAL MODEL SECURED' : 'ONE LINK STILL OPEN'}
                   </span>
-                  <span className="text-solder uppercase tracking-wider">{feynmanResult.grade.replace('_', ' ')}</span>
+                  <span className="text-solder uppercase tracking-wider">lab partner</span>
                 </div>
-                <p className="leading-relaxed text-xs">{feynmanResult.feedback}</p>
+                {feynmanResult.feedback ? (
+                  <p className="leading-relaxed text-xs">{feynmanResult.feedback}</p>
+                ) : null}
 
                 {/* Delta feedback: what you nailed + the ONE missing causal step,
                     with an inline field that patches it straight into the
                     mechanism answer instead of making you rewrite everything. */}
-                {((feynmanResult as any).nailedIt || (feynmanResult as any).missingLink) && (
-                  <div className="space-y-2">
-                    {(feynmanResult as any).nailedIt && (
-                      <div className="p-2.5 bg-signal-950/30 border border-signal-500/40 rounded-md text-xs text-signal-300 leading-relaxed">
-                        <span className="font-semibold">You nailed: </span>
-                        {(feynmanResult as any).nailedIt}
-                      </div>
-                    )}
-                    {(feynmanResult as any).missingLink && (
-                      <div className="p-2.5 bg-amber-500/[0.07] border border-amber-500/50 rounded-md text-xs text-bone leading-relaxed space-y-1.5">
-                        <span className="font-semibold text-amber-300">Missing link: </span>
-                        {(feynmanResult as any).missingLink}
-                      </div>
-                    )}
+                {feynmanResult.nailedIt && (
+                  <div className="p-2.5 bg-signal-950/30 border border-signal-500/40 rounded-md text-xs text-signal-300 leading-relaxed">
+                    <span className="font-semibold">You nailed: </span>
+                    {feynmanResult.nailedIt}
+                  </div>
+                )}
+
+                {/* The missing link arrives as a finished sentence, not as an
+                    instruction to "write more". It is already in your voice. */}
+                {feynmanResult.missingLink && (
+                  <div className="p-2.5 bg-amber-500/[0.07] border border-amber-500/50 rounded-md text-xs text-bone leading-relaxed space-y-1">
+                    <span className="font-semibold text-amber-300">
+                      Your sentence, finished for you: </span>
+                    {feynmanResult.missingLink}
+                  </div>
+                )}
+
+                {/* The lab partner finishing your thought: one clause, your
+                    voice, so you can say "yes, that is what I meant" and move on. */}
+                {feynmanResult.sentenceFinisher && (
+                  <div className="p-2.5 bg-inset border border-edge rounded-md text-xs text-slate-ink leading-relaxed">
+                    <span className="font-semibold text-bone">Then that means... </span>
+                    {feynmanResult.sentenceFinisher}
                   </div>
                 )}
 
                 {/* Jargon Buzzer */}
-                {(feynmanResult as any).jargonBuzzer && (
+                {feynmanResult.jargonBuzzer && (
                   <div className="p-2.5 bg-hazard-950/40 border border-hazard-500/40 rounded-md text-xs text-hazard-300 leading-relaxed">
                     <span className="font-semibold">Jargon buzz: </span>
-                    {(feynmanResult as any).jargonBuzzer}
+                    {feynmanResult.jargonBuzzer}
                   </div>
                 )}
 
                 {/* Oral Defense Probing Question */}
-                {(feynmanResult as any).vivaCrossExamination && (
+                {feynmanResult.vivaCrossExamination && (
                   <div className="p-2.5 bg-flux-950/40 border border-flux-500/40 rounded-md text-xs text-flux-300 leading-relaxed">
                     <span className="font-semibold">Viva challenge: </span>
-                    {(feynmanResult as any).vivaCrossExamination}
+                    {feynmanResult.vivaCrossExamination}
                   </div>
                 )}
               </div>
             )}
 
             {/* Insert-missing-link loop: one sentence, Enter, done. */}
-            {feynmanResult && feynmanResult.grade !== 'mastered' && !!(feynmanResult as any).missingLink && (
+            {feynmanResult && !feynmanResult.secured && !!feynmanResult.missingLink && (
               <div className="p-3 bg-inset border border-amber-500/40 rounded-md space-y-2">
                 <label
                   htmlFor="missing-link-input"
@@ -1248,7 +1350,7 @@ export function StudioWorkbench({
                         submitMissingLink();
                       }
                     }}
-                    placeholder="[ Insert the missing link here — one sentence ]"
+                    placeholder="[ Insert the missing link here, one sentence ]"
                     data-testid="missing-link-input"
                     className="flex-1 min-w-0 p-2.5 bg-chassis border border-edge text-bone placeholder-solder text-xs outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 font-sans"
                   />
@@ -1262,13 +1364,104 @@ export function StudioWorkbench({
                   </button>
                 </div>
                 <p className="text-[10px] text-solder">
-                  Enter appends it to your mechanism answer — no rewriting the whole paragraph.
+                  Enter appends it to your mechanism answer, no rewriting the whole paragraph.
                 </p>
               </div>
             )}
 
+            {/* THE PRESSURE TEST. One curious question that pushes the
+                mechanism to its edge, and a two-word answer is a complete
+                answer. Nothing here is scored. */}
+            {feynmanResult?.counterProbe && (
+              <div
+                className="p-3 bg-flux-500/[0.07] border border-flux-500/40 rounded-md space-y-2"
+                data-testid="counter-probe"
+              >
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-flux-300 block">
+                  Pressure test
+                </span>
+                <p className="text-sm text-bone leading-relaxed">{feynmanResult.counterProbe}</p>
+                {probeAnswerSent ? (
+                  <p className="text-[11px] text-signal-300 font-mono">
+                    Locked in. It is on the card.
+                  </p>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={probeDraft}
+                      onChange={(e) => setProbeDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          submitProbeAnswer();
+                        }
+                      }}
+                      placeholder="Two words is a complete answer"
+                      data-testid="counter-probe-input"
+                      aria-label="Answer the pressure test"
+                      className="flex-1 min-w-0 p-2.5 bg-chassis border border-edge text-bone placeholder-solder text-xs outline-none focus:border-flux-500/60 rounded-md transition-colors duration-150 font-sans"
+                    />
+                    <button
+                      type="button"
+                      onClick={submitProbeAnswer}
+                      disabled={!probeDraft.trim()}
+                      className="px-3 py-2.5 text-xs font-semibold rounded-md bg-flux-500 border border-flux-500 text-inset transition-colors duration-150 hover:bg-flux-400 disabled:opacity-40 cursor-pointer shrink-0"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CRYSTALLIZATION. The flashcard is the fossil record of an
+                "aha", never the assignment: the cards only drop out once the
+                mechanism has landed, and every word on them is a word the
+                learner just reasoned through. */}
+            {feynmanResult?.secured && (
+              <div
+                className="p-3.5 bg-signal-950/40 border border-signal-500/50 rounded-md space-y-2.5"
+                data-testid="crystallized-cards"
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-signal-300">
+                    Mental model secured
+                  </span>
+                  <span className="text-[10px] font-mono text-solder">
+                    {crystalCards.length} atomic card{crystalCards.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                {crystalCards.length > 0 ? (
+                  <ol className="space-y-1.5">
+                    {crystalCards.map((c, i) => (
+                      <li key={c.id} className="text-xs text-bone leading-relaxed">
+                        <span className="font-mono text-solder mr-1">{i + 1}.</span>
+                        {stripCardTags(c.front)}
+                        <span className="text-solder"> to </span>
+                        {stripCardTags(c.back)}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-xs text-solder leading-relaxed">
+                    The mechanism is yours. Add a line or two of wording and the cards forge themselves.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => void pushStageToAnki()}
+                  disabled={isPushingAnki || crystalCards.length === 0}
+                  title="Inject these cards straight into Anki with Cmd/Ctrl+Enter"
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-md bg-signal-500 border border-signal-500 text-inset transition-colors duration-150 hover:bg-signal-400 disabled:opacity-40 cursor-pointer"
+                >
+                  {isPushingAnki ? 'Injecting...' : 'Inject into Anki  ⌘⏎'}
+                </button>
+              </div>
+            )}
+
             {/* Contextual hint after a "needs work" grade */}
-            {feynmanResult?.grade === 'needs_elaboration' && (
+            {feynmanResult && !feynmanResult.secured && (
               <div className="p-3 bg-amber-500/[0.07] border border-amber-500/40 rounded-md text-xs text-slate-ink leading-relaxed">
                 <span className="text-amber-300 font-semibold">Not quite yet. </span>
                 {stageErrorAnalysis ? <>Checker noted: <em>{stageErrorAnalysis}</em>. </> : null}
@@ -1277,7 +1470,7 @@ export function StudioWorkbench({
             )}
 
             {/* Teach-me fallback after 2 failed checks */}
-            {(stageCheckCount ?? 0) >= 2 && feynmanResult?.grade !== 'mastered' && (
+            {(stageCheckCount ?? 0) >= 2 && !feynmanResult?.secured && (
               <div className="p-3.5 bg-amber-500/[0.07] border border-amber-500/50 rounded-md">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-widest">

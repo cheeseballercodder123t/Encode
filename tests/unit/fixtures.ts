@@ -38,7 +38,7 @@ export function makeSchema(overrides: Partial<SavedSchema> = {}): SavedSchema {
           field2: 'answer two',
           confidenceScore: 80,
           checkCount: 1,
-          feynmanReview: { grade: 'good', score: 82, feedback: 'solid', xpBonus: 20 },
+          feynmanReview: { secured: true, feedback: 'solid' },
         } satisfies StageResponse,
       ])
     );

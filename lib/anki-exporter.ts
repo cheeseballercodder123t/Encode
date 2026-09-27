@@ -110,7 +110,9 @@ export function computeActivityExportTags(resp: StageResponse | undefined): stri
   const hasWording = Boolean(resp && !resp.skipped && (resp.field1?.trim() || resp.field2?.trim()));
   if (!hasWording || !resp) return ['DeepEncode', 'SchemaActivity', 'Unfinished'];
   const tags = ['DeepEncode', 'SchemaActivity'];
-  if (resp.skipped || resp.feynmanReview?.grade === 'needs_elaboration') tags.push('Unfinished');
+  // "Unfinished" is the examiner's boolean, not a grade band: a stage whose
+  // mechanism never landed is unfinished regardless of how it was scored.
+  if (resp.skipped || resp.feynmanReview?.secured === false) tags.push('Unfinished');
   return tags;
 }
 
@@ -467,12 +469,14 @@ export function extractStageAnkiCards(
  * the threshold. Report-backed paths are untouched (they have no per-stage
  * grades), so a weak export of a fresh schema still yields cue cards.
  *
- * @param scoreThreshold stages with an examiner score below this count as weak.
+ * @param _scoreThreshold retained for call-site compatibility. There is no
+ * numeric examiner threshold any more: a stage is weak when the mechanism did
+ * not land, which is a boolean.
  */
 export function extractWeakAnkiCardsFromSchema(
   schema?: Partial<SavedSchema> | null,
   report?: SegregationReport | null,
-  scoreThreshold: number = 65
+  _scoreThreshold: number = 65
 ): AnkiCardItem[] {
   const all = extractAnkiCardsFromSchema(schema, report);
   if (!schema || !schema.activities || schema.activities.length === 0) return all;
@@ -487,7 +491,7 @@ export function extractWeakAnkiCardsFromSchema(
     if (!f1 && !f2) { weakIds.add(act.id); return; }
     const review = resp.feynmanReview;
     if (!review) { weakIds.add(act.id); return; }
-    if (review.grade === 'needs_elaboration' || (typeof review.score === 'number' && review.score < scoreThreshold)) {
+    if (!review.secured) {
       weakIds.add(act.id);
     }
   });

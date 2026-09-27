@@ -141,7 +141,7 @@ export function DiscriminationGate({
           <p className="text-xs text-solder leading-relaxed">
             One of these two vignettes is <span className="text-bone">{check.conceptLabel}</span>, the
             other is <span className="text-bone">{check.lookalikeLabel}</span>. Classify it before the
-            clock runs out — hesitation is the interference this gate exists to find.
+            clock runs out. Hesitation is the interference this gate exists to find.
           </p>
 
           {/* The clock: the whole point is that it is short. */}

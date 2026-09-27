@@ -19,8 +19,8 @@ describe('computeSessionStats', () => {
     const schema = makeSchema({
       activities: acts,
       userResponses: {
-        a1: { field1: 'yes', field2: 'x', confidenceScore: 60, checkCount: 2, reflection: 'r1', feynmanReview: { grade: 'mastered', score: 90, feedback: '', xpBonus: 0 } },
-        a2: { field1: 'yes', field2: '', confidenceScore: 80, checkCount: 4, reflection: '', feynmanReview: { grade: 'needs_elaboration', score: 50, feedback: '', xpBonus: 0 } },
+        a1: { field1: 'yes', field2: 'x', confidenceScore: 60, checkCount: 2, reflection: 'r1', feynmanReview: { secured: true, feedback: '' } },
+        a2: { field1: 'yes', field2: '', confidenceScore: 80, checkCount: 4, reflection: '', feynmanReview: { secured: false, feedback: '' } },
         a3: { field1: '', field2: '' },
       },
     });
@@ -60,15 +60,26 @@ describe('exportToCSV', () => {
       topicSummary: 'Topic with, comma and "quotes"',
       activities: acts,
       userResponses: {
-        a1: { field1: 'f1', field2: 'f2', confidenceScore: 70, checkCount: 1, reflection: 'did "it"', readinessLatencyMs: 2500 },
+        a1: {
+          field1: 'f1',
+          field2: 'f2',
+          confidenceScore: 70,
+          checkCount: 1,
+          reflection: 'did "it"',
+          feynmanReview: { secured: true, feedback: '' },
+        },
       },
     });
     const csv = exportToCSV([schema]);
     const lines = csv.split('\n');
     expect(lines[0]).toContain('session_id');
+    // The old per-stage grade and score columns are gone with the verdict they
+    // carried; what the export reports is whether the mechanism landed.
+    expect(lines[0]).toContain('mechanism_landed');
+    expect(lines[0]).not.toContain('grade');
     expect(lines).toHaveLength(2);
     expect(lines[1]).toContain('""quotes""');
-    expect(lines[1]).toContain('2500');
+    expect(lines[1]).toContain('yes');
   });
 
   it('skips stages without a response', () => {

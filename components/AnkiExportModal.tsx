@@ -39,6 +39,7 @@ import {
 import { gateSourceFromActivity } from '@/lib/discrimination';
 import { DiscriminationGate } from '@/components/DiscriminationGate';
 import { DiscriminationCheck } from '@/lib/types';
+import { BracketTag } from '@/components/ui/BracketTag';
 
 interface AnkiExportModalProps {
   isOpen: boolean;
@@ -257,7 +258,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       const result = await pushCardsToAnki(exportCards, deckName, { url: endpoint });
       setPushStatus({
         ok: true,
-        message: `${formatPushStatus(result)} — ${result.added} of ${result.attempted} card${
+        message: `${formatPushStatus(result)}: ${result.added} of ${result.attempted} card${
           result.attempted === 1 ? '' : 's'
         } landed in ${result.deckName}.`,
       });
@@ -529,9 +530,10 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
           <button
             onClick={onClose}
+            aria-label="Close export modal"
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none cursor-pointer"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 
@@ -545,7 +547,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
-            <span className="text-amber font-bold font-mono">[ DL ]</span>
+            <BracketTag label="DL" />
             <span>Export .apkg / .txt</span>
             {audit.length > 0 && (
               <span className="px-1.5 py-0.5 bg-amber/30 text-[10px] font-bold text-amber">{audit.length}</span>
@@ -560,7 +562,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
-            <span className="text-amber font-bold font-mono">[ MCQ ]</span>
+            <BracketTag label="MCQ" />
             <span>Procedural MCQ Deck (from your notes)</span>
           </button>
 
@@ -572,7 +574,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 : 'text-solder hover:text-bone hover:bg-deck'
             }`}
           >
-            <span className="text-amber font-bold font-mono">[ SYNC ]</span>
+            <BracketTag label="SYNC" />
             <span>Sync (Webhook)</span>
           </button>
         </div>
@@ -615,7 +617,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               data-testid="discrimination-flag"
             >
               This deck is flagged{' '}
-              <code className="font-mono">DiscriminationUnstable</code> — the pair that fooled you now
+              <code className="font-mono">DiscriminationUnstable</code>. The pair that fooled you now
               leads the deck as a trap card.
             </p>
           )}
@@ -623,7 +625,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
           {gatePassed && gateStatus === 'closed' && !gateUnstable && (
             <div className="flex items-center justify-between gap-2 flex-wrap p-2.5 bg-signal-950/30 border border-signal-500/40 rounded-md">
               <span className="text-[11px] text-signal-300" data-testid="discrimination-passed">
-                Discrimination gate passed — export unlocked for this session.
+                Discrimination gate passed. Export unlocked for this session.
               </span>
               <button
                 type="button"
@@ -699,13 +701,13 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                         {activeDeck.heldBack.length} card fragment{activeDeck.heldBack.length === 1 ? '' : 's'} held back
                       </span>
                       <span className="text-solder">
-                        {' '}— auto-splitting could not bring them under the 20-word ceiling, so they are out of
+                        {' '}Auto-splitting could not bring them under the 20-word ceiling, so they are out of
                         the export until you chunk them in the workbench.
                       </span>
                       <ul className="mt-1.5 space-y-0.5 font-mono text-[11px] text-solder">
                         {activeDeck.heldBack.map((h, i) => (
                           <li key={`${h.card.id}-${i}`}>
-                            [ ! ] {h.card.front.replace(/<[^>]*>/g, '').slice(0, 64)} — {h.reason}
+                            [ ! ] {h.card.front.replace(/<[^>]*>/g, '').slice(0, 64)}: {h.reason}
                           </li>
                         ))}
                       </ul>
@@ -741,7 +743,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   onClick={() => runGate(() => void handleDownloadApkg())}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer"
                 >
-                  <span className="text-amber font-bold font-mono">[ DL ]</span>
+                  <BracketTag label="DL" />
                   Download .apkg Package
                 </button>
 
@@ -749,7 +751,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   onClick={() => runGate(handleDownloadTxt)}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer"
                 >
-                  <span className="text-amber font-bold font-mono">[ FILE ]</span>
+                  <BracketTag label="FILE" />
                   Download Anki .txt (Tab-Separated)
                 </button>
               </div>
@@ -765,7 +767,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 <p className="text-xs text-solder leading-relaxed">
                   Creates the deck and adds {displayCards.length} card{displayCards.length === 1 ? '' : 's'} directly
                   through AnkiConnect. Requires the Anki desktop app open with the AnkiConnect add-on
-                  (code <code className="text-bone font-mono">2055492159</code>) — duplicates are skipped, never re-added.
+                  (code <code className="text-bone font-mono">2055492159</code>); duplicates are skipped, never re-added.
                   Every export path is gated by the 10-second discrimination check.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -782,7 +784,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                     disabled={isPushing || displayCards.length === 0}
                     className="px-4 py-2 bg-amber/15 hover:bg-amber/25 border border-amber/50 text-amber font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                   >
-                    <span className="font-mono">[ ZAP ]</span>
+                    <BracketTag label="ZAP" tone="" />
                     {isPushing ? 'Forging…' : `Push ${displayCards.length} to Anki`}
                   </button>
                 </div>
@@ -852,7 +854,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                             className="shrink-0 px-2.5 py-1 bg-amber/20 hover:bg-amber/30 border border-amber/40 text-amber font-bold flex items-center gap-1.5 transition-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                             title={issues.some((i) => i.kind === 'too_long') ? 'Auto-split into two atomic cards' : 'Only too-long cards can be split'}
                           >
-                            <span className="text-amber font-bold font-mono">[ SPLIT ]</span>
+                            <BracketTag label="SPLIT" />
                             <span>Split</span>
                           </button>
                         </div>
@@ -909,12 +911,12 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 >
                   {isSyncingWebhook ? (
                     <>
-                      <span className="text-amber font-bold font-mono">[ BUSY ]</span>
+                      <BracketTag label="BUSY" />
                       Dispatching Webhook...
                     </>
                 ) : (
                   <>
-                    <span className="text-amber font-bold font-mono">[ SEND ]</span>
+                    <BracketTag label="SEND" />
                     Dispatch SM-2 Card Payload to Webhook
                   </>
                 )}

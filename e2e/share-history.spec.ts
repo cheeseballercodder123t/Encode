@@ -10,7 +10,7 @@ test.describe('Stateless URL sharing', () => {
       topicSummary: 'TCP Handshake (Shared)',
       activities: [makeActivity({ id: 'shared-1' })],
       userResponses: {
-        'shared-1': { field1: 'syn', field2: 'syn-ack', readinessConfirmed: true },
+        'shared-1': { field1: 'syn', field2: 'syn-ack' },
       },
     });
     const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(schema));

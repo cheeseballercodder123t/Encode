@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { PrerequisitesReport, PrerequisiteItem } from '@/lib/types';
 import { sound, playSound } from '@/lib/audio';
@@ -65,7 +66,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
             onClick={onClose}
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 
@@ -145,7 +146,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                     onClick={() => setExpandedPrimer(isExpanded ? null : prereq.id)}
                     className="flex items-center gap-1 text-xs text-bone font-medium transition-none"
                   >
-                    <span className="text-amber font-bold font-mono">[ BOOK ]</span>
+                    <BracketTag label="BOOK" />
                     <span>{isExpanded ? 'Hide 3-Sentence Primer' : 'Read Quick 3-Sentence Primer'}</span>
                     {isExpanded ? <span className="text-amber font-bold font-mono">[ ^ ]</span> : <span className="text-amber font-bold font-mono">[ v ]</span>}
                   </button>
@@ -198,7 +199,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
               className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center gap-2 transition-none"
             >
               <span>{hasReviewedAll ? "Start Cognitive Encoding" : "Proceed to Encoding"}</span>
-              <span className="text-amber font-bold font-mono">[ NEXT ]</span>
+              <BracketTag label="NEXT" />
             </button>
           </div>
         </div>

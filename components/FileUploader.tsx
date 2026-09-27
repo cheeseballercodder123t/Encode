@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { UploadedFileAsset } from '@/lib/types';
 import { sound } from '@/lib/audio';
 import { GoogleDriveModal } from './GoogleDriveModal';
@@ -147,7 +148,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
             title="Remove attachment"
             aria-label="Remove attached file"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
       ) : compact ? (
@@ -157,10 +158,10 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           className="w-full min-h-[44px] px-3 py-2 bg-chassis/80 border border-dashed border-edge hover:border-amber text-[11px] font-mono text-solder hover:text-bone transition-none cursor-pointer flex items-center gap-2 text-left"
-          title="Attach a PDF or image alongside your notes — both are sent to the encoder"
+          title="Attach a PDF or image alongside your notes; both are sent to the encoder"
         >
           <span className="text-amber font-bold">[ +ATTACH FILE ]</span>
-          <span className="truncate">PDF / image (optional) — combines with notes above</span>
+          <span className="truncate">PDF / image (optional), combines with notes above</span>
         </button>
       ) : (
         <div

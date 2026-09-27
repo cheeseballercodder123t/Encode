@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, AIProvider } from '@/lib/types';
 import { loadAISettings, saveAISettings, DEFAULT_SETTINGS, loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
@@ -135,7 +136,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
               onClick={onClose}
               className="p-2 text-solder hover:text-bone hover:bg-inset transition-colors duration-150"
             >
-              <span className="text-amber font-bold font-mono">[ X ]</span>
+              <BracketTag label="X" />
             </button>
           </div>
 

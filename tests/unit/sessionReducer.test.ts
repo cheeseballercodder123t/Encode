@@ -46,7 +46,6 @@ const savedResponse: StageResponse = {
   field1: 'answer one',
   field2: 'answer two',
   selectedPreset: 'preset-1',
-  readinessConfirmed: true,
   confidenceScore: 90,
   reflection: 'took away',
   checkCount: 2,
@@ -115,7 +114,7 @@ describe('sessionReducer', () => {
       xpEarned: 120,
       activities: acts,
       userResponses: {
-        a1: { field1: 'done', field2: 'done', readinessConfirmed: true, confidenceScore: 90, checkCount: 1, feynmanReview: { grade: 'mastered', score: 95, feedback: '', xpBonus: 0 } },
+        a1: { field1: 'done', field2: 'done', confidenceScore: 90, checkCount: 1, feynmanReview: { secured: true, feedback: '' } },
         // a2 is unfinished (no response): resume should land here.
       },
     };
@@ -157,7 +156,7 @@ describe('sessionReducer', () => {
       xpEarned: 0,
       activities: acts,
       userResponses: {
-        a1: { field1: 'done', field2: 'done', readinessConfirmed: true, feynmanReview: { grade: 'mastered', score: 95, feedback: '', xpBonus: 0 } },
+        a1: { field1: 'done', field2: 'done', feynmanReview: { secured: true, feedback: '' } },
       },
     };
     const next = sessionReducer(initialSessionState, { type: 'resume_to_encoding', schema });

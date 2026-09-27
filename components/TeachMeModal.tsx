@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity,
@@ -42,7 +43,7 @@ const STYLE_META: { id: TeachLessonOptions['style']; label: string; blurb: strin
   { id: 'socratic', label: 'Socratic', blurb: 'Question-by-question, you discover the mechanism' },
   { id: 'storyteller', label: 'Storyteller', blurb: 'The mechanism becomes a plot with stakes' },
   { id: 'professor', label: 'Professor', blurb: 'Crisp lecture : define, motivate, solve, test' },
-  { id: 'meme', label: 'Meme Brainrot', blurb: 'Absurd & funny — accuracy still sacred' },
+  { id: 'meme', label: 'Meme Brainrot', blurb: 'Absurd & funny. Accuracy still sacred' },
 ];
 
 const BOOL_TOGGLES: [keyof TeachLessonOptions, string, string][] = [
@@ -146,7 +147,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
       setStreak(0);
       setBestStreak(0);
       setPhase('playing');
-      setErrorMsg('AI unavailable — taught you from your schema instead.');
+      setErrorMsg('AI unavailable. Taught you from your schema instead.');
       playSound('beep');
     }
   };
@@ -212,10 +213,10 @@ export function TeachMeModal(props: TeachMeModalProps) {
       <div className="p-3 bg-deck border border-edge/40 text-xs text-bone leading-relaxed">
         <p className="font-bold text-bone text-[11px] flex items-center gap-1.5">
           <span className="text-flux font-bold font-mono">[ AI ]</span>
-          Lesson Pre-Roll — how should I teach?
+          Lesson Pre-Roll: how should I teach?
         </p>
         <p className="text-solder mt-1">
-          Style, pacing, difficulty and humor are all          <span className="text-flux-300">soft preferences</span> — the AI
+          Style, pacing, difficulty and humor are all <span className="text-flux-300">soft preferences</span>, and the AI
           is free to override them if a better pedagogy occurs to it. Every lesson teaches the concept first, then
           walks you through a real problem step-by-step.
         </p>
@@ -286,7 +287,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
           onClick={handleGenerate}
           className="flex items-center gap-2 px-6 py-2.5 bg-flux border border-flux text-bone text-xs font-mono font-bold uppercase tracking-wider transition-colors duration-150 cursor-pointer hover:bg-flux-400 hover:border-flux-400"
         >
-          <span>[ GO ]</span>
+          <BracketTag label="GO" tone="" />
           <span>Generate Lesson</span>
         </button>
       </div>
@@ -306,7 +307,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
           : 'Authoring your interactive lesson...'}
       </p>
       <p className="text-[10px] text-solder font-mono">
-        concept → guided problem → your turn — with instant feedback at every step.
+        concept → guided problem → your turn, with instant feedback at every step.
       </p>
     </div>
   );
@@ -383,7 +384,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
               </div>
             </div>
             <button type="button" onClick={handleClose} className="p-2 text-solder hover:text-bone hover:bg-inset">
-              <span className="text-flux font-bold font-mono">[ X ]</span>
+              <BracketTag label="X" tone="text-flux" />
             </button>
           </div>
 

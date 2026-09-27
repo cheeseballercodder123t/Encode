@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { SavedSchema } from '@/lib/types';
 import { sound } from '@/lib/audio';
@@ -114,7 +115,7 @@ export function HistoryDrawer({
               aria-label="Close saved schemas"
               className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-solder hover:text-bone hover:bg-inset transition-colors shrink-0"
             >
-              <span className="text-amber font-bold font-mono">[ X ]</span>
+              <BracketTag label="X" />
             </button>
           </div>
 
@@ -211,7 +212,7 @@ export function HistoryDrawer({
                       </span>
                       <span className="text-sm font-bold text-bone block truncate">{s.topicSummary}</span>
                       <span className="text-[11px] text-solder font-mono mt-0.5 block">
-                        Stage {done + 1} of {acts.length}{skipped > 0 ? ` · ${skipped} skipped to revisit` : ''} — tap to resume
+                        Stage {done + 1} of {acts.length}{skipped > 0 ? ` · ${skipped} skipped to revisit` : ''}, tap to resume
                       </span>
                     </button>
                   );
@@ -256,7 +257,7 @@ export function HistoryDrawer({
                         </h4>
                         {isIncomplete && (
                           <span className="inline-block mt-1 text-[10px] font-mono font-bold uppercase tracking-wider text-amber bg-amber/15 border border-amber/50 px-1.5 py-0.5">
-                            [ ◐ {doneCount}/{acts.length} done{skippedCount > 0 ? ` · ${skippedCount} skipped` : ''} — resume ]
+                            [ ◐ {doneCount}/{acts.length} done{skippedCount > 0 ? ` · ${skippedCount} skipped` : ''} · resume ]
                           </span>
                         )}
                         {schema.sourceFileName && (

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   SegregationReport,
@@ -123,7 +124,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             onClick={onClose}
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 
@@ -406,7 +407,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             </div>
 
             {(report?.practiceQuestions?.length ?? 0) === 0 && (
-              <p className="text-xs text-solder p-3 border border-edge bg-deck/60">No drills in this report — regenerate segregation to include them.</p>
+              <p className="text-xs text-solder p-3 border border-edge bg-deck/60">No drills in this report. Regenerate segregation to include them.</p>
             )}
 
             {report?.practiceQuestions?.map((pq: PracticeQuestionItem, idx: number) => (
@@ -433,7 +434,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
             </div>
 
             {(report?.workedExamples?.length ?? 0) === 0 && (
-              <p className="text-xs text-solder p-3 border border-edge bg-deck/60">No worked examples in this report — regenerate segregation to include them.</p>
+              <p className="text-xs text-solder p-3 border border-edge bg-deck/60">No worked examples in this report. Regenerate segregation to include them.</p>
             )}
 
             {report?.workedExamples?.map((ex: WorkedExampleItem, idx: number) => (

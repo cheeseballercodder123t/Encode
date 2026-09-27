@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -112,7 +113,8 @@ export const PWAInstallHeader: React.FC = () => {
                 aria-label="Close iOS install guide"
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center px-2 py-1 text-solder hover:text-bone border border-edge hover:border-solder font-mono text-[10px] font-bold transition-none cursor-pointer"
               >
-                [ X ]
+                {/* Phone: the close brackets frame the X vertically. */}
+                <BracketTag label="X" tone="" />
               </button>
             </div>
 

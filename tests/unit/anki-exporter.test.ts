@@ -108,7 +108,7 @@ describe('extractAnkiCardsFromSchema', () => {
         field1: 'Sodium rushes in at the threshold.',
         field2: 'Because the gates are voltage-sensitive.',
         confidenceScore: 80,
-        feynmanReview: { grade: 'good', score: 78, feedback: 'Solid.', xpBonus: 10 },
+        feynmanReview: { secured: true, feedback: 'Solid.' },
       },
     },
   };
@@ -161,7 +161,7 @@ describe('extractAnkiCardsFromSchema', () => {
     const blank = {
       ...encodedSchema,
       userResponses: {
-        act_1: { field1: '', field2: '', skipped: true, readinessConfirmed: true },
+        act_1: { field1: '', field2: '', skipped: true },
       },
     };
     const cards = extractAnkiCardsFromSchema(blank, null);
@@ -288,9 +288,9 @@ describe('extractWeakAnkiCardsFromSchema', () => {
     ],
     userResponses: {
       // act_1: mastered at score 90 — NOT weak
-      act_1: { field1: 'Sodium rushes in.', field2: 'Voltage-gated.', readinessConfirmed: true, feynmanReview: { grade: 'mastered', score: 90, feedback: 'Good', xpBonus: 5 } },
+      act_1: { field1: 'Sodium rushes in.', field2: 'Voltage-gated.', feynmanReview: { secured: true, feedback: 'Good' } },
       // act_2: needs_elaboration — weak
-      act_2: { field1: 'Potassium.', field2: '', readinessConfirmed: true, feynmanReview: { grade: 'needs_elaboration', score: 45, feedback: 'Be precise', xpBonus: 0 } },
+      act_2: { field1: 'Potassium.', field2: '', feynmanReview: { secured: false, feedback: 'Be precise' } },
       // act_3: skipped — weak
       // (no response for act_3)
     },
@@ -310,7 +310,7 @@ describe('extractWeakAnkiCardsFromSchema', () => {
     expect(weak).toEqual([]);
   });
 
-  it('treats low-scoring stages as weak', () => {
+  it('treats a stage whose mechanism never landed as weak', () => {
     const low: Partial<SavedSchema> = {
       topicSummary: 'T',
       activities: [{
@@ -319,7 +319,9 @@ describe('extractWeakAnkiCardsFromSchema', () => {
         scaffold: { field1Label: 'a', field1Placeholder: 'b', field2Label: 'c', field2Placeholder: 'd', exampleAnswer: 'e' },
       }],
       userResponses: {
-        a1: { field1: 'x', field2: 'y', readinessConfirmed: true, feynmanReview: { grade: 'good', score: 30, feedback: '', xpBonus: 0 } },
+        // 'secured' is the examiner's whole verdict now: there is no score to
+        // fall below a threshold, so an open mechanism is what marks a stage.
+        a1: { field1: 'x', field2: 'y', feynmanReview: { secured: false, feedback: '' } },
       },
     };
     const weak = extractWeakAnkiCardsFromSchema(low, null);
@@ -352,7 +354,7 @@ describe('clozeUserWording / computeActivityExportTags / buildHierarchicalDeckNa
     const tags = computeActivityExportTags({
       field1: 'x',
       field2: 'y',
-      feynmanReview: { grade: 'needs_elaboration', score: 40, feedback: 'thin', xpBonus: 0 },
+      feynmanReview: { secured: false, feedback: 'thin' },
     });
     expect(tags).toContain('Unfinished');
   });

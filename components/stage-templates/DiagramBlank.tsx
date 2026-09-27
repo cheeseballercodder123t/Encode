@@ -88,7 +88,7 @@ export function DiagramBlank({ slot, onAdopt, accent = 'amber' }: DiagramBlankPr
 
       {result === 'hit' && (
         <p className={`text-[11px] leading-relaxed ${tokens.ok}`} data-testid="diagram-blank-verdict">
-          That is the link — it just went onto your card.
+          That is the link, and it just went onto your card.
         </p>
       )}
 

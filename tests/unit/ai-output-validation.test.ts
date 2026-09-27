@@ -179,23 +179,24 @@ describe('validateEncodedSchema', () => {
       ],
     };
 describe('validateEvaluationResult', () => {
-  it('coerces a valid evaluation', () => {
-    const out = validateEvaluationResult({ grade: 'good', score: 78, xpBonus: 40, feedback: 'Nice.' });
-    expect(out.grade).toBe('good');
-    expect(out.score).toBe(78);
-    expect(out.xpBonus).toBe(40);
-    expect(out.feedback).toBe('Nice.');
-  });
-
-  it('downgrades an invalid grade to needs_elaboration', () => {
-    const out = validateEvaluationResult({ grade: 'masterful', score: 99, feedback: 'wow' });
-    expect(out.grade).toBe('needs_elaboration');
-  });
-
-  it('carries the delta feedback lines through', () => {
+  it('coerces a valid evaluation without inventing any number', () => {
     const out = validateEvaluationResult({
-      grade: 'needs_elaboration',
-      score: 62,
+      secured: true,
+      feedback: 'Nice.',
+      counterProbe: 'What if the pump stalls halfway?',
+      sentenceFinisher: 'the pore opens because the helices moved.',
+    });
+    expect(out.secured).toBe(true);
+    expect(out.feedback).toBe('Nice.');
+    expect(out.counterProbe).toBe('What if the pump stalls halfway?');
+    expect(out.sentenceFinisher).toBe('the pore opens because the helices moved.');
+    // The whole point of the contract: nothing numeric survives.
+    expect(Object.values(out).some((v) => typeof v === 'number')).toBe(false);
+  });
+
+  it('carries the pressure test and the finished sentence through', () => {
+    const out = validateEvaluationResult({
+      secured: false,
       feedback: 'Close.',
       nailedIt: 'Na+ influx and threshold crossing.',
       missingLink: 'S4 segments swing outward, which is what opens the pore.',
@@ -206,8 +207,7 @@ describe('validateEvaluationResult', () => {
 
   it('falls back to errorAnalysis for the missing link', () => {
     const out = validateEvaluationResult({
-      grade: 'good',
-      score: 74,
+      secured: true,
       feedback: 'Solid.',
       errorAnalysis: 'You skipped the physical link between voltage change and pore dilation.',
     });
@@ -216,46 +216,47 @@ describe('validateEvaluationResult', () => {
     );
   });
 
-  it('clamps out-of-range scores', () => {
-    const out = validateEvaluationResult({ grade: 'mastered', score: 500, xpBonus: -20, feedback: 'x' });
-    expect(out.score).toBe(100);
-    expect(out.xpBonus).toBe(0);
-  });
-
   it('produces a safe fallback for a null payload (never grants mastery)', () => {
     const out = validateEvaluationResult(null);
-    expect(out.grade).toBe('needs_elaboration');
-    expect(out.feedback.length).toBeGreaterThan(0);
+    expect(out.secured).toBe(false);
+  });
+
+  it('reads a legacy grade as the boolean so old sessions keep working', () => {
+    expect(validateEvaluationResult({ grade: 'mastered', score: 90 }).secured).toBe(true);
+    expect(validateEvaluationResult({ grade: 'good', score: 78 }).secured).toBe(true);
+    expect(validateEvaluationResult({ grade: 'needs_elaboration', score: 40 }).secured).toBe(false);
+    expect(validateEvaluationResult({ grade: 'masterful', score: 99 }).secured).toBe(false);
   });
 
   it('keeps optional fields only when strings', () => {
-    const out = validateEvaluationResult({ grade: 'good', score: 70, feedback: 'f', depthAlert: 'watch jargon', jargonBuzzer: 42 });
+    const out = validateEvaluationResult({ secured: true, depthAlert: 'watch jargon', jargonBuzzer: 42 });
     expect(out.depthAlert).toBe('watch jargon');
     expect(out.jargonBuzzer).toBeUndefined();
   });
 });
 
 describe('validateBatchEvaluation', () => {
-  it('sanitizes per-stage grades and clamps the overall score', () => {
+  it('keeps per-stage truth values and drops junk, with no score anywhere', () => {
     const out = validateBatchEvaluation({
       overallScore: 120,
       analysis: 'Solid.',
       perStageGrades: [
-        { stageTitle: 'S1', grade: 'good', score: 80, feedback: 'ok' },
-        { grade: 'bogus', score: 200, feedback: '' },
+        { stageTitle: 'S1', secured: true, counterProbe: 'What if it stalls?', feedback: 'ok' },
+        { feedback: '' },
         'junk',
       ],
     });
-    expect(out.overallScore).toBe(100);
     expect(out.perStageGrades).toHaveLength(2);
-    expect(out.perStageGrades[1].grade).toBe('needs_elaboration');
-    expect(out.perStageGrades[1].score).toBe(100);
+    expect(out.perStageGrades[0].secured).toBe(true);
+    expect(out.perStageGrades[0].counterProbe).toBe('What if it stalls?');
+    expect(out.perStageGrades[1].secured).toBe(false);
     expect(out.perStageGrades[1].stageTitle).toBe('Stage');
+    expect(Object.keys(out)).not.toContain('overallScore');
   });
 
-  it('returns empty grades for a malformed payload', () => {
+  it('returns an empty read for a malformed payload', () => {
     const out = validateBatchEvaluation(null);
-    expect(out.overallScore).toBe(0);
+    expect(out.analysis).toBe('');
     expect(out.perStageGrades).toEqual([]);
   });
 });

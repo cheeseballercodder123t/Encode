@@ -1,4 +1,4 @@
-import { AISettings, EncodingMode, SavedSchema } from './types';
+import { AISettings, EncodingGear, EncodingMode, SavedSchema } from './types';
 import { saveSchemaToIDB, deleteSchemaFromIDB, clearAllSchemasFromIDB, getAllSchemasFromIDB } from './db';
 
 const STORAGE_KEYS = {
@@ -61,6 +61,8 @@ export interface StudyPrefs {
   strictnessLevel: StudyPrefsStrictness;
   enableDeepResearch: boolean;
   enableGuidedPath: boolean;
+  /** How deep this session goes. Defaults to the middle gear. */
+  gear: EncodingGear;
   /** Interleave toggle is intentionally NOT remembered: it re-routes the whole generation. */
   hiddenTemplates: string[];
 }
@@ -71,6 +73,7 @@ export const DEFAULT_STUDY_PREFS: StudyPrefs = {
   strictnessLevel: 'feynman',
   enableDeepResearch: true,
   enableGuidedPath: false,
+  gear: 2,
   hiddenTemplates: [],
 };
 
@@ -86,6 +89,7 @@ export function loadStudyPrefs(): StudyPrefs {
       strictnessLevel: ['sherpa', 'feynman', 'viva'].includes(parsed.strictnessLevel) ? parsed.strictnessLevel : DEFAULT_STUDY_PREFS.strictnessLevel,
       enableDeepResearch: typeof parsed.enableDeepResearch === 'boolean' ? parsed.enableDeepResearch : DEFAULT_STUDY_PREFS.enableDeepResearch,
       enableGuidedPath: typeof parsed.enableGuidedPath === 'boolean' ? parsed.enableGuidedPath : DEFAULT_STUDY_PREFS.enableGuidedPath,
+      gear: [1, 2, 3].includes(parsed.gear) ? (parsed.gear as EncodingGear) : DEFAULT_STUDY_PREFS.gear,
       hiddenTemplates: Array.isArray(parsed.hiddenTemplates) ? parsed.hiddenTemplates.filter((t: unknown) => typeof t === 'string') : [],
     };
     return prefs;
@@ -215,8 +219,8 @@ export function invalidateSchemaCache(): void {
 }
 
 // ─── "What's hard for me": per-topic struggle ledger ─────────────────────────
-// Records low examiner grades / repeated checks per topic so the tool can
-// surface weak topics and warn the learner before a re-test. Personal,
+// Records topics whose mechanism is still open, plus repeated checks, so the
+// tool can surface weak areas and warn the learner before a re-test. Personal,
 // local-only, one entry per topic (latest result wins).
 
 const STRUGGLE_KEY = 'deepencode_topic_struggles_v1';
@@ -224,8 +228,8 @@ const STRUGGLE_KEY = 'deepencode_topic_struggles_v1';
 export interface TopicStruggle {
   topic: string;
   templateType?: string;
-  lastGrade: 'mastered' | 'good' | 'needs_elaboration';
-  lastScore: number;
+  /** True when the last check landed the mechanism. There is no grade. */
+  lastSecured: boolean;
   checkCount: number;
   updatedAt: number;
 }
@@ -242,17 +246,17 @@ export function loadTopicStruggles(): TopicStruggle[] {
   }
 }
 
-/** Record one graded stage. Only "needs work" grades keep a topic on the list. */
+/** Record one checked stage. Landing the mechanism clears the topic. */
 export function recordTopicResult(entry: Omit<TopicStruggle, 'updatedAt'>): void {
   if (typeof window === 'undefined') return;
   try {
     const current = loadTopicStruggles().filter(
       s => s.topic.toLowerCase() !== entry.topic.toLowerCase()
     );
-    if (entry.lastGrade === 'needs_elaboration') {
+    if (!entry.lastSecured) {
       current.unshift({ ...entry, updatedAt: Date.now() });
     }
-    // Mastered/good clears the topic from the struggle list.
+    // A landed mechanism clears the topic from the struggle list.
     localStorage.setItem(STRUGGLE_KEY, JSON.stringify(current.slice(0, 30)));
   } catch (e) {
     console.error('Failed to record topic result', e);

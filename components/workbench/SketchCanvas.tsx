@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 
 interface SketchCanvasProps {
   onSaveSketch?: (dataUrl: string) => void;
@@ -188,7 +189,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
             title="Pen"
             aria-pressed={!isEraser}
           >
-            <span className="text-amber font-bold font-mono text-[11px]">[ PEN ]</span>
+            <BracketTag label="PEN" className="text-[11px]" />
           </button>
 
           <button
@@ -198,7 +199,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
             title="Eraser"
             aria-pressed={isEraser}
           >
-            <span className="text-amber font-bold font-mono text-[11px]">[ ERASER ]</span>
+            <BracketTag label="ERASER" className="text-[11px]" />
           </button>
 
           {/* Color Presets */}
@@ -227,7 +228,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
             className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1 px-2 text-[11px] text-solder hover:text-bone transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title="Undo last stroke"
           >
-            <span className="text-amber font-bold font-mono">[ UNDO ]</span>
+            <BracketTag label="UNDO" className="text-[11px]" />
           </button>
 
           <button
@@ -236,7 +237,7 @@ export function SketchCanvas({ onSaveSketch }: SketchCanvasProps) {
             className="min-h-[44px] flex items-center gap-1 px-2 text-[11px] text-solder hover:text-hazard-400 transition-colors"
             title="Clear canvas"
           >
-            <span className="text-amber font-bold font-mono">[ RESET ]</span>
+            <BracketTag label="RESET" className="text-[11px]" />
             <span>Clear</span>
           </button>
         </div>

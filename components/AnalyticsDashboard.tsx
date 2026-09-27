@@ -54,7 +54,10 @@ function computeAllStats(schemas: import('@/lib/types').SavedSchema[]): SessionS
       if (r.checkCount) { checkTotal += r.checkCount; checkCount++; }
       if (r.feynmanReview) {
         scored++;
-        if (r.feynmanReview.grade === 'mastered' || r.feynmanReview.grade === 'good') successes++;
+        // The examiner reports a boolean rather than a grade. Sessions saved
+        // before that change still carry a grade; read it as a fallback.
+        const review = r.feynmanReview as { secured?: boolean; grade?: string };
+        if (review.secured === true || review.grade === 'mastered' || review.grade === 'good') successes++;
       }
       if (r.reflection?.trim()) reflections++;
     }
@@ -125,7 +128,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   const weeklyTotal = Object.values(usage.weeklyCallsByModel).reduce((a, b) => a + b, 0);
 
   const handleExportCSV = () => {
-    const rows: string[] = ['session_id,timestamp,topic,mode,stage,template,confidence,check_count,grade,score,reflection'];
+    const rows: string[] = ['session_id,timestamp,topic,mode,stage,template,confidence,check_count,mechanism_landed,reflection'];
     for (const s of filteredSchemas) {
       for (const act of s.activities || []) {
         const r = s.userResponses?.[act.id];
@@ -136,8 +139,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
           s.mode, act.stageNumber, act.templateType,
           r.confidenceScore ?? '',
           r.checkCount ?? 0,
-          r.feynmanReview?.grade ?? '',
-          r.feynmanReview?.score ?? '',
+          r.feynmanReview?.secured === true ? 'yes' : r.feynmanReview ? 'open' : '',
           `"${(r.reflection || '').replace(/"/g, '""')}"`,
         ].join(','));
       }

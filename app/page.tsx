@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { sound } from '@/lib/audio';
 import {
@@ -34,7 +35,6 @@ import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
-import { ReadinessModal } from '@/components/ReadinessModal';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
@@ -66,6 +66,7 @@ export default function DeepEncodeApp() {
     enableDeepResearch, setEnableDeepResearch,
     enableGuidedPath, setEnableGuidedPath,
     interleaveMode, setInterleaveMode,
+    gear, setGear,
     strictnessLevel, setStrictnessLevel,
     wordCount,
   } = useInputSource();
@@ -205,11 +206,11 @@ export default function DeepEncodeApp() {
   const [importedShareBanner, setImportedShareBanner] = useState<string | null>(null);
 
   // New Metacognition & Science States
-  // (PreSessionConfidenceModal removed: no pre-session gate. The 1-5 rating is
-  // now collected inline right after stage 1 and feeds the same state.)
+  // No pre-session gate exists: nothing asks you to rate your confidence or
+  // prove you are "ready" before the screen loads. The 1-5 rating is collected
+  // inline right after stage 1 and only calibrates later stages.
   const [preSessionConfidence, setPreSessionConfidence] = useState<number>(3);
   const [difficultyRated, setDifficultyRated] = useState(false);
-  const [isReadinessModalOpen, setIsReadinessModalOpen] = useState(false);
   const [isEndSessionReviewOpen, setIsEndSessionReviewOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [endSessionReviewData, setEndSessionReviewData] = useState<EndSessionReviewData | null>(null);
@@ -239,12 +240,10 @@ export default function DeepEncodeApp() {
 
   const field1Ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
-  // Load stage inputs into the active editor; opens the Readiness modal when
-  // the stage hasn't been confirmed yet (UI side effect stays in the shell).
+  // Load stage inputs into the active editor. No gate, no confirmation step:
+  // the stage is on screen the moment you arrive.
   const loadStageInputs = (activityIndex: number, acts: Activity[], responses: Record<string, StageResponse>) => {
-    if (applyStageInputs(activityIndex, acts, responses)) {
-      setIsReadinessModalOpen(true);
-    }
+    applyStageInputs(activityIndex, acts, responses);
   };
 
   // Parse Stateless Shared Schema from URL query on Mount
@@ -681,6 +680,7 @@ export default function DeepEncodeApp() {
           userConfidence: userConfidenceVal,
           successRate: sRate,
           interleaveMode,
+          gear,
           hiddenTemplates: loadStudyPrefs().hiddenTemplates
         }),
       });
@@ -832,20 +832,17 @@ export default function DeepEncodeApp() {
         setStageErrorAnalysis(evalData.errorAnalysis);
       }
 
-      const mastered = evalData.grade === 'mastered';
+      const secured = evalData.secured;
 
-      // "What's hard for me": log needs-work grades per topic so weak areas
-      // surface later (mastered/good clears the topic from the ledger).
+      // "What's hard for me": log the stages whose mechanism is still open so
+      // weak areas surface later (landing the mechanism clears the topic).
       try {
-        if (evalData.grade) {
-          recordTopicResult({
-            topic: currentActivity.title || topicSummary || 'Untitled stage',
-            templateType: currentActivity.templateType,
-            lastGrade: evalData.grade,
-            lastScore: typeof evalData.score === 'number' ? evalData.score : 0,
-            checkCount: nextCount,
-          });
-        }
+        recordTopicResult({
+          topic: currentActivity.title || topicSummary || 'Untitled stage',
+          templateType: currentActivity.templateType,
+          lastSecured: secured,
+          checkCount: nextCount,
+        });
       } catch { /* struggle ledger is best-effort */ }
 
       // Update response record. On mastery, auto-save the full response
@@ -854,7 +851,7 @@ export default function DeepEncodeApp() {
         ...prev,
         [currentActivity.id]: {
           ...(prev[currentActivity.id] || { field1, field2 }),
-          ...(mastered ? { field1, field2, field3, selectedPreset } : {}),
+          ...(secured ? { field1, field2, field3, selectedPreset } : {}),
           confidenceScore: stageConfidence,
           reflection: stageReflection,
           checkCount: nextCount,
@@ -863,7 +860,7 @@ export default function DeepEncodeApp() {
         }
       }));
 
-      if (mastered) {
+      if (secured) {
         // Auto-advance cue: pulse the Next button (Atomic Habits : make the
         // next action obvious + immediately satisfying).
         setJustMastered(true);
@@ -872,10 +869,10 @@ export default function DeepEncodeApp() {
         setJustMastered(false);
       }
 
-      if (evalData.xpBonus) {
-        addXP(evalData.xpBonus);
-        sound.playSuccess();
-      }
+      // XP is a habit mechanic, not a verdict: it is derived here so the
+      // examiner never has to hand out a number.
+      addXP(secured ? 60 : 25);
+      if (secured) sound.playSuccess();
     } catch (e: any) {
       console.error('Evaluation error', e);
       alert(e?.message || 'Feynman evaluator unavailable. Please check settings.');
@@ -949,18 +946,21 @@ export default function DeepEncodeApp() {
       setEndSessionReviewData(data);
     } catch (err) {
       console.warn('End session review batch call fallback:', err);
-      // Fallback local score calculation
-      const scored = Object.values(resps).filter(r => r.feynmanReview);
-      const avgScore = scored.length ? Math.round(scored.reduce((a, r) => a + (r.feynmanReview?.score || 75), 0) / scored.length) : 82;
-      setEndSessionReviewData({
-        overallScore: avgScore,
-        analysis: 'Solid completion across the active generation stages. You systematically converted passive notes into intuitive first-principles mechanisms.',
-        perStageGrades: acts.map(a => ({
+      // Offline / failed batch call: say the same kind of thing the examiner
+      // would, minus the read. No fallback percentage is invented.
+      const fallbackStages = acts.map(a => {
+        const review = resps[a.id]?.feynmanReview;
+        return {
           stageTitle: a.title,
-          grade: resps[a.id]?.feynmanReview?.grade || 'good',
-          score: resps[a.id]?.feynmanReview?.score || 80,
-          feedback: resps[a.id]?.feynmanReview?.feedback || 'Active schema constructed.'
-        }))
+          secured: review?.secured === true,
+          counterProbe: review?.counterProbe || '',
+          feedback: review?.feedback || '',
+        };
+      });
+      const landed = fallbackStages.filter(s => s.secured).length;
+      setEndSessionReviewData({
+        analysis: `${landed} of ${fallbackStages.length} stage${fallbackStages.length === 1 ? '' : 's'} landed. The rest still have a link open.`,
+        perStageGrades: fallbackStages,
       });
     } finally {
       setIsLoadingEndSessionReview(false);
@@ -990,7 +990,6 @@ export default function DeepEncodeApp() {
         reflection: stageReflection,
         checkCount: stageCheckCount,
         errorAnalysis: stageErrorAnalysis || undefined,
-        readinessConfirmed: true,
       }
     };
     setUserResponses(updatedResponses);
@@ -1045,7 +1044,6 @@ export default function DeepEncodeApp() {
         field2: '',
         field3: '',
         selectedPreset: '',
-        readinessConfirmed: true,
         skipped: true,
       }
     };
@@ -1144,8 +1142,6 @@ export default function DeepEncodeApp() {
       // 1) Escape closes open modals (top-most first, roughly by z-order).
       if (e.key === 'Escape') {
         if (isTeachOpen) { setIsTeachOpen(false); return; }
-        if (isReadinessModalOpen) { setIsReadinessModalOpen(false); return; }
-        if (isReadinessModalOpen) { setIsReadinessModalOpen(false); return; }
         if (isShareModalOpen) { setIsShareModalOpen(false); return; }
         if (isAuthOpen) { setIsAuthOpen(false); return; }
         if (isSettingsOpen) { setIsSettingsOpen(false); return; }
@@ -1179,7 +1175,7 @@ export default function DeepEncodeApp() {
       // 3) Ctrl/Cmd+Enter from the input view launches generation.
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && appState === 'input') {
         const anyModalOpen =
-          isTeachOpen || isReadinessModalOpen || isShareModalOpen ||
+          isTeachOpen || isShareModalOpen ||
           isAuthOpen || isSettingsOpen ||
           isHistoryOpen || isAnalyticsOpen || isPrereqModalOpen || isPretestModalOpen ||
           isBlurtingModalOpen || isSegregateModalOpen || isAnkiExportOpen || isRoastModalOpen ||
@@ -1194,7 +1190,7 @@ export default function DeepEncodeApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     appState, isEvaluating,
-    isTeachOpen, isReadinessModalOpen, isShareModalOpen,
+    isTeachOpen, isShareModalOpen,
     isAuthOpen, isSettingsOpen,
     isHistoryOpen, isAnalyticsOpen, isPrereqModalOpen, isPretestModalOpen,
     isBlurtingModalOpen, isSegregateModalOpen, isAnkiExportOpen, isRoastModalOpen,
@@ -1209,9 +1205,7 @@ export default function DeepEncodeApp() {
   };
 
   const handleResumeSchema = (saved: SavedSchema) => {
-    if (resumeSchema(saved)) {
-      setIsReadinessModalOpen(true);
-    }
+    resumeSchema(saved);
     sound.playSuccess();
   };
 
@@ -1248,7 +1242,7 @@ export default function DeepEncodeApp() {
       if (!r.field1?.trim() && !r.field2?.trim()) return true;
       const review = r.feynmanReview;
       if (!review) return true;
-      return review.grade === 'needs_elaboration' || (typeof review.score === 'number' && review.score < 65);
+      return review.secured !== true;
     });
   }, [currentSavedSchema]);
 
@@ -1256,9 +1250,7 @@ export default function DeepEncodeApp() {
   // unfinished stage. Used by both the input-screen shortcut and the completed
   // view's "continue where you left off" button.
   const handleContinueToEncoding = (saved: SavedSchema) => {
-    if (resumeToEncoding(saved)) {
-      setIsReadinessModalOpen(true);
-    }
+    resumeToEncoding(saved);
     setAppState('encoding');
     sound.playSuccess();
   };
@@ -1469,7 +1461,7 @@ export default function DeepEncodeApp() {
                 } else if (lastSyncError) {
                   status = 'ERROR';
                   cls = 'border-hazard-500/60 text-hazard-300';
-                  title = `Last cloud sync failed: ${lastSyncError} — click to retry from Cloud Sync & Account.`;
+                  title = `Last cloud sync failed: ${lastSyncError}. Click to retry from Cloud Sync & Account.`;
                 } else {
                   status = 'SYNCED';
                   cls = 'border-amber-500/40 text-amber-300';
@@ -1558,7 +1550,7 @@ export default function DeepEncodeApp() {
                   <span className="font-bold text-bone text-sm">Classmate Shared Schema Loaded</span>
                 </div>
                 <p className="text-solder text-xs mt-0.5">
-                  Loaded <span className="text-amber-300 font-medium">&ldquo;{importedShareBanner}&rdquo;</span> — zero database login needed.
+                  Loaded <span className="text-amber-300 font-medium">&ldquo;{importedShareBanner}&rdquo;</span>. Zero database login needed.
                 </p>
               </div>
             </div>
@@ -1645,16 +1637,16 @@ export default function DeepEncodeApp() {
                     [ ▼ STILL TRICKY FOR YOU ]
                   </span>
                   <p className="text-[11px] text-solder font-mono mb-2">
-                    These stages came back “needs work” — paste them back in or drill them again.
+                    These mechanisms never landed. Paste them back in or drill them again.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {struggles.slice(0, 6).map(s => (
                       <span
                         key={`${s.topic}-${s.updatedAt}`}
-                        title={`Last score ${s.lastScore}/100 after ${s.checkCount} check${s.checkCount === 1 ? '' : 's'}`}
+                        title={`Mechanism still open after ${s.checkCount} check${s.checkCount === 1 ? '' : 's'}`}
                         className="text-[11px] font-mono px-2 py-1 bg-chassis border border-hazard/50 text-bone"
                       >
-                        {s.topic} · {s.lastScore}
+                        {s.topic} · still open
                       </span>
                     ))}
                   </div>
@@ -1685,7 +1677,7 @@ export default function DeepEncodeApp() {
                     </span>
                     <p className="text-sm font-bold text-bone leading-snug">
                       You left off mid-way through <em>{lastSchema.topicSummary}</em>
-                      {isLast ? ' — on the final stage' : ` — stage ${done + 1} of ${acts.length}`}.
+                      {isLast ? ', on the final stage' : `, stage ${done + 1} of ${acts.length}`}.
                     </p>
                     <p className="text-[11px] text-solder font-mono mt-0.5">
                       {isLast
@@ -1731,6 +1723,13 @@ export default function DeepEncodeApp() {
               setEnableGuidedPath={setEnableGuidedPath}
               interleaveMode={interleaveMode}
               setInterleaveMode={setInterleaveMode}
+              gear={gear}
+              setGear={(g) => {
+                setGear(g);
+                // The gear also sets how hard the examiner probes: an Express
+                // Forge session should never open with a ruthless viva.
+                setStrictnessLevel(g === 1 ? 'sherpa' : g === 3 ? 'viva' : 'feynman');
+              }}
               onGenerate={handleInitiateGenerate}
               onTeach={() => handleOpenTeach('notes')}
               isLoading={false}
@@ -1852,7 +1851,7 @@ export default function DeepEncodeApp() {
                   </div>
                   <p className="text-xs text-solder leading-relaxed">
                     {encodingMode === 'memorization'
-                      ? "Placing items along a familiar physical path leverages spatial navigation memory."
+                      ? "Placing items along a familiar physical path uses spatial navigation memory."
                       : "Forming both verbal and visual mental spatial codes doubles retrievability during recall."}
                   </p>
                 </div>
@@ -1880,7 +1879,7 @@ export default function DeepEncodeApp() {
             className="w-full py-24 flex flex-col items-center justify-center text-center"
           >
             <div className="mb-6 flex items-center gap-2 px-4 py-1.5 bg-deck border border-edge rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden />
               <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
                 Processing
               </span>
@@ -2233,31 +2232,6 @@ export default function DeepEncodeApp() {
           setIsAnkiExportOpen(true);
         }}
       />
-
-      {/* Science Feature: Stage Readiness & Premise Retrieval Modal */}
-      {currentActivity && (
-        <ReadinessModal
-          isOpen={isReadinessModalOpen}
-          stageNumber={currentActivity.stageNumber || currentActivityIndex + 1}
-          stageTitle={currentActivity.title}
-          previousPremise={
-            currentActivityIndex > 0 && activities[currentActivityIndex - 1]
-              ? activities[currentActivityIndex - 1].visualData?.generationChallenge?.premisePrompt || activities[currentActivityIndex - 1].title
-              : undefined
-          }
-          onConfirm={(latencyMs: number, summary: string) => {
-            setIsReadinessModalOpen(false);
-            setUserResponses(prev => ({
-              ...prev,
-              [currentActivity.id]: {
-                ...(prev[currentActivity.id] || { field1: '', field2: '' }),
-                readinessConfirmed: true,
-                readinessLatencyMs: latencyMs,
-              }
-            }));
-          }}
-        />
-      )}
 
       {/* Science Feature: End Session Metacognitive Performance Review Modal */}
       <EndSessionReviewModal

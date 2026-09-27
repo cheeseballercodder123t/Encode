@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 import { SavedSchema } from '@/lib/types';
 import { compressSchemaForUrl, generateStatelessShareUrl } from '@/lib/url-share';
@@ -113,7 +114,7 @@ export default function StatelessShareModal({
             onClick={onClose}
             className="text-solder hover:text-bone p-2 bg-inset/80 hover:bg-inset transition-colors duration-150 cursor-pointer text-xs"
           >
-            [ X ]
+            <BracketTag label="X" />
           </button>
         </div>
 

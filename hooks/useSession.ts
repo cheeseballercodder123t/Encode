@@ -385,16 +385,14 @@ export function useSession() {
   }, []);
 
   /**
-   * Load stage inputs for the given activity index. Returns true when the
-   * Readiness modal should be opened (stage not yet confirmed) so UI side
-   * effects stay in the component layer.
+   * Load stage inputs for the given activity index.
+   *
+   * Nothing gates this: the workbench paints immediately. A stage is a puzzle
+   * to look at, not paperwork to clear first.
    */
   const loadStageInputs = useCallback(
     (index: number, acts: Activity[], responses: Record<string, StageResponse>) => {
-      const act = acts[index];
-      const saved = act ? responses[act.id] : undefined;
       dispatch({ type: 'load_stage', index, activities: acts, responses });
-      return !(saved && saved.readinessConfirmed);
     },
     []
   );
@@ -404,29 +402,17 @@ export function useSession() {
     setXpGainAnimation(null);
   }, []);
 
-  /** Restore a saved schema into the completed view. Returns readiness requirement. */
+  /** Restore a saved schema into the completed view. */
   const resumeSchema = useCallback((schema: SavedSchema) => {
     dispatch({ type: 'resume_schema', schema });
-    const first = schema.activities?.[0];
-    const saved = first ? schema.userResponses?.[first.id] : undefined;
-    return !(saved && saved.readinessConfirmed);
   }, []);
 
   /**
    * Resume an incomplete schema back into the ENCODING workbench at its first
    * unfinished stage (used by the input-screen shortcut + continue button).
-   * Returns whether the readiness modal should open for that stage.
    */
   const resumeToEncoding = useCallback((schema: SavedSchema) => {
     dispatch({ type: 'resume_to_encoding', schema });
-    const acts = schema.activities || [];
-    const responses = schema.userResponses || {};
-    const target = acts.find(a => {
-      const r = responses[a.id];
-      return !r || (!r.field1?.trim() && !r.field2?.trim()) || r.skipped;
-    }) ?? acts[0];
-    const saved = target ? responses[target.id] : undefined;
-    return !(saved && saved.readinessConfirmed);
   }, []);
 
   // Switch active module in Guided Path (locked modules are ignored)
