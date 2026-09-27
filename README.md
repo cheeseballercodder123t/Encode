@@ -59,20 +59,22 @@ bun run dev        # http://localhost:3000
 | `bun run dev` | Next.js dev server |
 | `bun run build` | Production build + typecheck |
 | `bun run lint` | ESLint |
-| `bun test` | Vitest unit tests (pure logic in `lib/`) |
+| `bun run test` | Vitest unit tests (pure logic in `lib/`) |
 | `bun run test:watch` | Vitest in watch mode |
 | `bun run test:e2e` | Playwright end-to-end (main encode flow, mocked AI) |
 
 ## Design system
 
-The industrial workbench theme lives in `tailwind.config.ts` + `app/globals.css`:
+The illuminated theme (`tailwind.config.ts` + `app/globals.css`) treats the app as a dark hall lit from above: a few stone tablets, one gold accent, and typography that carries the structure instead of hairlines on every edge.
 
-- **Surfaces** — `chassis` (page) / `deck` (panels) / `inset` (recessed wells) / `edge` (hairline seams)
-- **Ink** — `bone` (high emphasis) / `slate-ink` (mid) / `solder` (muted)
-- **Semantic accents** — `amber` = primary action · `flux` = AI/Teach surfaces · `signal` = success/verified · `hazard` = errors
-- **Type** — IBM Plex Sans for prose & UI labels; IBM Plex Mono on inputs, badges, metadata, and code
-- **Motion** — 150ms color transitions on interactive elements; springs for modal enter/exit via `motion/react`
-- **Keyboard** — visible `:focus-visible` rings; square corners enforced globally (workbench aesthetic)
+- **Surfaces** — `chassis` (the hall) / `deck` (tablets) / `inset` (recessed wells) / `edge` (warm hairline, used only where a real seam is needed)
+- **Ink** — `bone` (vellum, high emphasis) / `slate-ink` (mid) / `solder` (muted)
+- **Accents** — `amber` = gold leaf (primary action & emphasis) · `flux` = ultramarine (AI/Teach) · `signal` = verdigris (verified) · `hazard` = ember (errors). `gilt` is the gold used for seams, ticks and halos
+- **Type** — Fraunces for headlines (`font-display`), IBM Plex Sans for prose & UI, IBM Plex Mono for data: inputs, badges, numbers, code
+- **Depth** — one soft light from above the page, plus real ambient shadow and a single top hairline of light (`shadow-panel`/`shadow-raised`). No drop-shadow clutter, no glass, no neon
+- **Layout** — the shell is a masthead of type and a quiet nav cluster (no framed control strip). Panels are spaced tablets rather than stacked full-width bands: the launchpad is a writing surface with a depth/tuning rail on the right, the forge reads as a page of luminous blocks with a vertical gold spine on the paradox, and pre-flight audits and export targets are two separate tablets. Progress is a stage ticker of small lozenges, never a row of bars
+- **Motion** — 150ms color transitions on interactive elements; a single `animate-dawn` bloom on the masthead; springs for modal enter/exit via `motion/react`
+- **Keyboard** — visible gold `:focus-visible` rings; generous radii (`rounded-lg`→`rounded-2xl`, pills for controls and chips) enforced through the theme scale
 
 Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip) are in `components/ui/`.
 
@@ -162,4 +164,4 @@ lib/
 
 ## Tech
 
-Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS · motion/react · Firebase (Auth + Firestore) · IndexedDB (`idb`) · JSZip · LZ-String · `@google/genai` · IBM Plex Sans + IBM Plex Mono
+Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS · motion/react · Firebase (Auth + Firestore) · IndexedDB (`idb`) · JSZip · LZ-String · `@google/genai` · Fraunces + IBM Plex Sans + IBM Plex Mono

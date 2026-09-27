@@ -205,10 +205,10 @@ export function HistoryDrawer({
                         onSelectSchemaToResume(s);
                         onClose();
                       }}
-                      className="w-full text-left p-4 bg-amber/10 border-2 border-amber/70 hover:bg-amber/15 transition-none cursor-pointer"
+                      className="w-full text-left p-3.5 bg-amber-500/[0.07] border border-amber-500/40 rounded-md hover:bg-amber-500/[0.11] transition-colors duration-150 cursor-pointer"
                     >
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber block mb-1">
-                        [ ▶ PICK UP WHERE YOU LEFT OFF ]
+                      <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-amber-300 block mb-1">
+                        [ PICK UP WHERE YOU LEFT OFF ]
                       </span>
                       <span className="text-sm font-bold text-bone block truncate">{s.topicSummary}</span>
                       <span className="text-[11px] text-solder font-mono mt-0.5 block">

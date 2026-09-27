@@ -36,12 +36,6 @@ interface FluffGuillotineModalProps {
   onApply: (cleaned: string) => void;
 }
 
-const KIND_ACCENT: Record<TriageKind, string> = {
-  kernel: 'border-l-signal-500/70',
-  evidence: 'border-l-amber-500/70',
-  noise: 'border-l-hazard-500/70',
-};
-
 const KIND_BADGE: Record<TriageKind, 'signal' | 'amber' | 'hazard'> = {
   kernel: 'signal',
   evidence: 'amber',
@@ -183,7 +177,11 @@ export function FluffGuillotineModal({ isOpen, onClose, notes, onApply }: FluffG
                     onClick={() => toggle(unit.index, unit.kind)}
                     data-testid={`triage-unit-${unit.index}`}
                     title={noise ? 'Restore this block' : 'Mark this block as noise'}
-                    className={`w-full text-left p-2.5 rounded-md border border-edge border-l-2 bg-inset transition-colors duration-150 cursor-pointer hover:border-slate-ink/40 ${KIND_ACCENT[unit.kind]}`}
+                    className={`w-full text-left p-2.5 rounded-md border bg-inset transition-colors duration-150 cursor-pointer ${
+                      noise
+                        ? 'border-hazard-500/40 hover:border-hazard-500/70'
+                        : 'border-edge hover:border-slate-ink/50'
+                    }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant={KIND_BADGE[unit.kind]} size="xs">
@@ -201,7 +199,7 @@ export function FluffGuillotineModal({ isOpen, onClose, notes, onApply }: FluffG
                       {unit.text}
                     </p>
                     {unit.note && (
-                      <p className="mt-1 font-mono text-[10px] text-solder">→ {unit.note}</p>
+                      <p className="mt-1 font-mono text-[10px] text-solder">{unit.note}</p>
                     )}
                   </button>
                 );

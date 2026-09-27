@@ -123,23 +123,39 @@ interface ZenLaunchpadProps {
   isLoading: boolean;
 }
 
-/** One segmented control row. Replaces the old 9-tab bracket buttons. */
+/**
+ * Small-caps section heading with a short gold tick — a mark, not a rule.
+ * (The full-width hairline that used to run to the edge was the single biggest
+ * source of the striped look.)
+ */
+function RailHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2.5 flex items-center gap-2.5">
+      <span className="label-caps">{children}</span>
+      <span className="h-px w-6 gilt-rule" aria-hidden />
+    </div>
+  );
+}
+
+/** One segmented control row: source selection and learning mode share it. */
 function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
   ariaLabel,
+  sound = 'click',
 }: {
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; title?: string }[];
   value: T;
   onChange: (v: T) => void;
   ariaLabel: string;
+  sound?: 'click' | 'pop';
 }) {
   return (
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex bg-inset border border-edge rounded-md p-0.5"
+      className="inline-flex bg-inset border border-edge/70 rounded-full p-1"
     >
       {options.map((opt) => {
         const active = value === opt.value;
@@ -148,13 +164,14 @@ function SegmentedControl<T extends string>({
             key={opt.value}
             type="button"
             aria-pressed={active}
+            title={opt.title}
             onClick={() => {
-              playSound('click');
+              playSound(sound);
               onChange(opt.value);
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-[5px] transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 text-xs rounded-full transition-colors duration-150 cursor-pointer whitespace-nowrap ${
               active
-                ? 'bg-amber-500 text-inset font-semibold shadow-panel'
+                ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-inset font-semibold shadow-gilt'
                 : 'text-slate-ink hover:text-bone'
             }`}
           >
@@ -165,6 +182,24 @@ function SegmentedControl<T extends string>({
     </div>
   );
 }
+
+const MODULES = [
+  {
+    key: 'deepResearch' as const,
+    title: 'Deep research',
+    desc: 'Detects and fetches omitted prerequisites',
+  },
+  {
+    key: 'guidedPath' as const,
+    title: "Miller's 7±2 guided path",
+    desc: 'Decomposes long text into unlocked milestones',
+  },
+  {
+    key: 'interleave' as const,
+    title: 'Interleaving',
+    desc: 'Alternates conceptual and rote templates',
+  },
+];
 
 export function ZenLaunchpad({
   notes,
@@ -189,8 +224,6 @@ export function ZenLaunchpad({
   onTeach,
   isLoading
 }: ZenLaunchpadProps) {
-  const activeGear = GEARS.find((g) => g.id === gear) ?? GEARS[1];
-  const [showSettings, setShowSettings] = useState(false);
   // Fluff Guillotine: pre-encoding semantic triage over the pasted notes.
   const [showTriage, setShowTriage] = useState(false);
 
@@ -201,7 +234,11 @@ export function ZenLaunchpad({
     return MEMORIZATION_TRIGGERS.some(kw => lower.includes(kw));
   }, [notes, mode]);
 
-  const activeSettingsCount = [enableDeepResearch, enableGuidedPath, interleaveMode].filter(Boolean).length;
+  const moduleState: Record<(typeof MODULES)[number]['key'], { on: boolean; toggle: () => void }> = {
+    deepResearch: { on: enableDeepResearch, toggle: () => setEnableDeepResearch(!enableDeepResearch) },
+    guidedPath: { on: enableGuidedPath, toggle: () => setEnableGuidedPath(!enableGuidedPath) },
+    interleave: { on: interleaveMode, toggle: () => setInterleaveMode(!interleaveMode) },
+  };
 
   const handleApplyPreset = (preset: PresetItem) => {
     playSound('click');
@@ -218,15 +255,12 @@ export function ZenLaunchpad({
   const wordCount = notes.trim() ? notes.trim().split(/\s+/).length : 0;
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-5">
-      {/* Command center */}
-      <div className="bg-deck border border-edge rounded-lg shadow-panel overflow-hidden">
-        {/* Header: source + mode */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-edge">
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-solder">
-              Source
-            </span>
+    <div className="w-full max-w-5xl mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_19rem] border border-edge/70 bg-deck rounded-2xl overflow-hidden shadow-panel">
+
+        {/* ── Writing surface ───────────────────────────────────────────── */}
+        <div className="flex min-w-0 flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge/50 px-4 py-3">
             <SegmentedControl
               ariaLabel="Input source"
               value={sourceType}
@@ -237,309 +271,239 @@ export function ZenLaunchpad({
                 { value: 'youtube', label: 'YouTube URL' },
               ]}
             />
+            <SegmentedControl
+              ariaLabel="Learning mode"
+              sound="pop"
+              value={mode}
+              onChange={(m) => setMode(m)}
+              options={[
+                {
+                  value: 'conceptual',
+                  label: 'Conceptual',
+                  title: 'First-principles causal encoding for mechanisms',
+                },
+                {
+                  value: 'memorization',
+                  label: 'Mnemonic',
+                  title: 'Chunking plus mnemonic pegs for lists and taxonomies',
+                },
+              ]}
+            />
           </div>
 
-          {/* Mode switch: readable two-state control */}
-          <div
-            role="group"
-            aria-label="Learning mode"
-            className="inline-flex bg-inset border border-edge rounded-md p-0.5"
-          >
-            {([
-              { v: 'conceptual' as EncodingMode, label: 'Conceptual' },
-              { v: 'memorization' as EncodingMode, label: 'Mnemonic' },
-            ]).map(({ v, label }) => {
-              const active = mode === v;
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  aria-pressed={active}
-                  title={v === 'memorization' ? 'Chunking + mnemonic pegs for lists and taxonomies' : 'First-principles causal encoding for mechanisms'}
-                  onClick={() => {
-                    playSound('pop');
-                    setMode(v);
-                  }}
-                  className={`px-3 py-1.5 text-xs rounded-[5px] transition-colors duration-150 cursor-pointer ${
-                    active
-                      ? 'bg-deck text-amber-300 font-semibold shadow-panel border border-amber-500/30'
-                      : 'text-slate-ink hover:text-bone'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Input body */}
-        <div className="p-4 space-y-3">
-          {sourceType !== 'youtube' && (
-            <div className="space-y-2.5">
+          <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
+            {sourceType !== 'youtube' && (
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Paste study material, complex concepts, or lists to encode (e.g. Periodic Table, action potentials, Krebs cycle)... Optional when a file is attached; your notes steer what the encoder pulls from the file."
-                rows={6}
+                rows={8}
                 aria-label="Study notes (optional when a file is attached)"
-                className="w-full bg-inset border border-edge focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none resize-y rounded-md leading-relaxed p-3.5 font-sans transition-colors duration-150"
+                className="w-full flex-1 min-h-[10rem] bg-inset border border-edge/70 focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none resize-y rounded-lg leading-relaxed p-4 font-sans transition-colors duration-150 shadow-panel"
               />
-              <FileUploader
-                onFileLoaded={onFileLoaded}
-                selectedFile={selectedFile}
-                compact={sourceType === 'text'}
-              />
-            </div>
-          )}
+            )}
 
-          {sourceType === 'youtube' && (
-            <div className="py-1 space-y-2">
-              <input
-                type="url"
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=... (Paste lecture or educational video)"
-                aria-label="YouTube video URL"
-                className="w-full px-3.5 py-2.5 bg-inset border border-edge focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none rounded-md font-mono transition-colors duration-150"
-              />
-              <p className="text-[11px] text-solder">
-                Extracts key moments and transcripts, then turns lecture checkpoints into active Feynman drills.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Smart Mnemonic Detection Alert */}
-        <AnimatePresence>
-          {detectedMnemonic && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="mx-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-hazard-950/40 border border-hazard-500/40 rounded-md">
-                <div className="text-sm">
-                  <span className="font-semibold text-hazard-300">Memorization material detected. </span>
-                  <span className="text-slate-ink">Switch to Mnemonic mode for high-yield pegs &amp; chunking?</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('memorization');
-                    playSound('success');
-                  }}
-                  className="px-3 py-1.5 bg-hazard-500 hover:bg-hazard-400 text-inset text-xs font-semibold rounded-md transition-colors duration-150 cursor-pointer whitespace-nowrap self-start sm:self-auto"
-                >
-                  Switch to Mnemonic
-                </button>
+            {sourceType === 'youtube' && (
+              <div className="space-y-2">
+                <input
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=... (Paste lecture or educational video)"
+                  aria-label="YouTube video URL"
+                  className="w-full px-4 py-2.5 bg-inset border border-edge/70 focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none rounded-lg font-mono transition-colors duration-150"
+                />
+                <p className="text-[11px] text-solder leading-relaxed">
+                  Extracts key moments and transcripts, then turns lecture checkpoints into active Feynman drills.
+                </p>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
 
-        {/* Gear selector: encoding used to demand the same full workout every
-            day, which is what made a Thursday night feel like homework. Pick
-            how much energy you actually have and the depth follows. */}
-        <div className="px-4 py-3 border-t border-edge">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-widest text-solder">
-              Energy today
-            </span>
-            <span className="text-[10px] font-mono text-solder">{activeGear.cost}</span>
-          </div>
-          <div
-            role="group"
-            aria-label="Session depth"
-            className="grid grid-cols-1 sm:grid-cols-3 gap-2"
-          >
-            {GEARS.map((g) => {
-              const active = g.id === gear;
-              return (
+            <FileUploader
+              onFileLoaded={onFileLoaded}
+              selectedFile={selectedFile}
+              compact={sourceType === 'text'}
+            />
+
+            {/* Mnemonic auto-detection: a note under the source, not a banner. */}
+            <AnimatePresence>
+              {detectedMnemonic && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex flex-col gap-2.5 border border-hazard-500/35 bg-hazard-950/25 p-3.5 sm:flex-row sm:items-center sm:justify-between rounded-lg">
+                    <p className="text-[11px] leading-relaxed text-slate-ink">
+                      <span className="text-hazard-300 font-semibold">This reads like a list.</span>{' '}
+                      Mnemonic mode chunks it and builds pegs instead of chasing a mechanism.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('memorization');
+                        playSound('success');
+                      }}
+                      className="self-start sm:self-auto shrink-0 px-3 py-1.5 border border-hazard-500/50 text-hazard-200 hover:bg-hazard-500/10 text-[11px] rounded-full transition-colors duration-150 cursor-pointer whitespace-nowrap"
+                    >
+                      Switch to Mnemonic
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Examples: quiet tiles, not pills. */}
+            <div className="mt-1">
+              <RailHeading>Examples</RailHeading>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {LAUNCHPAD_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => handleApplyPreset(p)}
+                    className="flex items-baseline gap-2.5 px-3 py-2 text-left bg-chassis/60 border border-edge/60 hover:border-gilt/40 hover:bg-white/[0.03] rounded-lg transition-colors duration-150 cursor-pointer"
+                  >
+                    <span className="font-mono text-[10px] font-semibold text-amber-300 shrink-0">{p.icon}</span>
+                    <span className="text-xs text-slate-ink truncate">{p.title}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions: left-aligned under the writing surface. */}
+            <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
+              {wordCount > 0 && (
+                <span
+                  className="font-mono text-[11px] text-solder"
+                  aria-label={`${wordCount} words`}
+                >
+                  {wordCount.toLocaleString()} words
+                </span>
+              )}
+              <span className="flex-1" aria-hidden />
+              {notes.trim().length > 0 && (
                 <button
-                  key={g.id}
                   type="button"
-                  aria-pressed={active}
-                  title={g.detail}
                   onClick={() => {
                     playSound('click');
-                    setGear(g.id);
+                    setShowTriage(true);
                   }}
-                  className={`p-2.5 text-left rounded-md border transition-colors duration-150 cursor-pointer ${
-                    active
-                      ? 'bg-amber-500/10 border-amber-500/50'
-                      : 'bg-deck border-edge hover:border-slate-ink/40'
-                  }`}
+                  className="px-3.5 py-2 border border-edge/70 text-solder hover:text-bone hover:border-hazard-500/50 text-xs rounded-full transition-colors duration-150 cursor-pointer"
+                  title="Fluff Guillotine: triage the source into causal kernels, evidence and throat-clearing, then strip the noise before encoding"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      aria-hidden
-                      className={`font-mono text-[10px] font-bold ${active ? 'text-amber-300' : 'text-solder'}`}
-                    >
-                      G{g.id}
-                    </span>
-                    <span className={`text-sm font-semibold ${active ? 'text-amber-300' : 'text-bone'}`}>
-                      {g.label}
-                    </span>
-                  </span>
-                  <span className="text-[11px] text-solder block mt-1 leading-snug">
-                    {g.blurb}
-                  </span>
+                  Strip noise
                 </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Action strip */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-edge bg-inset/60">
-          {/* Progressive disclosure toggle */}
-          <button
-            type="button"
-            onClick={() => setShowSettings(!showSettings)}
-            aria-expanded={showSettings}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-ink hover:text-bone rounded-md border border-transparent hover:border-edge transition-colors duration-150 cursor-pointer"
-          >
-            <span>Tuning</span>
-            {activeSettingsCount > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 bg-amber-500/15 text-amber-300 text-[10px] font-semibold rounded-full border border-amber-500/30">
-                {activeSettingsCount}
-              </span>
-            )}
-            <span className="text-solder" aria-hidden>{showSettings ? '−' : '+'}</span>
-          </button>
-
-          <div className="flex items-center gap-2.5">
-            {wordCount > 0 && (
-              <span className="hidden sm:inline text-[11px] font-mono text-solder" aria-label={`${wordCount} words`}>
-                {wordCount.toLocaleString()} words
-              </span>
-            )}
-            {notes.trim().length > 0 && (
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  playSound('click');
-                  setShowTriage(true);
-                }}
-                className="px-3 py-2.5 bg-transparent border border-edge text-solder hover:text-bone hover:border-hazard-500/50 text-sm font-medium rounded-md transition-colors duration-150 cursor-pointer"
-                title="Fluff Guillotine: triage the source into causal kernels, evidence and throat-clearing, then strip the noise before encoding"
+                onClick={onTeach}
+                disabled={!hasContent}
+                className="px-3.5 py-2 border border-flux-500/50 text-flux-300 hover:bg-flux-500/10 text-xs rounded-full transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                title="Teach Me: interactive lesson that teaches the concept, then walks a problem step-by-step"
               >
-                Strip noise
+                Teach me first
               </button>
-            )}
-            <button
-              type="button"
-              onClick={onTeach}
-              disabled={!hasContent}
-              className="px-4 py-2.5 bg-transparent border border-flux-500/50 text-flux-300 hover:bg-flux-500/10 text-sm font-medium rounded-md transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              title="Teach Me: Brilliant-style interactive lesson that teaches the concept, then walks a problem step-by-step"
-            >
-              Teach me first
-            </button>
-            <button
-              type="button"
-              onClick={onGenerate}
-              disabled={!hasContent || isLoading}
-              className="px-5 py-2.5 bg-amber-500 border border-amber-500 hover:bg-amber-400 hover:border-amber-400 text-inset text-sm font-semibold rounded-md shadow-panel transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {isLoading ? 'Encoding…' : 'Build cognitive schema'}
-            </button>
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={!hasContent || isLoading}
+                className="px-6 py-2.5 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-inset text-xs font-semibold shadow-gilt transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
+              >
+                {isLoading ? 'Encoding…' : 'Build cognitive schema'}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Collapsible Tuning Drawer */}
-        <AnimatePresence>
-          {showSettings && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="border-t border-edge overflow-hidden"
-            >
-              <div className="px-4 py-4 space-y-3 bg-inset/40">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-solder">
-                  Cognitive science modules
-                </div>
+        {/* ── Rail: how deep this session goes, and which modules ride along ── */}
+        <aside className="flex flex-col border-t border-edge/60 bg-chassis/40 lg:border-t-0 lg:border-l">
+          <div className="p-5 border-b border-edge/50">
+            <RailHeading>Session depth</RailHeading>
+            <div role="group" aria-label="Session depth" className="space-y-1.5">
+              {GEARS.map((g) => {
+                const active = g.id === gear;
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    aria-pressed={active}
+                    title={g.detail}
+                    onClick={() => {
+                      playSound('click');
+                      setGear(g.id);
+                    }}
+                    className={`w-full text-left px-3.5 py-3 rounded-xl border transition-colors duration-150 cursor-pointer ${
+                      active
+                        ? 'border-gilt/40 bg-amber-500/[0.07]'
+                        : 'border-transparent hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 shrink-0 rotate-45 ${
+                          active ? 'bg-amber-400' : 'border border-solder/60'
+                        }`}
+                      />
+                      <span className={`font-mono text-[10px] font-semibold ${active ? 'text-amber-300' : 'text-solder'}`}>
+                        G{g.id}
+                      </span>
+                      <span className={`text-[13px] font-semibold ${active ? 'text-amber-200' : 'text-bone'}`}>
+                        {g.label}
+                      </span>
+                    </span>
+                    <span className="mt-1 block pl-4 font-mono text-[10px] text-solder">{g.cost}</span>
+                    {active && (
+                      <span className="mt-1.5 block pl-4 text-[11px] leading-snug text-slate-ink">
+                        {g.blurb}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {([
-                    {
-                      on: enableDeepResearch,
-                      toggle: () => setEnableDeepResearch(!enableDeepResearch),
-                      title: 'Deep Research',
-                      desc: 'Detects & fetches omitted prerequisites',
-                    },
-                    {
-                      on: enableGuidedPath,
-                      toggle: () => setEnableGuidedPath(!enableGuidedPath),
-                      title: "Miller's 7±2 Guided Path",
-                      desc: 'Decomposes text into unlocked milestones',
-                    },
-                    {
-                      on: interleaveMode,
-                      toggle: () => setInterleaveMode(!interleaveMode),
-                      title: 'Interleaving',
-                      desc: 'Alternates conceptual & rote templates',
-                    },
-                  ] as const).map((m) => (
-                    <button
-                      key={m.title}
-                      type="button"
-                      onClick={m.toggle}
-                      aria-pressed={m.on}
-                      className={`p-3 text-left rounded-md border transition-colors duration-150 cursor-pointer ${
-                        m.on
-                          ? 'bg-amber-500/10 border-amber-500/50'
-                          : 'bg-deck border-edge hover:border-slate-ink/40'
+          <div className="p-5">
+            <RailHeading>Tuning</RailHeading>
+            <div className="space-y-1.5">
+              {MODULES.map((m) => {
+                const state = moduleState[m.key];
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={state.toggle}
+                    aria-pressed={state.on}
+                    title={m.desc}
+                    className={`w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border transition-colors duration-150 cursor-pointer ${
+                      state.on
+                        ? 'border-gilt/35 bg-amber-500/[0.06]'
+                        : 'border-transparent hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`mt-0.5 h-3 w-3 shrink-0 rotate-45 rounded-[2px] border ${
+                        state.on
+                          ? 'border-amber-400 bg-gradient-to-br from-amber-300 to-amber-600'
+                          : 'border-solder/60'
                       }`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className={`text-sm font-semibold ${m.on ? 'text-amber-300' : 'text-bone'}`}>
-                          {m.title}
-                        </span>
-                        <span
-                          aria-hidden
-                          className={`shrink-0 w-7 h-4 rounded-full relative transition-colors duration-150 ${
-                            m.on ? 'bg-amber-500' : 'bg-edge'
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-0.5 w-3 h-3 rounded-full bg-inset transition-all duration-150 ${
-                              m.on ? 'left-3.5' : 'left-0.5'
-                            }`}
-                          />
-                        </span>
+                    />
+                    <span className="min-w-0">
+                      <span className={`block text-[13px] ${state.on ? 'text-bone font-medium' : 'text-slate-ink'}`}>
+                        {m.title}
                       </span>
-                      <span className="text-[11px] text-solder block mt-1 leading-snug">
-                        {m.desc}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Quick-start presets */}
-      <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-solder whitespace-nowrap">
-          Quick start:
-        </span>
-        {LAUNCHPAD_PRESETS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => handleApplyPreset(p)}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-edge bg-deck text-slate-ink text-xs rounded-full whitespace-nowrap transition-colors duration-150 hover:text-bone hover:border-slate-ink/50 cursor-pointer"
-          >
-            <span className="font-mono text-[10px] text-amber-300 font-semibold">{p.icon}</span>
-            <span>{p.title}</span>
-          </button>
-        ))}
+                      <span className="mt-0.5 block text-[10px] leading-snug text-solder">{m.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </aside>
       </div>
 
       {/* Fluff Guillotine: heatmap the source, then strip the noise in one tap. */}

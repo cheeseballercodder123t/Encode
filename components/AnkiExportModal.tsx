@@ -504,7 +504,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
+            <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ ZAP ]</span>
             </div>
             <div>
