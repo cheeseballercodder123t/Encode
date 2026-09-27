@@ -474,6 +474,77 @@ export const TEACH_SHORT_RESPONSE = {
   },
 };
 
+// The merged deck the Forge returns for several sources: two cloze facts (no
+// drill prompt, so they exercise the cloze export path), one 4-quadrant
+// mechanism with its lookalike, one drill, one worked example. Ids are
+// namespaced per source, exactly as `mergeSegregationReports` namespaces them.
+// The last source FAILED (a video with no caption track): the deck still ships
+// and the log has to say why that one source contributed nothing.
+export const FORGE_RESPONSE = {
+  topic: 'Renal Physiology',
+  report: {
+    topic: 'Renal Physiology',
+    declarativeFacts: [
+      {
+        id: 'src_1-f1',
+        factStatement: 'The loop of Henle reaches 1,200 mOsm at the hairpin.',
+        clozeSuggestion: 'The loop of Henle reaches {{1,200 mOsm}} at the hairpin.',
+        tag: 'Constant',
+        memoryHook: 'Hairpin = highest.',
+      },
+      {
+        id: 'src_2-f1',
+        factStatement: 'ADH inserts aquaporin-2 into the collecting duct.',
+        clozeSuggestion: 'ADH inserts {{aquaporin-2}} into the collecting duct.',
+        tag: 'Mechanism',
+      },
+    ],
+    conceptualMechanisms: [
+      {
+        id: 'src_1-m1',
+        conceptName: 'Countercurrent multiplication',
+        whatIsIt: 'A gradient built by opposing flows in the loop.',
+        whyItMatters: 'It is the only way to concentrate urine above plasma.',
+        howItWorks: 'Active transport at the thick ascending limb sets up passive water movement.',
+        whatIfEdgeCase: 'Without it, urine stays isotonic.',
+        boundaryContrast: {
+          confusableLookalike: 'Countercurrent exchange',
+          distinguishingRule: 'Multiplication builds the gradient; exchange only preserves it.',
+        },
+      },
+    ],
+    practiceQuestions: [
+      { id: 'src_3-q1', question: 'Which limb pumps salt out?', answer: 'The thick ascending limb.' },
+    ],
+    workedExamples: [
+      {
+        id: 'src_3-e1',
+        title: 'Free-water clearance',
+        problem: 'Compute CH2O given CH2O = V − Cosm.',
+        steps: ['Find V', 'Find Cosm', 'Subtract'],
+        takeaway: 'Positive CH2O means dilute urine.',
+      },
+    ],
+    compressionRatio: '3 sources merged · 4 duplicate cards dropped',
+  },
+  sources: [
+    { id: 'src_1', kind: 'text', label: 'Lecture 4 slides', status: 'ok', counts: { facts: 1, mechanisms: 1, drills: 0, examples: 0 } },
+    { id: 'src_2', kind: 'file', label: 'handout.pdf', status: 'ok', counts: { facts: 1, mechanisms: 0, drills: 0, examples: 0 } },
+    { id: 'src_3', kind: 'text', label: 'Problem set 4', status: 'ok', counts: { facts: 0, mechanisms: 0, drills: 1, examples: 1 } },
+    {
+      id: 'src_4',
+      kind: 'youtube',
+      label: 'youtube:renal',
+      status: 'failed',
+      counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 },
+      note: 'No captions on this video, so there is no source text to cut cards from.',
+    },
+  ],
+  dropped: 4,
+  total: 5,
+  counts: { facts: 2, mechanisms: 1, drills: 1, examples: 1 },
+};
+
 // ─── 10-second discrimination gate (/api/discrimination) ───────────────────
 // One vignette is the concept (dq1) and one the lookalike (dq2); neither names
 // either label, which is what makes the check blind.

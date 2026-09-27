@@ -14,6 +14,7 @@ Instead of re-reading, you reconstruct: every AI-generated stage opens with a ph
 - **Paradox-first stages** — no stage opens with a definition request. Each one leads with the physical contradiction it exists to resolve (*"active ion pumps cannot build more than ~200 mOsm of gradient in one step, yet the loop of Henle reaches 1,200 mOsm. How?"*), followed by a **Gedankenexperiment** to run before formalising anything (*"You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?"*). Definitions are homework; paradoxes are irresistible, and the same mechanism has to be reasoned out either way
 - **A lab partner, not a grader** — the examiner returns no score, no grade, no XP and no band. It returns whether the mechanism landed, the causal links that did (quoting you), the ONE sentence that completes it (written for you, never *"add more detail"*), and a single counter-probe that pushes your mechanism to its edge (*"what happens if vasa recta flow surges 500%?"*). Answer it in two words and you are done
 - **Crystallization** — the cards are the exhaust of the engine, not the engine. Nothing is asked of the flashcard until the mechanism has landed; then the cards drop out on their own, read straight off the same fields the exporter ships, and `Cmd/Ctrl+Enter` injects them into Anki. Every word on them is a word you just reasoned through, which is why none of them become leeches three weeks later
+- **Flashcards Only (the forge)** — sometimes you do not want a workout at all: it is Thursday, the exam is Friday, and you have four PDFs, two lectures and a topic you half-remember. The launchpad's `[ FLASHCARDS ONLY ]` button takes up to **12 sources at once** — pasted notes, several PDFs / slide photos, and a list of YouTube links — and cuts them straight into cards: **facts** (atomic clozes), **mechanisms** (4-quadrant concept cards carrying the lookalike trap), **drills** (rapid-fire Q/A) and **worked examples**; each section can be switched off. The forge reports rather than hides: one line per source (`[ OK ] Lecture 4 slides — 4 cards` / `[ ! ] youtube:renal — no captions, so there is no source text to cut cards from`), a duplicate count for what the merge dropped, and an offline video contributes nothing instead of being invented around. Then you choose where the deck lands — **Anki**, **RemNote**, or **both** (`BOTH` opens Anki and queues RemNote behind it rather than stacking two modals). A forged deck and an encoded deck are the *same artifact*: both are cut to the shared card contract (`lib/services/segregation.ts`), merged/deduplicated by `lib/services/forge.ts`, and handed to the identical Wozniak pass, discrimination gate, FSRS audit and export funnel. The only difference is that nothing here becomes a stage, a paradox, an XP bar or an examiner
 - **Science stack** — prerequisites audit, pre-testing (productive failure), per-stage confidence + reflection, blurt canvas (free recall), roast-my-notes professor audit, end-of-session readout, analytics dashboard
 - **Guided Path** — auto chunking of huge inputs into sequential modules with Feynman checkpoints
 - **Streaming generation** — stage outlines stream in progressively while the full schema generates (`/api/encode/stream`)
@@ -82,8 +83,8 @@ Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip)
 
 ## Testing
 
-- **Unit** — `lib/` logic (storage, analytics, adaptive difficulty, template selection, Anki export, Wozniak sanitization, cognitive telemetry, interference traps, priming drills, URL share, knowledge graph, streaming parser) is covered by Vitest in `tests/unit/`.
-- **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons (deep rendering plus both end-of-lesson exits: saving a lesson and resuming it after a reload, and starting encoding straight from the exit panel), YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), the Parsons ordering drill, the Mad-Libs sentence scaffold with interactive diagram blanks, video chapter progress/resume, formula input, the four priming archetypes (archetype selection, the 2-probe source→sink check, the 3-probe extremal sweep, and the shape drill that draws the curve before naming it), the pre-export discrimination gate (pass, miss, timeout, and the webhook handoff it now also fronts), and quick diagnostics. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
+- **Unit** — `lib/` logic (storage, analytics, adaptive difficulty, template selection, Anki export, Wozniak sanitization, cognitive telemetry, interference traps, priming drills, URL share, knowledge graph, streaming parser, the saved-lesson library, and the forge's cross-source merge/dedupe) is covered by Vitest in `tests/unit/`.
+- **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons (deep rendering plus both end-of-lesson exits: saving a lesson and resuming it after a reload, and starting encoding straight from the exit panel), YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), the Parsons ordering drill, the Mad-Libs sentence scaffold with interactive diagram blanks, video chapter progress/resume, formula input, the four priming archetypes (archetype selection, the 2-probe source→sink check, the 3-probe extremal sweep, and the shape drill that draws the curve before naming it), the pre-export discrimination gate (pass, miss, timeout, and the webhook handoff it now also fronts), the Flashcards Only forge (many sources in / one deduped deck out, a caption-less source reported instead of invented around, the Anki and RemNote handoffs, and `BOTH` stacking RemNote behind Anki), and quick diagnostics. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
   - Run: `bun run test:e2e` (boots `next dev` on port 4310 automatically)
   - On this filesystem, run with `--workers=3`: full parallelism races Playwright's trace-file writes and produces bogus ENOENT failures.
   - Debug a failure: `npx playwright show-trace test-results/<failing-test>/trace.zip`
@@ -116,13 +117,17 @@ app/
   page.tsx                 # Composition root: state views + modal cluster
   api/                     # AI proxy routes: encode, encode/stream, youtube,
                            # evaluate, prerequisites, pretest, roast, segregate,
+                           # forge (many sources -> one flashcards-only deck),
                            # blurt, archetype, checkpoint, teach, regenerate-stage,
                            # triage (fluff guillotine), priming, probe (why-ladder),
                            # invert-step (adversarial drill), sequence (Parsons chain),
                            # discrimination (pre-export blind pair), remnote
                            # (server-side RemNote push proxy)
 components/
-  ZenLaunchpad.tsx         # Input command center: sources, modes, presets
+  ZenLaunchpad.tsx         # Input command center: sources, modes, presets,
+                           # TEACH ME FIRST / FLASHCARDS ONLY entries
+  FlashcardForgeModal.tsx  # The forge: many sources in, export target out,
+                           # no stages and no encoding anywhere in the loop
   workbench/               # 3-zone studio workbench (mic, sketch canvas)
   stage-templates/         # 15+ visual template renderers + error boundary
   ui/                      # Shared primitives (Button, Modal, Badge, ...)
@@ -145,7 +150,11 @@ lib/
   auth-context.tsx         # Firebase auth provider
   storage.ts + storage/    # localStorage + IndexedDB persistence
   services/                # Analytics, adaptive difficulty, template selector,
-                           # knowledge graph, offline generator
+                           # knowledge graph, offline generator,
+                           # segregation.ts (the shared card contract both the
+                           # segregate flow and the forge emit), forge.ts
+                           # (cross-source dedupe/merge + per-source report),
+                           # youtubeTranscript.ts (id, oEmbed, caption track)
   templates/               # Declarative template registry + types
   anki-exporter.ts         # .apkg/.txt decks, SM-2 state, webhook sync,
                            # extraction + Wozniak-enforced deck funnel,

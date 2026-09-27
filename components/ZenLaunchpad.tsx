@@ -120,6 +120,8 @@ interface ZenLaunchpadProps {
   setGear: (g: EncodingGear) => void;
   onGenerate: () => void;
   onTeach: () => void;
+  /** Flashcards Only: sources in, deck out — no workout, no stages. */
+  onForge: () => void;
   isLoading: boolean;
 }
 
@@ -222,6 +224,7 @@ export function ZenLaunchpad({
   setGear,
   onGenerate,
   onTeach,
+  onForge,
   isLoading
 }: ZenLaunchpadProps) {
   // Fluff Guillotine: pre-encoding semantic triage over the pasted notes.
@@ -404,6 +407,14 @@ export function ZenLaunchpad({
                 title="Teach Me: interactive lesson that teaches the concept, then walks a problem step-by-step"
               >
                 Teach me first
+              </button>
+              <button
+                type="button"
+                onClick={onForge}
+                className="px-3.5 py-2 border border-gilt/45 text-amber-200 hover:bg-amber-500/10 text-xs rounded-full transition-colors duration-150 cursor-pointer"
+                title="Flashcards Only: skip encoding entirely — throw in many sources (notes, PDFs, slides, YouTube lectures) and export a deck to Anki or RemNote"
+              >
+                Flashcards only
               </button>
               <button
                 type="button"
