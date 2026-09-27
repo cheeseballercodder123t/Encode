@@ -1,7 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
+  FORGE_CONDENSE_RESPONSE,
   FORGE_CONFLICT_RESPONSE,
   FORGE_MEDIA_RESPONSE,
+  FORGE_MORE_RESPONSE,
   FORGE_RESPONSE,
 } from './helpers/fixtures';
 import { mockAiApis } from './helpers/mocks';
@@ -87,6 +89,29 @@ async function mockForge(page: Page, payload: unknown = FORGE_RESPONSE) {
       body: JSON.stringify(payload),
     })
   );
+  await mockAnkiConnect(page, { offline: true });
+}
+
+/**
+ * The same route answering per `mode`, so one test can forge a deck, ask it for
+ * more cards, and then condense it, without re-registering routes.
+ */
+async function mockForgeModes(page: Page) {
+  await mockAiApis(page);
+  await page.route('**/api/forge', (route) => {
+    const body = route.request().postDataJSON() as { mode?: string } | null;
+    const payload =
+      body?.mode === 'more'
+        ? FORGE_MORE_RESPONSE
+        : body?.mode === 'condense'
+          ? FORGE_CONDENSE_RESPONSE
+          : FORGE_RESPONSE;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(payload),
+    });
+  });
   await mockAnkiConnect(page, { offline: true });
 }
 
@@ -271,6 +296,29 @@ test.describe('Flashcards Only (the Forge)', () => {
     // The fixture's YouTube source failed: the deck still ships, and the log
     // says exactly why that one source contributed nothing.
     await expect(page.getByText('[ ! ] youtube:renal')).toBeVisible();
+  });
+
+  test('a deck that came back too small can grow, and one that came back too long can condense', async ({ page }) => {
+    await mockForgeModes(page);
+    await forgeDeck(page);
+
+    await expect(page.getByText(/5 cards forged · 4 duplicates dropped/)).toBeVisible();
+    await expect(page.getByText('2 facts · 1 mechanisms · 1 drills · 1 examples')).toBeVisible();
+
+    // Too few cards: the same sources run again, and only the new cards land.
+    await page.getByTestId('forge-more').click();
+    await expect(page.getByTestId('forge-deck-note')).toContainText('+2 more cards');
+    await expect(page.getByText('3 facts · 1 mechanisms · 2 drills · 1 examples')).toBeVisible();
+
+    // Too many cards: overlapping cards fold into fewer, denser ones.
+    await page.getByTestId('forge-condense').click();
+    await expect(page.getByTestId('forge-deck-note')).toContainText('Condensed 7 → 3 cards');
+    await expect(page.getByText('1 facts · 1 mechanisms · 1 drills · 0 examples')).toBeVisible();
+
+    // What exports is the reshaped deck, not the one the forge first returned.
+    await page.getByTestId('forge-export-primary').click();
+    await expect(page.getByText('Anki & SM-2 Spaced Repetition Exporter')).toBeVisible();
+    await expect(page.getByText('1,200 mOsm').first()).toBeVisible();
   });
 
   test('the chosen export target opens with the forged deck', async ({ page }) => {

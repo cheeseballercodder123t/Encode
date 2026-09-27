@@ -644,6 +644,83 @@ export const FORGE_CONFLICT_RESPONSE = {
   ],
 };
 
+// The same sources run again because the deck was too small. Only the cards the
+// deck did not already have come back — nothing here repeats FORGE_RESPONSE.
+export const FORGE_MORE_RESPONSE = {
+  mode: 'more',
+  topic: 'Renal Physiology',
+  report: {
+    topic: 'Renal Physiology',
+    declarativeFacts: [
+      {
+        id: 'src_1-more-f1',
+        factStatement: 'The vasa recta run parallel to the loop of Henle.',
+        clozeSuggestion: 'The {{vasa recta}} run parallel to the loop of Henle.',
+        tag: 'Anatomy',
+      },
+    ],
+    conceptualMechanisms: [],
+    practiceQuestions: [
+      { id: 'src_1-more-q1', question: 'Which hormone inserts aquaporin-2?', answer: 'ADH.' },
+    ],
+    workedExamples: [],
+    compressionRatio: '1 source merged · no overlap',
+  },
+  sources: [
+    {
+      id: 'src_1',
+      kind: 'text',
+      label: 'Lecture 4 slides',
+      status: 'ok',
+      counts: { facts: 1, mechanisms: 0, drills: 1, examples: 0 },
+    },
+  ],
+  dropped: 0,
+  total: 2,
+  counts: { facts: 1, mechanisms: 0, drills: 1, examples: 0 },
+  contradictions: [],
+  resolved: [],
+};
+
+// The same deck folded down: five cards become three, purely by merging overlap.
+export const FORGE_CONDENSE_RESPONSE = {
+  mode: 'condense',
+  topic: 'Renal Physiology',
+  report: {
+    topic: 'Renal Physiology',
+    declarativeFacts: [
+      {
+        id: 'cond_1',
+        factStatement: 'The loop of Henle reaches 1,200 mOsm, and ADH adds aquaporin-2 to hold it.',
+        clozeSuggestion: 'The loop of Henle reaches {{1,200 mOsm}}; ADH adds aquaporin-2.',
+        tag: 'Constant',
+      },
+    ],
+    conceptualMechanisms: [
+      {
+        id: 'cond_2',
+        conceptName: 'Countercurrent multiplication',
+        whatIsIt: 'A gradient built by opposing flows in the loop.',
+        whyItMatters: 'It is the only way to concentrate urine above plasma.',
+        howItWorks: 'Active transport at the thick ascending limb sets up passive water movement.',
+        whatIfEdgeCase: 'Without it, urine stays isotonic.',
+      },
+    ],
+    practiceQuestions: [
+      { id: 'cond_3', question: 'Which limb pumps salt out?', answer: 'The thick ascending limb.' },
+    ],
+    workedExamples: [],
+    compressionRatio: 'folding overlap',
+  },
+  sources: [],
+  dropped: 0,
+  total: 3,
+  before: 5,
+  counts: { facts: 1, mechanisms: 1, drills: 1, examples: 0 },
+  contradictions: [],
+  resolved: [],
+};
+
 // ─── 10-second discrimination gate (/api/discrimination) ───────────────────
 // One vignette is the concept (dq1) and one the lookalike (dq2); neither names
 // either label, which is what makes the check blind.

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateJSONWithProvider } from '@/lib/ai-client';
 import {
+  buildCondenseSystemPrompt,
+  buildCondenseUserPrompt,
+  buildMoreCardsSystemPrompt,
+  buildMoreCardsUserPrompt,
   buildSegregationSystemPrompt,
   buildSegregationUserPrompt,
   resolveSegregationSections,
@@ -10,8 +14,13 @@ import {
   ForgeMergeInput,
   ForgeSource,
   ForgeSourceKind,
+  countReportSections,
+  dedupeKey,
+  dropKnownCards,
+  isEmptyForgeReport,
   mergeSegregationReports,
   normalizeSegregationReport,
+  totalReportCards,
 } from '@/lib/services/forge';
 import { extractYouTubeId, fetchYouTubeMeta } from '@/lib/services/youtubeTranscript';
 import {
@@ -49,6 +58,22 @@ interface ForgeSourcePayload {
 }
 
 const MAX_SOURCES = 12;
+/** Fronts sent back so the "more" pass can avoid repeating them. */
+const MAX_EXISTING_FRONTS = 400;
+
+/**
+ * What the route is being asked for:
+ *   · forge    — many sources in, one deck out (the original behaviour);
+ *   · more     — the deck came back too small, so extend it from the same sources;
+ *   · condense — the deck came back too long, so fold overlapping cards together.
+ */
+type ForgeMode = 'forge' | 'more' | 'condense';
+
+interface ResolvedSourcePayload {
+  id?: string;
+  label?: string;
+  notes?: string;
+}
 
 function cleanSource(raw: ForgeSourcePayload, index: number): ForgeSource {
   const kind: ForgeSourceKind =
@@ -73,15 +98,77 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const rawSources: ForgeSourcePayload[] = Array.isArray(body?.sources) ? body.sources.slice(0, MAX_SOURCES) : [];
   const settings = body?.settings;
+  const mode: ForgeMode = body?.mode === 'more' ? 'more' : body?.mode === 'condense' ? 'condense' : 'forge';
   const topic = typeof body?.topic === 'string' ? body.topic : '';
   const want = resolveSegregationSections(body?.include);
 
+  // ── Condense: no sources, no raw material — the deck the learner already
+  // has is folded down by an editor pass. Merging is the only allowed move. ──
+  if (mode === 'condense') {
+    const deck = normalizeSegregationReport(body?.report, 'condense');
+    if (!deck || isEmptyForgeReport(deck)) {
+      return NextResponse.json({ error: 'There is nothing to condense yet — forge a deck first.' }, { status: 400 });
+    }
+    try {
+      const result = await generateJSONWithProvider({
+        systemPrompt: buildCondenseSystemPrompt(),
+        userPrompt: buildCondenseUserPrompt(deck),
+        responseSchema: segregationSchema,
+        settings,
+        isChecker: false,
+      });
+      const condensed = normalizeSegregationReport(result, 'condense');
+      if (!condensed) {
+        return NextResponse.json(
+          { error: 'The condense pass returned no usable cards — your deck is unchanged.' },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json({
+        mode,
+        topic: deck.topic,
+        report: condensed,
+        total: totalReportCards(condensed),
+        before: totalReportCards(deck),
+        counts: countReportSections(condensed),
+        sources: [],
+        dropped: 0,
+        contradictions: [],
+        resolved: [],
+      });
+    } catch (error: any) {
+      console.error('Forge condense failed:', error);
+      return NextResponse.json(
+        { error: error?.message || 'The condense pass failed — your deck is unchanged.' },
+        { status: 500 }
+      );
+    }
+  }
+
+  const rawSources: ForgeSourcePayload[] = Array.isArray(body?.sources) ? body.sources.slice(0, MAX_SOURCES) : [];
   if (rawSources.length === 0) {
     return NextResponse.json({ error: 'Add at least one source to forge a deck.' }, { status: 400 });
   }
 
+  // "Generate more" sends the fronts already in the deck, and the source text
+  // it already paid to resolve — a transcript costs a model call to reproduce,
+  // so a second pass over the same lecture reuses it rather than re-running.
+  const existingFronts: string[] = Array.isArray(body?.existing)
+    ? body.existing.filter((v: any) => typeof v === 'string' && v.trim()).slice(0, MAX_EXISTING_FRONTS)
+    : [];
+  const reused = new Map<string, ResolvedSourcePayload>();
+  if (Array.isArray(body?.resolved)) {
+    for (const entry of body.resolved as ResolvedSourcePayload[]) {
+      if (!entry || typeof entry !== 'object') continue;
+      const id = typeof entry.id === 'string' ? entry.id : '';
+      const notes = typeof entry.notes === 'string' ? entry.notes.trim() : '';
+      if (!id || !notes) continue;
+      reused.set(id, { id, label: entry.label, notes });
+    }
+  }
+
+  const resolved: ResolvedSourcePayload[] = [];
   const inputs: ForgeMergeInput[] = [];
 
   for (let i = 0; i < rawSources.length; i++) {
@@ -94,55 +181,76 @@ export async function POST(req: NextRequest) {
 
     // ── YouTube: captions first, and only then the audio track ──────────────
     if (source.kind === 'youtube') {
-      const videoId = extractYouTubeId(raw.url || raw.notes || '');
-      if (!videoId) {
-        inputs.push({ source, report: null, note: 'That is not a YouTube video URL or id.' });
-        continue;
-      }
-      const [meta, transcript] = await Promise.all([
-        fetchYouTubeMeta(videoId),
-        readYouTubeTranscriptDetailed(videoId),
-      ]);
-      label = meta.title ? `${meta.title}${meta.author ? ` — ${meta.author}` : ''}` : `youtube:${videoId}`;
+      const cached = reused.get(source.id);
+      if (cached?.notes) {
+        // Resolved once already this session: reuse that transcript verbatim.
+        label = cached.label || source.label;
+        notes = cached.notes;
+        provenance = 'reused the transcript from this session';
+        resolved.push({ id: source.id, label, notes });
+      } else {
+        const videoId = extractYouTubeId(raw.url || raw.notes || '');
+        if (!videoId) {
+          inputs.push({ source, report: null, note: 'That is not a YouTube video URL or id.' });
+          continue;
+        }
+        const [meta, transcript] = await Promise.all([
+          fetchYouTubeMeta(videoId),
+          readYouTubeTranscriptDetailed(videoId),
+        ]);
+        label = meta.title ? `${meta.title}${meta.author ? ` — ${meta.author}` : ''}` : `youtube:${videoId}`;
 
-      if (transcript.status !== 'ok') {
-        // Nothing readable means no source text. Generating "cards" from a
-        // title would be invention, so the source is reported as unusable and
-        // the reason says which problem it actually was.
-        inputs.push({
-          source: { ...source, label },
-          report: null,
-          note: `${transcript.reason} — paste the notes or upload the recording instead.`,
-        });
-        continue;
-      }
+        if (transcript.status !== 'ok') {
+          // Nothing readable means no source text. Generating "cards" from a
+          // title would be invention, so the source is reported as unusable and
+          // the reason says which problem it actually was.
+          inputs.push({
+            source: { ...source, label },
+            report: null,
+            note: `${transcript.reason} — paste the notes or upload the recording instead.`,
+          });
+          continue;
+        }
 
-      provenance =
-        transcript.provenance === 'transcribed'
-          ? 'transcribed from the audio (no captions)'
-          : transcript.provenance === 'auto'
-            ? 'auto-generated captions'
-            : `captions (${transcript.language})`;
-      notes = `${meta.title ? `VIDEO: ${meta.title}\n` : ''}TRANSCRIPT WITH TIMESTAMPS:\n${transcript.text}`;
+        provenance =
+          transcript.provenance === 'transcribed'
+            ? 'transcribed from the audio (no captions)'
+            : transcript.provenance === 'auto'
+              ? 'auto-generated captions'
+              : `captions (${transcript.language})`;
+        notes = `${meta.title ? `VIDEO: ${meta.title}\n` : ''}TRANSCRIPT WITH TIMESTAMPS:\n${transcript.text}`;
+        resolved.push({ id: source.id, label, notes });
+      }
     }
 
     // ── Uploaded audio/video: transcribe instead of handing a model raw bytes ─
     else if (source.kind === 'file' && file && isTranscribableMedia(file.type || '', file.name || '')) {
-      const result = await transcribeAudio(
-        base64ToBytes(file.base64Data as string),
-        file.type || 'audio/mpeg',
-        file.name || 'recording.mp3'
-      );
-      if (!result.ok) {
-        inputs.push({
-          source: { ...source, label },
-          report: null,
-          note: `${file.name || 'the recording'} could not be transcribed: ${result.reason}.`,
-        });
-        continue;
+      const cached = reused.get(source.id);
+      if (cached?.notes) {
+        // Re-transcribing a recording costs real money and minutes; a follow-up
+        // pass over the same source reuses the transcript it already has.
+        label = cached.label || label;
+        notes = cached.notes;
+        provenance = 'reused the transcript from this session';
+        resolved.push({ id: source.id, label, notes });
+      } else {
+        const result = await transcribeAudio(
+          base64ToBytes(file.base64Data as string),
+          file.type || 'audio/mpeg',
+          file.name || 'recording.mp3'
+        );
+        if (!result.ok) {
+          inputs.push({
+            source: { ...source, label },
+            report: null,
+            note: `${file.name || 'the recording'} could not be transcribed: ${result.reason}.`,
+          });
+          continue;
+        }
+        provenance = 'transcribed from the uploaded recording';
+        notes = `RECORDING TRANSCRIPT (${file.name || 'recording'}):\n${result.text}`;
+        resolved.push({ id: source.id, label, notes });
       }
-      provenance = 'transcribed from the uploaded recording';
-      notes = `RECORDING TRANSCRIPT (${file.name || 'recording'}):\n${result.text}`;
     }
 
     if (source.kind === 'text' && !notes) {
@@ -159,14 +267,27 @@ export async function POST(req: NextRequest) {
 
     try {
       const result = await generateJSONWithProvider({
-        systemPrompt: buildSegregationSystemPrompt(want, label),
-        userPrompt: buildSegregationUserPrompt({
-          notes: notes || undefined,
-          hasFile: Boolean(inlineFile),
-          fileName: inlineFile?.name,
-          fileType: inlineFile?.type,
-          sourceLabel: label,
-        }),
+        systemPrompt:
+          mode === 'more'
+            ? buildMoreCardsSystemPrompt(want, label)
+            : buildSegregationSystemPrompt(want, label),
+        userPrompt:
+          mode === 'more'
+            ? buildMoreCardsUserPrompt({
+                notes: notes || undefined,
+                hasFile: Boolean(inlineFile),
+                fileName: inlineFile?.name,
+                fileType: inlineFile?.type,
+                sourceLabel: label,
+                existing: existingFronts,
+              })
+            : buildSegregationUserPrompt({
+                notes: notes || undefined,
+                hasFile: Boolean(inlineFile),
+                fileName: inlineFile?.name,
+                fileType: inlineFile?.type,
+                sourceLabel: label,
+              }),
         responseSchema: segregationSchema,
         settings,
         isChecker: false,
@@ -197,11 +318,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const merged = mergeSegregationReports(inputs, topic);
+  // A "more" pass extends ONE deck, so the cross-source contradiction sweep
+  // stays out of it: two cards from the same source are not two sources that
+  // disagree, and the deck this batch is joining was already checked.
+  const merged = mergeSegregationReports(
+    inputs,
+    topic,
+    mode === 'more' ? { detectConflicts: false } : undefined
+  );
+
+  // "Generate more" returns ONLY the additional cards: the deck on screen is
+  // not re-sent, so the client appends to it instead of replacing it.
+  if (mode === 'more') {
+    const known = new Set(existingFronts.map((front) => dedupeKey(front)).filter(Boolean));
+    const { report, added, dropped } = dropKnownCards(merged.report, known);
+    return NextResponse.json({
+      mode,
+      topic: merged.report.topic,
+      report,
+      sources: merged.sources,
+      dropped: merged.dropped + dropped,
+      total: added,
+      counts: countReportSections(report),
+      contradictions: [],
+      resolved,
+    });
+  }
 
   // The forge never fails as a whole: a source that broke is reported in
   // `sources` and the deck still ships with everything that worked.
   return NextResponse.json({
+    mode,
     topic: merged.report.topic,
     report: merged.report,
     sources: merged.sources,
@@ -209,5 +356,8 @@ export async function POST(req: NextRequest) {
     total: merged.total,
     counts: merged.counts,
     contradictions: merged.contradictions,
+    // What each source's text actually resolved to, so a follow-up "generate
+    // more" pass never has to re-fetch captions or re-transcribe a recording.
+    resolved,
   });
 }
