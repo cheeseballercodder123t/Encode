@@ -98,6 +98,29 @@ test.describe('10-second discrimination gate', () => {
     await expect(page.getByText(DISCRIMINATION_RESPONSE.cardFront)).toBeVisible();
   });
 
+  test('the webhook handoff is gated too — the deck only leaves after the pair is separated', async ({ page }) => {
+    // A webhook ships the whole deck to a server, so it is an export path like
+    // any other: it used to dispatch before the gate had a chance to run.
+    await page.route('https://hooks.example.test/**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+    );
+    await sessionWithPair(page);
+
+    await page.getByRole('button', { name: /Sync \(Webhook\)/ }).click();
+    await page.getByPlaceholder('https://api.myworkspace.com/v1/anki-sync').fill('https://hooks.example.test/anki');
+    await page.getByRole('button', { name: /Dispatch SM-2 Card Payload/ }).click();
+
+    // Nothing has been dispatched yet: the gate is in the way.
+    await expect(page.getByTestId('discrimination-gate')).toBeVisible();
+    await expect(page.getByText(/Successfully dispatched/)).toHaveCount(0);
+
+    await page.getByTestId('discrimination-concept').click();
+    await page.getByTestId('discrimination-lookalike').click();
+    await page.getByTestId('discrimination-continue').click();
+
+    await expect(page.getByText(/Successfully dispatched SM-2 payload/)).toBeVisible();
+  });
+
   test('running out of the 10-second clock counts as unstable, not as a guess', async ({ page }) => {
     await sessionWithPair(page);
 

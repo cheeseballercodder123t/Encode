@@ -40,11 +40,16 @@ const questionSchema = {
 };
 const segmentSchema = {
   type: Type.OBJECT,
-  description: "One lesson segment. You choose type, count, order and which fields to fill. 'concept' teaches, 'checkpoint' tests, 'guidedProblem' walks a worked example step-by-step, 'youTry' makes the learner attempt then reveal, 'memoryHook' gives a mnemonic (memorization mode), 'storyBeat' advances a narrative (story mode).",
+  description: "One lesson segment. You choose type, count, order and which fields to fill. 'concept' introduces, 'deepDive' takes the same idea further (the causal why, the failure modes, the limits), 'checkpoint' tests, 'guidedProblem' walks a worked example step-by-step, 'youTry' makes the learner attempt then reveal, 'misconception' names a plausible wrong belief and kills it, 'selfExplain' makes the learner produce the explanation in their own words, 'transfer' applies the same mechanism to an unfamiliar surface, 'memoryHook' gives a mnemonic (memorization mode), 'storyBeat' advances a narrative (story mode), 'recap' consolidates the load-bearing points.",
   properties: {
-    type: { type: Type.STRING, description: "'concept' | 'checkpoint' | 'guidedProblem' | 'youTry' | 'memoryHook' | 'storyBeat'. You may also use 'wrapup' for the final segment." },
+    type: { type: Type.STRING, description: "'concept' | 'deepDive' | 'checkpoint' | 'guidedProblem' | 'youTry' | 'misconception' | 'selfExplain' | 'transfer' | 'memoryHook' | 'storyBeat' | 'recap'. You may also use 'wrapup' for the final segment." },
     title: { type: Type.STRING, description: "Short segment title (<=8 words)." },
     body: { type: Type.STRING, description: "Teaching body text. Plain-language, concrete, zero jargon without explanation. 1-4 short paragraphs." },
+    why: { type: Type.STRING, description: "REQUIRED on every teaching segment (concept/deepDive/guidedProblem): the causal driver. Why is this true, what physically/nominally forces it, and where does it stop being true? 1-3 sentences. This is the depth layer — a segment without it is a summary, not a lesson." },
+    misconceptions: { type: Type.ARRAY, description: "The plausible wrong beliefs a learner actually holds here, and the correction that kills each. 1-3 items on teaching segments.", items: { type: Type.OBJECT, properties: { claim: { type: Type.STRING, description: "The wrong belief, phrased the way a student would say it." }, correction: { type: Type.STRING, description: "Why it fails and what is true instead, in one or two sentences." } }, required: ["claim", "correction"] } },
+    recapPoints: { type: Type.ARRAY, description: "For 'recap': 3-6 load-bearing bullets the learner must carry into encoding.", items: { type: Type.STRING } },
+    selfExplain: { type: Type.OBJECT, description: "For 'selfExplain': the Feynman production task.", properties: { prompt: { type: Type.STRING, description: "What to explain, to whom, and under what constraint (e.g. 'no jargon')." }, modelAnswer: { type: Type.STRING }, keywords: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Answer must hit these ideas." } }, required: ["prompt"] },
+    transfer: { type: Type.OBJECT, description: "For 'transfer': the same mechanism behind an unfamiliar surface.", properties: { prompt: { type: Type.STRING }, modelAnswer: { type: Type.STRING } }, required: ["prompt"] },
     keyTerms: { type: Type.ARRAY, description: "2-6 term chips this segment introduces.", items: { type: Type.STRING } },
     visual: visualSchema,
     question: questionSchema,
@@ -78,7 +83,10 @@ const teachResponseSchema = {
           },
           required: [],
         },
-        segments: { type: Type.ARRAY, items: segmentSchema, description: "The lesson body. 4-14 segments. Teach first (concept), then work a problem (guidedProblem), then let them try (youTry), interleaving checkpoints. In memorization mode lean on memoryHook + rehearsal checkpoints." },
+        objectives: { type: Type.ARRAY, description: "3-6 things the learner will be able to DO when the lesson ends, each one verb-first and testable (e.g. 'Derive the threshold from the Na+ conductance curve').", items: { type: Type.STRING } },
+        segments: { type: Type.ARRAY, items: segmentSchema, description: "The lesson body. Teach first (concept), deepen it (deepDive), surface the trap (misconception), work a problem (guidedProblem), let them try (youTry), make them produce it (selfExplain), move it to a new surface (transfer), and close with recap + wrapup. Interleave checkpoints. In memorization mode lean on memoryHook + rehearsal checkpoints." },
+        glossary: { type: Type.ARRAY, description: "Every term the lesson used, with the plain-language definition you gave it inline. 4-16 items.", items: { type: Type.OBJECT, properties: { term: { type: Type.STRING }, definition: { type: Type.STRING } }, required: ["term", "definition"] } },
+        encodingSeeds: { type: Type.ARRAY, description: "3-8 ready-to-encode prompts: what the learner should encode AFTER the lesson, in their own words, with a reference exemplar. This is the handoff payload — the lesson itself must never push them to encode mid-lesson.", items: { type: Type.OBJECT, properties: { title: { type: Type.STRING, description: "Stage-sized label." }, prompt: { type: Type.STRING, description: "The question the learner will answer when encoding." }, exemplar: { type: Type.STRING, description: "Reference answer in plain language." }, keywords: { type: Type.ARRAY, items: { type: Type.STRING } } }, required: ["title", "prompt"] } },
         masteryCheck: {
           type: Type.OBJECT,
           description: "Final interactive check : can they produce the mechanism themselves?",
@@ -135,7 +143,8 @@ export async function POST(req: NextRequest) {
       includeAnalogy: options.includeAnalogy !== false,
       includeMemoryHooks: options.includeMemoryHooks !== false,
       allowFreeResponse: options.allowFreeResponse !== false,
-      maxSteps: typeof options.maxSteps === 'number' ? options.maxSteps : 14,
+      detail: typeof options.detail === 'string' ? options.detail : 'deep',
+      maxSteps: typeof options.maxSteps === 'number' ? options.maxSteps : 18,
     };
 
     // Resolve the teaching target.
@@ -178,10 +187,21 @@ export async function POST(req: NextRequest) {
       ? `Use freeResponse checkpoints and youTry segments — production (typing) beats selection.`
       : `Prefer discrete interactions (mcq/ordering/matching/fillBlank) over open text.`;
 
+    // Depth is the headline feature: a lesson is only "detailed" if every
+    // teaching segment carries its causal why, its misconception, and a
+    // production step. These are hard floors, not decoration.
+    const detailDirective =
+      opts.detail === 'exhaustive'
+        ? `DETAIL: EXHAUSTIVE. This is the most thorough lesson the learner will ever get on this material. 24-${Math.max(24, Math.min(40, opts.maxSteps))} segments. Every idea gets THREE passes: concept (intuit it) → deepDive (the causal why, the limits, the failure modes, what would have to be different for it to break) → misconception (the trap, killed). Every worked problem is followed by a variation the learner must transfer. Include at least 2 selfExplain productions, at least 1 transfer problem, at least 2 recap segments, a 6+ objective list, and a glossary of every term you used. Do not pad: depth means more causal links per idea, never more adjectives.`
+        : opts.detail === 'standard'
+          ? `DETAIL: STANDARD. 6-${Math.max(6, Math.min(18, opts.maxSteps))} segments. Each idea gets one teaching pass with its 'why', one misconception, and one production step. Overview first, depth on the load-bearing idea only.`
+          : `DETAIL: DEEP (default). 12-${Math.max(12, Math.min(30, opts.maxSteps))} segments. Every idea gets a concept pass AND a deepDive pass with its causal 'why' and its failure modes, plus a misconception and a production step (checkpoint/selfExplain/transfer). Two worked problems: one guided move-by-move, one the learner attempts. End with a recap of the load-bearing points.`;
+
     const freedomDirective = `AUTHORITY & FREEDOM (READ FIRST):
 You are the lesson AUTHOR and you outrank any template. The segment list below is a toolbox, not a checklist.
-- Pick segment types, counts, ordering and content yourself. Reuse, skip, or invent combinations freely.
-- Aim for ${Math.max(4, Math.min(14, opts.maxSteps))} segments total (you may go shorter if the idea is atomic, or slightly longer if the concept genuinely needs it).
+- ${detailDirective}
+- Pick segment types, counts, ordering and content yourself. Reuse, skip, or invent combinations freely, but never drop the depth floor of the requested detail level.
+- Aim for at most ${Math.max(4, Math.min(40, opts.maxSteps))} segments total.
 - Include roughly ${Math.max(0, Math.min(8, opts.checkpoints))} interactive checkpoints across the lesson (your call how to distribute them).
 - ${storyDirective}
 - ${analogyDirective}
@@ -189,6 +209,11 @@ You are the lesson AUTHOR and you outrank any template. The segment list below i
 - ${responseDirective}
 - Prefer Feynman-plain language over textbook jargon; when a technical term is needed, define it inline in the same sentence.
 - If you think a different structure teaches better than the style directive requests, DEVIATE and note it in 'generatedWith'.`;
+
+    const exitDirective = `ENCODING IS DEFERRED (IMPORTANT):
+This lesson is self-contained teaching. Do NOT tell the learner to encode, export, or open the workbench anywhere inside the lesson body — the app offers that choice itself when the lesson ends.
+Instead, finish the lesson with a 'recap' segment carrying the load-bearing points, then a 'wrapup' whose callToAction previews that encoding is now available and cheap because they are pre-warmed. Supply the handoff payload in 'lesson.encodingSeeds': 3-8 stage-sized prompts with reference exemplars, written so that answering them in the learner's own words would encode exactly what this lesson taught.`;
+
 const modeDirective =
       mode === 'memorization'
         ? `MODE: GRANDMASTER OF MEMORY & MNEMONIC ARCHITECT (Joshua Foer, Dominic O'Brien, Harry Lorayne). Target is ROTE & TAXONOMIC material (tables, lists, sequences, classifications). Teach through absurd, bizarre, sensory narrative linking; chunk with Miller 7±2 law; give mnemonics, pegs, acronyms and memory-palace journeys. Lead each memoryHook with a chant-like phrase and list the linked items in order. Accuracy of each item is sacred — humor must never corrupt a fact.`
@@ -215,13 +240,15 @@ ${humorBar}
 
 ${freedomDirective}
 
+${exitDirective}
+
 STRUCTURE GUIDANCE (a school, not a rule):
-- Begin with an intro.hook — a tiny scenario that creates a curiosity gap — then whyItMatters.
-- Teach, then DO: concept segments build understanding, then a guidedProblem walks a full worked example one move at a time, then youTry makes the learner produce one themselves.
+- Begin with an intro.hook — a tiny scenario that creates a curiosity gap — then whyItMatters, then lesson.objectives.
+- Teach, then DEEPEN, then DO: concept (intuit) → deepDive (causal why + failure modes) → misconception (kill the trap) → guidedProblem (one move at a time) → youTry (they produce it) → selfExplain (they teach it) → transfer (new surface).
 - Interleave checkpoints so no stretch runs more than ~2 segments without a test.
 - Reuse the learner's own context where provided: contextSnippet, generationChallenge premise/clue/expertCompletion, scaffold labels, keywords, boundaryContrast. Your checkpoint traps should preferentially target the confusable lookalike; its distinguishingRule is your best explanation text.
 - If the learner already mastered a stage (marked in userResponses), you may compress it to a quick recap or skip it — don't re-teach what's proven.
-- The lesson must be completable in ${Math.max(1, Math.min(15, opts.lessonDepth * 4))} minutes: segments stay atomic, bodies stay tight.
+- Every segment stays atomic (one idea per segment) even though the lesson is long: depth comes from more segments and more causal links, not from longer paragraphs.
 
 Output ONLY the JSON object matching teachResponseSchema.`;
 let userPrompt = `TARGET: ${targetTitle}

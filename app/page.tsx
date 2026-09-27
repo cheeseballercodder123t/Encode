@@ -30,6 +30,7 @@ import { PretestModal } from '@/components/PretestModal';
 import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
 import { AnkiExportModal } from '@/components/AnkiExportModal';
+import { FlashcardForgeModal, type ForgeExportTarget } from '@/components/FlashcardForgeModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
 import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
@@ -190,6 +191,12 @@ export default function DeepEncodeApp() {
 
   // Anki Export & Webhook SM-2 Sync State
   const [isAnkiExportOpen, setIsAnkiExportOpen] = useState(false);
+
+  // Flashcards-only Forge state. Forging a deck is not an encoding session, so
+  // it shares nothing with the workout except the export surfaces it hands the
+  // merged deck to.
+  const [isForgeOpen, setIsForgeOpen] = useState(false);
+  const [pendingForgeRemnote, setPendingForgeRemnote] = useState(false);
 
   // Multi-Document Comparative 4-Quadrant Synthesis State
   const [isComparativeModalOpen, setIsComparativeModalOpen] = useState(false);
@@ -420,6 +427,35 @@ export default function DeepEncodeApp() {
     setTeachStageIndex(stageIndex);
     setIsTeachOpen(true);
     sound.playBeep(640, 'sine', 0.1);
+  };
+
+  // The Forge finished a deck and the learner chose where it goes. Nothing in
+  // the encoding session is touched: the merged report goes straight to the
+  // export surface. "Both" opens Anki first and stacks RemNote behind it once
+  // the Anki modal is closed, so two export modals are never on screen at once.
+  const handleForgeDeckReady = (report: SegregationReport, target: ForgeExportTarget) => {
+    setSegregationReport(report);
+    if (target === 'remnote') {
+      setIsSegregateModalOpen(true);
+      return;
+    }
+    setIsAnkiExportOpen(true);
+    setPendingForgeRemnote(target === 'both');
+  };
+
+  // End of a Teach Me lesson: "start encoding". The lesson never encodes on its
+  // own — it finishes, and this is the handoff. Where it lands depends on what
+  // the lesson was taught from: a notes lesson runs the encode pipeline from
+  // those notes, a stage lesson drops the learner back into the workbench stage
+  // they are already in (and focuses the mechanism field), and a schema lesson
+  // is already encoded, so the readout they came from is the destination.
+  const handleTeachStartEncoding = () => {
+    sound.playSuccess();
+    if (appState === 'input') {
+      void handleGenerate();
+    } else if (appState === 'encoding') {
+      setTimeout(() => field1Ref.current?.focus(), 60);
+    }
   };
 
   // Open Stateless Share Modal helper
@@ -1726,6 +1762,7 @@ export default function DeepEncodeApp() {
               }}
               onGenerate={handleInitiateGenerate}
               onTeach={() => handleOpenTeach('notes')}
+              onForge={() => setIsForgeOpen(true)}
               isLoading={false}
             />
 
@@ -2174,6 +2211,7 @@ export default function DeepEncodeApp() {
         researchContexts={researchContexts}
         settings={aiSettings}
         onAwardXP={(earnedXp: number) => addXP(earnedXp)}
+        onStartEncoding={handleTeachStartEncoding}
       />
 
       {/* Feature 51: The Blurting Method (Free Recall Blank Canvas) Modal */}
@@ -2256,7 +2294,15 @@ export default function DeepEncodeApp() {
       {/* Feature: Direct Anki .apkg Export & SM-2 Spaced Repetition Webhook Sync */}
       <AnkiExportModal
         isOpen={isAnkiExportOpen}
-        onClose={() => setIsAnkiExportOpen(false)}
+        onClose={() => {
+          setIsAnkiExportOpen(false);
+          // The forge's "both" target stacks RemNote behind Anki, so two
+          // export modals are never on screen at once.
+          if (pendingForgeRemnote) {
+            setPendingForgeRemnote(false);
+            setIsSegregateModalOpen(true);
+          }
+        }}
         schema={{
           topicSummary,
           activities,
@@ -2265,6 +2311,15 @@ export default function DeepEncodeApp() {
         report={segregationReport}
         notes={rawNotes}
         includeMcq={segregateOptions.mcq}
+      />
+
+      {/* Flashcards Only: the Forge. Many sources in, one deduped deck out,
+          straight to the export surface the learner chose — no encoding. */}
+      <FlashcardForgeModal
+        isOpen={isForgeOpen}
+        onClose={() => setIsForgeOpen(false)}
+        settings={aiSettings}
+        onDeckReady={handleForgeDeckReady}
       />
 
       {/* Feature: Multi-Document Comparative 4-Quadrant Synthesis */}

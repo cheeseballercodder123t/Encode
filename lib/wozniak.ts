@@ -153,20 +153,25 @@ export function tagOverflowCard(card: AnkiCardItem): AnkiCardItem {
  */
 export function sanitizeForWozniak(
   cards: AnkiCardItem[],
-  opts?: { addSymmetric?: boolean; protectTag?: string }
+  opts?: { addSymmetric?: boolean; protectTag?: string | string[] }
 ): WozniakResult {
   const addSymmetric = opts?.addSymmetric !== false;
-  const protectTag = opts?.protectTag;
+  const protectTags = opts?.protectTag
+    ? Array.isArray(opts.protectTag)
+      ? opts.protectTag
+      : [opts.protectTag]
+    : [];
   const heldBack: WozniakHeldCard[] = [];
   const cardsOut: AnkiCardItem[] = [];
   let addedSymmetric = 0;
 
   for (const card of cards) {
-    // Curated cards (e.g. a hypercorrection trap) are trusted verbatim: the
-    // card IS a discrimination pair — wrong intuition vs. truth — so splitting
-    // it or chunking it under the ceiling would destroy the distinction it
-    // exists to teach. Nothing is dropped; it simply passes through untouched.
-    if (protectTag && card.tags.includes(protectTag)) {
+    // Curated cards (a hypercorrection trap, a cross-source conflict) are
+    // trusted verbatim: the card IS a discrimination pair — wrong intuition vs.
+    // truth, or source A vs source B — so splitting it or chunking it under the
+    // ceiling would destroy the distinction it exists to teach. Nothing is
+    // dropped; it simply passes through untouched.
+    if (protectTags.some((tag) => card.tags.includes(tag))) {
       cardsOut.push(card);
       continue;
     }

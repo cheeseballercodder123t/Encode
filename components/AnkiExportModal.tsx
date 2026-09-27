@@ -8,6 +8,9 @@ import {
   extractWeakAnkiCardsFromSchema,
   sanitizeExtracted,
   withInterferenceTraps,
+} from '@/lib/anki-exporter';
+import { ankiCardKeys, recordDeckExport } from '@/lib/deck-memory';
+import {
   withHeldBackCards,
   type SanitizedDeck,
   generateAnkiApkgPackage, 
@@ -246,6 +249,20 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     [displayCards, gateUnstable]
   );
 
+  /**
+   * Records what actually left the app, so a later forge over the same topic
+   * can say `4 new · 12 already in your deck` instead of handing the whole deck
+   * back. Only successful exports are remembered.
+   */
+  const rememberExport = useCallback(
+    (surface: string) => {
+      const topic = report?.topic || schema?.topicSummary || '';
+      if (!topic) return;
+      recordDeckExport({ topic, keys: ankiCardKeys(exportCards), surface });
+    },
+    [report, schema, exportCards]
+  );
+
   const handlePushToAnki = useCallback(async () => {
     if (isPushing || exportCards.length === 0) return;
     playSound('click');
@@ -262,6 +279,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
           result.attempted === 1 ? '' : 's'
         } landed in ${result.deckName}.`,
       });
+      rememberExport('AnkiConnect');
       playSound('success');
     } catch (err) {
       setPushStatus({ ok: false, message: describePushError(err) });
@@ -269,7 +287,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     } finally {
       setIsPushing(false);
     }
-  }, [ankiEndpoint, deckName, exportCards, isPushing]);
+  }, [ankiEndpoint, deckName, exportCards, isPushing, rememberExport]);
 
   // Cmd/Ctrl+Shift+A from anywhere in the modal pushes. The capture-phase
   // listener (plus stopPropagation for this combo only) keeps the workbench's
@@ -301,6 +319,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      rememberExport('.apkg download');
       playSound('success');
     } catch (err: any) {
       console.error(err);
@@ -327,6 +346,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     });
+    rememberExport('.txt download');
     playSound('success');
   };
 
@@ -339,7 +359,10 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     const res = await syncToCustomWebhook(webhookUrl, deckName, exportCards);
     setWebhookStatus(res);
     setIsSyncingWebhook(false);
-    if (res.success) playSound('success');
+    if (res.success) {
+      rememberExport('webhook');
+      playSound('success');
+    }
   };
 
   const handleSimulateGrade = null; // removed : SM-2 simulator tab dropped for simplicity
@@ -905,7 +928,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 </div>
 
                 <button
-                  onClick={handleSyncWebhook}
+                  onClick={() => runGate(() => void handleSyncWebhook())}
                   disabled={!webhookUrl.trim() || isSyncingWebhook}
                   className="w-full py-3 px-4 bg-inset hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
                 >
@@ -1113,7 +1136,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               {/* Export Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
-                  onClick={handleDownloadProceduralApkg}
+                  onClick={() => runGate(() => void handleDownloadProceduralApkg())}
                   disabled={selectedArchetypes.length === 0}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40"
                 >
@@ -1121,7 +1144,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   Download Procedural MCQ .apkg ({selectedArchetypes.length})
                 </button>
                 <button
-                  onClick={handleDownloadProceduralTxt}
+                  onClick={() => runGate(handleDownloadProceduralTxt)}
                   disabled={selectedArchetypes.length === 0}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
                 >

@@ -396,6 +396,254 @@ export const TEACH_RESPONSE = {
   },
 };
 
+// A deliberately SHORT lesson (3 segments) whose last segment is the wrapup:
+// the end-of-lesson exit panel is what these specs are about, so the walk to it
+// must be two clicks rather than twenty. It still carries the full depth shape
+// (objectives, glossary, why, misconceptions, encoding seeds) so the deep
+// rendering is asserted too.
+export const TEACH_SHORT_RESPONSE = {
+  lesson: {
+    title: 'Threshold: The Two-Minute Version',
+    tagline: 'Everything that matters about firing, nothing that does not.',
+    estimatedMin: 3,
+    intro: {
+      hook: 'A neuron sits at -70 mV. What flips it in a millisecond?',
+      whyItMatters: 'Every spike you will ever draw starts at threshold.',
+    },
+    objectives: [
+      'State why -55 mV is the trigger and not a coincidence',
+      'Separate threshold from the refractory period',
+    ],
+    glossary: [
+      { term: 'threshold', definition: 'the voltage at which voltage-gated Na+ channels open' },
+    ],
+    segments: [
+      {
+        id: 'sc1',
+        type: 'concept',
+        title: 'The Threshold',
+        body: 'At -55 mV the voltage-gated Na+ channels open and Na+ rushes in.',
+        why: 'The channel protein senses the field across the membrane, so a small voltage change physically opens the pore.',
+        misconceptions: [
+          {
+            claim: 'The Na+/K+ pump reverses to cause the spike',
+            correction: 'The pump never reverses; the spike is pure Na+ conductance.',
+          },
+        ],
+        keyTerms: ['threshold', '-55 mV'],
+        xpValue: 5,
+      },
+      {
+        id: 'sc2',
+        type: 'deepDive',
+        title: 'Where threshold stops being useful',
+        body: 'Above threshold the size of the spike stops depending on the stimulus: it is all-or-none.',
+        why: 'Once every available Na+ channel is open, a bigger stimulus has nothing left to recruit.',
+        xpValue: 10,
+      },
+      {
+        id: 'sc3',
+        type: 'wrapup',
+        title: 'Wrap Up',
+        body: 'Threshold is a mechanical gate, not a magic number.',
+        xpValue: 0,
+      },
+    ],
+    masteryCheck: {
+      prompt: 'Explain in one sentence why the spike is all-or-none.',
+      keywords: ['threshold', 'all-or-none'],
+      modelAnswer: 'Past threshold every Na+ channel is already open, so a stronger stimulus changes nothing.',
+    },
+    encodingSeeds: [
+      {
+        title: 'Threshold',
+        prompt: 'Why does -55 mV open the Na+ gates?',
+        exemplar: 'The field across the membrane physically pulls the gate open at that voltage.',
+      },
+      {
+        title: 'All-or-none',
+        prompt: 'Why does a bigger stimulus not make a bigger spike?',
+        exemplar: 'Every available channel is already open.',
+      },
+    ],
+    wrapup: {
+      summary: 'Lesson complete. The two facts that carry the whole mechanism are on the exit panel.',
+      callToAction: 'Encode these two prompts now, or park the lesson and come back to it.',
+      connectionPrompt: 'How would a demyelinated axon change the threshold behaviour?',
+    },
+  },
+};
+
+// The merged deck the Forge returns for several sources: two cloze facts (no
+// drill prompt, so they exercise the cloze export path), one 4-quadrant
+// mechanism with its lookalike, one drill, one worked example. Ids are
+// namespaced per source, exactly as `mergeSegregationReports` namespaces them.
+// The last source FAILED (a video with no caption track): the deck still ships
+// and the log has to say why that one source contributed nothing.
+export const FORGE_RESPONSE = {
+  topic: 'Renal Physiology',
+  report: {
+    topic: 'Renal Physiology',
+    declarativeFacts: [
+      {
+        id: 'src_1-f1',
+        factStatement: 'The loop of Henle reaches 1,200 mOsm at the hairpin.',
+        clozeSuggestion: 'The loop of Henle reaches {{1,200 mOsm}} at the hairpin.',
+        tag: 'Constant',
+        memoryHook: 'Hairpin = highest.',
+      },
+      {
+        id: 'src_2-f1',
+        factStatement: 'ADH inserts aquaporin-2 into the collecting duct.',
+        clozeSuggestion: 'ADH inserts {{aquaporin-2}} into the collecting duct.',
+        tag: 'Mechanism',
+      },
+    ],
+    conceptualMechanisms: [
+      {
+        id: 'src_1-m1',
+        conceptName: 'Countercurrent multiplication',
+        whatIsIt: 'A gradient built by opposing flows in the loop.',
+        whyItMatters: 'It is the only way to concentrate urine above plasma.',
+        howItWorks: 'Active transport at the thick ascending limb sets up passive water movement.',
+        whatIfEdgeCase: 'Without it, urine stays isotonic.',
+        boundaryContrast: {
+          confusableLookalike: 'Countercurrent exchange',
+          distinguishingRule: 'Multiplication builds the gradient; exchange only preserves it.',
+        },
+      },
+    ],
+    practiceQuestions: [
+      { id: 'src_3-q1', question: 'Which limb pumps salt out?', answer: 'The thick ascending limb.' },
+    ],
+    workedExamples: [
+      {
+        id: 'src_3-e1',
+        title: 'Free-water clearance',
+        problem: 'Compute CH2O given CH2O = V − Cosm.',
+        steps: ['Find V', 'Find Cosm', 'Subtract'],
+        takeaway: 'Positive CH2O means dilute urine.',
+      },
+    ],
+    compressionRatio: '3 sources merged · 4 duplicate cards dropped',
+  },
+  sources: [
+    { id: 'src_1', kind: 'text', label: 'Lecture 4 slides', status: 'ok', counts: { facts: 1, mechanisms: 1, drills: 0, examples: 0 } },
+    { id: 'src_2', kind: 'file', label: 'handout.pdf', status: 'ok', counts: { facts: 1, mechanisms: 0, drills: 0, examples: 0 } },
+    { id: 'src_3', kind: 'text', label: 'Problem set 4', status: 'ok', counts: { facts: 0, mechanisms: 0, drills: 1, examples: 1 } },
+    {
+      id: 'src_4',
+      kind: 'youtube',
+      label: 'youtube:renal',
+      status: 'failed',
+      counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 },
+      note: 'No captions on this video, so there is no source text to cut cards from.',
+    },
+  ],
+  dropped: 4,
+  total: 5,
+  counts: { facts: 2, mechanisms: 1, drills: 1, examples: 1 },
+  contradictions: [],
+};
+
+// The same forge when one of the sources is an uploaded lecture recording:
+// the server transcribed it (no captions anywhere), so the log says so.
+export const FORGE_MEDIA_RESPONSE = {
+  ...FORGE_RESPONSE,
+  sources: [
+    ...FORGE_RESPONSE.sources,
+    {
+      id: 'src_5',
+      kind: 'file',
+      label: 'lecture-recording.m4a',
+      status: 'ok',
+      counts: { facts: 1, mechanisms: 0, drills: 0, examples: 0 },
+      note: 'transcribed from the uploaded recording',
+    },
+  ],
+};
+
+// Two sources that disagree (4 h vs 6 h). The merge replaced both claims with
+// ONE conflict card that leads the deck, and reports them in `contradictions`
+// rather than silently keeping whichever arrived first.
+export const FORGE_CONFLICT_RESPONSE = {
+  topic: 'Pharmacology',
+  report: {
+    topic: 'Pharmacology',
+    declarativeFacts: [
+      {
+        id: 'conflict-1-the-half-lif',
+        factStatement:
+          'The half-life of the drug is 4 h — Lecture 4 slides · The half-life of the drug is 6 h — handout.pdf',
+        clozeSuggestion:
+          'Sources disagree: The half-life of the drug is ___ h. Resolve: {{4 h — Lecture 4 slides}} or {{6 h — handout.pdf}}.',
+        question: 'Sources disagree: The half-life of the drug is ___ h. Which is right?',
+        tag: 'Contradiction',
+        memoryHook: 'Resolve this before the exam — two of your sources cannot both be right.',
+      },
+    ],
+    conceptualMechanisms: [],
+    practiceQuestions: [],
+    workedExamples: [],
+    compressionRatio: '2 sources merged · no overlap · 1 source conflict flagged',
+  },
+  sources: [
+    {
+      id: 'src_1',
+      kind: 'text',
+      label: 'Lecture 4 slides',
+      status: 'ok',
+      counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 },
+      note: '1 claim merged into a conflict card',
+    },
+    {
+      id: 'src_2',
+      kind: 'file',
+      label: 'handout.pdf',
+      status: 'ok',
+      counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 },
+      note: '1 claim merged into a conflict card',
+    },
+  ],
+  dropped: 0,
+  total: 1,
+  counts: { facts: 1, mechanisms: 0, drills: 0, examples: 0 },
+  contradictions: [
+    {
+      id: 'conflict-1-the-half-lif',
+      kind: 'numeric',
+      subject: 'the half lif of the drug is # h',
+      summary: '4 h vs 6 h',
+      claims: [
+        {
+          id: 'src_1-f1',
+          sourceId: 'src_1',
+          sourceLabel: 'Lecture 4 slides',
+          text: 'The half-life of the drug is 4 h.',
+          values: ['4 h'],
+        },
+        {
+          id: 'src_2-f1',
+          sourceId: 'src_2',
+          sourceLabel: 'handout.pdf',
+          text: 'The half-life of the drug is 6 h.',
+          values: ['6 h'],
+        },
+      ],
+      card: {
+        id: 'conflict-1-the-half-lif',
+        factStatement:
+          'The half-life of the drug is 4 h — Lecture 4 slides · The half-life of the drug is 6 h — handout.pdf',
+        clozeSuggestion:
+          'Sources disagree: The half-life of the drug is ___ h. Resolve: {{4 h — Lecture 4 slides}} or {{6 h — handout.pdf}}.',
+        question: 'Sources disagree: The half-life of the drug is ___ h. Which is right?',
+        tag: 'Contradiction',
+        memoryHook: 'Resolve this before the exam — two of your sources cannot both be right.',
+      },
+    },
+  ],
+};
+
 // ─── 10-second discrimination gate (/api/discrimination) ───────────────────
 // One vignette is the concept (dq1) and one the lookalike (dq2); neither names
 // either label, which is what makes the check blind.

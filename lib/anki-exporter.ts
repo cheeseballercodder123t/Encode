@@ -4,6 +4,7 @@ import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from '.
 import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
 import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
 import { loadInterferenceTraps } from './interference-traps';
+import { CONTRADICTION_TAG } from './services/contradiction';
 
 export { classifyDeckQuality };
 
@@ -151,17 +152,54 @@ export function normalizeClozeTermToAnki(text: string): string {
 }
 
 /**
- * Guarantees a front carries at least one REAL Anki deletion (`{{cN::...}}`).
- * Anki's Cloze note type refuses cards without one ("No cloze 1 found"), and
- * bare `{{term}}` renders as literal braces. Falls back to clozeing the last
- * half of the sentence when the text has no braces at all.
+ * The distinct cloze ordinals a front actually carries, ascending.
+ *
+ * Anki derives each cloze card's `ord` from the marker number (`{{c1::}}` is
+ * ord 0, `{{c2::}}` is ord 1), so the collection writer needs the real numbers
+ * to ship one card row per deletion — a note whose only deletion is `{{c2::}}`
+ * with a single ord-0 row would render an empty card and lose the cloze.
+ */
+export function clozeOrdinals(text: string): number[] {
+  const found = new Set<number>();
+  const re = /\{\{c(\d+)::/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text || '')) !== null) {
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n >= 1) found.add(n);
+  }
+  return [...found].sort((a, b) => a - b);
+}
+
+/**
+ * Rewrites cloze numbers so they are dense from `c1` in order of first
+ * appearance (`{{c2::A}}` → `{{c1::A}}`, `{{c1::A}}{{c3::B}}` → c1, c2).
+ * Deterministic and idempotent; keeps the deletion order the author wrote.
+ */
+export function renumberClozeOrdinals(text: string): string {
+  const order: number[] = [];
+  const scan = /\{\{c(\d+)::/g;
+  let m: RegExpExecArray | null;
+  while ((m = scan.exec(text || '')) !== null) {
+    const n = Number(m[1]);
+    if (!order.includes(n)) order.push(n);
+  }
+  if (order.length === 0) return text;
+  return text.replace(/\{\{c(\d+)::/g, (_match, digits: string) => `{{c${order.indexOf(Number(digits)) + 1}::`);
+}
+
+/**
+ * Guarantees a front carries at least one REAL Anki deletion (`{{cN::...}}`),
+ * dense from c1 so every deletion gets a card row. Anki's Cloze note type
+ * refuses cards without a deletion ("No cloze 1 found"), and bare `{{term}}`
+ * renders as literal braces. Falls back to clozeing the last half of the
+ * sentence when the text has no braces at all.
  */
 function ensureAnkiCloze(text: string): string {
   const input = text || '';
-  if (input.includes('{{c')) return input;
+  if (input.includes('{{c')) return renumberClozeOrdinals(input);
   const normalized = normalizeClozeTermToAnki(input);
-  if (normalized.includes('{{c')) return normalized;
-  return normalizeClozeTermToAnki(clozeUserWording(input, []));
+  if (normalized.includes('{{c')) return renumberClozeOrdinals(normalized);
+  return renumberClozeOrdinals(normalizeClozeTermToAnki(clozeUserWording(input, [])));
 }
 
 /** Converts a cloze front into a Basic Q/A front: deletions become blanks. */
@@ -528,6 +566,13 @@ export interface SanitizedDeck {
 export const INTERFERENCE_TRAP_TAG = 'InterferenceTrap';
 
 /**
+ * Curated tags the ceiling must not touch. A trap and a conflict card are both
+ * discrimination pairs (`wrong intuition vs truth`, `source A vs source B`), so
+ * chunking them would delete the very distinction they teach.
+ */
+export const PROTECTED_CARD_TAGS = [INTERFERENCE_TRAP_TAG, CONTRADICTION_TAG];
+
+/**
  * Interference-trap cards from the Predict–Observe–Explain gate.
  *
  * These are the highest-retention cards the learner will ever own: they mark a
@@ -563,8 +608,9 @@ export function sanitizeExtracted(
   cards: AnkiCardItem[],
   opts?: { addSymmetric?: boolean }
 ): SanitizedDeck {
-  // Traps always pass through the pass untouched, wherever a deck is built.
-  const result = sanitizeForWozniak(cards, { ...opts, protectTag: INTERFERENCE_TRAP_TAG });
+  // Traps and conflict cards always pass through the pass untouched, wherever a
+  // deck is built.
+  const result = sanitizeForWozniak(cards, { ...opts, protectTag: PROTECTED_CARD_TAGS });
   return {
     cards: result.cards,
     heldBack: result.heldBack,
@@ -771,7 +817,9 @@ export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: s
 
   const notes: (AnkiNoteRow & { _nid: number })[] = cards.map((card, i) => {
     const nid = modMs + i;
-    const isCloze = card.isCloze && card.front.includes('{{c');
+    // Only a real, numbered deletion belongs on the Cloze note type; anything
+    // else would ship a card Anki cannot render.
+    const isCloze = card.isCloze && clozeOrdinals(card.front).length > 0;
     return {
       // Deterministic per (deck, card id): re-exports UPDATE the Anki note
       // instead of duplicating it, while distinct cards can never collide.
@@ -784,12 +832,19 @@ export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: s
     };
   });
 
-  const cardRows = notes.map((note, i) => ({
-    nid: note._nid,
-    did: childDeckId,
-    ord: 0,
-    due: modMs + i,
-  }));
+  // One card row per cloze deletion (ord = n-1), exactly what a native Anki
+  // export writes. A Basic note has the single ord 0. Cloze numbering is dense
+  // from c1, so the ordinals always line up with existing card rows.
+  const cardRows = notes.flatMap((note, i) => {
+    const isCloze = note.mid === clozeModelId;
+    const ords = isCloze ? clozeOrdinals(String(note.flds[0] ?? '')) : [1];
+    return (ords.length > 0 ? ords : [1]).map((ord) => ({
+      nid: note._nid,
+      did: childDeckId,
+      ord: ord - 1,
+      due: modMs + i,
+    }));
+  });
 
   const collectionBytes = buildAnkiCollectionSqlite({
     conf: JSON.stringify(conf),

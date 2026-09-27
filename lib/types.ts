@@ -521,11 +521,16 @@ export interface ProceduralMCQArchetype {
 
 export type LessonSegmentType =
   | 'concept'          // teaching card (the "teaching" half)
+  | 'deepDive'         // second, deeper pass: the causal WHY, failure modes, limits
   | 'checkpoint'       // interactive MCQ / ordering / matching / fill-blank / free-response
   | 'guidedProblem'    // Brilliant-style worked example with step reveal
   | 'youTry'           // learner attempts, then reveals the model answer
+  | 'misconception'    // the confusable wrong belief vs. the correction that kills it
+  | 'selfExplain'      // Feynman production: explain the mechanism in your own words
+  | 'transfer'         // same mechanism, unfamiliar surface (near transfer)
   | 'memoryHook'       // mnemonic peg / chant / palace link (memorization mode)
   | 'storyBeat'        // narrative continuation (story mode)
+  | 'recap'            // consolidation bullets before the exit
   | 'wrapup';          // final summary / finish screen
 
 export interface LessonVisual {
@@ -579,6 +584,21 @@ export interface LessonSegment {
   /** storyBeat narrative. */
   narrative?: string;
   continuation?: string;
+  /**
+   * The causal driver behind the claim: WHY this is true, what physically
+   * forces it, and where it stops being true. This is the depth layer that
+   * separates a summary from a lesson, so almost every teaching segment
+   * carries one.
+   */
+  why?: string;
+  /** Misconception radar: the plausible wrong belief and the correction. */
+  misconceptions?: { claim: string; correction: string }[];
+  /** recap: consolidation bullets shown before the end-of-lesson exit. */
+  recapPoints?: string[];
+  /** selfExplain: Feynman production task with a reference answer. */
+  selfExplain?: { prompt: string; modelAnswer?: string; keywords?: string[] };
+  /** transfer: the same mechanism behind an unfamiliar surface problem. */
+  transfer?: { prompt: string; modelAnswer?: string };
   /** Optional chapter grouping label for the progress rail. */
   chapterTitle?: string;
   xpValue?: number;
@@ -589,7 +609,18 @@ export interface TeachLesson {
   tagline?: string;
   estimatedMin?: number;
   intro?: { hook?: string; whyItMatters?: string };
+  /** What the learner will be able to DO by the end, one line each. */
+  objectives?: string[];
   segments: LessonSegment[];
+  /** Terms the AI promised to teach, with the plain-language definition it used. */
+  glossary?: { term: string; definition: string }[];
+  /**
+   * Ready-to-encode seeds: the lesson's own payload handed to the encoder when
+   * the learner chooses "start encoding", or kept for later when they choose
+   * "save it for later". Encoding is deliberately NOT part of the lesson — the
+   * lesson ends, then the learner decides.
+   */
+  encodingSeeds?: { title: string; prompt: string; exemplar: string; keywords?: string[] }[];
   masteryCheck?: {
     prompt: string;
     keywords?: string[];
@@ -606,6 +637,8 @@ export interface TeachLessonOptions {
   storyMode: boolean;
   checkpoints: number;        // 0-8 soft target
   lessonDepth: number;        // 1-3 concept-card layers per idea
+  /** How exhaustive the lesson is: survey / deep / exhaustive. */
+  detail: 'standard' | 'deep' | 'exhaustive';
   difficulty: 'intro' | 'standard' | 'viva';
   humor: number;              // 0-5
   includeAnalogy: boolean;
@@ -619,11 +652,12 @@ export const DEFAULT_TEACH_OPTIONS: TeachLessonOptions = {
   storyMode: true,
   checkpoints: 4,
   lessonDepth: 2,
+  detail: 'deep',
   difficulty: 'standard',
   humor: 3,
   includeAnalogy: true,
   includeMemoryHooks: true,
   allowFreeResponse: true,
-  maxSteps: 14,
+  maxSteps: 18,
 };
 
