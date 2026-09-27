@@ -18,6 +18,28 @@ export interface AISettings {
 
 export type EncodingMode = 'conceptual' | 'memorization';
 
+/**
+ * How much energy you actually have today.
+ *
+ * Encoding used to demand the same full workout every single time, which is
+ * exactly why a Thursday night after labs felt like homework instead of a
+ * puzzle. The gear changes how deep the session goes, never whether the
+ * session happens:
+ *
+ *   1  Express Forge    low energy, about a minute. Supply the pivotal words
+ *                       only: the encoder extracts the mechanism and blanks
+ *                       2-3 critical links for you to fill.
+ *   2  Interactive      medium. Puzzles, ordering, boundary cases and
+ *                       discrimination instead of essay writing.
+ *   3  Deep Crucible    high. Full Feynman, voice, adversarial viva.
+ *
+ * Science preserved at every gear: Slamecka & Graf's generation effect shows
+ * that generating even a single missing word buys almost the same memory boost
+ * as writing the whole paragraph. Gear 1 is not a lesser workout. It is the
+ * same workout with the essay removed.
+ */
+export type EncodingGear = 1 | 2 | 3;
+
 export interface ResearchContextItem {
   id: string;
   detectedGap: string;
@@ -79,6 +101,20 @@ export interface Activity {
   keywords: string[];
   templateType: string;
   prompt: string;
+  /**
+   * The stage's physical contradiction, phrased as a "how is this possible?"
+   * hook. This is what the workbench leads with: a definition request is
+   * homework, a paradox is a puzzle, and the same mechanism has to be reasoned
+   * out either way.
+   */
+  paradox?: string;
+  /**
+   * One extreme, qualitative thought experiment to run BEFORE formalising
+   * anything ("You are an enzyme. The pH drops to 2.0. What happens to you?").
+   * Tracking charges and shapes is real encoding; reciting "denaturation" is
+   * not.
+   */
+  gedankenexperiment?: string;
   scaffold: ActivityScaffold;
   visualData?: ActivityVisualData;
   researchContext?: ResearchContextItem;
@@ -95,28 +131,42 @@ export interface StageResponse {
   field2: string;
   field3?: string;
   selectedPreset?: string;
+  /**
+   * The examiner's read on this stage.
+   *
+   * There is deliberately no score and no grade here. A number out of 100 (or
+   * "needs elaboration") hands you a verdict with no way forward, which is
+   * exactly what made encoding feel like homework. What replaces it:
+   *
+   *   secured          did the physical cause-and-effect land, yes or no
+   *   nailedIt         the causal links that landed, in your own words
+   *   missingLink      the ONE sentence to insert, already written for you
+   *   counterProbe     one question that pushes the mechanism to its edge
+   *   sentenceFinisher your own sentence, completed
+   */
   feynmanReview?: {
-    grade: 'mastered' | 'good' | 'needs_elaboration';
-    score: number;
+    /** True when the causal mechanism landed: the card is safe to forge. */
+    secured: boolean;
     feedback: string;
-    xpBonus: number;
     depthAlert?: string;
     errorAnalysis?: string;
     /** Jargon Parroting Buzzer: buzzword-without-mechanism callout. */
     jargonBuzzer?: string;
     /** Oxford Oral Defense counter-question (viva strictness mode). */
     vivaCrossExamination?: string;
-    /** Delta feedback: the causal links the answer got right, one line. */
+    /** The causal links the answer got right, quoting your own words. */
     nailedIt?: string;
-    /** Delta feedback: the single missing causal step, one line. */
+    /** The single missing causal step, written as the sentence to insert. */
     missingLink?: string;
+    /** The Socratic pressure test: one probing edge-case question. */
+    counterProbe?: string;
+    /** The assistant finishing your sentence for you. */
+    sentenceFinisher?: string;
   };
   confidenceScore?: number;        // 0-100 slider value
   reflection?: string;             // one-sentence takeaway
   checkCount?: number;             // how many times re-checked by AI
   errorAnalysis?: string;          // targeted diff feedback from checker
-  readinessConfirmed?: boolean;    // readiness modal confirmed
-  readinessLatencyMs?: number;     // ms from modal open to confirm
   difficultyLevel?: 'easy' | 'medium' | 'hard';
   /** True when the user chose "Skip for now" â€” exported tagged DeepEncode::Unfinished. */
   skipped?: boolean;

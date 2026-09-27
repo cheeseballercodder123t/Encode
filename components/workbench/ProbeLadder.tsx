@@ -55,7 +55,7 @@ export function ProbeLadder({ activity, seed, topicSummary, onAdopt }: ProbeLadd
     const answered = rows.map((r) => r.answer.trim()).filter(Boolean);
     const layers = [seed.trim(), ...answered];
     if (layers.length === 0 || !layers[0]) {
-      setError('Answer the stage first — the ladder interrogates your own wording.');
+      setError('Answer the stage first. The ladder interrogates your own wording.');
       return;
     }
 
@@ -202,7 +202,7 @@ export function ProbeLadder({ activity, seed, topicSummary, onAdopt }: ProbeLadd
             data-testid="probe-deeper"
             title={
               rows.length >= MAX_DEPTH
-                ? 'You are at the depth limit — stop here or take the anchor'
+                ? 'You are at the depth limit. Stop here or take the anchor'
                 : 'Interrogate your last layer'
             }
             className="px-3 py-2 text-[11px] font-semibold rounded-md bg-flux-500/15 border border-flux-500/50 text-flux-300 hover:bg-flux-500/25 transition-colors duration-150 disabled:opacity-40 cursor-pointer"

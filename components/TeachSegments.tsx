@@ -59,7 +59,7 @@ export function ConceptBody({ seg, onNext }: BodyProps) {
           {seg.visual.lines.map((l, i) => (
             <li key={i} className="text-[11px] text-bone font-mono">
               <span className="font-bold">{l.label}</span>
-              {l.detail && <span className="text-solder"> — {l.detail}</span>}
+              {l.detail && <span className="text-solder">: {l.detail}</span>}
             </li>
           ))}
         </ol>

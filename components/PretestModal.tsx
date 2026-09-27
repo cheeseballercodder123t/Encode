@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 import { PretestSession, PretestQuestion } from '@/lib/types';
 import { playSound } from '@/lib/audio';
@@ -27,7 +28,7 @@ interface PretestModalProps {
 }
 
 const TIERS: { id: ConfidenceTier; label: string; hint: string; weight: number }[] = [
-  { id: 'guess', label: 'Guessing', hint: 'No idea — a coin flip.', weight: 0 },
+  { id: 'guess', label: 'Guessing', hint: 'No idea. A coin flip.', weight: 0 },
   { id: 'half', label: '50/50', hint: 'Two options feel plausible.', weight: 1 },
   { id: 'bet', label: 'Bet my life', hint: 'I am certain. This is obvious.', weight: 2 },
 ];
@@ -111,7 +112,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
             aria-label="Close"
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 
@@ -251,7 +252,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
 
                 {!committed && options.length > 0 && !tier && (
                   <p className="mt-2 text-[10px] text-solder">
-                    Pick a confidence level first — it decides how hard the reveal lands.
+                    Pick a confidence level first. It decides how hard the reveal lands.
                   </p>
                 )}
 
@@ -263,7 +264,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
                         <span className="font-bold block mb-1">
                           [ HYPERCORRECTION ] You bet your life and it was the trap.
                         </span>
-                        The surprise is the point — this exact correction is what survives. Explain the
+                        The surprise is the point. This exact correction is what survives. Explain the
                         physical flaw, in your own words, and it becomes a permanent card.
                         {pickedTrap && (
                           <span className="block mt-1.5 text-hazard-300/90">
@@ -357,7 +358,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
               className="px-5 py-2.5 text-xs font-bold text-bone hover:bg-deck flex items-center gap-2 transition-none"
             >
               <span>{allAnswered ? 'Reveal Encoded Schema' : 'Continue to Schema'}</span>
-              <span className="text-amber font-bold font-mono">[ NEXT ]</span>
+              <BracketTag label="NEXT" />
             </button>
           </div>
         </div>

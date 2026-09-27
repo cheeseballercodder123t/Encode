@@ -99,7 +99,7 @@ export function InvertedStepDrill({ activity, topicSummary, onFix }: InvertedSte
       {!drill && (
         <p className="text-xs text-solder leading-relaxed">
           The examiner writes the mechanism in four causal steps and quietly falsifies exactly one.
-          Find the lie, then write the one-sentence fix — no blank page required.
+          Find the lie, then write the one-sentence fix. No blank page required.
         </p>
       )}
 
@@ -191,7 +191,7 @@ export function InvertedStepDrill({ activity, topicSummary, onFix }: InvertedSte
                         playSound('success');
                       }
                     }}
-                    placeholder="The flaw is that ... — it should be ..."
+                    placeholder="The flaw is that ...; it should be ..."
                     data-testid="invert-fix-input"
                     className="flex-1 min-w-0 p-2.5 bg-inset border border-edge text-bone placeholder-solder text-xs outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 font-sans"
                   />

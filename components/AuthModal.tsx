@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -80,7 +81,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               onClick={onClose}
               className="p-2 text-solder hover:text-bone hover:bg-inset transition-colors duration-150"
             >
-              <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
             </button>
           </div>
 
@@ -143,7 +144,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     disabled={isSyncing}
                     className="w-full flex items-center justify-center gap-2 py-2.5 bg-inset/20 hover:bg-inset/30 border border-edge/40 text-bone font-bold text-xs transition-colors duration-150"
                   >
-                    <span className="text-amber font-bold font-mono">[ RESET ]</span>
+                    <BracketTag label="RESET" />
                     {isSyncing ? 'Syncing...' : 'Sync Local History to Cloud'}
                   </button>
 
@@ -160,7 +161,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     }}
                     className="w-full flex items-center justify-center gap-2 py-2 bg-transparent hover:bg-inset/60 text-solder hover:text-hazard-400 font-bold text-xs transition-colors duration-150"
                   >
-                    <span className="text-amber font-bold font-mono">[ LOGOUT ]</span>
+                    <BracketTag label="LOGOUT" />
                     Sign Out
                   </button>
                 </div>

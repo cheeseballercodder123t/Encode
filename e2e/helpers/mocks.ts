@@ -230,11 +230,18 @@ export async function mockAuditFlow(page: Page) {
 
 // ─── Flow helpers ────────────────────────────────────────────────────────────
 
-export async function confirmReadiness(page: Page) {
-  const summaryBox = page.getByPlaceholder(/How action potentials|Mitochondria act/);
-  await summaryBox.fill('Potassium resets the membrane potential.');
-  await page.getByRole('button', { name: /actively focused/i }).click();
-  await page.getByRole('button', { name: /I'm Ready/i }).click();
+/**
+ * Retired readiness gate.
+ *
+ * The workout used to open behind a modal that asked you to summarise the
+ * previous stage in <=15 words and tick an "I am actively focused" box before
+ * the screen would load. That was homework, not encoding, and it is gone: the
+ * workbench paints immediately. The helper stays so every spec keeps reading
+ * as a plain linear flow (notes -> stages -> examiner -> completion), it just
+ * no longer has to clear anything.
+ */
+export async function confirmReadiness(_page: Page) {
+  return;
 }
 
 /** Fill notes on the launchpad and start generation (no pre-session gate). */
@@ -272,8 +279,9 @@ export async function completeWorkout(page: Page) {
   await expect(page.getByText('Clean cards, ready for Anki.')).toBeVisible();
   await expect(page.getByText('Batch analysis complete: strong first-principles encoding.')).toBeVisible();
 
-  // Close the auto-opened Session Performance Review so the page is interactive again
-  await expect(page.getByText('Session Performance Review')).toBeVisible();
+  // Close the auto-opened session readout so the page is interactive again.
+  // It is a readout now, not a performance review: mechanisms secured + open.
+  await expect(page.getByText('SESSION READOUT')).toBeVisible();
   await page.getByRole('button', { name: 'Done' }).click();
-  await expect(page.getByText('Session Performance Review')).not.toBeVisible();
+  await expect(page.getByText('SESSION READOUT')).not.toBeVisible();
 }

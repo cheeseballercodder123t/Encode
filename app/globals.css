@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,9 +8,9 @@
   html, body {
     background-color: #0E0F12;
     color: #E8E6E1;
-    /* Space Grotesk carries prose & UI labels; IBM Plex Mono is applied
+    /* IBM Plex Sans carries prose & UI labels; IBM Plex Mono is applied
        explicitly on inputs, badges, and metadata via `font-mono`. */
-    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
     -webkit-text-size-adjust: 100%;
   }
 

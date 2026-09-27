@@ -73,7 +73,7 @@ export function TeachFinishPanel({
         onClick={onClose}
         className="w-full px-4 py-2.5 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider cursor-pointer"
       >
-        [ FINISH ] — earned {totalXpEarned} XP {bestStreak > 1 ? `(best streak ${bestStreak})` : ''}
+        [ FINISH ]. Earned {totalXpEarned} XP {bestStreak > 1 ? `(best streak ${bestStreak})` : ''}
       </button>
     </div>
   );

@@ -53,7 +53,6 @@ export function safeParseJson<T = unknown>(raw: string): T | null {
 
 // ─── Schema generation validation ────────────────────────────────────────────
 
-const GRADE_ALLOWED = new Set(['mastered', 'good', 'needs_elaboration']);
 
 function clampScore(n: unknown, fallback: number, min = 0, max = 100): number {
   const v = typeof n === 'number' && Number.isFinite(n) ? n : fallback;
@@ -99,6 +98,11 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode): {
               mode === 'memorization' ? 'Anchor the material mnemonically.' : 'Explain the core mechanism.'
             ),
             contextSnippet: asString(a.contextSnippet, topicSummary),
+            // The paradox hook and the thought experiment are optional: older
+            // stored schemas and thin-note stages simply do not have them, and
+            // the workbench falls back to the prompt.
+            paradox: asString(a.paradox) || undefined,
+            gedankenexperiment: asString(a.gedankenexperiment) || undefined,
             keywords: asStringArray(a.keywords),
             visualData: a.visualData && typeof a.visualData === 'object' ? a.visualData : undefined,
             templateType: asString(
@@ -174,35 +178,42 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode): {
 // ─── Evaluation validation ───────────────────────────────────────────────────
 /**
  * Coerces an /api/evaluate payload into a safe StageResponse['feynmanReview'].
- * Falls back to a neutral "needs_elaboration" grade so a malformed checker
- * response never accidentally grants mastery (or an empty feedback loop).
+ *
+ * There is no score and no grade to coerce any more: the examiner returns a
+ * boolean (`secured`) plus the sentences that move the learner forward. A
+ * malformed payload therefore defaults to `secured: false` with an empty
+ * counter-probe — it never invents a verdict, and it never invents a number.
+ *
+ * Sessions saved before this contract existed still carry `grade`/`score`;
+ * those are read once here so an old schema keeps rendering sanely instead of
+ * flipping every finished stage back to unsecured.
  */
 export function validateEvaluationResult(raw: unknown): NonNullable<StageResponse['feynmanReview']> {
   const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
-  const rawGrade = typeof data.grade === 'string' ? data.grade.toLowerCase() : '';
-  const grade = GRADE_ALLOWED.has(rawGrade)
-    ? (rawGrade as 'mastered' | 'good' | 'needs_elaboration')
-    : 'needs_elaboration';
-  const defaultScore = grade === 'mastered' ? 85 : grade === 'good' ? 70 : 55;
-  const defaultXp = grade === 'mastered' ? 60 : grade === 'good' ? 40 : 25;
+  // Legacy bridge: a stored `grade` maps onto the boolean, so old decks keep
+  // their meaning without the number ever resurfacing in the UI.
+  const legacyGrade = typeof data.grade === 'string' ? data.grade.toLowerCase() : '';
+  const secured =
+    typeof data.secured === 'boolean'
+      ? data.secured
+      : legacyGrade === 'mastered' || legacyGrade === 'good';
+
   const result: NonNullable<StageResponse['feynmanReview']> = {
-    grade,
-    score: clampScore(data.score, defaultScore, 0, 100),
-    xpBonus: clampScore(data.xpBonus ?? defaultXp, defaultXp, 0, 500),
-    feedback: asString(
-      data.feedback,
-      'Your explanation is a good start — tighten the causal bridge to the target mechanism.'
-    ),
+    secured,
+    feedback: asString(data.feedback, ''),
   };
   if (data.depthAlert) result.depthAlert = asString(data.depthAlert);
   if (data.errorAnalysis) result.errorAnalysis = asString(data.errorAnalysis, data.errorAnalysis);
   if (data.jargonBuzzer) result.jargonBuzzer = asString(data.jargonBuzzer);
   if (data.vivaCrossExamination) result.vivaCrossExamination = asString(data.vivaCrossExamination);
-  // Delta feedback: what landed + the one missing causal step. Falls back to
+  // What landed + the one sentence that completes it. Falls back to
   // errorAnalysis for the gap so older checker prompts still render the panel.
   if (data.nailedIt) result.nailedIt = asString(data.nailedIt);
   const missingLink = asString(data.missingLink) || asString(data.errorAnalysis);
   if (missingLink) result.missingLink = missingLink;
+  // The pressure test: one question that pushes the mechanism to its edge.
+  if (data.counterProbe) result.counterProbe = asString(data.counterProbe);
+  if (data.sentenceFinisher) result.sentenceFinisher = asString(data.sentenceFinisher);
   return result;
 }
 
@@ -386,30 +397,40 @@ export function validateYouTubeResult(raw: unknown): {
 // ─── Batch evaluation validation ─────────────────────────────────────────────
 
 export interface SafeBatchEvaluation {
-  overallScore: number;
   analysis: string;
   perStageGrades: {
     stageTitle: string;
-    grade: 'mastered' | 'good' | 'needs_elaboration';
-    score: number;
+    secured: boolean;
+    /** The one edge-case question still open for that stage; '' when none. */
+    counterProbe: string;
     feedback: string;
   }[];
 }
 
+/**
+ * Coerces the end-of-session read. Same no-verdict rule as the single-stage
+ * path: the session ends with the mechanism named and the open questions
+ * listed, never with a percentage.
+ */
 export function validateBatchEvaluation(raw: unknown): SafeBatchEvaluation {
   const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
   const perStageGrades = Array.isArray(data.perStageGrades)
     ? data.perStageGrades
         .filter((g): g is Record<string, any> => g && typeof g === 'object')
-        .map(g => ({
-          stageTitle: asString(g.stageTitle, 'Stage'),
-          grade: (GRADE_ALLOWED.has(g.grade) ? g.grade : 'needs_elaboration') as SafeBatchEvaluation['perStageGrades'][number]['grade'],
-          score: clampScore(g.score, 55),
-          feedback: asString(g.feedback, ''),
-        }))
+        .map(g => {
+          const legacyGrade = typeof g.grade === 'string' ? g.grade.toLowerCase() : '';
+          return {
+            stageTitle: asString(g.stageTitle, 'Stage'),
+            secured:
+              typeof g.secured === 'boolean'
+                ? g.secured
+                : legacyGrade === 'mastered' || legacyGrade === 'good',
+            counterProbe: asString(g.counterProbe, ''),
+            feedback: asString(g.feedback, ''),
+          };
+        })
     : [];
   return {
-    overallScore: clampScore(data.overallScore, 0),
     analysis: asString(data.analysis, ''),
     perStageGrades,
   };

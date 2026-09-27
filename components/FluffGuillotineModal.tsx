@@ -118,7 +118,7 @@ export function FluffGuillotineModal({ isOpen, onClose, notes, onApply }: FluffG
       isOpen={isOpen}
       onClose={onClose}
       title="Fluff Guillotine"
-      description="Semantic heatmap of the source — cut the throat-clearing before encoding"
+      description="Semantic heatmap of the source. Cut the throat-clearing before encoding"
       maxWidth="2xl"
       icon={<span className="font-mono text-xs font-bold">[//]</span>}
       footer={
@@ -209,7 +209,7 @@ export function FluffGuillotineModal({ isOpen, onClose, notes, onApply }: FluffG
             </div>
 
             <p className="text-[11px] text-solder leading-relaxed">
-              {keptWords.toLocaleString()} of {totalWords.toLocaleString()} words survive the cut —
+              {keptWords.toLocaleString()} of {totalWords.toLocaleString()} words survive the cut;
               that is what the encoder will actually read.
             </p>
           </>

@@ -90,8 +90,10 @@ test.describe('10-second discrimination gate', () => {
 
     await expect(page.getByTestId('discrimination-flag')).toContainText('DiscriminationUnstable');
 
-    // Reopening the deck proves the rule became a card that leads it.
-    await page.getByRole('button', { name: '[ X ]' }).click();
+    // Reopening the deck proves the rule became a card that leads it. The
+    // close control is addressed by its accessible name, which is what a
+    // screen reader announces (the visible glyph is the bracket token).
+    await page.getByRole('button', { name: /close export modal/i }).click();
     await page.locator('button[title^="Export .apkg Anki package"]').click();
     await expect(page.getByText(DISCRIMINATION_RESPONSE.cardFront)).toBeVisible();
   });

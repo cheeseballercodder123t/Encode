@@ -118,7 +118,7 @@ export function CausalSequence({ activity, topicSummary, onAdopt }: CausalSequen
       {!drill && (
         <p className="text-xs text-solder leading-relaxed">
           The examiner breaks the mechanism into 4–6 steps and scrambles them. Number them into the
-          order the physics forces — no typing, just structure.
+          order the physics forces. No typing, just structure.
         </p>
       )}
 

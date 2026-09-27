@@ -2,17 +2,18 @@
 import { motion } from 'motion/react';
 import { Modal, Button, Badge, Card, CardContent } from './ui/index';
 
-interface PerStageGrade {
+interface PerStageRead {
   stageTitle: string;
-  grade: 'mastered' | 'good' | 'needs_elaboration';
-  score: number;
+  /** True when that stage's causal mechanism landed. */
+  secured: boolean;
+  /** The one edge-case question still open for that stage, if any. */
+  counterProbe: string;
   feedback: string;
 }
 
 export interface EndSessionReviewData {
-  overallScore: number;
   analysis: string;
-  perStageGrades: PerStageGrade[];
+  perStageGrades: PerStageRead[];
 }
 
 interface Props {
@@ -24,115 +25,110 @@ interface Props {
   topicSummary: string;
 }
 
-const GRADE_LABELS: Record<string, string> = {
-  mastered: 'MASTERED',
-  good: 'GOOD',
-  needs_elaboration: 'NEEDS WORK',
-};
-
+/**
+ * The end-of-session read.
+ *
+ * This used to be a performance review: an AI score out of 100, a calibration
+ * delta in "pts vs estimate", and a per-stage grade with a number beside it.
+ * That is a report card, and a report card is the exact thing that made
+ * encoding feel like homework. What is left is the part that actually helps:
+ * which mechanisms landed, which still have a link open, and the one question
+ * worth answering for each of those.
+ */
 export function EndSessionReviewModal(props: Props) {
-  const { isOpen, onClose, preSessionConfidence, sessionData, isLoading, topicSummary } = props;
-  const confidenceNorm = Math.round((preSessionConfidence / 5) * 100);
-  const aiScore = sessionData ? sessionData.overallScore : 0;
-  const delta = aiScore - confidenceNorm;
-  const deltaLabel = delta > 10
-    ? 'You underestimated yourself. Stronger grasp than you thought.'
-    : delta < -10
-    ? 'You overestimated. Common and normal. Revisit weaker stages.'
-    : 'Well-calibrated self-assessment. Solid metacognition.';
-  const deltaTone = delta > 10 ? 'text-amber' : delta < -10 ? 'text-hazard' : 'text-bone';
-  const deltaBorder = delta > 10 ? 'border-amber' : delta < -10 ? 'border-hazard' : 'border-edge';
+  const { isOpen, onClose, sessionData, isLoading, topicSummary } = props;
+
+  const stages = sessionData?.perStageGrades ?? [];
+  const landed = stages.filter((s) => s.secured).length;
+  const open = stages.filter((s) => !s.secured);
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="2xl"
-      icon={<span className="text-amber">[ EVALUATOR ]</span>}
-      title="SESSION PERFORMANCE REVIEW"
+      icon={<span className="text-amber">[ READOUT ]</span>}
+      title="SESSION READOUT"
       description={topicSummary}
       footer={
         <Button variant="primary" size="md" onClick={onClose}>
-          [ DONE ]
+          Done
         </Button>
       }
     >
       <div className="space-y-3">
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-10 gap-2 text-solder font-mono">
-            <p className="text-xs ">PROCESSING SESSION WITH FEYNMAN EVALUATOR...</p>
+            <p className="text-xs">READING WHAT LANDED...</p>
           </div>
         )}
+
         {!isLoading && sessionData && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Card>
-                <CardContent className="space-y-2">
-                  <p className="text-[10px] text-solder uppercase tracking-wider">Pre-session confidence</p>
-                  <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map(function (n) {
-                      return (
-                        <span key={n} className="text-[10px] font-mono text-amber">
-                          {n <= preSessionConfidence ? '[X]' : '[ ]'}
-                        </span>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-solder">{preSessionConfidence}/5</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="space-y-2">
-                  <p className="text-[10px] text-solder uppercase tracking-wider">AI score</p>
-                  <div className="w-full bg-chassis h-2">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: aiScore + '%' }}
-                      transition={{ duration: 1, ease: 'easeOut' }}
-                      className="h-2 bg-amber"
-                    />
-                  </div>
-                  <p className="text-xl font-bold text-bone">{aiScore}<span className="text-[10px] text-solder">/100</span></p>
-                  <p className="text-[10px] text-solder">Needs more encoding</p>
-                </CardContent>
-              </Card>
-            </div>
-            <Card className={'border ' + deltaBorder}>
-              <CardContent className="flex items-start gap-2">
-                <span className="text-[10px] font-mono text-solder">[CALIBRATION]</span>
-                <div>
-                  <p className={'text-xs font-bold ' + deltaTone}>{deltaLabel}</p>
-                  <p className="text-[10px] text-solder mt-0.5">Delta: {delta} pts vs estimate</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
+            {/* The headline is a count of mechanisms owned, not a percentage. */}
+            <Card className="border-edge">
               <CardContent className="space-y-1">
-                <p className="text-[10px] text-solder uppercase tracking-wider">AI analysis</p>
-                <p className="text-xs text-bone leading-relaxed">{sessionData.analysis}</p>
+                <p className="text-[10px] text-solder uppercase tracking-wider">Mental models secured</p>
+                <p className="text-sm font-semibold text-bone">
+                  {landed} of {stages.length} stage{stages.length === 1 ? '' : 's'} landed
+                </p>
+                <p className="text-[11px] text-solder leading-relaxed">
+                  Every one of those is a card you reasoned your way to, which is why none of them
+                  will turn into a leech three weeks from now.
+                </p>
               </CardContent>
             </Card>
-            {sessionData.perStageGrades && sessionData.perStageGrades.length > 0 && (
+
+            {sessionData.analysis && (
+              <Card>
+                <CardContent className="space-y-1">
+                  <p className="text-[10px] text-solder uppercase tracking-wider">What you demonstrated</p>
+                  <p className="text-xs text-bone leading-relaxed">{sessionData.analysis}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {stages.length > 0 && (
               <div className="space-y-1">
-                <p className="text-[10px] text-solder uppercase tracking-wider">Stage breakdown</p>
-                {sessionData.perStageGrades.map(function (g, i) {
-                  return (
-                    <Card key={i}>
-                      <CardContent className="flex items-start gap-2 p-2">
-                        <Badge
-                          variant={g.grade === 'mastered' ? 'amber' : g.grade === 'good' ? 'bone' : 'hazard'}
-                          size="xs"
-                        >
-                          {GRADE_LABELS[g.grade] || g.grade}
-                        </Badge>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs text-bone truncate">{g.stageTitle}</p>
-                          <p className="text-[10px] text-solder mt-0.5">{g.feedback}</p>
-                        </div>
-                        <span className="text-xs font-bold text-bone shrink-0">{g.score}</span>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                <p className="text-[10px] text-solder uppercase tracking-wider">Stage by stage</p>
+                {stages.map((s, i) => (
+                  <Card key={i}>
+                    <CardContent className="flex items-start gap-2 p-2">
+                      <Badge variant={s.secured ? 'bone' : 'hazard'} size="xs">
+                        {s.secured ? 'LANDED' : 'OPEN'}
+                      </Badge>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-bone truncate">{s.stageTitle}</p>
+                        {s.feedback && (
+                          <p className="text-[10px] text-solder mt-0.5">{s.feedback}</p>
+                        )}
+                        {s.counterProbe && (
+                          <p className="text-[10px] text-amber-300 mt-1 leading-relaxed">
+                            Still worth answering: {s.counterProbe}
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* The open mechanisms are a next step, not a failing mark. */}
+            {open.length > 0 && (
+              <div className="p-3 bg-inset border border-edge rounded-md flex items-start gap-2">
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-[10px] font-mono text-solder shrink-0 pt-0.5"
+                >
+                  NEXT
+                </motion.span>
+                <p className="text-[11px] text-slate-ink leading-relaxed">
+                  {open.length === 1 ? 'One stage is' : `${open.length} stages are`} still open. Nothing
+                  was thrown away: reopen the session and the cards are already there, waiting on the
+                  one missing link.
+                </p>
               </div>
             )}
           </div>

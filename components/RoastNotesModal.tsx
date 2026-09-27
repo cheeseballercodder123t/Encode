@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { RoastReport, RoastCriticism } from '@/lib/types';
 import { playSound } from '@/lib/audio';
@@ -90,7 +91,8 @@ export default function RoastNotesModal({
             onClick={onClose}
             className="text-solder hover:text-bone p-2 bg-inset/80 hover:bg-inset transition-colors duration-150 cursor-pointer text-xs"
           >
-            [ X ]
+            {/* Phone: the close brackets frame the X vertically. */}
+            <BracketTag label="X" tone="" />
           </button>
         </div>
 

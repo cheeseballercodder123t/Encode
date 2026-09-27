@@ -3,63 +3,82 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEvaluationResult, validateBatchEvaluation } from "@/lib/ai-output-validation";
 
+/**
+ * The examiner is a lab partner, not a grader.
+ *
+ * A number out of 100 ("62/100 · needs elaboration") is the single biggest
+ * reason encoding reads as homework: it hands you a verdict and no way
+ * forward. So this contract deliberately has no score, no grade, no XP and no
+ * band. What it returns instead:
+ *
+ *   secured         did the physical cause-and-effect land, yes or no
+ *   nailedIt        the causal links that landed, in the learner's own words
+ *   missingLink     the ONE sentence to insert, written for them
+ *   counterProbe    one curious question that pushes the mechanism to an edge
+ *   sentenceFinisher the learner's own sentence, completed
+ *
+ * Everything the UI shows is either their own phrasing handed back or a single
+ * question they can answer in two words. There is nothing to be graded *on*.
+ */
 const evaluationSchema = {
   type: Type.OBJECT,
   properties: {
-    grade: {
-      type: Type.STRING,
-      description: "One of: 'mastered', 'good', 'needs_elaboration'"
-    },
-    score: {
-      type: Type.INTEGER,
-      description: "A score between 50 and 100 based on cognitive depth and clarity"
-    },
-    xpBonus: {
-      type: Type.INTEGER,
-      description: "Bonus XP earned (25 for needs_elaboration, 40 for good, 60 for mastered)"
-    },
-    feedback: {
-      type: Type.STRING,
-      description: "1-2 sentence coaching tip. If the student used a fictional story, praise the vividness and either confirm the mechanism mapping (mastered) or offer a witty 1-sentence Story Patch correcting the character's action."
-    },
-    depthAlert: {
-      type: Type.STRING,
-      description: "Optional 1-line alert if the user exhibited the Illusion of Explanatory Depth (e.g., using jargon words without describing the underlying mechanism)."
-    },
-    errorAnalysis: {
-      type: Type.STRING,
-      description: "Targeted error analysis: 1 concise sentence highlighting the exact missing logical step or causal bridge compared to expert understanding."
+    secured: {
+      type: Type.BOOLEAN,
+      description:
+        "True when the physical cause-and-effect landed. Sloppy wording, shorthand and spoken transcripts still count: judge the mechanism, never the prose.",
     },
     nailedIt: {
       type: Type.STRING,
-      description: "Delta feedback, line 1: name the specific causal links the student DID get right, quoting their own words. Max 1 sentence, no praise padding."
+      description:
+        "The specific causal links the learner DID get right, quoting their own words. Max one sentence. No praise padding.",
     },
     missingLink: {
       type: Type.STRING,
-      description: "Delta feedback, line 2: the single missing causal step, phrased as the sentence the student should insert (e.g. 'S4 segments physically swing outward, which is what opens the pore'). One sentence. Never a generic 'add more detail'."
+      description:
+        "The single missing causal step, written as the sentence the learner should insert (e.g. 'S4 segments physically swing outward, which is what opens the pore'). Empty string when nothing is missing. Never a generic 'add more detail'.",
+    },
+    counterProbe: {
+      type: Type.STRING,
+      description:
+        "ONE probing question that pushes their mechanism to an extreme or edge case (e.g. 'What happens if blood flow through the vasa recta surges 500%?'). It must be answerable from the mechanism they just described, or from its failure mode. This is the pressure test, not a quiz.",
+    },
+    sentenceFinisher: {
+      type: Type.STRING,
+      description:
+        "Finish the learner's own last sentence for them, in their voice, in one clause. They should be able to say 'yes, that is what I meant' and be done.",
+    },
+    feedback: {
+      type: Type.STRING,
+      description:
+        "Optional one-line coaching, in plain language. Never a score, never a grade, never an instruction to write more.",
+    },
+    depthAlert: {
+      type: Type.STRING,
+      description:
+        "Optional one line when the Illusion of Explanatory Depth showed up (jargon used without the underlying mechanism).",
     },
     jargonBuzzer: {
       type: Type.STRING,
-      description: "Jargon Parroting Buzzer: Triggered when the student uses textbook buzzwords without articulating the physical/mechanical causality."
+      description:
+        "Jargon Parroting Buzzer: triggered when the learner names a process without describing what physically moves, collides, or changes shape.",
     },
     vivaCrossExamination: {
       type: Type.STRING,
-      description: "Oxford Oral Defense: A lethal probing counter-question testing why the opposite, edge-case, or failure state does not occur."
-    }
+      description:
+        "Optional harder probe for oral-defense mode: challenge the causal direction or ask why the reverse does not happen.",
+    },
   },
-  required: ["grade", "score", "xpBonus", "feedback"]
+  required: ["secured", "nailedIt", "counterProbe"],
 };
 
 const batchEvaluationSchema = {
   type: Type.OBJECT,
   properties: {
-    overallScore: {
-      type: Type.INTEGER,
-      description: "Aggregated overall session performance score between 0 and 100"
-    },
     analysis: {
       type: Type.STRING,
-      description: "A 2-3 sentence holistic evaluation comparing the student's demonstrated first-principles understanding against expected cognitive depth."
+      description:
+        "A 2-3 sentence holistic read of the mechanism the learner demonstrated across the session, in plain language. No score, no grade, no percentage.",
     },
     perStageGrades: {
       type: Type.ARRAY,
@@ -67,36 +86,44 @@ const batchEvaluationSchema = {
         type: Type.OBJECT,
         properties: {
           stageTitle: { type: Type.STRING },
-          grade: { type: Type.STRING, description: "'mastered' | 'good' | 'needs_elaboration'" },
-          score: { type: Type.INTEGER },
-          feedback: { type: Type.STRING }
+          secured: {
+            type: Type.BOOLEAN,
+            description: "True when this stage's causal mechanism landed.",
+          },
+          counterProbe: {
+            type: Type.STRING,
+            description: "The one edge-case question still worth answering for this stage. May be empty.",
+          },
+          feedback: { type: Type.STRING },
         },
-        required: ["stageTitle", "grade", "score", "feedback"]
-      }
-    }
+        required: ["stageTitle", "secured", "feedback"],
+      },
+    },
   },
-  required: ["overallScore", "analysis", "perStageGrades"]
+  required: ["analysis", "perStageGrades"],
 };
+
+const NO_VERDICT_DIRECTIVE = `NO-VERDICT DIRECTIVE // HARD RULES
+
+1. NEVER output a score, a percentage, a letter grade, an XP number, or a band. No "78/100", no "B", no "62 — needs elaboration", no "mastered". If you catch yourself ranking them, delete it and write the mechanism instead.
+2. NEVER tell them to "write more", "go deeper", "elaborate further", "be more specific", or "add detail". Those hand back the work without handing back the insight. If something is missing, WRITE THE MISSING SENTENCE FOR THEM in 'missingLink'.
+3. NEVER stand at the door with a red pen. You are the person at the next bench saying "wait, then what happens to the water?" — curious, not supervisory.
+4. Always leave them holding a mechanism, not a verdict. The three things that do that: what already works (nailedIt), the one sentence that completes it (missingLink), and the edge case that proves it (counterProbe).`;
 
 const MNEMONIC_FREEDOM_DIRECTIVE = `MNEMONIC IMMUNITY // EVALUATOR DIRECTIVE
 
 CORE RULE: Never penalize fictional, bizarre, or personal stories, cartoons, or slang. Leverage Structure Mapping & Self-Reference Effect.
 
-TWO-LAYER EVALUATION:
+TWO-LAYER READING:
 
 [ 01 ] STICKINESS CHECK
-- Praise vivid, absurd, or personal framing immediately. Treat invented characters, cartoons, or absurd scenarios as ELITE encoding.
-- If the student leans on slang, cartoons, or personal anecdotes, note the vividness and boost engagement signal. Do not dock for non-academic tone.
+- Vivid, absurd, or personal framing is ELITE encoding. Say so, briefly.
+- Slang, cartoons, and anecdotes are a strength, not a tone problem.
 
 [ 02 ] STRUCTURAL FIDELITY CHECK
-- After praising stickiness, check ONLY whether the narrative's causal mechanisms strictly map to the target scientific logic.
-- Map story actions to the underlying cause-and-effect. If the mapping is sound, award FULL MASTERY (100/100) and explain why the mapping works.
-  Example: "Mastered (100/100): That mental image of the mob boss cutting the telephone wire is hilarious and physically accurate -- Atropine blocks the parasympathetic brake on the sinoatrial node. Card forged for Anki."
-
-SCORING & FEEDBACK:
-- Accurate Logic: Award full mastery (100/100).
-- Flawed Logic: Never scold or lecture. Provide a concise, witty "Story Patch" adjusting the narrative actions to correct the underlying scientific mechanism.
-  Example: "Love the mob boss character! Story Patch: Atropine does not hand the heart coffee to pump faster (that would be an adrenergic agonist). Have the mob boss cut the brake lines on the car instead."
+- Then check ONLY whether the narrative's causal mechanisms strictly map to the target scientific logic.
+- If the mapping holds, secured = true. Say plainly that the mob boss cutting the telephone wire IS the parasympathetic brake on the sinoatrial node, and that the card is safe to forge.
+- If the mapping breaks, do not scold. Provide a concise, witty "Story Patch" that adjusts the narrative action so the physics comes out right.
 
 BOUNDARY:
 - This immunity never authorizes endorsing harmful instructions or pseudoscience; it protects creative encoding of verified academic content.`;
@@ -104,19 +131,19 @@ BOUNDARY:
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { batchMode, stages, settings, preSessionConfidence, topicSummary } = body;
+    const { batchMode, stages, settings, topicSummary } = body;
 
-    // Batch mode for End Session Performance Review
+    // Batch mode for the end-of-session read.
     if (batchMode && Array.isArray(stages)) {
-      const systemPrompt = `You are the Feynman Master Evaluator & Metacognitive Assessor.
-Analyze the complete multi-stage cognitive encoding workout submitted by the learner for "${topicSummary || 'Cognitive Schema'}".
-Assess the student's genuine grasp across all stages. Rate overall performance (0-100), give 2-3 sentences of holistic insight, and grade each stage.
-Be strict but encouraging: reward active causal deduction; penalize memorized jargon without explanation.
+      const systemPrompt = `You are the Feynman lab partner reading a completed multi-stage encoding workout for "${topicSummary || 'Cognitive Schema'}".
+
+Say what mechanism the learner actually demonstrated across the session, stage by stage, and name the one edge case worth probing in each. Do NOT rank them.
+
+${NO_VERDICT_DIRECTIVE}
 
 ${MNEMONIC_FREEDOM_DIRECTIVE}`;
 
       const userPrompt = `TOPIC: ${topicSummary || 'Cognitive Workout'}
-PRE-SESSION SELF-RATED CONFIDENCE: ${preSessionConfidence || 3}/5
 
 STUDENT WORKOUT SUBMISSIONS:
 ${stages.map((s: any, idx: number) => `
@@ -139,7 +166,7 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       return NextResponse.json(validateBatchEvaluation(batchResult));
     }
 
-    // Single stage evaluation
+    // Single stage read.
     const {
       stageTitle,
       framework,
@@ -161,22 +188,23 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       return NextResponse.json({ error: "No answers provided to evaluate." }, { status: 400 });
     }
 
+    // Strictness is a TONE knob, never a severity knob. It changes how hard the
+    // counter-probe leans, not how harshly the learner is judged.
     let strictnessDirective = '';
     if (strictnessLevel === 'sherpa') {
-      strictnessDirective = `STRICTNESS MODE: [ 01 ] SOCRATIC SHERPA (Supportive Learning)
-- Grade generously (score 70-95).
-- Forgive scientific jargon and focus on whether their general intuition is pointed in the right direction.
-- Provide encouraging guidance and fill in small missing steps.`;
+      strictnessDirective = `PROBE TONE: [ 01 ] GENTLE
+- Assume the mechanism is basically there and probe the one thing that would wobble it.
+- Fill in missing steps yourself in 'missingLink' rather than asking them to supply them.
+- The counterProbe should be a friendly "okay, but then what about...?"`;
     } else if (strictnessLevel === 'viva') {
-      strictnessDirective = `STRICTNESS MODE: [ 03 ] OXFORD ORAL DEFENSE / RUTHLESS VIVA (Exam Readiness)
-- Zero tolerance for hand-waving, buzzwords, or skipping causal transitions.
-- If they omit the underlying physical mechanism, FAIL THEM (grade: 'needs_elaboration', score: 35-60).
-- Populate 'vivaCrossExamination' with a sharp, rigorous counter-question challenging their causal direction or asking: "Why doesn't the reverse happen?"
-- Challenge every assumption as an elite thesis examiner.`;
+      strictnessDirective = `PROBE TONE: [ 03 ] ORAL DEFENSE
+- The counterProbe is the sharp one: push a variable to an extreme, invert the causal direction, or ask why the failure mode does not happen.
+- Also populate 'vivaCrossExamination' with a second, harder challenge.
+- Still never rank them, never score them, and never ask them to rewrite.`;
     } else {
-      strictnessDirective = `STRICTNESS MODE: [ 02 ] FEYNMAN STANDARD (True Understanding)
-- THE JARGON BUZZER: If the student uses textbook terms (e.g. "depolarization", "AIMD", "mitosis") WITHOUT explaining the physical mechanical motion (e.g. ions rushing in, window halving), trigger 'jargonBuzzer'.
-- Reward simple, visual, plain-English mechanical explanations.`;
+      strictnessDirective = `PROBE TONE: [ 02 ] STANDARD
+- THE JARGON BUZZER: if a textbook term appears ("depolarization", "AIMD", "mitosis") WITHOUT the physical motion (ions rushing, window halving), populate 'jargonBuzzer' and write the physical sentence for them in 'missingLink'.
+- Plain, visual, mechanical explanations are what you are listening for.`;
     }
 
     // Taboo enforcement: the learner was shown these terms as banned. The
@@ -186,20 +214,21 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       ? tabooTerms.filter((t: unknown): t is string => typeof t === 'string' && t.trim().length > 0)
       : [];
     const tabooDirective = tabooList.length > 0
-      ? `\nTABOO CONSTRAINT (enforce strictly):\n- The student was told NOT to use these terms: ${tabooList.join(', ')}.\n- Any use of them WITHOUT an accompanying physical/causal description is jargon parroting: populate 'jargonBuzzer' and do not grade above 'good'.\n- A correct use that also explains the underlying motion is fine — the ban is on the label substituting for the mechanism.`
+      ? `\nTABOO CONSTRAINT:\n- The learner was told NOT to use these terms: ${tabooList.join(', ')}.\n- Any use of them WITHOUT an accompanying physical/causal description is jargon parroting: populate 'jargonBuzzer' and write the physical wording for them in 'missingLink'.\n- A correct use that also explains the underlying motion is fine — the ban is on the label substituting for the mechanism.`
       : '';
 
-    const systemPrompt = `You are the Feynman Cognitive Coach & Socratic Evaluator.
-Your job is to assess a student's active cognitive encoding response to ensure their understanding is deep enough to create high-yield RemNote flashcards.
+    const systemPrompt = `You are the Feynman lab partner reading a learner's encoding answer. Their goal was to own the mechanism well enough that the flashcard writes itself at the end — so your job is to find the leak in their mental model and hand them the sentence that seals it.
 
 ${strictnessDirective}
 ${tabooDirective}
 
-EVALUATION CRITERIA:
-1. Did the student explain the concept in genuine, clear first-principles language, or did they just copy-paste/parrot textbook buzzwords?
-2. Did they articulate the core mechanism/causality or mnemonic connection?
-3. Check for the 'Illusion of Explanatory Depth' (feeling like they understand because they recognize terms, but unable to explain the inner moving parts).
-4. Always fill 'nailedIt' (what landed) and 'missingLink' (the one exact causal step that is missing, written as the sentence they should insert). Put the same gap in 'errorAnalysis' so single-line consumers keep working. Never return a vague 2-sentence paragraph in place of these two lines.
+WHAT YOU ARE READING FOR:
+1. Genuine first-principles language, including messy shorthand, spoken transcripts, slang and cartoons — or parrotry of textbook buzzwords?
+2. The core causality: does A physically force B, or are the two just named next to each other?
+3. The Illusion of Explanatory Depth (recognizing terms without knowing the inner moving parts).
+4. Always fill 'nailedIt' (the causal links that landed, quoting them) and 'sentenceFinisher' (their own sentence, completed). Keep 'missingLink' to the ONE exact causal step that is missing, written as the sentence they should insert — never a vague request to add more.
+
+${NO_VERDICT_DIRECTIVE}
 
 ${MNEMONIC_FREEDOM_DIRECTIVE}
 
@@ -211,7 +240,7 @@ SOURCE CONTEXT: ${contextSnippet}
 ${premisePrompt ? `CHALLENGE PREMISE: ${premisePrompt}` : ''}
 ${expertCompletion ? `EXPERT SCHEMA COMPLETION: ${expertCompletion}` : ''}
 
-STUDENT'S SUBMISSION:
+LEARNER'S SUBMISSION:
 - ${field1Label}: "${field1Value || ''}"
 - ${field2Label}: "${field2Value || ''}"
 ${field3Label && field3Value ? `- ${field3Label}: "${field3Value}"` : ''}`;

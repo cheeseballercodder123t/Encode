@@ -12,7 +12,7 @@ import type { Config } from 'tailwindcss'
  *   • Ink: bone (high emphasis) / slate-ink (mid) / solder (muted).
  *   • Accents: amber = action, flux = AI, signal = success, hazard = errors.
  *
- * Type: Space Grotesk carries prose & labels (readable at normal case);
+ * Type: IBM Plex Sans carries prose & labels (readable at normal case);
  * IBM Plex Mono is reserved for data — inputs, numbers, badges, code.
  */
 const config: Config = {
@@ -87,12 +87,11 @@ const config: Config = {
       },
       fontFamily: {
         mono: ['"IBM Plex Mono"', '"Courier New"', 'monospace'],
-        sans: ['"Space Grotesk"', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
         panel: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.6)',
         raised: '0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 32px -12px rgba(0,0,0,0.7)',
-        'glow-amber': '0 0 0 1px rgba(208,132,48,0.55), 0 0 20px -4px rgba(208,132,48,0.35)',
       },
       /* Motion: 120ms base, 200ms entrances. Colors + opacity only. */
       transitionDuration: {

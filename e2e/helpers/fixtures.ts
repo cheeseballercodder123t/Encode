@@ -147,15 +147,18 @@ export const YOUTUBE_RESPONSE = {
 };
 
 export const EVAL_SINGLE = {
-  grade: 'good',
-  score: 78,
+  // The examiner returns no score and no grade: a boolean plus the sentences
+  // that move the learner forward.
+  secured: false,
   feedback: 'Good mechanism : tighten the threshold detail.',
-  xpBonus: 25,
-  // Delta feedback: what landed + the single missing causal step. The workbench
-  // renders both and offers an inline "patch the gap" field.
+  // What landed + the single missing causal step. The workbench renders both
+  // and offers an inline "patch the gap" field.
   nailedIt: 'Na+ influx and threshold crossing are both correct.',
   missingLink: 'S4 segments physically swing outward, which is what opens the pore.',
   errorAnalysis: 'S4 segments physically swing outward, which is what opens the pore.',
+  // The Socratic pressure test: one edge case that proves the mechanism.
+  counterProbe: 'What happens to the gradient if vasa recta flow surges 500%?',
+  sentenceFinisher: 'the pore opens because the charged helices were pulled outward.',
 };
 
 // ─── Predict–Observe–Explain gate (/api/pretest) ────────────────────────────
@@ -233,11 +236,15 @@ export const INVERT_RESPONSE = {
 };
 
 export const EVAL_BATCH = {
-  overallScore: 84,
   analysis: 'Batch analysis complete: strong first-principles encoding.',
   perStageGrades: [
-    { stageTitle: STAGE_1.title, grade: 'good', score: 82, feedback: 'Solid.' },
-    { stageTitle: STAGE_2.title, grade: 'good', score: 86, feedback: 'Strong boundary test.' },
+    { stageTitle: STAGE_1.title, secured: true, counterProbe: '', feedback: 'Solid.' },
+    {
+      stageTitle: STAGE_2.title,
+      secured: true,
+      counterProbe: 'What happens if the pump stalls halfway?',
+      feedback: 'Strong boundary test.',
+    },
   ],
 };
 
@@ -250,7 +257,7 @@ export function makeSavedSchema(overrides: Partial<SavedSchema> = {}): SavedSche
     xpEarned: 320,
     activities: [makeActivity({ id: 'seed-1' })],
     userResponses: {
-      'seed-1': { field1: 'seeded one', field2: 'seeded two', readinessConfirmed: true },
+      'seed-1': { field1: 'seeded one', field2: 'seeded two' },
     },
     ...overrides,
   };

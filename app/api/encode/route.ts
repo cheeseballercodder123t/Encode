@@ -268,6 +268,16 @@ const standardResponseSchema = {
             description: "Template identifier chosen intelligently from the catalog for this mode." 
           },
           prompt: { type: Type.STRING, description: "The overarching guiding challenge" },
+          paradox: {
+            type: Type.STRING,
+            description:
+              "The stage's PHYSICAL PARADOX, phrased as a 'how is this possible?' hook. Name the two facts that cannot both be naively true, then ask how the system gets away with it. Example: 'Active pumps in a cell membrane cannot build a gradient above ~200 mOsm in one step because the ions leak back, yet the loop of Henle reaches 1,200 mOsm. How does it reach 1,200 without breaking thermodynamics?' NEVER a definition request ('Define X and list its components') and never a homework instruction: this is the puzzle the stage exists to resolve."
+          },
+          gedankenexperiment: {
+            type: Type.STRING,
+            description:
+              "ONE extreme, qualitative thought experiment the learner runs BEFORE formalising anything, written as a direct instruction to become part of the system. Example: 'You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?' No numbers to solve and no terms to recite: the learner should be tracking charges, forces and shapes. Skip it (empty string) only for pure rote/memorization stages where no mechanism exists."
+          },
           boundaryContrast: {
             type: Type.OBJECT,
             description: "Discriminative boundary for this stage's concept (required for exam-ready cards)",
@@ -315,7 +325,7 @@ const standardResponseSchema = {
             required: ["field1Label", "field1Placeholder", "field2Label", "field2Placeholder", "exampleAnswer"]
           }
         },
-        required: ["id", "stageNumber", "title", "framework", "cognitiveGoal", "contextSnippet", "keywords", "templateType", "prompt", "scaffold"]
+        required: ["id", "stageNumber", "title", "framework", "cognitiveGoal", "contextSnippet", "keywords", "templateType", "prompt", "paradox", "scaffold"]
       }
     }
   },
@@ -383,6 +393,16 @@ const guidedPathResponseSchema = {
                 },
                 templateType: { type: Type.STRING },
                 prompt: { type: Type.STRING },
+                paradox: {
+                  type: Type.STRING,
+                  description:
+                    "This stage's physical paradox, as a 'how is this possible?' hook (never a definition request)."
+                },
+                gedankenexperiment: {
+                  type: Type.STRING,
+                  description:
+                    "One extreme qualitative thought experiment to run before formalising, written as an instruction to become part of the system."
+                },
                 boundaryContrast: {
                   type: Type.OBJECT,
                   properties: {
@@ -418,7 +438,7 @@ const guidedPathResponseSchema = {
                   required: ["field1Label", "field1Placeholder", "field2Label", "field2Placeholder", "exampleAnswer"]
                 }
               },
-              required: ["id", "stageNumber", "title", "framework", "cognitiveGoal", "contextSnippet", "keywords", "templateType", "prompt", "scaffold"]
+              required: ["id", "stageNumber", "title", "framework", "cognitiveGoal", "contextSnippet", "keywords", "templateType", "prompt", "paradox", "scaffold"]
             }
           }
         },
@@ -441,6 +461,7 @@ export async function POST(req: NextRequest) {
       userConfidence,
       successRate,
       interleaveMode = false,
+      gear = 2,
       hiddenTemplates = [],
     } = await req.json();
 
@@ -449,6 +470,39 @@ export async function POST(req: NextRequest) {
     const hiddenList: string[] = Array.isArray(hiddenTemplates)
       ? hiddenTemplates.filter((t: unknown) => typeof t === 'string')
       : [];
+
+    // ─── Cognitive gears ────────────────────────────────────────────────────
+    // Encoding used to demand the same full workout every day, which is why a
+    // Thursday night after labs felt like homework rather than a puzzle. The
+    // gear changes how deep the session goes, never whether it happens.
+    // Science preserved at every gear: Slamecka & Graf's generation effect
+    // shows that generating a single missing word buys almost the same memory
+    // boost as writing the whole paragraph.
+    const gearInstruction =
+      gear === 1
+        ? `
+
+COGNITIVE GEAR 1 — EXPRESS FORGE (low energy, about 60 seconds):
+- Generate exactly TWO stages, not five. Ruthlessly pick the two load-bearing mechanisms.
+- Strip every stage down to its causal crux: populate ONLY field1 (the pivotal blank) and leave field2/field3 labels EMPTY. There is no essay in this session.
+- 'scaffold.causalFrame' is REQUIRED at this gear and is the whole exercise: ONE short sentence with 2-3 blanks, each answerable in one to three words (e.g. "When [[1]], the membrane becomes [[2]], so the cell is [[3]] excitable."). Never a blank that needs a clause.
+- 'paradox' and 'gedankenexperiment' stay mandatory: the puzzle is what makes the blanks worth filling.
+- Every blank must be a word the learner could say out loud in a corridor. If it needs a sentence, the blank is wrong: cut it down.`
+        : gear === 3
+          ? `
+
+COGNITIVE GEAR 3 — DEEP CRUCIBLE (high energy):
+- Generate all FIVE stages with full field1/field2/field3 depth: the full Feynman workout.
+- Write the hardest 'gedankenexperiment' you can that is still answerable qualitatively, and make each 'paradox' genuinely counterintuitive rather than a restatement of the definition.
+- Assume the learner will speak their answer aloud and defend it: 'scaffold.causalFrame' should template a complete causal chain, not a fill-in-the-blank cue.
+- Prefer templates that punish hand-waving (first_principles, boundary_stress_test, broken_model_debug, cause_effect).`
+          : `
+
+COGNITIVE GEAR 2 — INTERACTIVE PUZZLES (medium energy):
+- Generate THREE stages. No essay writing is expected of the learner at this gear.
+- Favour templates that can be SOLVED rather than described: 'first_principles', 'state_transition', 'contrast_grid', 'broken_model_debug', 'concept_hierarchy'. A stage whose only answer channel is prose is the wrong template here.
+- Keep 'scaffold.causalFrame' short (under 20 words) with blanks answerable in a few words, and make sure every stage carries a 'boundaryContrast' so the discrimination pair exists.
+- 'paradox' and 'gedankenexperiment' stay mandatory.`;
 
     const diffLevel = getDifficultyLevel(typeof successRate === 'number' ? successRate : 0.6);
     const difficultyInstruction = getDifficultyPromptModifier(diffLevel);
@@ -527,6 +581,11 @@ AVAILABLE MEMORIZATION TEMPLATES:
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 If the user's notes miss foundational rules (e.g. forgot why HF is a weak acid or omitted a cranial nerve ganglion), fetch the missing foundational context in 'researchContexts' and link it.` : ''}
 
+PARADOX FIRST (CRITICAL):
+Rote material still has a reason it is shaped the way it is. For EVERY stage write 'paradox' as a "how is this possible?" hook rather than a definition request. "Define the strong acids and list their properties" is homework; "HF has a stronger H-F bond than HCl, so why is HF the WEAKER acid?" is a puzzle, and the list follows from resolving it. If the material is pure taxonomy with no mechanism, write the paradox about WHY the classification holds (why these belong together and not next to their lookalike).
+
+GEDANKENEXPERIMENT: also write 'gedankenexperiment' — one extreme qualitative thought experiment the learner runs before formalising anything ("You are the electron. The bond stretches. What happens to the energy?"). No arithmetic, no terms to recite.
+
 ATOMIC + BOUNDARY DISCIPLINE: One item-cluster per stage. For EVERY stage populate 'boundaryContrast' (confusableLookalike + distinguishingRule) : the confusable pair in this list (e.g. strong vs weak acid, Na vs K channel) and the one-sentence rule that separates them.
 
 Also write 'scaffold.causalFrame' — ONE sentence templating this stage's deduction with [[1]] / [[2]] / (optional) [[3]] where the learner's field1 / field2 / field3 answers go (real connectives, no labels, no repeated markers).
@@ -567,6 +626,11 @@ AVAILABLE CONCEPTUAL TEMPLATES CATALOG:
    - visualData: Populate 'brokenModel' with 3-5 sequential nodes, where 1-2 nodes are INTENTIONALLY SABOTAGED with common misconceptions (set 'isFlawed: true'). Provide 'flawExplanation' explaining what is broken.
 ${hiddenNote}
 
+PARADOX FIRST (CRITICAL):
+Never open a stage with a definition request. Definitions are homework; paradoxes are irresistible. For EVERY stage write 'paradox' as the physical contradiction the stage exists to resolve, phrased as "how is this possible?": name the two facts that appear mutually impossible, then ask how the system gets away with it. Example: "Active ion pumps cannot build more than ~200 mOsm of gradient in one step, yet the loop of Henle reaches 1,200 mOsm. How?" The learner should be solving a puzzle, not filling in a worksheet.
+
+GEDANKENEXPERIMENT: for every stage with a mechanism, write 'gedankenexperiment' — one extreme, qualitative thought experiment run BEFORE formalising anything, written as an instruction to become part of the system ("You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?"). It must be answerable by tracking charges, forces and shapes, with no numbers to solve and no jargon to recite. Leave it empty only for pure memorization stages where no mechanism exists.
+
 THE GENERATION EFFECT (CRITICAL):
 Information that the user deduces and generates themselves is remembered far better than information passively read.
 For EVERY stage, you MUST populate 'visualData.generationChallenge' with:
@@ -593,7 +657,7 @@ Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting pote
 CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges and 'generationChallenge', provide clear scaffold labels, domain presets, and concrete example answers, and ALWAYS include 'boundaryContrast' for the stage's concept.`;
     }
 
-    systemPrompt += `\n\n${difficultyInstruction}${confidenceContext}${interleaveNote}`;
+    systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}`;
 
     let userPrompt = '';
     if (hasNotes) {

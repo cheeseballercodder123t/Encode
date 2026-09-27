@@ -193,7 +193,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
       {!drill && !requestedKind && (
         <p className="text-xs text-solder leading-relaxed">
           One committed prediction before the formula: draw the curve, find the density source, assemble
-          the units, or push a variable to its extreme. Pick the drill or let the examiner choose — one
+          the units, or push a variable to its extreme. Pick the drill or let the examiner choose. One
           probe at a time, no typing.
         </p>
       )}
@@ -300,7 +300,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
                         ? 'Forced, not memorized.'
                         : verdict.fellForTrap
                           ? 'That is the trap.'
-                          : 'Not quite — here is what forces it.'}
+                          : 'Not quite. Here is what forces it.'}
                     </span>
                     {verdict.fellForTrap && verdict.trapExplanation && (
                       <p className="mb-1.5">{verdict.trapExplanation}</p>
@@ -395,7 +395,7 @@ export function PrimingWarmup({ activity, topicSummary, onAdopt }: PrimingWarmup
         </button>
         {drill && !playable && (
           <span className="text-[10px] text-solder">
-            The examiner returned an unusable warm-up — try another.
+            The examiner returned an unusable warm-up. Try another.
           </span>
         )}
       </div>

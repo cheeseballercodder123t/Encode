@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Adaptive Difficulty Engine
  * Based on Vygotsky's Zone of Proximal Development.
  * Adjusts Generation Effect challenge complexity based on learner performance.
@@ -14,12 +14,15 @@ export function getDifficultyLevel(successRate: number): DifficultyLevel {
 }
 
 /** Derive success rate from saved schemas userResponses */
-export function computeSuccessRate(userResponses: Record<string, { feynmanReview?: { grade: string } }>): number {
+export function computeSuccessRate(userResponses: Record<string, { feynmanReview?: { secured?: boolean; grade?: string } }>): number {
   const values = Object.values(userResponses);
   if (values.length === 0) return 0.6; // default medium
   const scored = values.filter(r => r.feynmanReview);
   if (scored.length === 0) return 0.6;
+  // The examiner no longer grades, so "success" is the boolean it does report.
+  // Stored pre-change sessions still carry a grade; read it as a fallback.
   const successes = scored.filter(r =>
+    r.feynmanReview?.secured === true ||
     r.feynmanReview?.grade === 'mastered' || r.feynmanReview?.grade === 'good'
   ).length;
   return successes / scored.length;

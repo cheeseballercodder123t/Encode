@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { GuidedPathModule, FeynmanCheckpoint } from '@/lib/types';
 import { playSound } from '@/lib/audio';
@@ -269,7 +270,8 @@ export function GuidedPathRoadmap({
                   onClick={() => setShowCheckpointModal(false)}
                   className="text-solder hover:text-bone text-xs px-2 py-1 bg-inset cursor-pointer"
                 >
-                  [ X ]
+                  {/* Phone: the close brackets frame the X vertically. */}
+                  <BracketTag label="X" tone="" />
                 </button>
               </div>
 

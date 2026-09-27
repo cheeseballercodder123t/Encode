@@ -2,6 +2,7 @@
 
 import React, { useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { BracketTag } from './BracketTag';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -70,7 +71,8 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
                   className="min-h-[44px] min-w-[44px] flex items-center justify-center px-3 text-solder hover:text-bone hover:bg-deck cursor-pointer font-mono text-xs"
                   aria-label="Close modal"
                 >
-                  [ X ]
+                  {/* Phone: the close brackets frame the X vertically. */}
+                  <BracketTag label="X" tone="" />
                 </button>
               )}
             </div>

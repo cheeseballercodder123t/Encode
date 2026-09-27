@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { UploadedFileAsset } from '@/lib/types';
+import { EncodingGear, UploadedFileAsset } from '@/lib/types';
 import { loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
 import { getSessionStateIDB, putSessionStateIDB, deleteSessionStateIDB } from '@/lib/db';
 
@@ -53,6 +53,10 @@ export function useInputSource() {
   const [enableGuidedPath, setEnableGuidedPath] = useState(false);
   const [strictnessLevel, setStrictnessLevel] = useState<StrictnessLevel>('feynman');
   const [interleaveMode, setInterleaveMode] = useState(false);
+  // How deep this session goes. Remembered between sessions: your energy
+  // pattern is stable across a semester, and re-picking it every time is its
+  // own small friction.
+  const [gear, setGear] = useState<EncodingGear>(2);
 
   // Hydrate last-used study prefs once on mount. localStorage cannot be read
   // during render without an SSR hydration mismatch, so syncing from this
@@ -65,6 +69,7 @@ export function useInputSource() {
       setEnableDeepResearch(prefs.enableDeepResearch);
       setEnableGuidedPath(prefs.enableGuidedPath);
       setStrictnessLevel(prefs.strictnessLevel);
+      setGear(prefs.gear);
     } catch {
       /* keep defaults */
     } finally {
@@ -81,8 +86,8 @@ export function useInputSource() {
 
   useEffect(() => {
     if (!prefsLoaded) return;
-    saveStudyPrefs({ enableDeepResearch, enableGuidedPath, strictnessLevel });
-  }, [enableDeepResearch, enableGuidedPath, strictnessLevel, prefsLoaded]);
+    saveStudyPrefs({ enableDeepResearch, enableGuidedPath, strictnessLevel, gear });
+  }, [enableDeepResearch, enableGuidedPath, strictnessLevel, gear, prefsLoaded]);
 
   // Auto-detect massive text for Guided Path hint
   const wordCount = useMemo(() => {
@@ -106,6 +111,8 @@ export function useInputSource() {
     setStrictnessLevel,
     interleaveMode,
     setInterleaveMode,
+    gear,
+    setGear,
     wordCount,
   };
 }

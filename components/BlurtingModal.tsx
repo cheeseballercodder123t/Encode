@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 import { BlurtingEvaluation, Activity, ResearchContextItem, AISettings } from '@/lib/types';
 import { sound, playSound } from '@/lib/audio';
@@ -93,7 +94,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
             onClick={onClose}
             className="p-1.5 text-solder hover:text-bone hover:bg-inset transition-none"
           >
-            <span className="text-amber font-bold font-mono">[ X ]</span>
+            <BracketTag label="X" />
           </button>
         </div>
 

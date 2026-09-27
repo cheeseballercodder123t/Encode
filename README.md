@@ -2,14 +2,18 @@
 
 DeepEncode is a local-first learning app that turns passive study material (notes, PDFs, images, YouTube lectures) into **active cognitive encoding workouts** grounded in learning science — the generation effect, dual coding, method of loci, chunking, interleaving, metacognition, and more.
 
-Instead of re-reading, you reconstruct: every AI-generated stage asks you to deduce, explain, and connect mechanisms yourself, then a checker model grades your answers Feynman-style.
+Instead of re-reading, you reconstruct: every AI-generated stage opens with a physical paradox to resolve, an extreme thought experiment to run, and a mechanistic crux to write in your own words. Nothing is graded. The examiner is a lab partner: it tells you which causal links landed, writes the one missing sentence for you, and asks a single question that pushes your mechanism to its edge. The flashcard is never the assignment, only the fossil record of an aha that already happened.
 
 ## Features
 
 - **Encoding sessions** — text, file (PDF/image), or YouTube input; `conceptual` and `memorization` modes with smart mnemonic auto-detection
 - **Teach Me** — Brilliant-style interactive lessons: the AI teaches the concept, walks a worked example, then checks you with inline MCQs; launchable pre-session or per-stage when stuck
 - **15 visual stage templates** — Memory Palace, First Principles, Analogy Matrix, Contrast Grid, Concept Hierarchy, State Transition, Mnemonic Peg, Broken-Model Debug, and more (`components/stage-templates/` + declarative registry in `lib/templates/`)
-- **Science stack** — prerequisites audit, pre-testing (productive failure), readiness gates, per-stage confidence + reflection, blurt canvas (free recall), roast-my-notes professor audit, end-of-session metacognitive review, analytics dashboard
+- **Cognitive gears** — encoding used to demand the same full workout every day, which is exactly why a Thursday night after labs felt like homework. The launchpad asks how much energy you actually have: **Express Forge** (low, ~60s — the encoder extracts the mechanism and blanks 2-3 pivotal words, each answerable in one or three words), **Interactive Puzzles** (medium — ordering, flaw-hunting, discrimination, zero essay), or **Deep Crucible** (high — full Feynman, spoken aloud, adversarial viva). The gear also sets how hard the examiner probes, so an Express session never opens with a ruthless viva. Science preserved at every gear: Slamecka & Graf's generation effect shows that generating a single missing word buys almost the same memory boost as writing the whole paragraph. Gear 1 is not a lesser workout, it is the same workout with the essay removed
+- **Paradox-first stages** — no stage opens with a definition request. Each one leads with the physical contradiction it exists to resolve (*"active ion pumps cannot build more than ~200 mOsm of gradient in one step, yet the loop of Henle reaches 1,200 mOsm. How?"*), followed by a **Gedankenexperiment** to run before formalising anything (*"You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?"*). Definitions are homework; paradoxes are irresistible, and the same mechanism has to be reasoned out either way
+- **A lab partner, not a grader** — the examiner returns no score, no grade, no XP and no band. It returns whether the mechanism landed, the causal links that did (quoting you), the ONE sentence that completes it (written for you, never *"add more detail"*), and a single counter-probe that pushes your mechanism to its edge (*"what happens if vasa recta flow surges 500%?"*). Answer it in two words and you are done
+- **Crystallization** — the cards are the exhaust of the engine, not the engine. Nothing is asked of the flashcard until the mechanism has landed; then the cards drop out on their own, read straight off the same fields the exporter ships, and `Cmd/Ctrl+Enter` injects them into Anki. Every word on them is a word you just reasoned through, which is why none of them become leeches three weeks later
+- **Science stack** — prerequisites audit, pre-testing (productive failure), per-stage confidence + reflection, blurt canvas (free recall), roast-my-notes professor audit, end-of-session readout, analytics dashboard
 - **Guided Path** — auto chunking of huge inputs into sequential modules with Feynman checkpoints
 - **Streaming generation** — stage outlines stream in progressively while the full schema generates (`/api/encode/stream`)
 - **YouTube chapter mode** — one mini-workout per chapter, tied to real video timestamps
@@ -66,7 +70,7 @@ The industrial workbench theme lives in `tailwind.config.ts` + `app/globals.css`
 - **Surfaces** — `chassis` (page) / `deck` (panels) / `inset` (recessed wells) / `edge` (hairline seams)
 - **Ink** — `bone` (high emphasis) / `slate-ink` (mid) / `solder` (muted)
 - **Semantic accents** — `amber` = primary action · `flux` = AI/Teach surfaces · `signal` = success/verified · `hazard` = errors
-- **Type** — Space Grotesk for prose & UI labels; IBM Plex Mono on inputs, badges, metadata, and code
+- **Type** — IBM Plex Sans for prose & UI labels; IBM Plex Mono on inputs, badges, metadata, and code
 - **Motion** — 150ms color transitions on interactive elements; springs for modal enter/exit via `motion/react`
 - **Keyboard** — visible `:focus-visible` rings; square corners enforced globally (workbench aesthetic)
 
@@ -158,4 +162,4 @@ lib/
 
 ## Tech
 
-Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS · motion/react · Firebase (Auth + Firestore) · IndexedDB (`idb`) · JSZip · LZ-String · `@google/genai` · Space Grotesk + IBM Plex Mono
+Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS · motion/react · Firebase (Auth + Firestore) · IndexedDB (`idb`) · JSZip · LZ-String · `@google/genai` · IBM Plex Sans + IBM Plex Mono

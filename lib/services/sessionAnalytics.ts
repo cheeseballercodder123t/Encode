@@ -1,4 +1,4 @@
-﻿import type { SavedSchema, SessionMetacognition } from '../types';
+import type { SavedSchema, SessionMetacognition } from '../types';
 
 export interface SessionStats {
   totalStages: number;
@@ -27,9 +27,12 @@ export function computeSessionStats(schema: SavedSchema): SessionStats {
     ? withChecks.reduce((a, r) => a + (r.checkCount || 0), 0) / withChecks.length
     : 0;
   const scored = responses.filter(r => r.feynmanReview);
-  const successes = scored.filter(r =>
-    r.feynmanReview?.grade === 'mastered' || r.feynmanReview?.grade === 'good'
-  ).length;
+  const successes = scored.filter(r => {
+    // The examiner reports a boolean now. Older saved sessions still carry a
+    // grade, so it is read as a fallback rather than assumed.
+    const review = r.feynmanReview as { secured?: boolean; grade?: string };
+    return review?.secured === true || review?.grade === 'mastered' || review?.grade === 'good';
+  }).length;
   const successRate = scored.length ? successes / scored.length : 0;
   const reflectionsWritten = responses.filter(r => r.reflection?.trim()).length;
 
@@ -63,7 +66,7 @@ export function invalidateSessionCache(schemaId?: string): void {
 
 export function exportToCSV(schemas: SavedSchema[]): string {
   const rows: string[] = [];
-  rows.push(['session_id','timestamp','topic','mode','stage','template','confidence','check_count','grade','score','reflection','readiness_latency_ms'].join(','));
+  rows.push(['session_id','timestamp','topic','mode','stage','template','confidence','check_count','mechanism_landed','reflection'].join(','));
   for (const schema of schemas) {
     for (const act of schema.activities || []) {
       const resp = schema.userResponses?.[act.id];
@@ -77,10 +80,8 @@ export function exportToCSV(schemas: SavedSchema[]): string {
         act.templateType,
         resp.confidenceScore ?? '',
         resp.checkCount ?? 0,
-        resp.feynmanReview?.grade ?? '',
-        resp.feynmanReview?.score ?? '',
+        resp.feynmanReview?.secured === true ? 'yes' : resp.feynmanReview ? 'open' : '',
         `"${(resp.reflection || '').replace(/"/g, '""')}"`,
-        resp.readinessLatencyMs ?? '',
       ].join(','));
     }
   }

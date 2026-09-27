@@ -47,7 +47,7 @@ export function YouTryBody({ seg, onCorrect, onNext }: BodyProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-bone font-mono leading-relaxed">
-        {seg.question?.prompt || seg.body || 'Your turn — produce the answer yourself.'}
+        {seg.question?.prompt || seg.body || 'Your turn: produce the answer yourself.'}
       </p>
       <textarea value={attempt} onChange={(e) => setAttempt(e.target.value)} placeholder="Type your answer in plain language..." rows={4} className="w-full p-3 bg-chassis border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed" />
       {!revealed && hintIdx >= 0 && hints[hintIdx] && (
