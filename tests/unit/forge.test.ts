@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   ForgeSource,
+  collectCardFronts,
+  countReportSections,
   dedupeKey,
+  dropKnownCards,
   isEmptyForgeReport,
+  mergeAdditionalCards,
   mergeSegregationReports,
   normalizeSegregationReport,
   summarizeMerge,
+  totalReportCards,
 } from '@/lib/services/forge';
 import { SegregationReport } from '@/lib/types';
 
@@ -255,5 +260,95 @@ describe('mergeSegregationReports', () => {
 
   it('collapses punctuation and case when keying cards', () => {
     expect(dedupeKey('The Loop of Henle, reaches 1,200 mOsm!')).toBe('the loop of henle reaches 1 200 mosm');
+  });
+});
+
+describe('extending a forged deck ("generate more" / "condense")', () => {
+  it('counts every section and the whole deck', () => {
+    expect(countReportSections(report())).toEqual({ facts: 1, mechanisms: 1, drills: 1, examples: 1 });
+    expect(totalReportCards(report())).toBe(4);
+    expect(
+      totalReportCards(report({ declarativeFacts: [], conceptualMechanisms: [], practiceQuestions: [], workedExamples: [] }))
+    ).toBe(0);
+  });
+
+  it('lists one front per card, in the order the deck ships', () => {
+    expect(collectCardFronts(report())).toEqual([
+      'The loop of Henle reaches 1,200 mOsm.',
+      'Countercurrent multiplication',
+      'Which limb pumps salt out?',
+      'Free-water clearance',
+    ]);
+  });
+
+  it('drops cards the deck already has, however they are punctuated', () => {
+    const addition = report({
+      declarativeFacts: [
+        // The same fact, re-worded enough to be a repeat rather than a copy.
+        { id: 'a', factStatement: 'THE LOOP OF HENLE REACHES 1 200 MOSM', clozeSuggestion: 'x' },
+        { id: 'b', factStatement: 'ADH inserts aquaporin-2 into the collecting duct.', clozeSuggestion: 'y' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const known = new Set(collectCardFronts(report()).map(dedupeKey));
+    const { report: fresh, added, dropped } = dropKnownCards(addition, known);
+
+    expect(added).toBe(1);
+    expect(dropped).toBe(1);
+    expect(fresh.declarativeFacts.map((f) => f.id)).toEqual(['b']);
+  });
+
+  it('drops repeats inside the new batch too', () => {
+    const addition = report({
+      declarativeFacts: [
+        { id: 'a', factStatement: 'Vasa recta run parallel to the loop.', clozeSuggestion: 'x' },
+        { id: 'b', factStatement: 'Vasa recta run parallel to the loop.', clozeSuggestion: 'y' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const { added, dropped } = dropKnownCards(addition, new Set());
+    expect(added).toBe(1);
+    expect(dropped).toBe(1);
+  });
+
+  it('appends to the deck without reordering it or re-labelling the topic', () => {
+    const base = report();
+    const addition = report({
+      topic: 'Something else entirely',
+      declarativeFacts: [{ id: 'n1', factStatement: 'Vasa recta run parallel to the loop.', clozeSuggestion: 'x' }],
+      conceptualMechanisms: [],
+      practiceQuestions: [{ id: 'n2', question: 'What drives the medullary gradient?', answer: 'The loop.' }],
+      workedExamples: [],
+    });
+    const { report: grown, added, dropped } = mergeAdditionalCards(base, addition);
+
+    expect(added).toBe(2);
+    expect(dropped).toBe(0);
+    expect(grown.topic).toBe('Renal Physiology');
+    expect(grown.declarativeFacts.map((f) => f.id)).toEqual(['f1', 'n1']);
+    expect(grown.practiceQuestions!.map((q) => q.id)).toEqual(['q1', 'n2']);
+    // The base deck is left untouched.
+    expect(base.declarativeFacts).toHaveLength(1);
+    expect(base.practiceQuestions).toHaveLength(1);
+  });
+
+  it('returns the deck unchanged when the batch has nothing new', () => {
+    const base = report();
+    const duplicate = report({
+      declarativeFacts: [
+        { id: 'dup', factStatement: 'the loop of henle reaches 1,200 mOsm.', clozeSuggestion: 'x' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const { report: unchanged, added, dropped } = mergeAdditionalCards(base, duplicate);
+    expect(added).toBe(0);
+    expect(dropped).toBe(1);
+    expect(unchanged).toBe(base);
   });
 });

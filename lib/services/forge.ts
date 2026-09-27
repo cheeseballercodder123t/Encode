@@ -177,7 +177,8 @@ export function normalizeSegregationReport(raw: any, sourceId = 'src'): Segregat
   };
 }
 
-function countOf(report: SegregationReport): ForgeSectionCounts {
+/** Per-section card counts for a report (facts, mechanisms, drills, examples). */
+export function countReportSections(report: SegregationReport): ForgeSectionCounts {
   return {
     facts: report.declarativeFacts.length,
     mechanisms: report.conceptualMechanisms.length,
@@ -186,9 +187,14 @@ function countOf(report: SegregationReport): ForgeSectionCounts {
   };
 }
 
+/** Total cards a report would ship. */
+export function totalReportCards(report: SegregationReport): number {
+  const c = countReportSections(report);
+  return c.facts + c.mechanisms + c.drills + c.examples;
+}
+
 export function isEmptyForgeReport(report: SegregationReport): boolean {
-  const c = countOf(report);
-  return c.facts + c.mechanisms + c.drills + c.examples === 0;
+  return totalReportCards(report) === 0;
 }
 
 /**
@@ -238,7 +244,7 @@ export function mergeSegregationReports(
       continue;
     }
 
-    const before: ForgeSectionCounts = countOf(report);
+    const before: ForgeSectionCounts = countReportSections(report);
     const kept: ForgeSectionCounts = { ...EMPTY_COUNTS };
 
     for (const fact of report.declarativeFacts) {
@@ -320,6 +326,98 @@ export function mergeSegregationReports(
       drills: drills.length,
       examples: examples.length,
     },
+  };
+}
+
+/**
+ * Every card front in a deck, one line each, in the order the deck ships. This
+ * is the "already in your deck" list the model is told not to repeat when the
+ * learner asks for more cards.
+ */
+export function collectCardFronts(report: SegregationReport): string[] {
+  const lines: string[] = [];
+  for (const fact of report.declarativeFacts) if (fact.factStatement) lines.push(fact.factStatement);
+  for (const mech of report.conceptualMechanisms) if (mech.conceptName) lines.push(mech.conceptName);
+  for (const drill of report.practiceQuestions || []) if (drill.question) lines.push(drill.question);
+  for (const example of report.workedExamples || []) if (example.title) lines.push(example.title);
+  return lines;
+}
+
+/** Dedupe fingerprints for every card in a deck, using the merge's own key. */
+export function deckCardKeys(report: SegregationReport): Set<string> {
+  const keys = new Set<string>();
+  const add = (value: string) => {
+    const key = dedupeKey(value);
+    if (key) keys.add(key);
+  };
+  report.declarativeFacts.forEach((f) => add(f.factStatement));
+  report.conceptualMechanisms.forEach((m) => add(m.conceptName));
+  (report.practiceQuestions || []).forEach((q) => add(q.question));
+  (report.workedExamples || []).forEach((e) => add(`${e.title} ${e.problem}`));
+  return keys;
+}
+
+export interface AdditionalCardsResult {
+  report: SegregationReport;
+  /** Cards in the batch that were NOT already in the deck. */
+  added: number;
+  /** Cards dropped because the deck (or the batch itself) already had them. */
+  dropped: number;
+}
+
+/**
+ * Drops every card a `known` key set already contains. This is what makes
+ * "generate more" safe: a model that re-worded an existing card produces a
+ * duplicate, and a duplicate is dropped rather than shipped twice.
+ */
+export function dropKnownCards(addition: SegregationReport, known: Set<string>): AdditionalCardsResult {
+  let dropped = 0;
+  const seen = new Set(known);
+  const take = (value: string): boolean => {
+    const key = dedupeKey(value);
+    if (!key) return true;
+    if (seen.has(key)) {
+      dropped += 1;
+      return false;
+    }
+    seen.add(key);
+    return true;
+  };
+
+  const declarativeFacts = addition.declarativeFacts.filter((f) => take(f.factStatement));
+  const conceptualMechanisms = addition.conceptualMechanisms.filter((m) => take(m.conceptName));
+  const practiceQuestions = (addition.practiceQuestions || []).filter((q) => take(q.question));
+  const workedExamples = (addition.workedExamples || []).filter((e) => take(`${e.title} ${e.problem}`));
+  const report: SegregationReport = {
+    ...addition,
+    declarativeFacts,
+    conceptualMechanisms,
+    practiceQuestions,
+    workedExamples,
+  };
+
+  return { report, added: totalReportCards(report), dropped };
+}
+
+/**
+ * Appends a "generate more" batch to the deck it extends. The base deck is
+ * never reordered or re-scored, and no contradiction pass runs: this is one
+ * deck growing, not a second merge of disagreeing sources.
+ */
+export function mergeAdditionalCards(base: SegregationReport, addition: SegregationReport): AdditionalCardsResult {
+  const { report: fresh, added, dropped } = dropKnownCards(addition, deckCardKeys(base));
+  if (added === 0) return { report: base, added: 0, dropped };
+  return {
+    report: {
+      topic: base.topic || fresh.topic,
+      declarativeFacts: [...base.declarativeFacts, ...fresh.declarativeFacts],
+      conceptualMechanisms: [...base.conceptualMechanisms, ...fresh.conceptualMechanisms],
+      practiceQuestions: [...(base.practiceQuestions || []), ...(fresh.practiceQuestions || [])],
+      workedExamples: [...(base.workedExamples || []), ...(fresh.workedExamples || [])],
+      compressionRatio: base.compressionRatio,
+    },
+    added,
+    dropped,
   };
 }
 

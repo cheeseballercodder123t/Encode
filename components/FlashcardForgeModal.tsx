@@ -9,6 +9,8 @@ import {
   ForgeExportTarget,
   ForgeSectionCounts,
   ForgeSourceKind,
+  collectCardFronts,
+  mergeAdditionalCards,
 } from '@/lib/services/forge';
 import type { Contradiction } from '@/lib/services/contradiction';
 import { MEDIA_ACCEPT_ATTRIBUTE, isTranscribableMedia } from '@/lib/media-types';
@@ -145,6 +147,12 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   const [recipeName, setRecipeName] = useState('');
   const [recipeNote, setRecipeNote] = useState('');
   const [missingFiles, setMissingFiles] = useState<string[]>([]);
+  /** Transcripts this session already paid for, so "more" never re-buys them. */
+  const [resolved, setResolved] = useState<{ id: string; label?: string; notes: string }[]>([]);
+  /** What the last "more" / "condense" pass did, under the deck summary. */
+  const [deckNote, setDeckNote] = useState('');
+  const [deckNoteError, setDeckNoteError] = useState(false);
+  const [deckBusy, setDeckBusy] = useState<'' | 'more' | 'condense'>('');
   const nextId = useRef(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,6 +177,10 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setCheckingAnki(false);
     setRecipeNote('');
     setMissingFiles([]);
+    setResolved([]);
+    setDeckNote('');
+    setDeckNoteError(false);
+    setDeckBusy('');
   };
 
   const handleClose = () => {
@@ -269,6 +281,40 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setSources((prev) => prev.filter((s) => s.id !== id));
   };
 
+  /** Where a draft source goes on the wire. */
+  const sourcePayloadFor = (s: ForgeSourceDraft) => ({
+    id: s.id,
+    kind: s.kind,
+    label: s.label,
+    notes: s.notes,
+    url: s.url,
+    file: s.file ? { name: s.file.name, type: s.file.type, base64Data: s.file.base64Data } : null,
+  });
+
+  const deckCount = (report: SegregationReport) =>
+    report.declarativeFacts.length +
+    report.conceptualMechanisms.length +
+    (report.practiceQuestions?.length || 0) +
+    (report.workedExamples?.length || 0);
+
+  const noteDeck = (text: string, isError = false) => {
+    setDeckNoteError(isError);
+    setDeckNote(text);
+  };
+
+  /**
+   * Re-reads what this topic has already shipped. Every mutation of the deck —
+   * a forge, a "more" pass, a condense — has to re-diff, or the export would
+   * offer the stale "already in your deck" counts of cards that are no longer
+   * there (or miss the ones that just arrived).
+   */
+  const refreshMemory = (report: SegregationReport, choice: 'reset' | 'keep') => {
+    const nextDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
+    setDiff(nextDiff);
+    setSkipKnown((prev) => (choice === 'reset' ? nextDiff.known > 0 : prev && nextDiff.known > 0));
+    return nextDiff;
+  };
+
   const runForge = async (sourceList: ForgeSourceDraft[], wanted: string[]) => {
     if (sourceList.length === 0 || wanted.length === 0) return;
     playSound('click');
@@ -283,16 +329,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sources: sourceList.map((s) => ({
-            id: s.id,
-            kind: s.kind,
-            label: s.label,
-            notes: s.notes,
-            url: s.url,
-            file: s.file
-              ? { name: s.file.name, type: s.file.type, base64Data: s.file.base64Data }
-              : null,
-          })),
+          sources: sourceList.map(sourcePayloadFor),
           include: wanted,
           settings,
         }),
@@ -304,6 +341,12 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       const report: SegregationReport | null = data.report || null;
       setOutcomes(Array.isArray(data.sources) ? data.sources : []);
       setMerged(report);
+      setResolved(
+        Array.isArray(data.resolved)
+          ? data.resolved.filter((r: any) => r && typeof r.id === 'string' && typeof r.notes === 'string')
+          : []
+      );
+      noteDeck('');
       setContradictions(Array.isArray(data.contradictions) ? data.contradictions : []);
       setMergeNote(
         `${data.total ?? 0} card${data.total === 1 ? '' : 's'} forged${data.dropped ? ` · ${data.dropped} duplicate${data.dropped === 1 ? '' : 's'} dropped` : ''}`
@@ -313,9 +356,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       // local answer lands instantly; the real Anki deck refines it a moment
       // later (see checkAnkiDeck) without ever blocking the result.
       if (report) {
-        const localDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
-        setDiff(localDiff);
-        setSkipKnown(localDiff.known > 0);
+        refreshMemory(report, 'reset');
         setAnkiRead(null);
         void checkAnkiDeck(report, true);
       }
@@ -341,11 +382,9 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     try {
       const result = await syncDeckMemoryFromAnki(report.topic);
       setAnkiRead(result);
-      const nextDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
-      setDiff(nextDiff);
       // A fresh forge defaults to "only the new cards"; a manual re-check never
       // overrides the learner's own choice.
-      setSkipKnown((prev) => (resetChoice ? nextDiff.known > 0 : prev && nextDiff.known > 0));
+      refreshMemory(report, resetChoice ? 'reset' : 'keep');
     } catch {
       setAnkiRead({ ok: false, decks: [], notes: 0, keys: [], error: 'The Anki deck could not be read.' });
     } finally {
@@ -361,6 +400,105 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   const emptyDeck = deckSize === 0;
   const shipsOnlyFresh = skipKnown && (diff?.known || 0) > 0;
   const shippingCount = shipsOnlyFresh ? diff?.fresh ?? deckSize : deckSize;
+
+  /**
+   * "That is not enough cards." Re-runs the SAME sources, but the prompt is
+   * handed every card already in the deck and the batch is deduped against it,
+   * so this can only ever ADD cards — it can never quietly re-ship the deck you
+   * already have. Transcripts resolved for the first forge are reused, so a
+   * lecture recording is never transcribed (or paid for) twice.
+   */
+  const handleGenerateMore = async () => {
+    const base = merged;
+    if (!base || deckBusy !== '') return;
+    playSound('click');
+    setDeckBusy('more');
+    noteDeck('');
+    try {
+      const res = await fetch('/api/forge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'more',
+          sources: sources.map(sourcePayloadFor),
+          resolved,
+          existing: collectCardFronts(base),
+          include: sectionList,
+          settings,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'The forge could not add more cards.');
+      const addition: SegregationReport | null = data.report || null;
+      if (!addition) {
+        noteDeck('The model returned no additional cards.');
+        return;
+      }
+      const next = mergeAdditionalCards(base, addition);
+      if (next.added === 0) {
+        noteDeck(
+          'Nothing new came back — the model found no testable item in these sources that the deck does not already cover. Add another source, or turn on more card sections.'
+        );
+        return;
+      }
+      setMerged(next.report);
+      refreshMemory(next.report, 'keep');
+      noteDeck(
+        `+${next.added} more card${next.added === 1 ? '' : 's'}${
+          next.dropped > 0 ? ` (${next.dropped} repeat${next.dropped === 1 ? '' : 's'} dropped)` : ''
+        } — the deck now holds ${deckCount(next.report)}.`
+      );
+      playSound('success');
+    } catch (err: any) {
+      noteDeck(err?.message || 'Adding more cards failed.', true);
+    } finally {
+      setDeckBusy('');
+    }
+  };
+
+  /**
+   * "That is too many cards." One editor pass folds overlapping cards into
+   * fewer, denser ones. It can only ever shorten the deck, and a pass that
+   * finds no real overlap leaves the deck exactly as it was.
+   */
+  const handleCondense = async () => {
+    const base = merged;
+    if (!base || deckBusy !== '') return;
+    playSound('click');
+    setDeckBusy('condense');
+    noteDeck('');
+    try {
+      const before = deckCount(base);
+      const res = await fetch('/api/forge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'condense', report: base, settings }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'The condense pass failed; your deck is unchanged.');
+      const condensed: SegregationReport | null = data.report || null;
+      if (!condensed) throw new Error('The condense pass returned nothing; your deck is unchanged.');
+
+      const after = deckCount(condensed);
+      if (after >= before) {
+        noteDeck(`No overlap left to fold — the deck is already lean at ${before} cards.`);
+        return;
+      }
+      // The condensed deck keeps the topic it came from, so deck memory and the
+      // export still recognise it as the same topic.
+      const nextDeck: SegregationReport = { ...condensed, topic: base.topic || condensed.topic };
+      setMerged(nextDeck);
+      // The conflict panel quoted cards that may have just been merged away.
+      setContradictions([]);
+      refreshMemory(nextDeck, 'keep');
+      noteDeck(`Condensed ${before} → ${after} card${after === 1 ? '' : 's'}.`);
+      playSound('success');
+    } catch (err: any) {
+      noteDeck(err?.message || 'Condensing failed; your deck is unchanged.', true);
+    } finally {
+      setDeckBusy('');
+    }
+  };
 
   const sendToExport = (which: ForgeExportTarget) => {
     if (!merged) return;
@@ -768,6 +906,44 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                   <p className="text-[10px] font-mono text-solder">{merged.topic}</p>
                 </div>
 
+                {/* Too few cards, or too many: both are one click from here. */}
+                <div className="p-3 bg-deck border border-edge/40 space-y-2">
+                  <p className="text-[11px] font-mono text-solder leading-relaxed">
+                    Deck size: <span className="text-bone font-bold">{deckSize}</span> card
+                    {deckSize === 1 ? '' : 's'}. Still short of what you need? Generate more — it re-reads the same
+                    sources and only appends cards the deck does not already have. Too much overlap? Condense folds
+                    overlapping cards into fewer, denser ones.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      data-testid="forge-more"
+                      onClick={handleGenerateMore}
+                      disabled={deckBusy !== '' || emptyDeck}
+                      className="px-3 py-2 bg-chassis border border-amber/60 text-amber text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
+                    >
+                      {deckBusy === 'more' ? '[ ADDING MORE… ]' : '[ + GENERATE MORE FLASHCARDS ]'}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="forge-condense"
+                      onClick={handleCondense}
+                      disabled={deckBusy !== '' || emptyDeck}
+                      className="px-3 py-2 bg-chassis border border-edge text-solder hover:text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
+                    >
+                      {deckBusy === 'condense' ? '[ CONDENSING… ]' : '[ CONDENSE SOME FLASHCARDS ]'}
+                    </button>
+                  </div>
+                  {deckNote && (
+                    <p
+                      data-testid="forge-deck-note"
+                      className={`text-[10px] font-mono leading-relaxed ${deckNoteError ? 'text-hazard' : 'text-amber'}`}
+                    >
+                      {deckNote}
+                    </p>
+                  )}
+                </div>
+
                 {/* Two sources disagreeing is a finding, not a footnote. */}
                 {contradictions.length > 0 && (
                   <div
@@ -884,7 +1060,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                     type="button"
                     data-testid="forge-export-primary"
                     onClick={() => sendToExport(target)}
-                    disabled={emptyDeck || shippingCount === 0}
+                    disabled={emptyDeck || shippingCount === 0 || deckBusy !== ''}
                     className="w-full px-4 py-3 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
                   >
                     {target === 'anki'
@@ -898,7 +1074,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                       type="button"
                       data-testid="forge-open-anki"
                       onClick={() => sendToExport('anki')}
-                      disabled={emptyDeck}
+                      disabled={emptyDeck || deckBusy !== ''}
                       className="px-3 py-2 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
                     >
                       [ ANKI EXPORT ]
@@ -907,7 +1083,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                       type="button"
                       data-testid="forge-open-remnote"
                       onClick={() => sendToExport('remnote')}
-                      disabled={emptyDeck}
+                      disabled={emptyDeck || deckBusy !== ''}
                       className="px-3 py-2 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
                     >
                       [ REMNOTE EXPORT ]

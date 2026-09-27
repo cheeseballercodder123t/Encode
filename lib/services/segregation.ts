@@ -115,12 +115,24 @@ export function resolveSegregationSections(include?: string[]): Record<Segregati
 
 export function describeWantedSections(want: Record<SegregationSection, boolean>): string {
   return [
-    want.facts ? 'declarativeFacts (12-24)' : null,
+    want.facts ? 'declarativeFacts (16-32)' : null,
     want.mechanisms ? 'conceptualMechanisms (4-8)' : null,
-    want.drills ? 'practiceQuestions (8-16)' : null,
+    want.drills ? 'practiceQuestions (12-24)' : null,
     want.examples ? 'workedExamples (2-4)' : null,
   ].filter(Boolean).join(', ');
 }
+
+/**
+ * The brevity contract every card-authoring pass obeys — the first pass, and
+ * the "generate more" pass that extends a deck the learner found too small.
+ */
+const CARD_BREVITY_RULES = `CARD BREVITY RULES (a long card is a failed card):
+- factStatement: ONE atomic fact, ONE short sentence, < 25 words, single clause. Split compounds — never cram two facts into one card.
+- question: SHORT drill prompt < 15 words that does NOT contain the answer. Bad: "What is the Na+/K+ pump which moves 3 Na+ out and 2 K+ in?" Good: "Na+/K+ pump net ion movement?"
+- clozeSuggestion: context sentence with ONLY the key term in {{}}. The front must be guessable without seeing the answer.
+- Every quadrant field (whatIsIt / whyItMatters / howItWorks / whatIfEdgeCase): 1-2 SHORT sentences, never a paragraph.
+- practiceQuestions: answerable in under ~10 seconds. If it needs an essay, split it into smaller questions.
+- No card front may exceed 25 words. No back may exceed 40 words.`;
 
 /**
  * The card-authoring contract. `sourceLabel` names which upload produced this
@@ -143,19 +155,13 @@ SECTIONS TO GENERATE (generate ONLY these; set every other array to empty []):
 - ${wantedLabels || '(none selected - return empty arrays)'}
 
 VOLUME TARGETS (hit every minimum — under-producing is a failure):
-- declarativeFacts: 12-24 atomic facts. Cover EVERY testable item in the source: each date, number, constant, formula, name, term, and definition gets its own card. If the source is small, split compound facts into separate atomic cards rather than returning fewer.
+- declarativeFacts: 16-32 atomic facts. Cover EVERY testable item in the source: each date, number, constant, formula, name, term, and definition gets its own card. If the source is small, split compound facts into separate atomic cards rather than returning fewer.
 - conceptualMechanisms: 4-8 mechanisms, one per distinct process/law/framework.
-- practiceQuestions: 8-16 rapid-fire Q/A drills covering different facts, numbers, steps, and discriminations.
+- practiceQuestions: 12-24 rapid-fire Q/A drills covering different facts, numbers, steps, and discriminations.
 - workedExamples: 2-4 step-by-step worked examples.
-If at least facts+mechs selected, hit 26-52 total cards; otherwise fill the selected sections generously.
+If at least facts+mechs selected, hit 30-64 total cards; otherwise fill the selected sections generously. A lecture that yields fewer than 50 cards was under-mined: work through the reverse of every card, the second-order consequences, the neighbouring-term distinctions and each named step before you stop.
 
-CARD BREVITY RULES (a long card is a failed card):
-- factStatement: ONE atomic fact, ONE short sentence, < 25 words, single clause. Split compounds — never cram two facts into one card.
-- question: SHORT drill prompt < 15 words that does NOT contain the answer. Bad: "What is the Na+/K+ pump which moves 3 Na+ out and 2 K+ in?" Good: "Na+/K+ pump net ion movement?"
-- clozeSuggestion: context sentence with ONLY the key term in {{}}. The front must be guessable without seeing the answer.
-- Every quadrant field (whatIsIt / whyItMatters / howItWorks / whatIfEdgeCase): 1-2 SHORT sentences, never a paragraph.
-- practiceQuestions: answerable in under ~10 seconds. If it needs an essay, split it into smaller questions.
-- No card front may exceed 25 words. No back may exceed 40 words.
+${CARD_BREVITY_RULES}
 
 1. Segregate the raw input into TWO distinct buckets (when both selected):
    - Declarative Facts: Static memorization items (dates, constants, formulas, proper nouns) -> formatted with {{cloze}} deletions.
@@ -185,4 +191,102 @@ export function buildSegregationUserPrompt(opts: {
   }
   userPrompt += `Perform Fact vs. Concept Segregation and 4-Quadrant Matrix decomposition.`;
   return userPrompt;
+}
+
+/**
+ * The "generate more" contract: the learner forged a deck and said it is not
+ * enough. The sources are unchanged; the job is to find what the first pass
+ * missed and return ONLY that, so the batch merges onto the deck without a
+ * single duplicate.
+ */
+export function buildMoreCardsSystemPrompt(
+  want: Record<SegregationSection, boolean>,
+  sourceLabel?: string
+): string {
+  const wantedLabels = describeWantedSections(want);
+  const sourceLine = sourceLabel
+    ? `\nSOURCE: this batch is ONE of several sources being forged into a single deck ("${sourceLabel}"). Extend only from THIS source's material.\n`
+    : '';
+
+  return `You are a Knowledge Graph and RemNote Taxonomy Specialist EXTENDING a flashcard deck the learner says is too small.
+Same contract as the first pass, but the mission is now COVERAGE: find the testable material the first pass skipped and turn it into additional cards.
+${sourceLine}
+SECTIONS TO GENERATE (generate ONLY these; set every other array to empty []):
+- ${wantedLabels || '(none selected - return empty arrays)'}
+
+THE ONE HARD RULE — NO REPEATS:
+The learner's existing cards are listed under ALREADY IN THE DECK. Every card you return must test something those cards do NOT already test. Re-wording an existing card is a duplicate, not a new card. If a fact is already covered, mine a different one.
+
+WHERE THE MISSING CARDS ARE (this is the work):
+- Every number, date, unit, constant and formula the first pass skipped, one card each.
+- The reverse direction of each one-way card (back -> front, symptom -> cause, effect -> trigger).
+- Second-order consequences: what happens next, what limits it, what breaks it.
+- Distinctions between neighbouring terms, with the exact test that separates them.
+- Each named step of every process as its own drill.
+- The common wrong answer for an existing card, as its own discrimination drill.
+- Edge cases, exceptions and failure modes.
+
+VOLUME: up to 20 additional cards per source when the material supports it. Returning nothing is correct only when every testable item in the source is already covered — say so by returning empty arrays rather than padding the deck with restatements.
+
+${CARD_BREVITY_RULES}
+
+Output strictly valid JSON in the SAME schema as the first pass.`;
+}
+
+/** The user turn for "generate more": the same source, plus what not to repeat. */
+export function buildMoreCardsUserPrompt(opts: {
+  notes?: string;
+  hasFile?: boolean;
+  fileName?: string;
+  fileType?: string;
+  sourceLabel?: string;
+  existing?: string[];
+}): string {
+  let userPrompt = '';
+  const label = opts.sourceLabel ? `SOURCE: ${opts.sourceLabel}\n` : '';
+  if (opts.notes) {
+    userPrompt += `${label}STUDENT RAW NOTES:\n\n${opts.notes.slice(0, 14000)}\n\n`;
+  } else if (label) {
+    userPrompt += label;
+  }
+  if (opts.hasFile) {
+    userPrompt += `[ATTACHED FILE: ${opts.fileName || 'source'} (${opts.fileType || 'unknown'}). Re-read it for material the first pass missed.]\n\n`;
+  }
+
+  const existing = (opts.existing || []).filter(Boolean);
+  if (existing.length > 0) {
+    userPrompt += `ALREADY IN THE DECK (${existing.length} card${existing.length === 1 ? '' : 's'}) — do NOT repeat, re-word or trivially extend any of these:\n`;
+    userPrompt += existing.map((line) => `- ${line.slice(0, 160)}`).join('\n');
+    userPrompt += `\n\n`;
+  }
+
+  userPrompt += `Return ONLY cards that are new: the facts, drills, mechanisms and examples the first pass did not cover.`;
+  return userPrompt;
+}
+
+/**
+ * The "condense" contract: the learner thinks the deck is bloated. Merging is
+ * the only move available here — nothing may be deleted, only folded together.
+ */
+export function buildCondenseSystemPrompt(): string {
+  return `You are a Flashcard Deck Editor performing SEMANTIC CONDENSATION.
+The learner believes their deck is too long and wants FEWER, DENSER cards. Your job is to MERGE, never to delete knowledge.
+
+MERGE RULES (a condensed card must still teach everything the originals taught):
+- Two or more cards asserting the same thing: keep the single best-worded one.
+- Two cards that are two halves of one idea (a cause and its effect, a rule and its exception, a step and its trigger): combine them into ONE card only if the combined front stays under 25 words and the back under 40.
+- Near-duplicate drills: keep the sharpest question and fold the other facts into its answer.
+- The same concept at two granularities: keep the atomic version and drop the vague one.
+- NEVER merge unrelated cards just to shrink the count. Coverage is preserved: after condensation the deck must still answer every question the original deck answered.
+- Keep exactly ONE key term in {{}} per fact, and keep any card tagged "Contradiction" intact — it must survive.
+- Every front stays under 25 words; every back under 40.
+
+Target roughly 50-70% of the original card count, achieved purely by folding overlap. If the deck has no real overlap, return it essentially unchanged and say so in compressionRatio.
+
+Output strictly valid JSON in the SAME schema: the same four arrays with the condensed cards and fresh sequential ids.`;
+}
+
+/** The user turn for "condense": the deck itself, plus what must survive. */
+export function buildCondenseUserPrompt(deck: unknown): string {
+  return `DECK TO CONDENSE (merge overlapping cards; every distinct fact must stay answerable):\n\n${JSON.stringify(deck)}\n\nReturn the condensed deck in the same JSON schema.`;
 }
