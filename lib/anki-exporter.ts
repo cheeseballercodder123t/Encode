@@ -4,6 +4,7 @@ import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from '.
 import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
 import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
 import { loadInterferenceTraps } from './interference-traps';
+import { CONTRADICTION_TAG } from './services/contradiction';
 
 export { classifyDeckQuality };
 
@@ -565,6 +566,13 @@ export interface SanitizedDeck {
 export const INTERFERENCE_TRAP_TAG = 'InterferenceTrap';
 
 /**
+ * Curated tags the ceiling must not touch. A trap and a conflict card are both
+ * discrimination pairs (`wrong intuition vs truth`, `source A vs source B`), so
+ * chunking them would delete the very distinction they teach.
+ */
+export const PROTECTED_CARD_TAGS = [INTERFERENCE_TRAP_TAG, CONTRADICTION_TAG];
+
+/**
  * Interference-trap cards from the Predict–Observe–Explain gate.
  *
  * These are the highest-retention cards the learner will ever own: they mark a
@@ -600,8 +608,9 @@ export function sanitizeExtracted(
   cards: AnkiCardItem[],
   opts?: { addSymmetric?: boolean }
 ): SanitizedDeck {
-  // Traps always pass through the pass untouched, wherever a deck is built.
-  const result = sanitizeForWozniak(cards, { ...opts, protectTag: INTERFERENCE_TRAP_TAG });
+  // Traps and conflict cards always pass through the pass untouched, wherever a
+  // deck is built.
+  const result = sanitizeForWozniak(cards, { ...opts, protectTag: PROTECTED_CARD_TAGS });
   return {
     cards: result.cards,
     heldBack: result.heldBack,

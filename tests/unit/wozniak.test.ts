@@ -5,7 +5,7 @@ import {
   sanitizeForWozniak,
   WOZNIAK_WORD_CEILING,
 } from '@/lib/wozniak';
-import { AnkiCardItem } from '@/lib/anki-exporter';
+import { AnkiCardItem, sanitizeExtracted } from '@/lib/anki-exporter';
 
 function card(overrides: Partial<AnkiCardItem> & { id?: string }): AnkiCardItem {
   return {
@@ -124,6 +124,34 @@ describe('wozniak curated-card exemption', () => {
     expect(res.cards.map((c) => c.id)).toEqual(['trap']);
     expect(res.heldBack).toHaveLength(1);
     expect(res.heldBack[0].card.id).toBe('plain');
+  });
+
+  it('protects several curated tags at once (a trap AND a conflict card)', () => {
+    const res = sanitizeForWozniak(
+      [
+        card({ id: 'trap', tags: ['DeepEncode', 'InterferenceTrap'], back: longBack }),
+        card({ id: 'conflict', tags: ['DeepEncode', 'DeclarativeFact', 'Contradiction'], back: longBack }),
+      ],
+      { protectTag: ['InterferenceTrap', 'Contradiction'] }
+    );
+    expect(res.cards.map((c) => c.id)).toEqual(['trap', 'conflict']);
+    expect(res.heldBack).toHaveLength(0);
+  });
+
+  it('ships a conflict card verbatim through the real export funnel', () => {
+    // A conflict card is a discrimination pair (source A vs source B), so the
+    // 20-word ceiling must not hold it back — that is what makes the deck say
+    // the sources disagree instead of quietly picking one.
+    const conflict = card({
+      id: 'conflict-1',
+      front: 'Sources disagree: The half-life is ___ h. Which is right?',
+      back: '<b>Fact Detail:</b> The half-life is 4 h — Lecture slides · The half-life is 6 h — handout.pdf',
+      tags: ['DeepEncode', 'DeclarativeFact', 'Contradiction'],
+    });
+    const res = sanitizeExtracted([conflict], { addSymmetric: false });
+    expect(res.heldBack).toHaveLength(0);
+    expect(res.cards).toHaveLength(1);
+    expect(res.cards[0].front).toContain('Sources disagree');
   });
 
   it('behaves exactly as before when no protectTag is given', () => {

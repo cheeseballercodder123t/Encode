@@ -20,6 +20,7 @@ import {
   FeynmanClozeItem
 } from '@/lib/remnote';
 import { sound, playSound } from '@/lib/audio';
+import { recordDeckExport, reportCardKeys } from '@/lib/deck-memory';
 
 interface SegregationRemnoteModalProps {
   isOpen: boolean;
@@ -80,6 +81,11 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
       const res = await pushToRemnoteApi(remnoteApiKey, remnoteUserId, remnotePayload);
       setPushStatus(res);
       if (res.success) {
+        // Remember what left the app, so a later forge over this topic can
+        // report `4 new · 12 already in your deck` instead of the whole deck.
+        if (report) {
+          recordDeckExport({ topic: report.topic, keys: reportCardKeys(report), surface: 'RemNote push' });
+        }
         playSound('success');
       }
     } catch (err: any) {

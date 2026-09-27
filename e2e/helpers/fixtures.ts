@@ -543,6 +543,105 @@ export const FORGE_RESPONSE = {
   dropped: 4,
   total: 5,
   counts: { facts: 2, mechanisms: 1, drills: 1, examples: 1 },
+  contradictions: [],
+};
+
+// The same forge when one of the sources is an uploaded lecture recording:
+// the server transcribed it (no captions anywhere), so the log says so.
+export const FORGE_MEDIA_RESPONSE = {
+  ...FORGE_RESPONSE,
+  sources: [
+    ...FORGE_RESPONSE.sources,
+    {
+      id: 'src_5',
+      kind: 'file',
+      label: 'lecture-recording.m4a',
+      status: 'ok',
+      counts: { facts: 1, mechanisms: 0, drills: 0, examples: 0 },
+      note: 'transcribed from the uploaded recording',
+    },
+  ],
+};
+
+// Two sources that disagree (4 h vs 6 h). The merge replaced both claims with
+// ONE conflict card that leads the deck, and reports them in `contradictions`
+// rather than silently keeping whichever arrived first.
+export const FORGE_CONFLICT_RESPONSE = {
+  topic: 'Pharmacology',
+  report: {
+    topic: 'Pharmacology',
+    declarativeFacts: [
+      {
+        id: 'conflict-1-the-half-lif',
+        factStatement:
+          'The half-life of the drug is 4 h — Lecture 4 slides · The half-life of the drug is 6 h — handout.pdf',
+        clozeSuggestion:
+          'Sources disagree: The half-life of the drug is ___ h. Resolve: {{4 h — Lecture 4 slides}} or {{6 h — handout.pdf}}.',
+        question: 'Sources disagree: The half-life of the drug is ___ h. Which is right?',
+        tag: 'Contradiction',
+        memoryHook: 'Resolve this before the exam — two of your sources cannot both be right.',
+      },
+    ],
+    conceptualMechanisms: [],
+    practiceQuestions: [],
+    workedExamples: [],
+    compressionRatio: '2 sources merged · no overlap · 1 source conflict flagged',
+  },
+  sources: [
+    {
+      id: 'src_1',
+      kind: 'text',
+      label: 'Lecture 4 slides',
+      status: 'ok',
+      counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 },
+      note: '1 claim merged into a conflict card',
+    },
+    {
+      id: 'src_2',
+      kind: 'file',
+      label: 'handout.pdf',
+      status: 'ok',
+      counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 },
+      note: '1 claim merged into a conflict card',
+    },
+  ],
+  dropped: 0,
+  total: 1,
+  counts: { facts: 1, mechanisms: 0, drills: 0, examples: 0 },
+  contradictions: [
+    {
+      id: 'conflict-1-the-half-lif',
+      kind: 'numeric',
+      subject: 'the half lif of the drug is # h',
+      summary: '4 h vs 6 h',
+      claims: [
+        {
+          id: 'src_1-f1',
+          sourceId: 'src_1',
+          sourceLabel: 'Lecture 4 slides',
+          text: 'The half-life of the drug is 4 h.',
+          values: ['4 h'],
+        },
+        {
+          id: 'src_2-f1',
+          sourceId: 'src_2',
+          sourceLabel: 'handout.pdf',
+          text: 'The half-life of the drug is 6 h.',
+          values: ['6 h'],
+        },
+      ],
+      card: {
+        id: 'conflict-1-the-half-lif',
+        factStatement:
+          'The half-life of the drug is 4 h — Lecture 4 slides · The half-life of the drug is 6 h — handout.pdf',
+        clozeSuggestion:
+          'Sources disagree: The half-life of the drug is ___ h. Resolve: {{4 h — Lecture 4 slides}} or {{6 h — handout.pdf}}.',
+        question: 'Sources disagree: The half-life of the drug is ___ h. Which is right?',
+        tag: 'Contradiction',
+        memoryHook: 'Resolve this before the exam — two of your sources cannot both be right.',
+      },
+    },
+  ],
 };
 
 // ─── 10-second discrimination gate (/api/discrimination) ───────────────────

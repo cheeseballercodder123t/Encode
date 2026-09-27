@@ -5,6 +5,7 @@ import {
   SegregationReport,
   WorkedExampleItem,
 } from '@/lib/types';
+import { ClaimInput, Contradiction, detectContradictions } from './contradiction';
 
 // ─── Forge : many sources in, one deck out, no encoding ─────────────────────
 //
@@ -20,6 +21,12 @@ import {
 // without a model.
 
 export type ForgeSourceKind = 'text' | 'file' | 'youtube';
+
+/**
+ * Where a forged deck is handed off. `both` opens Anki and queues RemNote
+ * behind it, so two export modals are never on screen at once.
+ */
+export type ForgeExportTarget = 'anki' | 'remnote' | 'both';
 
 export interface ForgeSource {
   id: string;
@@ -52,12 +59,25 @@ export interface ForgeResult {
   counts: ForgeSectionCounts;
   /** Total cards in the merged deck. */
   total: number;
+  /**
+   * Places where two sources disagree. Each one replaced the conflicting pair
+   * with a single explicit conflict card (kept in `report.declarativeFacts`),
+   * because a deck that silently keeps whichever claim arrived first is worse
+   * than one that says out loud that the sources disagree.
+   */
+  contradictions: Contradiction[];
 }
 
 export interface ForgeMergeInput {
   source: ForgeSource;
   report: SegregationReport | null;
   note?: string;
+}
+
+/** How the merge resolved cross-source conflicts. */
+export interface ForgeMergeOptions {
+  /** Detect and replace conflicting claims (default true). */
+  detectConflicts?: boolean;
 }
 
 const EMPTY_COUNTS: ForgeSectionCounts = { facts: 0, mechanisms: 0, drills: 0, examples: 0 };
@@ -180,7 +200,11 @@ export function isEmptyForgeReport(report: SegregationReport): boolean {
  * otherwise ship the same card twice. Nothing else is reordered — the deck
  * keeps the source order the learner set up.
  */
-export function mergeSegregationReports(inputs: ForgeMergeInput[], topic?: string): ForgeResult {
+export function mergeSegregationReports(
+  inputs: ForgeMergeInput[],
+  topic?: string,
+  options: ForgeMergeOptions = {}
+): ForgeResult {
   const sources: ForgedSourceResult[] = [];
   const seen = new Set<string>();
   let dropped = 0;
@@ -189,6 +213,8 @@ export function mergeSegregationReports(inputs: ForgeMergeInput[], topic?: strin
   const mechanisms: ConceptualMechanismItem[] = [];
   const drills: PracticeQuestionItem[] = [];
   const examples: WorkedExampleItem[] = [];
+  /** Every surviving fact, with the source it came from, for conflict detection. */
+  const claims: ClaimInput[] = [];
 
   const take = (key: string): boolean => {
     if (!key) return false;
@@ -219,6 +245,12 @@ export function mergeSegregationReports(inputs: ForgeMergeInput[], topic?: strin
       if (!take(dedupeKey(fact.factStatement))) continue;
       facts.push(fact);
       kept.facts += 1;
+      claims.push({
+        id: fact.id,
+        text: fact.factStatement,
+        sourceId: input.source.id,
+        sourceLabel: input.source.label,
+      });
     }
     for (const mech of report.conceptualMechanisms) {
       if (!take(dedupeKey(mech.conceptName))) continue;
@@ -248,14 +280,32 @@ export function mergeSegregationReports(inputs: ForgeMergeInput[], topic?: strin
     });
   }
 
-  const total = facts.length + mechanisms.length + drills.length + examples.length;
+  // Cross-source contradictions, resolved by replacement rather than by silence.
+  const contradictions = options.detectConflicts === false ? [] : detectContradictions(claims);
+  const replaced = new Set(contradictions.flatMap((c) => c.claims.map((claim) => claim.id)));
+  const survivingFacts = replaced.size > 0 ? facts.filter((fact) => !replaced.has(fact.id)) : facts;
+  const conflictCards = contradictions.map((c) => c.card);
+
+  // The replaced claims leave their source's tally (they are one card now) and
+  // that source says so, instead of claiming a card that is no longer there.
+  if (replaced.size > 0) {
+    for (const source of sources) {
+      const lost = contradictions.filter((c) => c.claims.some((claim) => claim.sourceId === source.id)).length;
+      if (lost === 0 || source.status !== 'ok') continue;
+      source.counts = { ...source.counts, facts: Math.max(0, source.counts.facts - lost) };
+      source.note = `${lost} claim${lost === 1 ? '' : 's'} merged into a conflict card`;
+    }
+  }
+
+  const allFacts = [...conflictCards, ...survivingFacts];
+  const total = allFacts.length + mechanisms.length + drills.length + examples.length;
   const report: SegregationReport = {
     topic: topic?.trim() || inputs.find((i) => i.report?.topic)?.report?.topic || 'Forged Deck',
-    declarativeFacts: facts,
+    declarativeFacts: allFacts,
     conceptualMechanisms: mechanisms,
     practiceQuestions: drills,
     workedExamples: examples,
-    compressionRatio: summarizeMerge(dropped, sources.filter((s) => s.status === 'ok').length),
+    compressionRatio: summarizeMerge(dropped, sources.filter((s) => s.status === 'ok').length, contradictions.length),
   };
 
   return {
@@ -263,12 +313,19 @@ export function mergeSegregationReports(inputs: ForgeMergeInput[], topic?: strin
     sources,
     dropped,
     total,
-    counts: { facts: facts.length, mechanisms: mechanisms.length, drills: drills.length, examples: examples.length },
+    contradictions,
+    counts: {
+      facts: allFacts.length,
+      mechanisms: mechanisms.length,
+      drills: drills.length,
+      examples: examples.length,
+    },
   };
 }
 
 /** One line for the outcome panel / RemNote header. */
-export function summarizeMerge(dropped: number, sourceCount: number): string {
+export function summarizeMerge(dropped: number, sourceCount: number, conflicts = 0): string {
   const overlap = dropped > 0 ? `${dropped} duplicate card${dropped === 1 ? '' : 's'} dropped` : 'no overlap';
-  return `${sourceCount} source${sourceCount === 1 ? '' : 's'} merged · ${overlap}`;
+  const conflict = conflicts > 0 ? ` · ${conflicts} source conflict${conflicts === 1 ? '' : 's'} flagged` : '';
+  return `${sourceCount} source${sourceCount === 1 ? '' : 's'} merged · ${overlap}${conflict}`;
 }

@@ -5,7 +5,33 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AISettings, SegregationReport, UploadedFileAsset } from '@/lib/types';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { playSound } from '@/lib/audio';
-import { ForgeSectionCounts, ForgeSourceKind } from '@/lib/services/forge';
+import {
+  ForgeExportTarget,
+  ForgeSectionCounts,
+  ForgeSourceKind,
+} from '@/lib/services/forge';
+import type { Contradiction } from '@/lib/services/contradiction';
+import { MEDIA_ACCEPT_ATTRIBUTE, isTranscribableMedia } from '@/lib/media-types';
+import {
+  DeckDiff,
+  diffReportAgainstMemory,
+  forgetDeckMemory,
+  keepOnlyFreshCards,
+  knownKeysForTopic,
+  recordDeckExport,
+  reportCardKeys,
+} from '@/lib/deck-memory';
+import {
+  ForgeRecipe,
+  buildForgeRecipe,
+  deleteForgeRecipe,
+  describeForgeRecipe,
+  loadForgeRecipes,
+  markForgeRecipeRun,
+  saveForgeRecipe,
+} from '@/lib/forge-recipes';
+
+export type { ForgeExportTarget };
 
 /**
  * The Forge: skip the workout, get the deck.
@@ -16,9 +42,12 @@ import { ForgeSectionCounts, ForgeSourceKind } from '@/lib/services/forge';
  * lectures and an exam on Friday, and you want the cards. This modal takes as
  * many sources as you can throw at it, asks where the deck should go, and never
  * creates a stage, a session or an XP bar.
+ *
+ * It also does the three things a repeat ingest needs: songs you already know
+ * (deck memory says `4 new · 12 already in your deck`), sources that disagree
+ * (an explicit conflict card instead of whichever claim arrived first), and the
+ * same setup next Monday (recipes).
  */
-
-export type ForgeExportTarget = 'anki' | 'remnote' | 'both';
 
 interface ForgeSourceDraft {
   id: string;
@@ -26,6 +55,8 @@ interface ForgeSourceDraft {
   label: string;
   notes?: string;
   url?: string;
+  /** True for an uploaded recording, which the server transcribes. */
+  media?: boolean;
   file?: UploadedFileAsset | null;
 }
 
@@ -60,7 +91,30 @@ const TARGETS: { id: ForgeExportTarget; label: string; blurb: string }[] = [
 ];
 
 const MAX_SOURCES = 12;
-const FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'];
+const FILE_TYPES = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+];
+const MEDIA_TYPES = [
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/m4a',
+  'audio/x-m4a',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/ogg',
+  'audio/webm',
+  'audio/flac',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-matroska',
+];
 
 export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: FlashcardForgeModalProps) {
   const [sources, setSources] = useState<ForgeSourceDraft[]>([]);
@@ -78,6 +132,14 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   const [outcomes, setOutcomes] = useState<ForgeSourceOutcome[]>([]);
   const [merged, setMerged] = useState<SegregationReport | null>(null);
   const [mergeNote, setMergeNote] = useState('');
+  const [contradictions, setContradictions] = useState<Contradiction[]>([]);
+  const [diff, setDiff] = useState<DeckDiff | null>(null);
+  const [skipKnown, setSkipKnown] = useState(false);
+  const [recipes, setRecipes] = useState<ForgeRecipe[]>([]);
+  const [showRecipes, setShowRecipes] = useState(false);
+  const [recipeName, setRecipeName] = useState('');
+  const [recipeNote, setRecipeNote] = useState('');
+  const [missingFiles, setMissingFiles] = useState<string[]>([]);
   const nextId = useRef(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +157,11 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setOutcomes([]);
     setMerged(null);
     setMergeNote('');
+    setContradictions([]);
+    setDiff(null);
+    setSkipKnown(false);
+    setRecipeNote('');
+    setMissingFiles([]);
   };
 
   const handleClose = () => {
@@ -143,8 +210,10 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     Array.from(files)
       .slice(0, MAX_SOURCES)
       .forEach((file) => {
-        if (!FILE_TYPES.includes(file.type)) {
-          setError('Only PDFs and images (PNG/JPEG/WebP) can be forged.');
+        const isMedia =
+          MEDIA_TYPES.includes(file.type) || isTranscribableMedia(file.type, file.name);
+        if (!isMedia && !FILE_TYPES.includes(file.type)) {
+          setError('Only PDFs, images (PNG/JPEG/WebP) and audio/video recordings can be forged.');
           return;
         }
         if (file.size > 15 * 1024 * 1024) {
@@ -166,7 +235,16 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
           setSources((prev) =>
             prev.length >= MAX_SOURCES
               ? prev
-              : [...prev, { id: idFor('file'), kind: 'file' as ForgeSourceKind, label: file.name, file: asset }]
+              : [
+                  ...prev,
+                  {
+                    id: idFor(isMedia ? 'media' : 'file'),
+                    kind: 'file' as ForgeSourceKind,
+                    label: file.name,
+                    media: isMedia,
+                    file: asset,
+                  },
+                ]
           );
           playSound('pop');
         };
@@ -179,19 +257,21 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setSources((prev) => prev.filter((s) => s.id !== id));
   };
 
-  const handleForge = async () => {
-    if (sources.length === 0 || sectionList.length === 0) return;
+  const runForge = async (sourceList: ForgeSourceDraft[], wanted: string[]) => {
+    if (sourceList.length === 0 || wanted.length === 0) return;
     playSound('click');
     setPhase('forging');
     setError('');
     setOutcomes([]);
     setMerged(null);
+    setContradictions([]);
+    setDiff(null);
     try {
       const res = await fetch('/api/forge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sources: sources.map((s) => ({
+          sources: sourceList.map((s) => ({
             id: s.id,
             kind: s.kind,
             label: s.label,
@@ -201,7 +281,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
               ? { name: s.file.name, type: s.file.type, base64Data: s.file.base64Data }
               : null,
           })),
-          include: sectionList,
+          include: wanted,
           settings,
         }),
       });
@@ -209,11 +289,20 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       if (!res.ok) {
         throw new Error(data?.error || 'The forge could not build a deck.');
       }
+      const report: SegregationReport | null = data.report || null;
       setOutcomes(Array.isArray(data.sources) ? data.sources : []);
-      setMerged(data.report || null);
+      setMerged(report);
+      setContradictions(Array.isArray(data.contradictions) ? data.contradictions : []);
       setMergeNote(
         `${data.total ?? 0} card${data.total === 1 ? '' : 's'} forged${data.dropped ? ` · ${data.dropped} duplicate${data.dropped === 1 ? '' : 's'} dropped` : ''}`
       );
+      // Deck memory: what has this topic already shipped? The learner decides
+      // whether the deck goes out whole or only the cards that are new.
+      if (report) {
+        const nextDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
+        setDiff(nextDiff);
+        setSkipKnown(nextDiff.known > 0);
+      }
       setPhase('done');
       playSound('success');
     } catch (err: any) {
@@ -222,34 +311,125 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     }
   };
 
+  const handleForge = () => runForge(sources, sectionList);
+
   const deckSize =
     (merged?.declarativeFacts.length || 0) +
     (merged?.conceptualMechanisms.length || 0) +
     (merged?.practiceQuestions?.length || 0) +
     (merged?.workedExamples?.length || 0);
   const emptyDeck = deckSize === 0;
+  const shipsOnlyFresh = skipKnown && (diff?.known || 0) > 0;
+  const shippingCount = shipsOnlyFresh ? diff?.fresh ?? deckSize : deckSize;
 
   const sendToExport = (which: ForgeExportTarget) => {
     if (!merged) return;
     playSound('success');
-    const report = merged;
+    const report = shipsOnlyFresh && diff ? keepOnlyFreshCards(merged, diff.freshIds) : merged;
+    // Remember what actually shipped, so next week's forge can say so.
+    recordDeckExport({ topic: report.topic, keys: reportCardKeys(report), surface: which });
     onClose();
     resetTransient();
     onDeckReady(report, which);
   };
 
+  const handleForgetMemory = () => {
+    if (!merged) return;
+    playSound('click');
+    forgetDeckMemory(merged.topic);
+    setDiff({ freshIds: [], knownIds: [], fresh: deckSize, known: 0 });
+    setSkipKnown(false);
+    setRecipeNote(`Deck memory for "${merged.topic}" cleared.`);
+  };
+
+  const openRecipes = () => {
+    playSound('click');
+    const next = !showRecipes;
+    setShowRecipes(next);
+    if (next) setRecipes(loadForgeRecipes());
+  };
+
+  const handleSaveRecipe = () => {
+    if (sources.length === 0) {
+      setRecipeNote('Add at least one source before saving a recipe.');
+      return;
+    }
+    const name = recipeName.trim() || `${sources.length}-source forge`;
+    const draft = {
+      name,
+      sections: sectionList,
+      target,
+      sources: sources.map((s) => ({ kind: s.kind, label: s.label, notes: s.notes, url: s.url })),
+    };
+    const existing = recipes.find((r) => r.name.toLowerCase() === name.toLowerCase()) || null;
+    const recipe = buildForgeRecipe(draft, existing);
+    if (!recipe) {
+      setRecipeNote('That setup cannot be saved as a recipe.');
+      return;
+    }
+    setRecipes(saveForgeRecipe(recipe));
+    setRecipeName('');
+    playSound('success');
+    setRecipeNote(
+      recipe.fileNames.length > 0
+        ? `Saved "${recipe.name}". ${recipe.fileNames.length} file(s) will have to be re-attached when you run it.`
+        : `Saved "${recipe.name}".`
+    );
+  };
+
+  const handleLoadRecipe = (recipe: ForgeRecipe, run: boolean) => {
+    playSound('click');
+    const loaded: ForgeSourceDraft[] = recipe.sources
+      .filter((s) => s.kind !== 'file')
+      .map((s) => ({
+        id: idFor(s.kind === 'youtube' ? 'yt' : 'text'),
+        kind: s.kind,
+        label: s.label,
+        notes: s.notes,
+        url: s.url,
+      }));
+    const nextSections: Record<keyof ForgeSectionCounts, boolean> = {
+      facts: recipe.sections.includes('facts'),
+      mechanisms: recipe.sections.includes('mechanisms'),
+      drills: recipe.sections.includes('drills'),
+      examples: recipe.sections.includes('examples'),
+    };
+    const wanted = SECTIONS.filter((s) => nextSections[s.id]).map((s) => s.id);
+
+    setSources(loaded);
+    setSections(nextSections);
+    setTarget(recipe.target);
+    setMissingFiles(recipe.fileNames);
+    setRecipeNote(
+      recipe.fileNames.length > 0
+        ? `Loaded "${recipe.name}" — re-attach ${recipe.fileNames.join(', ')} before forging.`
+        : `Loaded "${recipe.name}".`
+    );
+    if (run) setRecipes(markForgeRecipeRun(recipe.id));
+
+    if (run && loaded.length > 0) void runForge(loaded, wanted);
+  };
+
+  const handleDeleteRecipe = (recipe: ForgeRecipe) => {
+    playSound('click');
+    setRecipes(deleteForgeRecipe(recipe.id));
+    setRecipeNote(`Deleted "${recipe.name}".`);
+  };
+
   const renderSourceRow = (source: ForgeSourceDraft) => (
     <div key={source.id} className="flex items-center gap-2 p-2 bg-deck border border-edge/40">
       <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider shrink-0">
-        [ {source.kind === 'youtube' ? 'YT' : source.kind === 'file' ? 'FILE' : 'TEXT'} ]
+        [ {source.kind === 'youtube' ? 'YT' : source.kind === 'file' ? (source.media ? 'AUDIO' : 'FILE') : 'TEXT'} ]
       </span>
       <span className="min-w-0 flex-1 text-[11px] font-mono text-bone truncate">{source.label}</span>
       <span className="text-[10px] font-mono text-solder shrink-0">
         {source.kind === 'text'
           ? `${(source.notes || '').split(/\s+/).filter(Boolean).length} words`
           : source.kind === 'file'
-            ? `${Math.round((source.file?.size || 0) / 1024)} KB`
-            : 'captions'}
+            ? source.media
+              ? 'transcribed'
+              : `${Math.round((source.file?.size || 0) / 1024)} KB`
+            : 'captions / audio'}
       </span>
       <button
         type="button"
@@ -285,23 +465,106 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleClose}
-              aria-label="Close forge"
-              className="p-2 text-solder hover:text-bone hover:bg-inset cursor-pointer"
-            >
-              <BracketTag label="X" tone="text-amber" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="forge-recipes-toggle"
+                onClick={openRecipes}
+                className="px-2.5 py-1.5 bg-chassis border border-edge text-[10px] font-mono font-bold uppercase tracking-wider text-solder hover:text-amber cursor-pointer"
+              >
+                [ RECIPES ]
+              </button>
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="Close forge"
+                className="p-2 text-solder hover:text-bone hover:bg-inset cursor-pointer"
+              >
+                <BracketTag label="X" tone="text-amber" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {showRecipes && (
+              <div className="space-y-2 p-3 bg-deck border border-gilt/45" data-testid="forge-recipes">
+                <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">
+                  Recipes · the weekly ingest
+                </span>
+                <p className="text-[11px] text-solder font-mono leading-relaxed">
+                  A recipe is the setup, not the deck: which sources, which sections, which export surface.
+                  Files are remembered by name, so a recipe with PDFs asks for them back.
+                </p>
+                {recipes.length === 0 ? (
+                  <p className="text-[11px] text-solder font-mono">No recipes yet. Build a setup and save it.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {recipes.map((recipe) => (
+                      <div
+                        key={recipe.id}
+                        data-testid={`forge-recipe-${recipe.id}`}
+                        className="p-2 bg-chassis border border-edge/40 flex items-center gap-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-mono text-bone truncate">{recipe.name}</p>
+                          <p className="text-[10px] font-mono text-solder">{describeForgeRecipe(recipe)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          data-testid={`forge-run-recipe-${recipe.id}`}
+                          onClick={() => handleLoadRecipe(recipe, true)}
+                          className="shrink-0 px-2.5 py-1 bg-amber border border-amber text-chassis text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                        >
+                          [ RUN ]
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadRecipe(recipe, false)}
+                          className="shrink-0 px-2 py-1 bg-chassis border border-edge text-solder hover:text-bone text-[10px] font-mono font-bold uppercase cursor-pointer"
+                        >
+                          [ LOAD ]
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete recipe ${recipe.name}`}
+                          onClick={() => handleDeleteRecipe(recipe)}
+                          className="shrink-0 px-2 py-1 bg-chassis border border-edge text-solder hover:text-hazard text-[10px] font-mono font-bold cursor-pointer"
+                        >
+                          [ X ]
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={recipeName}
+                    onChange={(e) => setRecipeName(e.target.value)}
+                    placeholder="Monday lectures"
+                    aria-label="Recipe name"
+                    className="flex-1 px-2.5 py-1.5 bg-chassis border border-edge text-[11px] text-bone placeholder-solder focus:outline-none focus:border-amber font-mono"
+                  />
+                  <button
+                    type="button"
+                    data-testid="forge-save-recipe"
+                    onClick={handleSaveRecipe}
+                    className="shrink-0 px-3 py-1.5 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                  >
+                    [ SAVE CURRENT SETUP ]
+                  </button>
+                </div>
+                {recipeNote && <p className="text-[10px] font-mono text-amber">{recipeNote}</p>}
+              </div>
+            )}
+
             {phase !== 'done' && (
               <>
                 <div className="p-3 bg-deck border border-edge/40 text-[11px] text-solder font-mono leading-relaxed">
                   Nothing here becomes a workout: no stages, no paradoxes, no XP. Sources are cut straight into
                   cards, deduplicated across sources, then run through the same Wozniak enforcement pass and FSRS
-                  audit as an encoded deck.
+                  audit as an encoded deck. A video is read from its captions, or transcribed from its own audio when
+                  it has none. Where two sources disagree, you get one conflict card that names both.
                 </div>
 
                 <div className="space-y-2">
@@ -314,24 +577,30 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                       onClick={() => fileInputRef.current?.click()}
                       className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider cursor-pointer"
                     >
-                      [ + ADD FILES ]
+                      [ + ADD FILES / RECORDINGS ]
                     </button>
                   </div>
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    accept={`application/pdf,image/png,image/jpeg,image/webp,${MEDIA_ACCEPT_ATTRIBUTE}`}
                     onChange={(e) => addFiles(e.target.files)}
                     className="hidden"
                     aria-label="Add source files"
                   />
                   {sources.length === 0 ? (
                     <p className="text-[11px] font-mono text-solder p-3 bg-deck/60 border border-edge/40">
-                      No sources yet. Paste notes, drop in PDFs and slide photos, or paste a list of YouTube links.
+                      No sources yet. Paste notes, drop in PDFs, slide photos or a lecture recording, or paste a list
+                      of YouTube links.
                     </p>
                   ) : (
                     <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">{sources.map(renderSourceRow)}</div>
+                  )}
+                  {missingFiles.length > 0 && (
+                    <p className="text-[10px] font-mono text-hazard">
+                      Re-attach from the recipe: {missingFiles.join(', ')}
+                    </p>
                   )}
                 </div>
 
@@ -376,8 +645,8 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                     [ + ADD VIDEOS ]
                   </button>
                   <p className="text-[10px] font-mono text-solder">
-                    Videos are read from their own caption track. No captions → no source text, and the forge says so
-                    rather than inventing cards.
+                    Captions come first (manual, then auto-generated). Only when a video has none is its audio
+                    transcribed — and if that is not possible either, the source says so rather than inventing cards.
                   </p>
                 </div>
 
@@ -458,6 +727,66 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                   <p className="text-[10px] font-mono text-solder">{merged.topic}</p>
                 </div>
 
+                {/* Two sources disagreeing is a finding, not a footnote. */}
+                {contradictions.length > 0 && (
+                  <div
+                    data-testid="forge-conflicts"
+                    className="p-3 bg-hazard/5 border border-hazard/40 space-y-2"
+                  >
+                    <span className="text-[10px] font-mono font-bold text-hazard uppercase tracking-wider">
+                      [ ! ] {contradictions.length} source conflict{contradictions.length === 1 ? '' : 's'} — conflict
+                      card{contradictions.length === 1 ? '' : 's'} lead this deck
+                    </span>
+                    {contradictions.map((conflict) => (
+                      <div key={conflict.id} data-testid={`forge-conflict-${conflict.id}`} className="space-y-0.5">
+                        <p className="text-[10px] font-mono text-solder uppercase tracking-wider">
+                          {conflict.kind === 'numeric' ? 'different quantity' : 'opposite claim'} · {conflict.summary}
+                        </p>
+                        {conflict.claims.map((claim) => (
+                          <p key={claim.id} className="text-[11px] font-mono text-bone leading-relaxed">
+                            <span className="text-hazard">▸</span> {claim.text}{' '}
+                            <span className="text-solder">— {claim.sourceLabel}</span>
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                    <p className="text-[10px] font-mono text-solder">
+                      Resolve it in your notes before you trust either card: the deck ships the disagreement as one
+                      card instead of quietly picking a side.
+                    </p>
+                  </div>
+                )}
+
+                {/* Deck memory: what has this topic already shipped? */}
+                {diff && diff.known > 0 && (
+                  <div data-testid="forge-memory" className="p-3 bg-deck border border-gilt/45 space-y-2">
+                    <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">
+                      [ DECK MEMORY ] {diff.fresh} new · {diff.known} already in your deck
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="forge-skip-known"
+                      onClick={() => setSkipKnown((prev) => !prev)}
+                      className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border cursor-pointer ${
+                        skipKnown ? 'bg-amber border-amber text-chassis' : 'bg-chassis border-edge text-solder'
+                      }`}
+                    >
+                      [ {skipKnown ? 'SHIPPING NEW CARDS ONLY' : 'SHIPPING THE WHOLE DECK'} ]
+                    </button>
+                    <p className="text-[10px] font-mono text-solder leading-relaxed">
+                      Remembered from every deck this topic has already exported — {shippingCount} card
+                      {shippingCount === 1 ? '' : 's'} will ship now.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleForgetMemory}
+                      className="text-[10px] font-mono text-solder hover:text-hazard uppercase tracking-wider cursor-pointer"
+                    >
+                      [ FORGET THIS TOPIC&apos;S MEMORY ]
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <span className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider">
                     Source log
@@ -487,7 +816,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                     type="button"
                     data-testid="forge-export-primary"
                     onClick={() => sendToExport(target)}
-                    disabled={emptyDeck}
+                    disabled={emptyDeck || shippingCount === 0}
                     className="w-full px-4 py-3 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
                   >
                     {target === 'anki'

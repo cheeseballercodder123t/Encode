@@ -182,6 +182,75 @@ describe('mergeSegregationReports', () => {
     expect(merged.report.compressionRatio).toBe('1 source merged · no overlap');
     expect(summarizeMerge(3, 2)).toBe('2 sources merged · 3 duplicate cards dropped');
     expect(summarizeMerge(1, 1)).toBe('1 source merged · 1 duplicate card dropped');
+    expect(summarizeMerge(0, 2, 1)).toBe('2 sources merged · no overlap · 1 source conflict flagged');
+  });
+
+  it('replaces two disagreeing claims with ONE conflict card that leads the deck', () => {
+    const slides = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'The half-life of the drug is 4 h.', clozeSuggestion: 'The half-life is {{4 h}}.' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const lecture = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'The half-life of the drug is 6 h.', clozeSuggestion: 'The half-life is {{6 h}}.' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    const merged = mergeSegregationReports([
+      { source: textSource, report: slides },
+      { source: pdfSource, report: lecture },
+    ]);
+
+    expect(merged.contradictions).toHaveLength(1);
+    expect(merged.contradictions[0].kind).toBe('numeric');
+    expect(merged.contradictions[0].summary).toBe('4 h vs 6 h');
+
+    // The two originals are gone; the single conflict card is what ships.
+    expect(merged.report.declarativeFacts).toHaveLength(1);
+    const card = merged.report.declarativeFacts[0];
+    expect(card.id).toBe(merged.contradictions[0].card.id);
+    expect(card.tag).toBe('Contradiction');
+    expect(card.factStatement).toContain('4 h');
+    expect(card.factStatement).toContain('6 h');
+    expect(merged.counts.facts).toBe(1);
+    expect(merged.total).toBe(1);
+
+    // Each source stops claiming the card it just handed over.
+    expect(merged.sources[0].counts.facts).toBe(0);
+    expect(merged.sources[0].note).toContain('conflict card');
+    expect(merged.sources[1].counts.facts).toBe(0);
+    expect(merged.report.compressionRatio).toContain('1 source conflict flagged');
+  });
+
+  it('leaves agreeing sources alone and can be told not to look for conflicts', () => {
+    const second = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'The half-life of the drug is 4 h.', clozeSuggestion: 'The half-life is {{4 h}}.' },
+      ],
+    });
+    const merged = mergeSegregationReports([{ source: textSource, report: report() }, { source: pdfSource, report: second }]);
+    expect(merged.contradictions).toEqual([]);
+
+    const conflicting = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'The loop of Henle reaches 900 mOsm.', clozeSuggestion: 'reaches {{900 mOsm}}' },
+      ],
+    });
+    const off = mergeSegregationReports(
+      [{ source: textSource, report: report() }, { source: pdfSource, report: conflicting }],
+      undefined,
+      { detectConflicts: false }
+    );
+    expect(off.contradictions).toEqual([]);
+    // Both disagreeing claims survive as separate cards when detection is off.
+    expect(off.report.declarativeFacts).toHaveLength(2);
   });
 
   it('collapses punctuation and case when keying cards', () => {
