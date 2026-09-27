@@ -74,12 +74,12 @@ export const PWAInstallHeader: React.FC = () => {
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        {/* Offline / Online state indicator badge : wraps on phones so it
-            never pushes the row into horizontal overflow. */}
+      <div className="flex items-stretch">
+        {/* Offline indicator: sits inline in the instrument strip, so it never
+            pushes the row into a second band on phones. */}
         {!isOnline && (
-          <div className="max-w-full px-2.5 py-1 min-h-[44px] flex items-center bg-chassis border border-hazard text-solder text-[10px] font-mono font-bold uppercase tracking-wider break-words">
-            [ LINK: OFFLINE // INDEXEDDB ACTIVE ]
+          <div className="max-w-full px-3 min-h-[36px] flex items-center rounded-full border border-hazard-500/40 bg-hazard-950/40 text-hazard-300 text-[10px] font-mono uppercase tracking-[0.16em] whitespace-nowrap">
+            [ OFFLINE // INDEXEDDB ACTIVE ]
           </div>
         )}
 
@@ -87,7 +87,7 @@ export const PWAInstallHeader: React.FC = () => {
         {!isInstalled && (deferredPrompt || isIOS) && (
           <button
             onClick={handleInstallClick}
-            className="min-h-[44px] px-3 py-1.5 bg-chassis border border-edge text-solder hover:text-bone hover:border-solder transition-none text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+            className="min-h-[36px] flex items-center rounded-full border border-edge/70 bg-deck px-3 text-solder hover:text-bone hover:border-gilt/40 hover:bg-white/[0.04] transition-colors duration-150 text-[10px] font-mono uppercase tracking-[0.16em] cursor-pointer whitespace-nowrap"
             title="Install DeepEncode locally for offline flight/subway use"
           >
             [ INSTALL APP: PWA ]
@@ -101,13 +101,13 @@ export const PWAInstallHeader: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-sm bg-deck border border-edge p-6 mobile-sheet-viewport overflow-y-auto overscroll-contain"
+            className="w-full max-w-sm bg-deck border border-edge/70 rounded-2xl shadow-raised p-6 mobile-sheet-viewport overflow-y-auto overscroll-contain"
             role="dialog"
             aria-modal="true"
             aria-label="Install on iOS"
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-sm text-bone font-mono uppercase tracking-wider">{'// INSTALL ON iOS'}</h3>
+              <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-slate-ink">{'// INSTALL ON iOS'}</h3>
               <button
                 onClick={() => setShowIOSGuide(false)}
                 aria-label="Close iOS install guide"
@@ -135,7 +135,7 @@ export const PWAInstallHeader: React.FC = () => {
 
             <button
               onClick={() => setShowIOSGuide(false)}
-              className="mt-6 w-full min-h-[44px] py-2 bg-amber border border-amber text-chassis font-mono font-bold text-[10px] uppercase tracking-wider transition-none cursor-pointer"
+              className="mt-6 w-full min-h-[44px] py-2.5 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 text-inset font-mono font-semibold text-[10px] uppercase tracking-[0.16em] shadow-gilt cursor-pointer"
             >
               [ ACKNOWLEDGED ]
             </button>

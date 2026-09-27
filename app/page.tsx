@@ -75,7 +75,6 @@ export default function DeepEncodeApp() {
   const {
     aiSettings, setAiSettings,
     soundMuted, toggleSound,
-    isOffline,
   } = useSettings();
 
   // The whole session flow : schema, progress, stage inputs & gamification
@@ -1358,68 +1357,35 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="min-h-screen min-h-dvh bg-chassis text-bone flex flex-col items-center py-4 sm:py-8 px-3 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/30 selection:text-inset font-sans mobile-safe-bottom">
+    <main className="min-h-screen min-h-dvh bg-chassis text-bone flex flex-col items-center py-5 sm:py-10 px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
 
       <div className="w-full max-w-5xl relative z-10 flex-1 flex flex-col">
 
-        {/* Top Control Bar : wraps cleanly on phones, full-width rows. */}
-        <header className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 bg-deck border border-edge rounded-lg shadow-panel px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-bone">DeepEncode</h1>
-                <span className="hidden sm:inline px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-widest bg-inset text-amber-300 border border-amber-500/30 rounded-full">
-                  Forge
-                </span>
+        {/* Masthead: the wordmark on vellum, then one quiet cluster of
+            controls. No framed strip and no rule across the page — the header
+            is typography and air, so the top of the app is not a band. */}
+        <header className="mb-6 animate-dawn">
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-5">
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-3">
+                <h1 className="text-[26px] font-semibold leading-none tracking-tight text-bone">DeepEncode</h1>
+                <span className="label-caps">local-first</span>
               </div>
-              <p className="text-[11px] text-solder">Multimodal cognitive schema architect with adaptive chunking &amp; interleaving</p>
+              <div className="mt-3 h-px w-24 gilt-rule" aria-hidden />
+              <p className="mt-3 max-w-md text-[11px] leading-relaxed text-solder">
+                Notes, PDFs, images and lecture videos become encoder stages: one paradox, one thought experiment, one mechanism written in your own words.
+              </p>
             </div>
-          </div>
 
-          {/* Gamification Bar & Top Buttons : scrolls horizontally on phones
-              so items keep 44px targets instead of wrapping into a tall stack. */}
-          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto max-w-full py-1 [-webkit-overflow-scrolling:touch]">
-            {appState !== 'input' && (
-              <div className="shrink-0 flex items-center gap-2.5 bg-inset border border-edge rounded-lg px-3 py-1.5 min-h-[44px] relative">
-                <span className="text-xs font-semibold text-slate-ink">
-                  Progress <span className="font-mono font-semibold text-amber-300">{String(xp).padStart(4, '0')}</span>
-                </span>
-
-                <div className="h-4 w-px bg-edge" />
-
-                <div className="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider border border-edge bg-deck text-slate-ink rounded-md">
-                  {userRank.title}
-                </div>
-
-                {/* Floating Gain Indicator */}
-                <AnimatePresence>
-                  {xpGainAnimation && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 0 }}
-                      animate={{ opacity: 1, y: -28 }}
-                      exit={{ opacity: 0 }}
-                      className="absolute -top-3 right-4 px-2 py-0.5 bg-amber-500 text-inset text-[11px] font-mono font-semibold rounded-md z-20"
-                    >
-                      +{xpGainAnimation}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
-
+          <nav className="flex flex-wrap items-center justify-end gap-1.5 max-w-full" aria-label="Workspace">
             {/* Offline & Install Indicator */}
-            {isOffline && (
-              <div className="shrink-0 px-2.5 py-1 min-h-[44px] flex items-center bg-hazard-950/40 border border-hazard-500/50 text-hazard-300 text-[11px] font-medium rounded-md">
-                Offline
-              </div>
-            )}
             <PWAInstallHeader />
 
             {/* Multi-Doc Comparative Synthesis Button */}
             <button
               type="button"
               onClick={() => setIsComparativeModalOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
+              className="shrink-0 min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
               title="Compare two documents (e.g. Lecture Slides vs Textbook Chapter)"
             >
               Compare 2 docs
@@ -1429,7 +1395,7 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsAnkiExportOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
+              className="shrink-0 min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
               title="Export .apkg Anki package or sync via SM-2 Webhooks"
             >
               Anki / SM-2
@@ -1440,7 +1406,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleOpenStatelessShare()}
-                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
+                className="shrink-0 min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
                 title="Share Stateless URL (Free & Zero DB Required)"
               >
                 Share
@@ -1451,20 +1417,20 @@ export default function DeepEncodeApp() {
             {(() => {
               const pendingNote = pendingLocalCount > 0 ? ` : ${pendingLocalCount} local` : '';
               let status = 'OFF';
-              let cls = 'border-edge text-solder hover:text-bone';
+              let dot = 'bg-solder';
               let title = 'Sign in to sync schemas across devices (Firestore)';
               if (user) {
                 if (isSyncing) {
                   status = 'SYNCING';
-                  cls = 'border-amber-500/40 text-amber-300';
+                  dot = 'bg-amber-500';
                   title = 'Syncing your schemas to the cloud...';
                 } else if (lastSyncError) {
                   status = 'ERROR';
-                  cls = 'border-hazard-500/60 text-hazard-300';
+                  dot = 'bg-hazard-500';
                   title = `Last cloud sync failed: ${lastSyncError}. Click to retry from Cloud Sync & Account.`;
                 } else {
                   status = 'SYNCED';
-                  cls = 'border-amber-500/40 text-amber-300';
+                  dot = 'bg-signal-500';
                   const when = lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString() : 'just now';
                   title = `Signed in as ${user.displayName || user.email || 'User'}${pendingNote} : last synced ${when}.`;
                 }
@@ -1474,9 +1440,10 @@ export default function DeepEncodeApp() {
               return (
                 <button
                   onClick={() => setIsAuthOpen(true)}
-                  className={`shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border rounded-md transition-colors duration-150 text-xs font-medium cursor-pointer ${cls}`}
+                  className="shrink-0 min-h-[36px] flex items-center gap-2 rounded-full border border-edge/70 px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:border-gilt/40 transition-colors duration-150 cursor-pointer whitespace-nowrap"
                   title={title}
                 >
+                  <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
                   Cloud: {status}
                 </button>
               );
@@ -1487,7 +1454,7 @@ export default function DeepEncodeApp() {
               <button
                 type="button"
                 onClick={() => handleEndSessionReview()}
-                className="shrink-0 min-h-[44px] px-3 py-1.5 bg-amber-500 border border-amber-500 text-inset text-xs font-semibold rounded-md transition-colors duration-150 cursor-pointer"
+                className="min-h-[36px] flex items-center rounded-full bg-gradient-to-b from-amber-400 to-amber-600 px-3.5 text-[11px] font-semibold tracking-wide text-inset shadow-gilt hover:from-amber-300 hover:to-amber-500 transition-colors duration-150 cursor-pointer whitespace-nowrap"
                 title="View Metacognitive Performance Review"
               >
                 Session review
@@ -1498,7 +1465,7 @@ export default function DeepEncodeApp() {
             <button
               type="button"
               onClick={() => setIsAnalyticsOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
+              className="shrink-0 min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
               title="Metacognitive Analytics & Model Quota Dashboard"
             >
               Analytics
@@ -1507,7 +1474,7 @@ export default function DeepEncodeApp() {
             {/* Saved Schemas History Button */}
             <button
               onClick={() => setIsHistoryOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer relative"
+              className="min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap relative"
               title="View Saved Schemas History"
             >
               Library{savedSchemas.length > 0 ? ` · ${savedSchemas.length}` : ''}
@@ -1516,7 +1483,7 @@ export default function DeepEncodeApp() {
             {/* AI Settings / Multi-Key Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
+              className="min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
               title="Configure Models (Gemini 3.7 Flash & 3.5 Flash-Lite)"
             >
               Settings
@@ -1525,13 +1492,40 @@ export default function DeepEncodeApp() {
             {/* Audio Toggle */}
             <button
               onClick={toggleSound}
-              className="shrink-0 min-h-[44px] px-3 py-1.5 bg-inset border border-edge rounded-md text-slate-ink hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 text-xs font-medium cursor-pointer"
+              className="min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
               title={soundMuted ? 'Unmute audio effects' : 'Mute audio effects'}
               aria-label={soundMuted ? 'Unmute audio effects' : 'Mute audio effects'}
             >
               {soundMuted ? 'Sound off' : 'Sound on'}
             </button>
+          </nav>
           </div>
+
+          {/* Session rail : the live numbers as a quiet line of type beneath the
+              masthead. Progress is data, so it keeps the mono voice and the gold,
+              but it lives in the page's type instead of a bordered strip. */}
+          {appState !== 'input' && (
+            <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="label-caps">Progress</span>
+              <span className="relative font-mono text-sm font-semibold text-amber-300">
+                {String(xp).padStart(4, '0')}
+                <AnimatePresence>
+                  {xpGainAnimation && (
+                    <motion.span
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: -22 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute left-0 top-0 font-mono text-[11px] font-semibold text-amber-300"
+                    >
+                      +{xpGainAnimation}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </span>
+              <span className="h-1 w-1 rotate-45 bg-edge" aria-hidden />
+              <span className="text-[11px] text-slate-ink">{userRank.title}</span>
+            </div>
+          )}
         </header>
 
         {/* Imported Stateless Link Notification Banner */}
@@ -1539,10 +1533,10 @@ export default function DeepEncodeApp() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-deck border border-amber-500/40 rounded-lg shadow-panel flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+            className="mb-5 p-4 bg-deck border border-gilt/30 rounded-2xl shadow-panel flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
           >
             <div className="flex items-center gap-3">
-              <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/40 text-amber-300 text-[10px] font-semibold uppercase tracking-widest rounded-full shrink-0">
+              <span className="px-3 py-1 bg-amber-500/10 border border-gilt/35 text-amber-200 text-[10px] font-mono uppercase tracking-[0.18em] rounded-full shrink-0">
                 Shared link
               </span>
               <div>
@@ -1575,14 +1569,14 @@ export default function DeepEncodeApp() {
                   sound.playSuccess();
                   setImportedShareBanner(null);
                 }}
-                className="px-3.5 py-2 bg-amber border border-amber text-chassis font-mono font-bold text-[10px] uppercase tracking-wider cursor-pointer transition-none"
+                className="px-4 py-2 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 text-inset font-mono font-semibold text-[10px] uppercase tracking-[0.16em] shadow-gilt cursor-pointer"
               >
                 [ SAVE TO HISTORY ]
               </button>
               <button
                 type="button"
                 onClick={() => setImportedShareBanner(null)}
-                className="px-2 py-1 text-solder hover:text-bone border border-edge hover:border-solder font-mono text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-none"
+                className="px-3.5 py-2 rounded-full text-solder hover:text-bone border border-edge/70 hover:border-gilt/40 font-mono text-[10px] uppercase tracking-[0.16em] cursor-pointer"
               >
                 [ X ]
               </button>
@@ -1598,12 +1592,12 @@ export default function DeepEncodeApp() {
             key="input"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full flex flex-col gap-6"
+            className="w-full flex flex-col gap-4 sm:gap-5"
           >
             {/* Interrupted generation notice: the tab was closed mid-encode. */}
             {interruptedGen && (
               <div
-                className="flex items-center justify-between gap-3 bg-hazard/10 border border-hazard/40 px-3 py-2"
+                className="flex items-center justify-between gap-4 bg-hazard-950/25 border border-hazard-500/35 px-4 py-3.5 rounded-2xl"
                 data-testid="interrupted-gen-banner"
                 role="status"
               >
@@ -1618,7 +1612,7 @@ export default function DeepEncodeApp() {
                     clearGenerationInProgress();
                     setInterruptedGen(null);
                   }}
-                  className="min-h-[36px] px-2 text-[10px] font-mono font-bold uppercase text-solder hover:text-bone border border-edge transition-none cursor-pointer"
+                  className="min-h-[36px] px-3.5 rounded-full text-[10px] font-mono uppercase tracking-[0.16em] text-solder hover:text-bone border border-edge/70 hover:border-gilt/40 cursor-pointer"
                   title="Dismiss"
                 >
                   [ DISMISS ]
@@ -1632,7 +1626,7 @@ export default function DeepEncodeApp() {
               const struggles = typeof window !== 'undefined' ? loadTopicStruggles() : [];
               if (struggles.length === 0) return null;
               return (
-                <div className="w-full p-3.5 bg-deck border border-hazard/40">
+                <div className="w-full p-4 bg-deck border border-hazard-500/35 rounded-2xl">
                   <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-hazard block mb-1">
                     [ ▼ STILL TRICKY FOR YOU ]
                   </span>
@@ -1644,7 +1638,7 @@ export default function DeepEncodeApp() {
                       <span
                         key={`${s.topic}-${s.updatedAt}`}
                         title={`Mechanism still open after ${s.checkCount} check${s.checkCount === 1 ? '' : 's'}`}
-                        className="text-[11px] font-mono px-2 py-1 bg-chassis border border-hazard/50 text-bone"
+                        className="text-[11px] font-mono px-2.5 py-1 bg-chassis border border-hazard-500/40 text-bone rounded-full"
                       >
                         {s.topic} · still open
                       </span>
@@ -1670,7 +1664,7 @@ export default function DeepEncodeApp() {
               const done = firstUnfinishedIdx;
               const isLast = done >= acts.length - 1;
               return (
-                <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 bg-amber/10 border-2 border-amber/70">
+                <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-amber-500/[0.05] border border-gilt/30 rounded-2xl shadow-panel">
                   <div className="min-w-0">
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber block mb-0.5">
                       [ ▶ RESUME WHERE YOU LEFT OFF ]
@@ -1689,13 +1683,13 @@ export default function DeepEncodeApp() {
                     <button
                       type="button"
                       onClick={() => handleContinueToEncoding(lastSchema)}
-                      className="px-4 py-2 bg-amber border border-amber text-chassis text-[11px] font-mono font-bold uppercase tracking-wider hover:bg-amber/90 transition-none cursor-pointer"
+                      className="px-5 py-2 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 text-inset text-[11px] font-mono font-semibold uppercase tracking-[0.16em] shadow-gilt hover:from-amber-300 hover:to-amber-500 cursor-pointer"
                     >
                       Resume here
                     </button>
                     <button
                       type="button"
-                      className="px-3 py-2 bg-chassis border border-edge text-solder text-[11px] font-mono font-bold uppercase tracking-wider hover:text-bone transition-none cursor-pointer"
+                      className="px-4 py-2 rounded-full bg-chassis border border-edge/70 text-solder text-[11px] font-mono uppercase tracking-[0.16em] hover:text-bone hover:border-gilt/40 cursor-pointer"
                       title="Start a fresh topic instead"
                     >
                       Start fresh
@@ -1735,133 +1729,184 @@ export default function DeepEncodeApp() {
               isLoading={false}
             />
 
-            {/* Quick Diagnostic Power Tools */}
-            <div className="flex flex-col items-center gap-2">
-              {/* Pre-generation section + target selectors for SEGREGATE */}
-              <div className="flex flex-wrap items-center justify-center gap-2 bg-deck border border-edge rounded-lg px-3 py-2">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-300">
-                  Segregate
-                </span>
-                {([
-                  ['facts', 'Facts'],
-                  ['mechanisms', 'Mechanisms'],
-                  ['drills', 'Drills'],
-                  ['examples', 'Examples'],
-                  ['mcq', 'MCQ'],
-                ] as [keyof typeof segregateOptions, string][]).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() =>
-                      setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))
-                    }
-                    className={`px-2.5 py-1.5 min-h-[36px] text-xs font-medium rounded-full border transition-colors duration-150 cursor-pointer ${
-                      segregateOptions[key]
-                        ? 'bg-inset border-slate-ink/50 text-bone'
-                        : 'bg-chassis border-edge text-solder hover:text-slate-ink'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-solder">→</span>
-                {([['anki', 'ANKI'], ['remnote', 'REMNOTE']] as [keyof typeof segregateOptions, string][]).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() =>
-                      setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))
-                    }
-                    className={`px-2.5 py-1.5 min-h-[36px] text-xs font-semibold rounded-full border transition-colors duration-150 cursor-pointer ${
-                      segregateOptions[key]
-                        ? 'bg-amber-500 border-amber-500 text-inset'
-                        : 'bg-chassis border-edge text-solder hover:text-slate-ink'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+                        {/* Bench: audits and export targets share one panel, in two
+                columns, instead of two centered rows of pills stacked above a
+                three-column telemetry band. Each audit is its own bordered
+                block so the page reads as a working list. */}
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4">
+              <div className="min-w-0 p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="label-caps whitespace-nowrap">
+                    Pre-flight audits
+                  </span>
+                  <span className="h-px w-6 gilt-rule" aria-hidden />
+                  <span className="font-mono text-[10px] text-solder whitespace-nowrap">optional</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    {
+                      key: 'prereq',
+                      label: 'Check prerequisites',
+                      busy: 'Auditing…',
+                      busyNow: isAuditingPrereq,
+                      desc: 'Background fundamentals this topic quietly assumes.',
+                      tone: 'amber' as const,
+                      title: 'Concept Prerequisites Check: Diagnoses background fundamentals you need before tackling this topic',
+                      onClick: handleAuditPrerequisites,
+                      disabled: (!rawNotes.trim() && !uploadedFile) || isAuditingPrereq,
+                    },
+                    {
+                      key: 'pretest',
+                      label: 'Pre-test drill',
+                      busy: 'Generating…',
+                      busyNow: isLoadingPretest,
+                      desc: 'Three questions you are supposed to fail first.',
+                      tone: 'amber' as const,
+                      title: 'Pre-Testing Effect (Productive Failure): 3-question diagnostic failure drill before learning',
+                      onClick: handleLaunchPretest,
+                      disabled: (!rawNotes.trim() && !uploadedFile) || isLoadingPretest,
+                    },
+                    {
+                      key: 'roast',
+                      label: 'Roast notes',
+                      busy: 'Auditing…',
+                      busyNow: isRoasting,
+                      desc: 'Names fallacies and hand-waving in the source.',
+                      tone: 'hazard' as const,
+                      title: 'Strict Professor Audit: Call out fallacies, hand-waving, and missing gaps before encoding',
+                      onClick: handleRoastNotes,
+                      disabled: (!rawNotes.trim() && !uploadedFile) || isRoasting,
+                    },
+                    {
+                      key: 'segregate',
+                      label: 'Segregate and export',
+                      busy: 'Segregating…',
+                      busyNow: isSegregating,
+                      desc: 'Separates concepts from facts in a 4-quadrant matrix.',
+                      tone: 'amber' as const,
+                      title: 'Concept vs Fact Segregator: 4-Quadrant Matrix + Cloze Optimizer / Export to Anki or RemNote',
+                      onClick: handleSegregateNotes,
+                      disabled: (!rawNotes.trim() && !uploadedFile) || isSegregating,
+                    },
+                  ]).map((a) => (
+                    <button
+                      key={a.key}
+                      type="button"
+                      onClick={a.onClick}
+                      disabled={a.disabled}
+                      title={a.title}
+                      className={`text-left p-4 bg-chassis/60 border rounded-xl transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        a.tone === 'hazard'
+                          ? 'border-edge/70 hover:border-hazard-500/50'
+                          : 'border-edge/70 hover:border-gilt/40'
+                      }`}
+                    >
+                      <span
+                        className={`block text-xs font-semibold ${
+                          a.tone === 'hazard' ? 'text-hazard-300' : 'text-bone'
+                        }`}
+                      >
+                        {a.busyNow ? a.busy : a.label}
+                      </span>
+                      <span className="mt-1 block text-[11px] leading-snug text-solder">{a.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-solder mr-1">
-                Deep diagnostics
-              </span>
-              <button
-                type="button"
-                onClick={handleAuditPrerequisites}
-                disabled={(!rawNotes.trim() && !uploadedFile) || isAuditingPrereq}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-amber-500/60 text-bone text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
-                title="Concept Prerequisites Check: Diagnoses background fundamentals you need before tackling this topic"
-              >
-                {isAuditingPrereq ? 'Auditing…' : 'Check prerequisites'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleLaunchPretest}
-                disabled={(!rawNotes.trim() && !uploadedFile) || isLoadingPretest}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-amber-500/60 text-bone text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
-                title="Pre-Testing Effect (Productive Failure): 3-question diagnostic failure drill before learning"
-              >
-                {isLoadingPretest ? 'Generating…' : 'Pre-test drill'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSegregateNotes}
-                disabled={(!rawNotes.trim() && !uploadedFile) || isSegregating}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-amber-500/60 text-bone text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
-                title="Concept vs Fact Segregator: 4-Quadrant Matrix + Cloze Optimizer / Export to Anki or RemNote"
-              >
-                {isSegregating ? 'Segregating…' : 'Segregate and export'}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleRoastNotes}
-                disabled={(!rawNotes.trim() && !uploadedFile) || isRoasting}
-                className="px-3 py-1.5 bg-chassis disabled:opacity-40 border border-edge hover:border-hazard-500/60 text-hazard-300 text-xs font-medium rounded-md transition-colors duration-150 cursor-pointer"
-                title="Strict Professor Audit: Call out fallacies, hand-waving, and missing gaps before encoding"
-              >
-                {isRoasting ? 'Auditing…' : 'Roast notes'}
-              </button>
-            </div>
-            </div>
-
-            {/* Cognitive framework telemetry */}
-            <div className="bg-deck border border-edge">
-              <div className="px-4 py-2 border-b border-edge bg-chassis">
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-solder">Cognitive framework telemetry</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 md:divide-x divide-y md:divide-y-0 divide-edge">
-                <div className="p-4">
-                  <div className="text-amber-300 text-xs font-semibold mb-1.5">
-                    01 · {encodingMode === 'memorization' ? "Miller's 7±2 Law & Chunking" : "Craik & Lockhart Levels of Processing"}
-                  </div>
-                  <p className="text-xs text-solder leading-relaxed">
-                    {encodingMode === 'memorization'
-                      ? "Chunking arbitrary items into semantic sub-clusters prevents working memory overload."
-                      : "Semantic analysis creates drastically stronger memory traces than passive re-reading."}
-                  </p>
+              <div className="p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <span className="label-caps whitespace-nowrap">
+                    Export targets
+                  </span>
+                  <span className="h-px w-6 gilt-rule" aria-hidden />
                 </div>
-                <div className="p-4">
-                  <div className="text-amber-300 text-xs font-semibold mb-1.5">
-                    02 · {encodingMode === 'memorization' ? "Method of Loci (Palace)" : "Paivio Dual Coding (1986)"}
-                  </div>
-                  <p className="text-xs text-solder leading-relaxed">
-                    {encodingMode === 'memorization'
-                      ? "Placing items along a familiar physical path uses spatial navigation memory."
-                      : "Forming both verbal and visual mental spatial codes doubles retrievability during recall."}
-                  </p>
+
+                {/* What the segregation pass keeps, as a real form list. */}
+                <div className="border border-edge/60 bg-chassis/50 rounded-xl overflow-hidden divide-y divide-edge/40">
+                  {([
+                    ['facts', 'Facts', 'Isolated claims worth a card'],
+                    ['mechanisms', 'Mechanisms', 'Causal chains to reconstruct'],
+                    ['drills', 'Drills', 'Procedures and worked steps'],
+                    ['examples', 'Examples', 'Concrete instances of the rule'],
+                    ['mcq', 'MCQ', 'Parametric multiple-choice archetypes'],
+                  ] as [keyof typeof segregateOptions, string, string][]).map(([key, label, hint]) => (
+                    <label
+                      key={key}
+                      className="flex items-start gap-2.5 px-2.5 py-2 cursor-pointer hover:bg-inset/60 transition-colors duration-150"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={segregateOptions[key]}
+                        onChange={() => setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))}
+                        className="mt-0.5 w-3.5 h-3.5 accent-amber-500 cursor-pointer"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-medium text-bone">{label}</span>
+                        <span className="block text-[10px] leading-snug text-solder">{hint}</span>
+                      </span>
+                    </label>
+                  ))}
                 </div>
-                <div className="p-4">
-                  <div className="text-amber-300 text-xs font-semibold mb-1.5">
-                    03 · The Interleaving Effect
+
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  {([['anki', 'ANKI'], ['remnote', 'REMNOTE']] as [keyof typeof segregateOptions, string][]).map(([key, label]) => {
+                    const on = segregateOptions[key];
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setSegregateOptions((prev) => ({ ...prev, [key]: !prev[key] }))}
+                        className={`px-3 py-2 border rounded-full font-mono text-[11px] uppercase tracking-[0.16em] transition-colors duration-150 cursor-pointer ${
+                          on
+                            ? 'bg-gradient-to-b from-amber-400 to-amber-600 border-amber-600/70 text-inset font-semibold shadow-gilt'
+                            : 'bg-chassis border-edge/70 text-solder hover:text-bone hover:border-gilt/40'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Method: why the encoder is shaped this way. */}
+                <div className="mt-5">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <span className="label-caps whitespace-nowrap">
+                      Method
+                    </span>
+                    <span className="h-px w-6 gilt-rule" aria-hidden />
                   </div>
-                  <p className="text-xs text-solder leading-relaxed">
-                    Mixing diverse domains forces active neural discrimination, preventing mental fixation and building flexible mastery.
-                  </p>
+                  <dl className="space-y-2.5">
+                    <div>
+                      <dt className="text-[11px] font-semibold text-amber-300">
+                        01 · {encodingMode === 'memorization' ? "Miller's 7±2 law and chunking" : 'Craik & Lockhart levels of processing'}
+                      </dt>
+                      <dd className="mt-0.5 text-[11px] leading-relaxed text-solder">
+                        {encodingMode === 'memorization'
+                          ? 'Arbitrary items get grouped into semantic sub-clusters, because working memory holds about seven pieces at once.'
+                          : 'Semantic analysis leaves stronger traces than re-reading, so every stage asks for meaning, not recitation.'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold text-amber-300">
+                        02 · {encodingMode === 'memorization' ? 'Method of loci' : 'Paivio dual coding (1986)'}
+                      </dt>
+                      <dd className="mt-0.5 text-[11px] leading-relaxed text-solder">
+                        {encodingMode === 'memorization'
+                          ? 'Items placed along a familiar physical path ride on spatial memory, which is cheap to walk back through.'
+                          : 'A verbal code and a visual code for the same mechanism give recall two routes instead of one.'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] font-semibold text-amber-300">03 · The interleaving effect</dt>
+                      <dd className="mt-0.5 text-[11px] leading-relaxed text-solder">
+                        Mixing domains forces active discrimination between similar items, which is what keeps them from collapsing into each other in review.
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
               </div>
             </div>
@@ -1878,13 +1923,13 @@ export default function DeepEncodeApp() {
             animate={{ opacity: 1, scale: 1 }}
             className="w-full py-24 flex flex-col items-center justify-center text-center"
           >
-            <div className="mb-6 flex items-center gap-2 px-4 py-1.5 bg-deck border border-edge rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden />
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+            <div className="mb-7 flex items-center gap-2.5 px-3.5 py-1.5 bg-deck border border-gilt/30 rounded-full">
+              <span className="h-1.5 w-1.5 rotate-45 bg-gradient-to-br from-amber-300 to-amber-600" aria-hidden />
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-200">
                 Processing
               </span>
             </div>
-            <h2 className="text-xl font-bold text-bone mb-2 tracking-tight">
+            <h2 className="font-display text-[26px] leading-tight text-bone mb-3">
               {activeTab === 'youtube'
                 ? 'Deconstructing YouTube Video Lecture Timestamps...'
                 : uploadedFile
@@ -1905,9 +1950,9 @@ export default function DeepEncodeApp() {
 
             {/* Live pipeline progress : asymptotic bar + elapsed clock + phase ticker */}
             <div className="mt-8 w-full max-w-md">
-              <div className="h-1.5 w-full bg-inset border border-edge rounded-full overflow-hidden">
+              <div className="h-1.5 w-full bg-inset border border-edge/60 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
+                  className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300 shadow-gilt transition-all duration-1000 ease-linear"
                   style={{ width: `${pct}%` }}
                   role="progressbar"
                   aria-label="Generation progress"
@@ -1924,7 +1969,7 @@ export default function DeepEncodeApp() {
                 type="button"
                 onClick={handleCancelGeneration}
                 title="Cancel this generation and return to the input"
-                className="mt-5 px-3.5 py-2 text-xs font-medium text-solder bg-inset border border-edge rounded-md hover:text-hazard-300 hover:border-hazard-500/50 transition-colors duration-150 cursor-pointer"
+                className="mt-6 px-4 py-2 text-xs text-solder bg-inset border border-edge/70 rounded-full hover:text-hazard-300 hover:border-hazard-500/50 transition-colors duration-150 cursor-pointer"
               >
                 Cancel generation
               </button>
@@ -2162,14 +2207,14 @@ export default function DeepEncodeApp() {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-deck border border-edge p-6 max-w-md w-full mx-4"
+            className="bg-deck border border-edge/70 rounded-2xl shadow-raised p-6 max-w-md w-full mx-4"
           >
             <div className="text-center mb-6">
-              <span className="inline-block px-3 py-1 bg-chassis border border-amber/40 text-amber text-[10px] font-mono font-bold uppercase tracking-widest mb-3">
+              <span className="inline-block px-3 py-1 bg-chassis border border-gilt/30 text-amber-200 text-[10px] font-mono uppercase tracking-[0.2em] rounded-full mb-4">
                 [ SEGREGATION COMPLETE ]
               </span>
-              <h3 className="text-base font-bold text-bone font-mono uppercase tracking-wider">Export your 4-Quadrant Matrix</h3>
-              <p className="text-[10px] text-solder font-mono uppercase tracking-wider mt-1">
+              <h3 className="font-display text-[20px] leading-tight text-bone">Export your 4-Quadrant Matrix</h3>
+              <p className="text-[10px] text-solder font-mono uppercase tracking-[0.2em] mt-1.5">
                 {'// TARGET: ANKI OR REMNOTE'}
               </p>
             </div>
@@ -2180,7 +2225,7 @@ export default function DeepEncodeApp() {
                   setShowExportChoice(false);
                   setIsAnkiExportOpen(true);
                 }}
-                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-edge hover:border-amber transition-none cursor-pointer"
+                className="flex flex-col items-center gap-2 p-5 bg-chassis/60 border border-edge/70 rounded-2xl hover:border-gilt/45 hover:bg-white/[0.03] transition-colors duration-150 cursor-pointer"
               >
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-bone">[ ANKI ]</span>
                 <span className="text-[10px] font-mono text-solder">.APKG + SM-2</span>
@@ -2191,7 +2236,7 @@ export default function DeepEncodeApp() {
                   setShowExportChoice(false);
                   setIsSegregateModalOpen(true);
                 }}
-                className="flex flex-col items-center gap-1.5 p-4 bg-chassis border border-edge hover:border-amber transition-none cursor-pointer"
+                className="flex flex-col items-center gap-2 p-5 bg-chassis/60 border border-edge/70 rounded-2xl hover:border-gilt/45 hover:bg-white/[0.03] transition-colors duration-150 cursor-pointer"
               >
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-bone">[ REMNOTE ]</span>
                 <span className="text-[10px] font-mono text-solder">MARKDOWN + API</span>
@@ -2200,7 +2245,7 @@ export default function DeepEncodeApp() {
 
             <button
               onClick={() => setShowExportChoice(false)}
-              className="w-full mt-4 py-2 text-[10px] font-mono font-bold uppercase tracking-wider text-solder hover:text-bone transition-none cursor-pointer"
+              className="w-full mt-4 py-2 rounded-full text-[10px] font-mono uppercase tracking-[0.2em] text-solder hover:text-bone hover:bg-white/[0.04] cursor-pointer"
             >
               [ CANCEL ]
             </button>

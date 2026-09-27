@@ -252,7 +252,7 @@ export function GuidedPathRoadmap({
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-10 h-10 bg-amber/20 border border-amber/40 text-amber">
+                  <div className="flex items-center justify-center h-10 w-fit min-w-[2.5rem] px-2 bg-amber/20 border border-amber/40 text-amber">
                     <span className="text-amber font-bold font-mono">[ * ]</span>
                   </div>
                   <div>

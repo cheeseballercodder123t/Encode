@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,24 +6,38 @@
 
 @layer base {
   html, body {
-    background-color: #0E0F12;
-    color: #E8E6E1;
-    /* IBM Plex Sans carries prose & UI labels; IBM Plex Mono is applied
-       explicitly on inputs, badges, and metadata via `font-mono`. */
+    background-color: #0B0C11;
+    color: #F3EEE3;
+    /* IBM Plex Sans carries prose & UI labels; Fraunces is applied explicitly
+       with `font-display`, and Mono on inputs, badges and metadata. */
     font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
     -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'kern' 1, 'liga' 1;
   }
 
-  /* The page itself gets a barely-there vertical vignette so panels sit
-     "on" the surface instead of floating in flat black. */
+  /* The hall: a dark stone floor with one soft light from above. No mesh
+     gradient, no purple, no glass — a single source of illumination, barely
+     there, so surfaces have something to sit in. */
   body {
-    background-image: radial-gradient(1200px 600px at 50% -200px, rgba(208, 132, 48, 0.05), transparent 60%);
+    background-image:
+      radial-gradient(1100px 520px at 50% -180px, rgba(210, 164, 85, 0.09), transparent 62%),
+      radial-gradient(760px 460px at 8% 108%, rgba(97, 105, 214, 0.06), transparent 68%);
     background-repeat: no-repeat;
+    background-attachment: fixed;
   }
 
   /* Code-like elements keep the terminal voice. */
   code, pre, kbd, samp {
     font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  }
+
+  /* Headlines are set in Fraunces wherever a surface names itself. */
+  h1, h2, .font-display {
+    font-family: 'Fraunces', 'Iowan Old Style', Palatino, Georgia, serif;
+    font-optical-sizing: auto;
   }
 
   /* Prevent iOS Safari auto-zoom when focusing small inputs. */
@@ -33,28 +47,32 @@
     }
   }
 
-  /* Depth is allowed again: subtle inset top-light on panels, soft ambient
-     shadows for raised elements. No neon glows, no frosted glass. */
+  /* No neon glows, no frosted glass: depth is light, value and shadow. */
   *, *::before, *::after {
     text-shadow: none !important;
-    filter: none !important;
     backdrop-filter: none !important;
   }
 
-  /* Kill the default outline, but restore keyboard focus as a visible
-     amber ring. Pointer focus stays clean. */
+  /* Kill the default outline, but restore keyboard focus as a visible gold
+     ring. Pointer focus stays clean. */
   *:focus {
     outline: none;
   }
 
   *:focus-visible {
-    outline: 2px solid #D08430;
-    outline-offset: 1px;
+    outline: 2px solid #D2A455;
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: rgba(210, 164, 85, 0.28);
+    color: #FBF7EE;
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
 
   ::-webkit-scrollbar-track {
@@ -62,17 +80,26 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #2A2D35;
-    border-radius: 3px;
+    background: #2A2E39;
+    border-radius: 999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #3A3E48;
+    background: #4A4436;
   }
 
   input, textarea, select, button {
     /* Larger tap targets on coarse-pointer devices without touching layout. */
     touch-action: manipulation;
+  }
+
+  /* The light rises, the cards settle — but only for people who want motion. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
   }
 
   /* Safe-area + dynamic viewport fallbacks for notched mobile browsers.
@@ -90,5 +117,49 @@
 
   .mobile-safe-bottom {
     padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@layer components {
+  /* A tablet: lit top edge, soft ambient shadow, one warm hairline. Used for
+     every large surface so the page reads as a few objects, not bands. */
+  .tablet {
+    @apply bg-deck border border-edge/70 rounded-xl shadow-panel;
+  }
+
+  /* The gold leaf rule: a short gradient hairline, never a full-width bar. */
+  .gilt-rule {
+    height: 1px;
+    background: linear-gradient(90deg, rgba(210, 164, 85, 0.55), rgba(210, 164, 85, 0.05));
+  }
+
+  /* Small-caps label used on every surface heading. */
+  .label-caps {
+    @apply font-mono text-[10px] uppercase tracking-[0.2em] text-solder;
+  }
+
+  /* Chips, toggles and status pills. */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-edge/80 bg-inset px-2.5 py-1 text-[11px] text-slate-ink;
+  }
+
+  /* Bracket chrome tokens (`[ DL ]`, `[ ZAP ]`, `[ OK ]`) are single-line
+     dressing. The bold mono combination is used only for them across the app,
+     and a token that breaks reads as three stacked lines instead of one label
+     — so they never wrap. Utilities still win, so `whitespace-normal` can opt
+     any future bold-mono element back out. */
+  .font-bold.font-mono {
+    white-space: nowrap;
+  }
+
+  /* The sigil: the small gold lozenge that marks a heading. */
+  .sigil::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 0.55rem;
+    background: linear-gradient(135deg, #E3C285, #A1752E);
+    transform: rotate(45deg) translateY(-1px);
   }
 }

@@ -87,9 +87,9 @@ interface StudioWorkbenchProps {
 function TabooStrip({ leaked, terms }: { leaked: string[]; terms: string[] }) {
   if (terms.length === 0) return null;
   return (
-    <div className="p-3 bg-inset border border-edge rounded-md space-y-1.5">
+    <div className="p-4 bg-inset/70 border border-edge/60 rounded-2xl space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-amber-300">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-300">
           Taboo terms
         </span>
         <span className="text-[10px] font-mono text-solder">
@@ -102,10 +102,10 @@ function TabooStrip({ leaked, terms }: { leaked: string[]; terms: string[] }) {
           return (
             <span
               key={t}
-              className={`px-2 py-0.5 text-[11px] font-mono rounded border ${
+              className={`px-2.5 py-1 text-[11px] font-mono rounded-full border ${
                 hit
-                  ? 'bg-hazard-500/15 border-hazard-500/50 text-hazard-300 line-through'
-                  : 'bg-deck border-edge text-slate-ink'
+                  ? 'bg-hazard-500/12 border-hazard-500/45 text-hazard-300 line-through'
+                  : 'bg-deck border-edge/70 text-slate-ink'
               }`}
             >
               {t}
@@ -120,10 +120,15 @@ function TabooStrip({ leaked, terms }: { leaked: string[]; terms: string[] }) {
   );
 }
 
-/** Compact uppercase section label — sans, calm, one voice for all zones. */
+/**
+ * One voice for every zone label: small caps, marked by a gold lozenge.
+ * The mark replaces the full-width rule the panel headers used to carry — a
+ * rule under every heading is what made the workbench read as stacked bands.
+ */
 function ZoneLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="text-[11px] font-semibold uppercase tracking-widest text-solder">
+    <span className="flex items-center gap-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-ink">
+      <span className="h-1.5 w-1.5 rotate-45 bg-gradient-to-br from-amber-300 to-amber-600" aria-hidden />
       {children}
     </span>
   );
@@ -147,10 +152,10 @@ function ToolToggle({
       onClick={onClick}
       title={title}
       aria-pressed={active}
-      className={`min-h-[40px] sm:min-h-0 px-3 sm:px-2.5 py-2 sm:py-1 text-[11px] font-medium rounded-md border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+      className={`min-h-[40px] sm:min-h-0 px-3 py-2 sm:py-1.5 text-[11px] rounded-full border transition-colors duration-150 cursor-pointer whitespace-nowrap ${
         active
-          ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
-          : 'bg-inset border-edge text-slate-ink hover:text-bone hover:border-slate-ink/40'
+          ? 'bg-amber-500/[0.14] border-gilt/50 text-amber-200'
+          : 'bg-inset/70 border-edge/70 text-slate-ink hover:text-bone hover:border-gilt/30'
       }`}
     >
       {children}
@@ -579,7 +584,7 @@ export function StudioWorkbench({
       {/* Mobile Tab Switcher : sticky so the zone state stays visible while
           scrolling long forge content on small screens. */}
       <div
-        className="flex lg:hidden bg-deck border border-edge rounded-lg p-1 gap-1 sticky top-2 z-10 shadow-panel"
+        className="flex lg:hidden bg-deck/95 border border-edge/70 rounded-full p-1 gap-1 sticky top-2 z-10 shadow-panel"
         role="group"
         aria-label="Workbench zones"
       >
@@ -589,8 +594,10 @@ export function StudioWorkbench({
             type="button"
             aria-pressed={mobileTab === t.id}
             onClick={() => setMobileTab(t.id)}
-            className={`flex-1 min-h-[40px] px-2 text-xs font-medium rounded-md transition-colors duration-150 ${
-              mobileTab === t.id ? 'bg-amber-500 text-inset font-semibold' : 'text-slate-ink hover:text-bone'
+            className={`flex-1 min-h-[40px] px-2 text-xs rounded-full transition-colors duration-150 ${
+              mobileTab === t.id
+                ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-inset font-semibold shadow-gilt'
+                : 'text-slate-ink hover:text-bone'
             }`}
           >
             {t.label}
@@ -605,9 +612,9 @@ export function StudioWorkbench({
         {/* ZONE 1: THE SOURCE DOCK (LEFT 3 COLS)                     */}
         {/* ========================================================= */}
         <div className={`lg:col-span-3 flex-col gap-3 ${mobileTab === 'source' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-deck border border-edge rounded-lg shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden">
+          <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden">
             {/* Zone 1 Header */}
-            <div className="flex items-center justify-between border-b border-edge pb-3 mb-3">
+            <div className="flex items-center justify-between gap-3 pb-3 mb-3">
               <ZoneLabel>Source</ZoneLabel>
               
               {/* Fluff Stripper Button */}
@@ -686,37 +693,44 @@ export function StudioWorkbench({
         {/* ZONE 2: THE FORGE (CENTER 6 COLS)                         */}
         {/* ========================================================= */}
         <div className={`lg:col-span-6 flex-col gap-3 ${mobileTab === 'forge' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-deck border border-edge rounded-lg shadow-panel p-5 space-y-4">
+          <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-5 sm:p-6 space-y-5">
 
             {/* Stage Progression header */}
-            <div className="flex items-center justify-between gap-3 border-b border-edge pb-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="shrink-0 px-2 py-0.5 bg-inset border border-edge rounded-md text-[11px] font-mono font-semibold text-bone">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 px-2.5 py-1 bg-inset border border-edge/70 rounded-full text-[11px] font-mono font-semibold text-amber-300">
                   {String(currentActivityIndex + 1).padStart(2, '0')}/{String(activities.length).padStart(2, '0')}
                 </span>
-                <span className="text-sm font-semibold text-bone truncate">
+                <span className="font-display text-[19px] leading-tight text-bone truncate">
                   {currentActivity.title}
                 </span>
               </div>
 
               <span
-                className="shrink-0 text-[11px] font-mono font-semibold text-amber-300 border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 rounded-md"
+                className="shrink-0 text-[11px] font-mono font-semibold text-amber-200 border border-gilt/40 bg-amber-500/10 px-2.5 py-1 rounded-full"
                 title="Consecutive mastered stages"
               >
                 ×{combo}
               </span>
             </div>
 
-            {/* Progress rail */}
-            <div className="flex items-center gap-1 -mt-2">
+            {/* Stage ticker : one jewel per stage. This was a row of full-width
+                bars, which just added another horizontal stripe to the page. */}
+            <div className="flex items-center gap-2 -mt-2 flex-wrap">
               {activities.map((_, i) => {
                 const done = i < currentActivityIndex;
                 const current = i === currentActivityIndex;
                 return (
-                  <div
+                  <span
                     key={i}
                     title={`Stage ${i + 1}${done ? ' (completed)' : current ? ' (current)' : ''}`}
-                    className={`h-1 flex-1 rounded-full ${done ? 'bg-signal-500/70' : current ? 'bg-amber-500' : 'bg-edge'}`}
+                    className={`h-1.5 rotate-45 transition-colors duration-150 ${
+                      current
+                        ? 'w-2.5 bg-gradient-to-br from-amber-300 to-amber-600'
+                        : done
+                          ? 'w-1.5 bg-signal-500/80'
+                          : 'w-1.5 border border-edge/80'
+                    }`}
                   />
                 );
               })}
@@ -731,15 +745,19 @@ export function StudioWorkbench({
                 than looked up. */}
             {currentActivity.paradox && (
               <div
-                className="p-4 bg-flux-950/30 border-l-2 border-flux-500 rounded-r-lg"
+                className="relative p-5 pl-6 bg-flux-950/25 border border-flux-500/35 rounded-2xl overflow-hidden"
                 role="note"
                 aria-label="The paradox this stage resolves"
                 data-testid="stage-paradox"
               >
-                <span className="font-semibold text-[10px] text-flux-300 uppercase tracking-widest block mb-1">
+                <span
+                  aria-hidden
+                  className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-flux-300/80 to-flux-700/30"
+                />
+                <span className="block mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-flux-300">
                   How is this possible?
                 </span>
-                <p className="text-[15px] font-semibold text-bone leading-snug">
+                <p className="font-display text-[19px] leading-snug text-bone">
                   {currentActivity.paradox}
                 </p>
               </div>
@@ -750,13 +768,13 @@ export function StudioWorkbench({
                 the name of the process is not. */}
             {currentActivity.gedankenexperiment && (
               <div
-                className="p-3.5 bg-inset border border-edge rounded-md"
+                className="p-4 bg-inset/70 border border-edge/60 rounded-2xl"
                 data-testid="stage-gedanken"
               >
-                <span className="font-semibold text-[10px] text-amber-300 uppercase tracking-widest block mb-1">
+                <span className="block mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-300">
                   Thought experiment · run it before you write a word
                 </span>
-                <p className="text-sm text-bone italic leading-relaxed">
+                <p className="font-display text-[15px] italic leading-relaxed text-bone">
                   {currentActivity.gedankenexperiment}
                 </p>
               </div>
@@ -770,14 +788,14 @@ export function StudioWorkbench({
               if (!yourTask) return null;
               return (
                 <div
-                  className="p-4 bg-amber-500/[0.07] border-l-2 border-amber-500 rounded-r-lg"
+                  className="p-5 bg-amber-500/[0.05] border border-gilt/35 rounded-2xl"
                   role="note"
                   aria-label="Your task for this stage"
                 >
-                  <span className="font-semibold text-[10px] text-amber-300 uppercase tracking-widest block mb-1">
+                  <span className="block mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-300">
                     Your task
                   </span>
-                  <p className="text-[15px] font-semibold text-bone leading-snug">
+                  <p className="font-display text-[19px] leading-snug text-bone">
                     {yourTask}
                   </p>
                   {meta?.learnerBenefit && (
@@ -797,8 +815,8 @@ export function StudioWorkbench({
             })()}
 
             {/* Target Concept Extract */}
-            <div className="p-3.5 bg-inset border border-edge rounded-md text-sm text-slate-ink leading-relaxed">
-              <span className="font-semibold text-[10px] text-amber-300 uppercase tracking-widest block mb-1">
+            <div className="p-4 bg-inset/70 border border-edge/60 rounded-2xl text-sm text-slate-ink leading-relaxed">
+              <span className="block mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-300">
                 Target mechanism
               </span>
               &ldquo;{currentActivity.contextSnippet}&rdquo;
@@ -1028,7 +1046,7 @@ export function StudioWorkbench({
             {/* Scaffold Input 2 with Mic Button */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-ink uppercase tracking-widest block">
+                <label className="block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-ink">
                   {currentActivity.scaffold.field2Label}
                 </label>
 
@@ -1059,7 +1077,7 @@ export function StudioWorkbench({
             {/* Scaffold Input 3 (if provided) */}
             {currentActivity.scaffold.field3Label && (
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-slate-ink uppercase tracking-widest block">
+                <label className="block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-ink">
                   {currentActivity.scaffold.field3Label}
                 </label>
                 <input
@@ -1082,7 +1100,7 @@ export function StudioWorkbench({
               const totalWords = f1Words + f2Words;
               if (!bothFilled || totalWords >= 15) return null;
               return (
-                <div className="p-3 bg-amber-500/[0.07] border border-amber-500/30 rounded-md text-xs text-slate-ink leading-relaxed">
+                <div className="p-3.5 bg-amber-500/[0.05] border border-gilt/25 rounded-xl text-xs text-slate-ink leading-relaxed">
                   <span className="text-amber-300 font-semibold">Short answer. </span>
                   This looks like a one-word blurt ({totalWords} words). Add a sentence or two. The examiner grades on mechanistic depth, and you&apos;ll encode it deeper that way.
                 </div>
@@ -1091,9 +1109,9 @@ export function StudioWorkbench({
 
             {/* Inline difficulty rating */}
             {showDifficultyRating && (
-              <div className="p-3 bg-inset border border-amber-500/30 rounded-md">
+              <div className="p-3.5 bg-inset/70 border border-gilt/25 rounded-xl">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-widest">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-300">
                     How hard was stage 1?
                   </span>
                   <div className="flex items-center gap-1">
@@ -1106,10 +1124,10 @@ export function StudioWorkbench({
                           playSound('pop');
                         }}
                         title={['Trivial', 'Light', 'Fair', 'Hard', 'Brutal'][n - 1]}
-                        className={`w-7 h-7 text-xs font-semibold rounded-md border transition-colors duration-150 cursor-pointer ${
+                        className={`w-7 h-7 text-xs font-semibold rounded-full border transition-colors duration-150 cursor-pointer ${
                           n >= 4
                             ? 'border-hazard-500/40 text-hazard-300 hover:bg-hazard-500/15'
-                            : 'border-edge text-slate-ink hover:border-amber-500/60 hover:text-amber-300'
+                            : 'border-edge/70 text-slate-ink hover:border-gilt/50 hover:text-amber-300'
                         }`}
                       >
                         {n}
@@ -1124,14 +1142,14 @@ export function StudioWorkbench({
             )}
 
             {/* Forge Navigation Footer */}
-            <div className="sticky bottom-0 bg-deck/95 flex items-center justify-between pt-3 pb-1 border-t border-edge gap-2 flex-wrap">
+            <div className="sticky bottom-0 bg-deck/95 flex items-center justify-between pt-4 pb-1 border-t border-edge/50 gap-2 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={onPreviousActivity}
                   disabled={currentActivityIndex === 0}
                   aria-label="Previous stage"
-                  className="px-3 py-2 text-xs font-medium text-slate-ink bg-inset border border-edge rounded-md hover:text-bone transition-colors duration-150 disabled:opacity-40 cursor-pointer"
+                  className="px-3.5 py-2 text-xs text-slate-ink bg-inset border border-edge/70 rounded-full hover:text-bone hover:border-gilt/40 transition-colors duration-150 disabled:opacity-40 cursor-pointer"
                 >
                   ←
                 </button>
@@ -1142,7 +1160,7 @@ export function StudioWorkbench({
                   onClick={() => onRegenerateStage()}
                   disabled={isRegenerating}
                   title="Regenerate this stage (lightweight model) : use when the stage doesn't fit you"
-                  className="px-3 py-2 text-xs font-medium text-slate-ink bg-inset border border-edge rounded-md hover:text-bone hover:border-slate-ink/40 transition-colors duration-150 disabled:opacity-40 cursor-pointer"
+                  className="px-3.5 py-2 text-xs text-slate-ink bg-inset border border-edge/70 rounded-full hover:text-bone hover:border-gilt/40 transition-colors duration-150 disabled:opacity-40 cursor-pointer"
                 >
                   {isRegenerating ? 'Regenerating…' : 'Regenerate'}
                 </button>
@@ -1152,7 +1170,7 @@ export function StudioWorkbench({
                   type="button"
                   onClick={onTeachStage}
                   title="Teach Me This: interactive lesson that teaches this stage's mechanism and walks the problem step-by-step"
-                  className="px-3 py-2 text-xs font-medium text-flux-300 bg-flux-500/10 border border-flux-500/40 rounded-md hover:bg-flux-500/20 transition-colors duration-150 cursor-pointer"
+                  className="px-3.5 py-2 text-xs text-flux-300 bg-flux-500/10 border border-flux-500/45 rounded-full hover:bg-flux-500/20 transition-colors duration-150 cursor-pointer"
                 >
                   Teach me this
                 </button>
@@ -1164,10 +1182,10 @@ export function StudioWorkbench({
                   onClick={onCheckAnswer}
                   disabled={isEvaluating || (!field1.trim() && !field2.trim())}
                   title="I'm done thinking. Check my answer with the examiner (Cmd/Ctrl+Enter)"
-                  className={`px-4 py-2.5 text-xs font-semibold rounded-md transition-colors duration-150 disabled:opacity-40 cursor-pointer border ${
+                  className={`px-5 py-2.5 text-xs font-semibold rounded-full transition-colors duration-150 disabled:opacity-40 cursor-pointer border ${
                     feynmanResult
-                      ? 'bg-inset border-edge text-slate-ink'
-                      : 'bg-amber-500 border-amber-500 text-inset hover:bg-amber-400 hover:border-amber-400'
+                      ? 'bg-inset border-edge/70 text-slate-ink'
+                      : 'bg-gradient-to-b from-amber-400 to-amber-600 border-amber-600/80 text-inset shadow-gilt hover:from-amber-300 hover:to-amber-500'
                   }`}
                 >
                   {isEvaluating ? 'Checking…' : feynmanResult ? 'CHECKED. TRY AGAIN OR NEXT' : 'CHECK MY ANSWER'}
@@ -1177,7 +1195,7 @@ export function StudioWorkbench({
                   type="button"
                   onClick={onSkipStage}
                   title="Skip for now. I'll come back: marked visibly so you can resume it later, no guilt"
-                  className="px-3 py-2 text-xs font-medium text-solder bg-inset border border-edge rounded-md hover:text-bone transition-colors duration-150 cursor-pointer"
+                  className="px-3.5 py-2 text-xs text-solder bg-inset border border-edge/70 rounded-full hover:text-bone hover:border-gilt/40 transition-colors duration-150 cursor-pointer"
                 >
                   Skip
                 </button>
@@ -1186,7 +1204,7 @@ export function StudioWorkbench({
                   type="button"
                   onClick={onNextActivity}
                   disabled={!field1.trim() || !field2.trim()}
-                  className="px-4 py-2.5 text-xs font-semibold bg-amber-500 border border-amber-500 text-inset rounded-md transition-colors duration-150 disabled:opacity-40 cursor-pointer hover:bg-amber-400 hover:border-amber-400"
+                  className="px-5 py-2.5 text-xs font-semibold rounded-full bg-gradient-to-b from-amber-400 to-amber-600 border border-amber-600/80 text-inset shadow-gilt transition-colors duration-150 disabled:opacity-40 disabled:shadow-none cursor-pointer hover:from-amber-300 hover:to-amber-500"
                 >
                   {justMastered
                     ? (currentActivityIndex === activities.length - 1 ? 'MASTERED! FINISH →' : 'MASTERED! NEXT →')
@@ -1198,7 +1216,7 @@ export function StudioWorkbench({
             {/* One-line note */}
             {setStageReflection && (
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-slate-ink uppercase tracking-widest block">
+                <label className="block font-mono text-[10px] uppercase tracking-[0.2em] text-slate-ink">
                   What clicked? <span className="normal-case font-normal text-solder">(one line, in your own words, optional)</span>
                 </label>
                 <input
@@ -1207,7 +1225,7 @@ export function StudioWorkbench({
                   onChange={e => setStageReflection(e.target.value)}
                   placeholder="The part that finally clicked for me was..."
                   data-dg-field="reflection"
-                  className="w-full p-2.5 bg-inset border border-edge text-bone placeholder-solder text-sm outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 font-sans"
+                  className="w-full p-3 bg-inset border border-edge/70 text-bone placeholder-solder text-sm outline-none focus:border-amber-500/60 rounded-lg transition-colors duration-150 font-sans"
                 />
               </div>
             )}
@@ -1219,10 +1237,10 @@ export function StudioWorkbench({
         {/* ZONE 3: EXAMINER CONSOLE & REMNOTE STAGING (RIGHT 3 COLS) */}
         {/* ========================================================= */}
         <div className={`lg:col-span-3 flex-col gap-3 ${mobileTab === 'remnote' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-deck border border-edge rounded-lg shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden space-y-3.5">
+          <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden space-y-3.5">
 
             {/* Zone 3 Header & Strictness Rocker */}
-            <div className="space-y-2.5 border-b border-edge pb-3">
+            <div className="space-y-3 pb-3 border-b border-edge/50">
               <div className="flex items-center justify-between">
                 <ZoneLabel>Examiner</ZoneLabel>
                 <span className="text-[11px] font-mono text-solder">
@@ -1234,7 +1252,7 @@ export function StudioWorkbench({
               <div
                 role="group"
                 aria-label="Examiner strictness"
-                className="flex bg-inset border border-edge rounded-md p-0.5"
+                className="flex bg-inset border border-edge/70 rounded-full p-1"
               >
                 {([
                   { id: 'sherpa' as const, label: 'Sherpa', title: 'Encouraging guide. Nudges, never wounds' },
@@ -1252,9 +1270,9 @@ export function StudioWorkbench({
                         setStrictnessLevel(lvl.id);
                         playSound('click');
                       }}
-                      className={`flex-1 py-1.5 text-xs rounded-[5px] transition-colors duration-150 ${
+                      className={`flex-1 py-1.5 text-xs rounded-full transition-colors duration-150 ${
                         active
-                          ? 'bg-amber-500 text-inset font-semibold'
+                          ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-inset font-semibold shadow-gilt'
                           : 'text-slate-ink hover:text-bone'
                       }`}
                     >
@@ -1267,12 +1285,12 @@ export function StudioWorkbench({
 
             {/* Socratic Feedback & Jargon Alerts */}
             {feynmanResult && (
-              <div className={`p-3.5 rounded-md border text-sm space-y-2 ${
+              <div className={`p-4 rounded-2xl border text-sm space-y-2.5 ${
                 feynmanResult.secured
-                  ? 'bg-signal-950/40 border-signal-500/40 text-bone'
-                  : 'bg-inset border-edge text-slate-ink'
+                  ? 'bg-signal-950/35 border-signal-500/35 text-bone'
+                  : 'bg-inset/70 border-edge/60 text-slate-ink'
               }`}>
-                <div className="flex items-center justify-between text-[11px] font-mono font-semibold">
+                <div className="flex items-center justify-between font-mono text-[10px] tracking-[0.16em]">
                   <span className={feynmanResult.secured ? 'text-signal-300' : 'text-amber-300'}>
                     {feynmanResult.secured ? 'MENTAL MODEL SECURED' : 'ONE LINK STILL OPEN'}
                   </span>
@@ -1321,7 +1339,7 @@ export function StudioWorkbench({
 
                 {/* Oral Defense Probing Question */}
                 {feynmanResult.vivaCrossExamination && (
-                  <div className="p-2.5 bg-flux-950/40 border border-flux-500/40 rounded-md text-xs text-flux-300 leading-relaxed">
+                  <div className="p-3 bg-flux-950/30 border border-flux-500/35 rounded-xl text-xs text-flux-300 leading-relaxed">
                     <span className="font-semibold">Viva challenge: </span>
                     {feynmanResult.vivaCrossExamination}
                   </div>
@@ -1331,10 +1349,10 @@ export function StudioWorkbench({
 
             {/* Insert-missing-link loop: one sentence, Enter, done. */}
             {feynmanResult && !feynmanResult.secured && !!feynmanResult.missingLink && (
-              <div className="p-3 bg-inset border border-amber-500/40 rounded-md space-y-2">
+              <div className="p-3.5 bg-inset/70 border border-gilt/30 rounded-xl space-y-2.5">
                 <label
                   htmlFor="missing-link-input"
-                  className="text-[11px] font-semibold uppercase tracking-widest text-amber-300 block"
+                  className="block font-mono text-[10px] uppercase tracking-[0.2em] text-amber-300"
                 >
                   Patch the gap
                 </label>
@@ -1352,13 +1370,13 @@ export function StudioWorkbench({
                     }}
                     placeholder="[ Insert the missing link here, one sentence ]"
                     data-testid="missing-link-input"
-                    className="flex-1 min-w-0 p-2.5 bg-chassis border border-edge text-bone placeholder-solder text-xs outline-none focus:border-amber-500/60 rounded-md transition-colors duration-150 font-sans"
+                    className="flex-1 min-w-0 p-3 bg-chassis border border-edge/70 text-bone placeholder-solder text-xs outline-none focus:border-amber-500/60 rounded-lg transition-colors duration-150 font-sans"
                   />
                   <button
                     type="button"
                     onClick={submitMissingLink}
                     disabled={!missingLinkDraft.trim()}
-                    className="px-3 py-2.5 text-xs font-semibold rounded-md bg-amber-500 border border-amber-500 text-inset transition-colors duration-150 hover:bg-amber-400 disabled:opacity-40 cursor-pointer shrink-0"
+                    className="px-4 py-2.5 text-xs font-semibold rounded-full bg-gradient-to-b from-amber-400 to-amber-600 border border-amber-600/80 text-inset shadow-gilt transition-colors duration-150 hover:from-amber-300 hover:to-amber-500 disabled:opacity-40 disabled:shadow-none cursor-pointer shrink-0"
                   >
                     Add
                   </button>
@@ -1374,10 +1392,10 @@ export function StudioWorkbench({
                 answer. Nothing here is scored. */}
             {feynmanResult?.counterProbe && (
               <div
-                className="p-3 bg-flux-500/[0.07] border border-flux-500/40 rounded-md space-y-2"
+                className="p-4 bg-flux-500/[0.06] border border-flux-500/35 rounded-xl space-y-2.5"
                 data-testid="counter-probe"
               >
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-flux-300 block">
+                <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-flux-300">
                   Pressure test
                 </span>
                 <p className="text-sm text-bone leading-relaxed">{feynmanResult.counterProbe}</p>
@@ -1400,13 +1418,13 @@ export function StudioWorkbench({
                       placeholder="Two words is a complete answer"
                       data-testid="counter-probe-input"
                       aria-label="Answer the pressure test"
-                      className="flex-1 min-w-0 p-2.5 bg-chassis border border-edge text-bone placeholder-solder text-xs outline-none focus:border-flux-500/60 rounded-md transition-colors duration-150 font-sans"
+                      className="flex-1 min-w-0 p-3 bg-chassis border border-edge/70 text-bone placeholder-solder text-xs outline-none focus:border-flux-500/60 rounded-lg transition-colors duration-150 font-sans"
                     />
                     <button
                       type="button"
                       onClick={submitProbeAnswer}
                       disabled={!probeDraft.trim()}
-                      className="px-3 py-2.5 text-xs font-semibold rounded-md bg-flux-500 border border-flux-500 text-inset transition-colors duration-150 hover:bg-flux-400 disabled:opacity-40 cursor-pointer shrink-0"
+                      className="px-4 py-2.5 text-xs font-semibold rounded-full bg-flux-500 border border-flux-400/60 text-bone transition-colors duration-150 hover:bg-flux-400 disabled:opacity-40 cursor-pointer shrink-0"
                     >
                       Add
                     </button>
@@ -1421,11 +1439,11 @@ export function StudioWorkbench({
                 learner just reasoned through. */}
             {feynmanResult?.secured && (
               <div
-                className="p-3.5 bg-signal-950/40 border border-signal-500/50 rounded-md space-y-2.5"
+                className="p-4 bg-signal-950/35 border border-signal-500/40 rounded-2xl space-y-3"
                 data-testid="crystallized-cards"
               >
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-signal-300">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-signal-300">
                     Mental model secured
                   </span>
                   <span className="text-[10px] font-mono text-solder">
@@ -1551,7 +1569,7 @@ export function StudioWorkbench({
                     : 'bg-inset border-edge text-bone hover:border-amber-500/60'
                 }`}
               >
-                {copiedRemNote ? 'Copied ✓' : 'Copy into RemNote'}
+                {copiedRemNote ? 'Copied' : 'Copy into RemNote'}
               </button>
             </div>
 

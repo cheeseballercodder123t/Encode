@@ -336,7 +336,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
         </div>
 
         {chapterLabel && (
-          <div className="text-[10px] font-mono font-bold text-amber uppercase tracking-widest border-l-2 border-amber pl-2">
+          <div className="text-[10px] font-mono font-semibold text-amber-300 uppercase tracking-widest">
             {chapterLabel}
           </div>
         )}

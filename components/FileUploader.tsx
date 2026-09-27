@@ -115,24 +115,24 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
       />
 
       {selectedFile ? (
-        <div className="p-3 bg-deck border border-edge/40 flex items-center justify-between gap-3 ">
+        <div className="p-3 bg-deck border border-edge/70 rounded-xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {selectedFile.previewUrl ? (
               <img
                 src={selectedFile.previewUrl}
                 alt={selectedFile.name}
-                className="w-10 h-10 object-cover border border-edge shrink-0"
+                className="w-10 h-10 object-cover border border-edge/70 rounded-lg shrink-0"
               />
             ) : (
-              <div className="w-10 h-10 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone shrink-0">
-                <span className="text-amber font-bold font-mono">[ FILE ]</span>
+              <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-inset border border-edge/70 flex items-center justify-center text-bone shrink-0 rounded-lg">
+                <span className="text-amber-300 font-mono text-[10px] tracking-wider">[ FILE ]</span>
               </div>
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-bone text-xs truncate">{selectedFile.name}</span>
-                <span className="px-1.5 py-0.5 bg-amber/20 text-amber-300 text-[9px] font-bold ">
-                  Multimodal Ready
+                <span className="px-2 py-0.5 border border-gilt/35 bg-amber-500/10 text-amber-200 text-[9px] font-mono uppercase tracking-[0.14em] rounded-full shrink-0">
+                  Multimodal ready
                 </span>
               </div>
               <p className="text-[11px] text-solder">
@@ -144,7 +144,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           <button
             type="button"
             onClick={clearFile}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 text-solder hover:text-hazard-400 hover:bg-inset transition-colors duration-150 shrink-0"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 rounded-full text-solder hover:text-hazard-300 hover:bg-white/[0.05] transition-colors duration-150 shrink-0"
             title="Remove attachment"
             aria-label="Remove attached file"
           >
@@ -157,10 +157,10 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
-          className="w-full min-h-[44px] px-3 py-2 bg-chassis/80 border border-dashed border-edge hover:border-amber text-[11px] font-mono text-solder hover:text-bone transition-none cursor-pointer flex items-center gap-2 text-left"
+          className="w-full min-h-[44px] px-4 py-2.5 bg-chassis/60 border border-dashed border-edge/70 hover:border-gilt/45 hover:bg-white/[0.02] text-[11px] font-mono text-solder hover:text-bone transition-colors duration-150 cursor-pointer flex items-center gap-2 text-left rounded-xl"
           title="Attach a PDF or image alongside your notes; both are sent to the encoder"
         >
-          <span className="text-amber font-bold">[ +ATTACH FILE ]</span>
+          <span className="text-amber-300 font-mono shrink-0">[ +ATTACH FILE ]</span>
           <span className="truncate">PDF / image (optional), combines with notes above</span>
         </button>
       ) : (
@@ -169,27 +169,27 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
-          className={`p-4 border-2 border-dashed  transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-3 ${
+          className={`p-5 border border-dashed rounded-2xl transition-colors duration-150 cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-4 ${
             isDragging
-              ? 'border-edge bg-inset/10'
-              : 'border-edge bg-chassis/80 hover:bg-deck'
+              ? 'border-gilt/60 bg-amber-500/[0.04]'
+              : 'border-edge/70 bg-chassis/60 hover:border-gilt/35 hover:bg-white/[0.02]'
           }`}
         >
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-inset/10 border border-edge/20 text-bone">
-              <span className="text-amber font-bold font-mono">[ UPLOAD ]</span>
+            <div className="p-3 bg-inset border border-edge/70 text-bone rounded-xl">
+              <span className="text-amber-300 font-mono text-[10px] tracking-wider">[ UPLOAD ]</span>
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-bone">
-                  Attach Handwritten Notes, Whiteboard, or PDF Slides
+                <span className="text-xs font-semibold text-bone">
+                  Attach handwritten notes, a whiteboard shot, or PDF slides
                 </span>
-                <span className="px-1.5 py-0.5 bg-inset/20 text-bone text-[9px] font-bold ">
-                  Gemini 3.7 Vision
+                <span className="px-2 py-0.5 border border-edge/70 text-solder text-[9px] font-mono uppercase tracking-[0.14em] rounded-full shrink-0">
+                  vision pass
                 </span>
               </div>
               <p className="text-[11px] text-solder">
-                Drag & drop or click to upload PDF lecture slides, diagrams, or photo of notes
+                Drop a file here, or click to pick one. PDF slides, diagrams, and photos of notes all work.
               </p>
             </div>
           </div>
@@ -201,18 +201,18 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
                 e.stopPropagation();
                 setIsDriveModalOpen(true);
               }}
-              className="px-3 py-1.5 bg-inset/60 border border-edge/40 text-bone text-xs font-bold transition-colors duration-150 shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 bg-inset border border-edge/70 text-bone text-xs font-medium transition-colors duration-150 shrink-0 flex items-center gap-2 cursor-pointer rounded-full hover:border-gilt/40"
             >
-              <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
+              <span className="text-amber-300 font-mono text-[10px] tracking-wider">[ CLOUD ]</span>
               Import Google Drive
             </button>
 
             <button
               type="button"
-              className="px-3 py-1.5 bg-deck hover:bg-inset border border-edge text-bone text-xs font-bold transition-colors duration-150 shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 bg-deck hover:bg-white/[0.04] border border-edge/70 text-bone text-xs font-medium transition-colors duration-150 shrink-0 flex items-center gap-2 cursor-pointer rounded-full"
             >
-              <span className="text-amber font-bold font-mono">[ IMG ]</span>
-              Browse Local
+              <span className="text-amber-300 font-mono text-[10px] tracking-wider">[ IMG ]</span>
+              Browse local
             </button>
           </div>
         </div>
@@ -220,7 +220,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
 
       {errorMessage && (
         <div className="flex items-center gap-1.5 text-xs text-hazard-400 px-1">
-          <span className="text-amber font-bold font-mono">[ ! ]</span>
+          <span className="text-hazard-400 font-mono shrink-0">[ ! ]</span>
           <span>{errorMessage}</span>
         </div>
       )}

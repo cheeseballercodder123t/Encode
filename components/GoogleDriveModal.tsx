@@ -123,7 +123,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
+            <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
             </div>
             <div>
@@ -271,7 +271,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                   <p className="text-xs">Fetching Google Drive slides and notes...</p>
                 </div>
               ) : files.length === 0 ? (
-                <div className="py-12 text-center border-2 border-dashed border-edge space-y-2">
+                <div className="py-12 text-center border border-dashed border-edge rounded-md space-y-2">
                   <span className="text-amber font-bold font-mono">[ FILE ]</span>
                   <p className="text-xs font-bold text-solder">No PDF slides or images found in your Google Drive.</p>
                   <p className="text-[11px] text-solder">Upload slides to Google Drive or adjust your search term.</p>

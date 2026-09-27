@@ -47,7 +47,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
         {/* Header Badge */}
         <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber/20 border border-amber/40 flex items-center justify-center text-amber">
+            <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-amber/20 border border-amber/40 flex items-center justify-center text-amber">
               <span className="text-amber font-bold font-mono">[ ! ]</span>
             </div>
             <div>
