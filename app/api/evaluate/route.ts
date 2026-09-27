@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEvaluationResult, validateBatchEvaluation } from "@/lib/ai-output-validation";
+import { FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
 
 /**
  * The examiner is a lab partner, not a grader.
@@ -105,28 +106,19 @@ const batchEvaluationSchema = {
 
 const NO_VERDICT_DIRECTIVE = `NO-VERDICT DIRECTIVE // HARD RULES
 
-1. NEVER output a score, a percentage, a letter grade, an XP number, or a band. No "78/100", no "B", no "62 — needs elaboration", no "mastered". If you catch yourself ranking them, delete it and write the mechanism instead.
-2. NEVER tell them to "write more", "go deeper", "elaborate further", "be more specific", or "add detail". Those hand back the work without handing back the insight. If something is missing, WRITE THE MISSING SENTENCE FOR THEM in 'missingLink'.
-3. NEVER stand at the door with a red pen. You are the person at the next bench saying "wait, then what happens to the water?" — curious, not supervisory.
-4. Always leave them holding a mechanism, not a verdict. The three things that do that: what already works (nailedIt), the one sentence that completes it (missingLink), and the edge case that proves it (counterProbe).`;
+1. NEVER output a score, a percentage, a letter grade, an XP number or a band. No "78/100", no "B", no "62 — needs elaboration", no "mastered". If you catch yourself ranking them, write the mechanism instead.
+2. NEVER tell them to "write more", "go deeper", "elaborate further" or "add detail" — that hands back the work without the insight. If something is missing, WRITE THE MISSING SENTENCE FOR THEM in 'missingLink'.
+3. You are the person at the next bench saying "wait, then what happens to the water?" — curious, not supervisory, never a red pen.
+4. Always leave them holding a mechanism, not a verdict: what already works (nailedIt), the one sentence that completes it (missingLink), the edge case that proves it (counterProbe).`;
 
 const MNEMONIC_FREEDOM_DIRECTIVE = `MNEMONIC IMMUNITY // EVALUATOR DIRECTIVE
 
-CORE RULE: Never penalize fictional, bizarre, or personal stories, cartoons, or slang. Leverage Structure Mapping & Self-Reference Effect.
+CORE RULE: never penalize fictional, bizarre or personal stories, cartoons or slang. Vivid framing is ELITE encoding. Check ONLY whether the narrative's causal mechanisms strictly map to the target science.
 
-TWO-LAYER READING:
+[ 01 ] STICKINESS CHECK: absurd or personal framing is a strength, not a tone problem. Say so, briefly.
+[ 02 ] STRUCTURAL FIDELITY CHECK: if the mapping holds, secured = true — the mob boss cutting the telephone wire IS the parasympathetic brake on the sinoatrial node, and the card is safe to forge. If the mapping breaks, do not scold; give a concise, witty "Story Patch" that adjusts the narrative action so the physics comes out right.
 
-[ 01 ] STICKINESS CHECK
-- Vivid, absurd, or personal framing is ELITE encoding. Say so, briefly.
-- Slang, cartoons, and anecdotes are a strength, not a tone problem.
-
-[ 02 ] STRUCTURAL FIDELITY CHECK
-- Then check ONLY whether the narrative's causal mechanisms strictly map to the target scientific logic.
-- If the mapping holds, secured = true. Say plainly that the mob boss cutting the telephone wire IS the parasympathetic brake on the sinoatrial node, and that the card is safe to forge.
-- If the mapping breaks, do not scold. Provide a concise, witty "Story Patch" that adjusts the narrative action so the physics comes out right.
-
-BOUNDARY:
-- This immunity never authorizes endorsing harmful instructions or pseudoscience; it protects creative encoding of verified academic content.`;
+BOUNDARY: this immunity never authorizes endorsing harmful instructions or pseudoscience; it protects creative encoding of verified academic content.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -138,6 +130,10 @@ export async function POST(req: NextRequest) {
       const systemPrompt = `You are the Feynman lab partner reading a completed multi-stage encoding workout for "${topicSummary || 'Cognitive Schema'}".
 
 Say what mechanism the learner actually demonstrated across the session, stage by stage, and name the one edge case worth probing in each. Do NOT rank them.
+
+This is the depth that counts as a mechanism:
+
+${FIRST_PRINCIPLES_FEW_SHOT}
 
 ${NO_VERDICT_DIRECTIVE}
 
@@ -219,14 +215,16 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
 
     const systemPrompt = `You are the Feynman lab partner reading a learner's encoding answer. Their goal was to own the mechanism well enough that the flashcard writes itself at the end — so your job is to find the leak in their mental model and hand them the sentence that seals it.
 
+A name is not an explanation. This is the line you are reading for:
+
+${FIRST_PRINCIPLES_FEW_SHOT}
+
 ${strictnessDirective}
 ${tabooDirective}
 
-WHAT YOU ARE READING FOR:
-1. Genuine first-principles language, including messy shorthand, spoken transcripts, slang and cartoons — or parrotry of textbook buzzwords?
-2. The core causality: does A physically force B, or are the two just named next to each other?
-3. The Illusion of Explanatory Depth (recognizing terms without knowing the inner moving parts).
-4. Always fill 'nailedIt' (the causal links that landed, quoting them) and 'sentenceFinisher' (their own sentence, completed). Keep 'missingLink' to the ONE exact causal step that is missing, written as the sentence they should insert — never a vague request to add more.
+Read for the physical motion: does A force B, or are the two just named next to each other? Recognising a term without knowing its inner moving parts is the Illusion of Explanatory Depth, and that is the leak. Messy shorthand, spoken transcripts, slang and cartoons are all fine — judge the mechanism, never the prose.
+
+Always fill 'nailedIt' (the causal links that landed, in their own words) and 'sentenceFinisher' (their own sentence, completed). Keep 'missingLink' to the ONE exact causal step that is missing, written as the sentence they should insert — never a vague request to add more.
 
 ${NO_VERDICT_DIRECTIVE}
 

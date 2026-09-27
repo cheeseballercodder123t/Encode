@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEncodedSchema } from "@/lib/ai-output-validation";
+import { FIRST_PRINCIPLES_ENGINE, FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 
 // Allow up to 60s for multi-stage schema generation on Vercel
@@ -535,126 +536,82 @@ COGNITIVE GEAR 2 — INTERACTIVE PUZZLES (medium energy):
     let systemPrompt = '';
 
     if (isMassiveText) {
-      systemPrompt = `You are a world-class Cognitive Science Architect specializing in MILLER'S 7±2 LAW, ADAPTIVE CHUNKING, and MULTI-TEMPLATE VISUAL ENCODING for massive texts.
+      systemPrompt = `${FIRST_PRINCIPLES_ENGINE}
+
+${FIRST_PRINCIPLES_FEW_SHOT}
 
 Decompose this material into 2 to 4 sequential "GUIDED PATH MODULES":
-1. Each module represents a distinct, coherent semantic milestone.
-2. Each module contains 3 active cognitive exercises. For each exercise, select the best visual template from the catalog ('first_principles', 'cause_effect', 'visual_blueprint', 'analogy_matrix', 'concept_hierarchy', 'state_transition', 'boundary_stress_test', 'taxonomic_chunking', 'contrast_grid') and generate appropriate 'visualData'.
+1. Each module is a distinct, coherent semantic milestone.
+2. Each module contains 3 exercises, each built on the template whose structure matches the mechanism — pick from ('first_principles', 'cause_effect', 'visual_blueprint', 'analogy_matrix', 'concept_hierarchy', 'state_transition', 'boundary_stress_test', 'taxonomic_chunking', 'contrast_grid') — and generate appropriate 'visualData'.
 3. Each module ends with a "FEYNMAN CHECKPOINT" question testing intuitive causal mastery.
 ${hiddenNote}
 
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 Identify if any vital foundational definitions or causal steps were omitted or rushed in the source text. Synthesize 1-2 missing background concepts into 'researchContexts'.` : ''}`;
     } else if (mode === 'memorization') {
-      systemPrompt = `You are a world-class Grandmaster of Memory & Mnemonic Architect (channeling Joshua Foer, Dominic O'Brien, and Harry Lorayne) specializing in ROTE & TAXONOMIC MEMORIZATION (e.g. Periodic Table of Elements, Amino Acids, Cranial Nerves, Strong/Weak Acids, Pharmacological Drug Classes, Anatomy).
+      systemPrompt = `${FIRST_PRINCIPLES_ENGINE}
 
-CRITICAL RULE FOR LISTS & PERIODIC TABLE:
-Do NOT be clinical, boring, or overly theoretical. Memory champions memorize tables and long sequences through ABSURD, BIZARRE, HILARIOUS, and SENSORY NARRATIVE STORIES connecting symbols in sequence.
+This mode encodes ROTE material (Periodic Table, Amino Acids, Cranial Nerves, Strong/Weak Acids, Drug Classes, Anatomy). The imagery stays ABSURD, BIZARRE and SENSORY — that is elite encoding — but every image must carry the real structural fact, and even a list has a reason it is shaped the way it is.
+
+${FIRST_PRINCIPLES_FEW_SHOT}
 
 AVAILABLE MEMORIZATION TEMPLATES:
-1. 'mnemonic_storyboard' (RECOMMENDED for Periodic Table, Sequential Lists, Amino Acids, Nerves):
-   - Best for: 5 to 15 items in sequence (e.g. Elements 1-10, Elements 11-20, Cranial Nerves I-XII).
-   - visualData: Provide 'mnemonicStoryboard' with:
-     * 'questTitle': e.g. "Quest 1: Elements 1 to 10 (The Genesis Block)"
-     * 'narrativeStory': A vivid, ridiculous, unforgettable story where the symbols are characters acting out actions.
-     * 'tiles': Array of items with 'symbol', 'name', 'numberOrOrder', 'categoryTag', and 'mnemonicHook'.
-2. 'taxonomic_chunking' (Miller's 7±2 Semantic Cluster Buckets):
-   - Best for: Grouping 10-30 items into 3-5 logical categorical buckets (e.g., Polar vs Non-polar, Strong vs Weak, Acid vs Base).
-   - visualData: Provide 'chunkBuckets' with bucket names, items, and color hints.
-2. 'mnemonic_peg' (Phonetic Pegs & Acronym/Acrostic Letter Matrix):
-   - Best for: Ordered sequences or lists where first letters form acronyms or phonetic rhymes (e.g. Cranial Nerves, Essential Amino Acids).
-   - visualData: Provide 'acronymLetters' with letters, associated words, and vivid phonetic cues.
-3. 'memory_palace' (Method of Loci Spatial Journey):
-   - Best for: Fixed sequential items anchored in a physical route (Foyer -> Living Room -> Kitchen -> Hallway -> Balcony).
-   - visualData: Provide 'palaceRooms' with roomName, itemPlaced, vividSensoryHook (bizarre, funny, interactive image), and locusNumber (1 to 5).
-4. 'contrast_grid' (2x2 Discriminative Disambiguation Matrix):
-   - Best for: Confusable lookalike pairs and tricky exam traps.
-   - visualData: Provide 'contrastMatrix' with axisX, axisY, and 4 quadrants with trap warnings.
-5. 'formula_spatial_grid' (Formula & Sequence Subway Line):
-   - Best for: Formulas, equations, mathematical laws, or linear sequential pathways.
-   - visualData: Provide 'formulaComponents' with symbols, meanings, and roles ('variable' | 'constant' | 'operator' | 'state').
-6. 'interleaved_srs' (Retrieval Cloze & Flashcard Deck):
-   - Best for: High-yield active recall synthesis with bidirectional cueing.
-7. 'shape_association' (Number-Shape Pegboard):
-   - Best for: Numbered rules or ranked lists anchored to visual shape archetypes.
+1. 'mnemonic_storyboard' (RECOMMENDED for sequential lists): 5-15 items in order (Elements 1-10, Cranial Nerves I-XII). 'questTitle' + 'narrativeStory' (one ridiculous connected story where the symbols are characters) + 'tiles' (symbol, name, numberOrOrder, categoryTag, mnemonicHook).
+2. 'taxonomic_chunking': 10-30 items into 3-5 categorical buckets (Polar vs Non-polar, Strong vs Weak). 'chunkBuckets': bucketName, items, colorHint.
+3. 'mnemonic_peg': ordered lists whose first letters form an acronym (Cranial Nerves, Essential Amino Acids). 'acronymLetters': letter, word, mnemonicCue.
+4. 'memory_palace': fixed sequence anchored to a physical route (Foyer -> Living Room -> Kitchen -> Hallway). 'palaceRooms': roomName, itemPlaced, vividSensoryHook, locusNumber (1 to 5).
+5. 'contrast_grid': confusable lookalike pairs and exam traps. 'contrastMatrix': axisX, axisY, 4 quadrants with trap warnings.
+6. 'formula_spatial_grid': formulas, equations, mathematical laws, linear pathways. 'formulaComponents': symbol, meaning, role ('variable' | 'constant' | 'operator' | 'state').
+7. 'interleaved_srs': high-yield active recall synthesis with bidirectional cueing.
+8. 'shape_association': numbered rules or ranked lists pegged to visual shape archetypes.
 
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 If the user's notes miss foundational rules (e.g. forgot why HF is a weak acid or omitted a cranial nerve ganglion), fetch the missing foundational context in 'researchContexts' and link it.` : ''}
 
-PARADOX FIRST (CRITICAL):
-Rote material still has a reason it is shaped the way it is. For EVERY stage write 'paradox' as a "how is this possible?" hook rather than a definition request. "Define the strong acids and list their properties" is homework; "HF has a stronger H-F bond than HCl, so why is HF the WEAKER acid?" is a puzzle, and the list follows from resolving it. If the material is pure taxonomy with no mechanism, write the paradox about WHY the classification holds (why these belong together and not next to their lookalike).
+PARADOX FIRST: write 'paradox' for EVERY stage as a "how is this possible?" hook, never a definition request. "Define the strong acids and list their properties" is homework; "HF has a stronger H-F bond than HCl, so why is HF the WEAKER acid?" is a puzzle, and the list follows from resolving it. For pure taxonomy, ask why the classification holds (why these belong together and not next to their lookalike).
 
-GEDANKENEXPERIMENT: also write 'gedankenexperiment' — one extreme qualitative thought experiment the learner runs before formalising anything ("You are the electron. The bond stretches. What happens to the energy?"). No arithmetic, no terms to recite.
+'gedankenexperiment' too: one extreme, qualitative thought experiment the learner runs before formalising anything ("You are the electron. The bond stretches. What happens to the energy?"). No arithmetic, no terms to recite.
 
-ATOMIC + BOUNDARY DISCIPLINE: One item-cluster per stage. For EVERY stage populate 'boundaryContrast' (confusableLookalike + distinguishingRule) : the confusable pair in this list (e.g. strong vs weak acid, Na vs K channel) and the one-sentence rule that separates them.
+One item-cluster per stage. For EVERY stage populate 'boundaryContrast' (confusableLookalike + distinguishingRule) — the confusable pair in this list (strong vs weak acid, Na vs K channel) and the one-sentence rule that separates them — and 'scaffold.causalFrame': ONE sentence templating the stage's deduction with [[1]] / [[2]] / (optional) [[3]] where the learner's field1 / field2 / field3 answers go (real connectives, no labels, no repeated markers).
 
-Also write 'scaffold.causalFrame' — ONE sentence templating this stage's deduction with [[1]] / [[2]] / (optional) [[3]] where the learner's field1 / field2 / field3 answers go (real connectives, no labels, no repeated markers).
-
-CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/buckets/palace rooms/acronyms, and provide clear scaffold labels and concrete high-quality example answers.`;
+For every stage specify the chosen 'templateType', populate 'visualData' with rich structured nodes/buckets/palace rooms/acronyms, and provide clear scaffold labels and concrete high-quality example answers.`;
     } else {
-      systemPrompt = `You are a world-class Cognitive Science Architect specializing in Semantic Memory Encoding (Craik & Lockhart Levels of Processing, Paivio Dual Coding Theory, Chi's ICAP Framework, and Ausubel's Meaningful Learning).
+      systemPrompt = `${FIRST_PRINCIPLES_ENGINE}
 
-Your mission is to decompose the study notes/file into an interactive 5-Stage Visual Cognitive Encoding Workout.
-You have access to a rich catalog of VISUAL CONCEPTUAL TEMPLATES. Dynamically choose the 5 most effective and diverse visual templates that best capture the structure of the subject:
+If a stage's explanation could be replaced by the name of the process, it is jargon — cut it. This is the depth to emit:
+
+${FIRST_PRINCIPLES_FEW_SHOT}
+
+Decompose the study notes/file into an interactive 5-stage visual encoding workout. Dynamically choose the 5 templates that best capture the structure of the subject:
 
 AVAILABLE CONCEPTUAL TEMPLATES CATALOG:
-1. 'first_principles' (Step-by-Step First-Principles Causal Chain):
-   - Best for: Foundational mechanisms, physical laws, and core definitions.
-   - visualData: Provide 'nodes' with step-by-step causal chain (type: 'input' | 'mechanism' | 'outcome').
-2. 'cause_effect' (Perturbation & Counterfactual Domino):
-   - Best for: System dynamics, feedback loops, and "What happens if variable X drops?" breakdowns.
-   - visualData: Provide 'nodes' with disturbance shock, cascading consequence, and broken state (type: 'danger').
-3. 'visual_blueprint' (Paivio Dual-Coding Mental Diagram):
-   - Best for: Spatial, anatomical, cellular, or architectural phenomena that benefit from vivid mental imagery.
-   - visualData: Provide 'flowSteps' or 'nodes' highlighting Foreground Actor, Motion Vector, and Spatial Anchor.
-4. 'analogy_matrix' (Schema Bridge & Cross-Domain Mapping):
-   - Best for: Abstract concepts explained via familiar real-world domains (Plumbing, Traffic, Electrical Grids, Cooking, OS Kernels).
-   - visualData: Provide 'analogyMappings' with sourceElement, targetElement, and mechanistic explanation.
-5. 'concept_hierarchy' (Taxonomic Mind Tree & Multilevel DAG):
-   - Best for: Subjects with parent theories, sub-mechanisms, and branch conditions.
-   - visualData: Provide 'hierarchyTree' with rootNode and branches with subItems.
-6. 'state_transition' (Cyclic State Machine & Feedback Loop):
-   - Best for: Cycles (e.g., Krebs Cycle, TCP 3-Way Handshake, Heart Cardiac Cycle, Market Cycles).
-   - visualData: Provide 'flowSteps' with step numbers, titles, mechanisms, and icons.
-7. 'boundary_stress_test' (Parameter Extremes & Failure Envelope):
-   - Best for: Testing understanding at extreme edge cases (e.g. Temperature -> infinity, Concentration -> 0, Velocity -> speed of light).
-   - visualData: Provide 'boundaryGauges' with variables, normal ranges, extreme cases, and breakdown results.
-8. 'personal_schema' (Self-Reference & Spaced Repetition Synthesis):
-   - Best for: Linking the theory to personal intuition, everyday decisions, or clinical intuition.
-9. 'broken_model_debug' (Socratic Sabotage & Causal Bug Hunt - HIGHLY RECOMMENDED):
-   - Best for: Complex causal mechanisms where students fall for common exam traps or inverted logic.
-   - visualData: Populate 'brokenModel' with 3-5 sequential nodes, where 1-2 nodes are INTENTIONALLY SABOTAGED with common misconceptions (set 'isFlawed: true'). Provide 'flawExplanation' explaining what is broken.
+1. 'first_principles': foundational mechanisms and physical laws. 'nodes': causal chain (type: 'input' | 'mechanism' | 'outcome').
+2. 'cause_effect': system dynamics, feedback loops, "what happens if variable X drops?". 'nodes': disturbance shock, cascading consequence, broken state (type: 'danger').
+3. 'visual_blueprint': spatial, anatomical, cellular or architectural motion. 'flowSteps' or 'nodes': Foreground Actor, Motion Vector, Spatial Anchor.
+4. 'analogy_matrix': abstract concepts via a familiar domain (Plumbing, Traffic, Electrical Grids, OS Kernels). 'analogyMappings': sourceElement, targetElement, mechanistic explanation.
+5. 'concept_hierarchy': parent theories with sub-mechanisms and branch conditions. 'hierarchyTree': rootNode + branches with subItems.
+6. 'state_transition': cycles (Krebs Cycle, TCP 3-Way Handshake, Cardiac Cycle). 'flowSteps': step numbers, titles, mechanisms, icons.
+7. 'boundary_stress_test': extremes and failure envelopes (Temperature -> infinity, Concentration -> 0). 'boundaryGauges': variable, normalRange, extremeCase, breakdownResult.
+8. 'personal_schema': linking the mechanism to personal intuition and everyday decisions.
+9. 'broken_model_debug' (HIGHLY RECOMMENDED): causal mechanisms students fall for. 'brokenModel': 3-5 sequential nodes with 1-2 INTENTIONALLY SABOTAGED (set 'isFlawed: true' + 'flawExplanation').
 ${hiddenNote}
 
-PARADOX FIRST (CRITICAL):
-Never open a stage with a definition request. Definitions are homework; paradoxes are irresistible. For EVERY stage write 'paradox' as the physical contradiction the stage exists to resolve, phrased as "how is this possible?": name the two facts that appear mutually impossible, then ask how the system gets away with it. Example: "Active ion pumps cannot build more than ~200 mOsm of gradient in one step, yet the loop of Henle reaches 1,200 mOsm. How?" The learner should be solving a puzzle, not filling in a worksheet.
+PARADOX FIRST: never open a stage with a definition request. For EVERY stage write 'paradox' as the physical contradiction the stage exists to resolve — name the two facts that cannot both be naively true, then ask how the system gets away with it. Example: "Active ion pumps cannot build more than ~200 mOsm of gradient in one step, yet the loop of Henle reaches 1,200 mOsm. How?" The learner should be solving a puzzle, not filling in a worksheet.
 
-GEDANKENEXPERIMENT: for every stage with a mechanism, write 'gedankenexperiment' — one extreme, qualitative thought experiment run BEFORE formalising anything, written as an instruction to become part of the system ("You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?"). It must be answerable by tracking charges, forces and shapes, with no numbers to solve and no jargon to recite. Leave it empty only for pure memorization stages where no mechanism exists.
+'gedankenexperiment': for every stage with a mechanism, one extreme qualitative thought experiment run BEFORE formalising, written as an instruction to become part of the system ("You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?"). Answerable by tracking charges, forces and shapes — no numbers to solve, no jargon to recite. Empty string only for pure rote stages where no mechanism exists.
 
-THE GENERATION EFFECT (CRITICAL):
-Information that the user deduces and generates themselves is remembered far better than information passively read.
-For EVERY stage, you MUST populate 'visualData.generationChallenge' with:
-1. 'premisePrompt': The setup/premise (e.g., "If the cell is an industrial factory, what is the mitochondria?").
-2. 'clue': A Socratic hint guiding the learner's deduction.
-3. 'missingRoleOrTarget': The missing counterpart or mechanism to be deduced.
-4. 'expertCompletion': The completed expert synthesis.
+'visualData.generationChallenge' for EVERY stage: 'premisePrompt' (the setup, e.g. "If the cell is an industrial factory, what is the mitochondria?"), 'clue' (a hint that guides without giving it away), 'missingRoleOrTarget' (the mechanism to be deduced), 'expertCompletion' (the completed synthesis). What the learner deduces survives; what they read does not.
 
-ATOMIC CARD DISCIPLINE (CRITICAL FOR FSRS HANDOFF):
-Each stage teaches exactly ONE mechanism : one idea, one card. Never bundle multiple mechanisms into a single stage.
-Every scaffold label and example answer must be answerable in UNDER 15 WORDS so the learner's generated wording can become one atomic spaced-repetition card.
+ONE mechanism per stage : one idea, one card. Every scaffold label and example answer must be answerable in UNDER 15 WORDS so the learner's wording becomes one atomic spaced-repetition card.
 
-CAUSAL FRAME: also write 'scaffold.causalFrame' — the ONE sentence this stage is asking the learner to complete, with [[1]] / [[2]] / (optional) [[3]] marking where their field1 / field2 / field3 answers go. It must be a readable causal sentence with real connectives (when … then … which forces … unless …), never a list of labels, never repeating a marker, and the blanks must sit exactly where that stage's deduction breaks down.
+'scaffold.causalFrame' is the ONE sentence this stage asks the learner to complete, with [[1]] / [[2]] / (optional) [[3]] where their field1 / field2 / field3 answers go — real connectives (when … then … which forces … unless …), never a list of labels, never a repeated marker, blanks exactly where the deduction breaks down.
 
-BOUNDARY CONTRAST (REQUIRED):
-For EVERY stage, populate 'boundaryContrast' with:
-1. 'confusableLookalike': the concept this stage's topic is most often confused with.
-2. 'distinguishingRule': the concrete test, exception, or rule that separates them (one sentence).
-These become discriminative Anki cards that prevent the classic single-concept exam trap.
+'boundaryContrast' is REQUIRED for every stage: 'confusableLookalike' (the concept it is most often confused with) and 'distinguishingRule' (the concrete test, exception or one-sentence rule that separates them). These become the discriminative cards that kill the classic single-concept exam trap.
 
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting potential, compounding frequency). Fetch 1-2 missing background concepts into 'researchContexts' and link to relevant stages.` : ''}
 
-CRITICAL: For every stage, specify the chosen 'templateType', populate 'visualData' with rich structured nodes/mappings/trees/gauges and 'generationChallenge', provide clear scaffold labels, domain presets, and concrete example answers, and ALWAYS include 'boundaryContrast' for the stage's concept.`;
+For every stage specify the chosen 'templateType' and populate 'visualData' with rich structured nodes/mappings/trees/gauges plus 'generationChallenge', clear scaffold labels, domain presets and concrete example answers, and ALWAYS include 'boundaryContrast'.`;
     }
 
     systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}`;
