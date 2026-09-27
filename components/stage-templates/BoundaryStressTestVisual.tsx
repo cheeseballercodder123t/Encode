@@ -43,7 +43,7 @@ export function BoundaryStressTestVisual({ activity, field1, field2, field3, sel
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-hazard-500/30 via-[#0E111C]  p-4   transition-colors duration-150">
+    <div className="rounded-lg border border-hazard-500/30 bg-deck p-4 transition-colors duration-150">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-hazard-500/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ export function BoundaryStressTestVisual({ activity, field1, field2, field3, sel
                   max="100"
                   value={currentVal}
                   onChange={e => handleSliderChange(idx, Number(e.target.value))}
-                  className="w-full h-1.5 bg-inset appearance-none cursor-pointer accent-red-500"
+                  className="my-1 h-2 w-full cursor-pointer appearance-none rounded-full bg-inset accent-hazard"
                 />
               </div>
 
@@ -164,7 +164,7 @@ export function BoundaryStressTestVisual({ activity, field1, field2, field3, sel
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Boundary Stress Analysis
             </span>
-            <span className="text-[9px] font-mono text-hazard-400 bg-hazard-950/60 border border-hazard-500/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-hazard-400 bg-hazard-950/60 border border-hazard-500/30 px-1.5 py-0.5">
               Limit Deduction
             </span>
           </div>

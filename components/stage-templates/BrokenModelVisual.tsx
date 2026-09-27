@@ -90,11 +90,11 @@ export function BrokenModelVisual({ activity, field1, field2 }: Props) {
   const falseAlarmsCount = nodes.filter(n => !n.isFlawed && flaggedBugs[n.id]).length;
 
   return (
-    <div className=" border border-hazard-500/40 via-[#0E111C]  p-4   transition-colors duration-150 space-y-4">
+    <div className="rounded-lg border border-hazard-500/40 bg-deck p-4 transition-colors duration-150 space-y-4">
       {/* Header Banner */}
       <div className="flex flex-wrap items-center justify-between border-b border-hazard-500/20 pb-3 gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 bg-hazard-500/20 text-hazard-400 border border-hazard-500/30 ">
+          <div className="p-1.5 bg-hazard-500/20 text-hazard-400 border border-hazard-500/30">
             <span className="text-amber font-bold font-mono">[ BUG ]</span>
           </div>
           <div>

@@ -5,6 +5,7 @@ import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { RoastReport, RoastCriticism } from '@/lib/types';
 import { playSound } from '@/lib/audio';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface RoastNotesModalProps {
   isOpen: boolean;
@@ -30,6 +31,9 @@ export default function RoastNotesModal({
   const [injectedIds, setInjectedIds] = useState<string[]>([]);
   const [copiedQuote, setCopiedQuote] = useState(false);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleInjectSingle = (critique: RoastCriticism) => {
@@ -57,7 +61,7 @@ export default function RoastNotesModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -67,7 +71,7 @@ export default function RoastNotesModal({
         {/* Animated Fire Header */}
         <div className="p-4 sm:p-6 border-b border-hazard-500/30 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center   shrink-0">
+            <div className="w-12 h-12 flex items-center justify-center shrink-0">
               <span className="text-amber font-bold font-mono">[ FLAME ]</span>
             </div>
             <div>
@@ -100,7 +104,7 @@ export default function RoastNotesModal({
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-bone">
           {loading ? (
             <div className="py-16 text-center space-y-4">
-              <div className="w-14 h-14 mx-auto bg-hazard-500/20 border border-hazard-500/40 flex items-center justify-center ">
+              <div className="w-14 h-14 mx-auto bg-hazard-500/20 border border-hazard-500/40 flex items-center justify-center">
                 <span className="text-amber font-bold font-mono">[ FLAME ]</span>
               </div>
               <div className="space-y-1">
@@ -297,7 +301,7 @@ export default function RoastNotesModal({
               <button
                 type="button"
                 onClick={handleApplyAll}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 hover:bg-deck text-bone font-bold text-xs   transition-all cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 hover:bg-deck text-bone font-bold text-xs transition-all cursor-pointer"
               >
                 <span className="text-amber font-bold font-mono">[ * ]</span>
                 <span>Auto-Patch Notes & Encode</span>

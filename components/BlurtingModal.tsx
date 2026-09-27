@@ -3,6 +3,7 @@ import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 import { BlurtingEvaluation, Activity, ResearchContextItem, AISettings } from '@/lib/types';
 import { sound, playSound } from '@/lib/audio';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface BlurtingModalProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [evaluation, setEvaluation] = useState<BlurtingEvaluation | null>(null);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleAnalyzeBlurt = async () => {
@@ -65,12 +69,12 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-deck border border-edge/30 p-6   text-bone relative my-8"
+        className="w-full max-w-2xl bg-deck border border-edge/30 p-6 text-bone relative my-8"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">
@@ -136,7 +140,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
               <button
                 onClick={handleAnalyzeBlurt}
                 disabled={!blurtText.trim() || isAnalyzing}
-                className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center gap-2 transition-none disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2.5 text-xs font-bold text-bone hover:bg-deck flex items-center gap-2 transition-none disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isAnalyzing ? (
                   <>
@@ -234,7 +238,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
 
               <button
                 onClick={onClose}
-                className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck  transition-none"
+                className="px-5 py-2.5 text-xs font-bold text-bone hover:bg-deck transition-none"
               >
                 Done Reviewing
               </button>

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '@/lib/auth-context';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,6 +17,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleGoogleLogin = async () => {
@@ -59,7 +63,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/75 ">
+      <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/75">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -69,7 +73,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* Header */}
           <div className="p-5 border-b border-edge bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-inset/10 border border-edge/30 text-bone ">
+              <div className="p-2 bg-inset/10 border border-edge/30 text-bone">
                 <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               </div>
               <div>
@@ -88,7 +92,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* Content */}
           <div className="p-6 space-y-5">
             {errorMsg && (
-              <div className="p-3 bg-hazard-500/10 border border-hazard-500/30 text-hazard-300 text-xs ">
+              <div className="p-3 bg-hazard-500/10 border border-hazard-500/30 text-hazard-300 text-xs">
                 {errorMsg}
               </div>
             )}
@@ -115,7 +119,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     <p className="text-xs text-solder truncate">
                       {user.email || (user.isAnonymous ? 'Anonymous Cloud Session' : '')}
                     </p>
-                    <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-amber font-semibold bg-amber/10 border border-amber/30 px-2 py-0.5 ">
+                    <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-amber font-semibold bg-amber/10 border border-amber/30 px-2 py-0.5">
                       <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
                       Live Sync Active
                     </span>
@@ -124,11 +128,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
                 {/* Cloud stats */}
                 <div className="grid grid-cols-2 gap-3 text-center">
-                  <div className="p-3 bg-deck border border-edge ">
+                  <div className="p-3 bg-deck border border-edge">
                     <span className="text-[10px] uppercase font-bold text-solder block mb-1">Cloud Schemas</span>
                     <span className="text-lg font-black text-bone font-mono">{cloudStats.schemasCompleted}</span>
                   </div>
-                  <div className="p-3 bg-deck border border-edge ">
+                  <div className="p-3 bg-deck border border-edge">
                     <span className="text-[10px] uppercase font-bold text-solder block mb-1">Total Cloud XP</span>
                     <span className="text-lg font-black text-amber font-mono flex items-center justify-center gap-1">
                       <span className="text-amber font-bold font-mono">[ ZAP ]</span>

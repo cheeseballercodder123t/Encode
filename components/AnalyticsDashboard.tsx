@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Button, Card, CardContent, Badge, Input } from './ui/index';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface UsageStats {
   date: string;
@@ -119,6 +120,9 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
     return btns;
   }, [totalPages, safePage]);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const stats = computeAllStats(savedSchemas);
@@ -165,7 +169,7 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-chassis overflow-y-auto font-mono">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 bg-chassis overflow-y-auto font-mono">
       <div className="max-w-3xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4 border-b border-edge pb-3">
           <div className="flex items-center gap-2">

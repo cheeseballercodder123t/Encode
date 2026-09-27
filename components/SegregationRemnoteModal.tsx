@@ -21,6 +21,7 @@ import {
 } from '@/lib/remnote';
 import { sound, playSound } from '@/lib/audio';
 import { recordDeckExport, reportCardKeys } from '@/lib/deck-memory';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface SegregationRemnoteModalProps {
   isOpen: boolean;
@@ -47,6 +48,9 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
   const [isPushing, setIsPushing] = useState(false);
   const [pushStatus, setPushStatus] = useState<{ success?: boolean; message?: string } | null>(null);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   // Generate Remnote markdown either from segregation report or active schema.
@@ -99,12 +103,12 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-4xl bg-deck border border-edge/30 p-6   text-bone relative my-8"
+        className="w-full max-w-4xl bg-deck border border-edge/30 p-6 text-bone relative my-8"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-edge pb-4 mb-4">
@@ -248,7 +252,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {activeTab === 'matrix' && (
           <div className="space-y-4 max-h-[54vh] overflow-y-auto pr-1">
             {report?.conceptualMechanisms?.map((concept: ConceptualMechanismItem, idx: number) => (
-              <div key={concept.id || idx} className=" border border-edge bg-inset/40 p-4">
+              <div key={concept.id || idx} className="border border-edge bg-inset/40 p-4">
                 <div className="flex items-center justify-between border-b border-edge/60 pb-2 mb-3">
                   <div className="flex items-center gap-2">
                     <span className="w-5 h-5 bg-inset/20 text-bone text-xs font-bold flex items-center justify-center border border-edge/30">
@@ -375,7 +379,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
         {activeTab === 'facts' && (
           <div className="space-y-3 max-h-[54vh] overflow-y-auto pr-1">
             <div className="p-3 bg-inset/60 border border-edge text-xs text-solder">
-              <span className="font-bold text-bone">Declarative Memory Items:</span> Isolated facts, formulas, and constants optimized with <code className="text-bone bg-deck px-1 py-0.5 ">{"{{cloze deletions}}"}</code> for RemNote flashcards.
+              <span className="font-bold text-bone">Declarative Memory Items:</span> Isolated facts, formulas, and constants optimized with <code className="text-bone bg-deck px-1 py-0.5">{"{{cloze deletions}}"}</code> for RemNote flashcards.
             </div>
 
             {report?.declarativeFacts?.map((fact: DeclarativeFactItem, idx: number) => (
@@ -469,7 +473,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               </div>
               <button
                 onClick={handleCopyMarkdown}
-                className="px-3.5 py-1.5 text-xs font-bold text-bone bg-inset flex items-center gap-1.5 transition-none  cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-bold text-bone bg-inset flex items-center gap-1.5 transition-none cursor-pointer"
               >
                 {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
                 <span>{copied ? "Copied to Clipboard!" : "Copy RemNote Markdown"}</span>
@@ -529,7 +533,7 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               <button
                 onClick={handlePushRemnote}
                 disabled={!remnoteApiKey.trim() || isPushing}
-                className="w-full py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center justify-center gap-2 transition-none disabled:opacity-50 cursor-pointer"
+                className="w-full py-2.5 text-xs font-bold text-bone hover:bg-deck flex items-center justify-center gap-2 transition-none disabled:opacity-50 cursor-pointer"
               >
                 {isPushing ? (
                   <>

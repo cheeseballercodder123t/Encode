@@ -144,7 +144,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           <button
             type="button"
             onClick={clearFile}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 rounded-full text-solder hover:text-hazard-300 hover:bg-white/[0.05] transition-colors duration-150 shrink-0"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-1.5 rounded-full text-solder hover:text-hazard-300 hover:bg-bone/[0.06] transition-colors duration-150 shrink-0"
             title="Remove attachment"
             aria-label="Remove attached file"
           >
@@ -157,7 +157,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           onClick={() => fileInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
-          className="w-full min-h-[44px] px-4 py-2.5 bg-chassis/60 border border-dashed border-edge/70 hover:border-gilt/45 hover:bg-white/[0.02] text-[11px] font-mono text-solder hover:text-bone transition-colors duration-150 cursor-pointer flex items-center gap-2 text-left rounded-xl"
+          className="w-full min-h-[44px] px-4 py-2.5 bg-chassis/60 border border-dashed border-edge/70 hover:border-gilt/45 hover:bg-bone/[0.03] text-[11px] font-mono text-solder hover:text-bone transition-colors duration-150 cursor-pointer flex items-center gap-2 text-left rounded-xl"
           title="Attach a PDF or image alongside your notes; both are sent to the encoder"
         >
           <span className="text-amber-300 font-mono shrink-0">[ +ATTACH FILE ]</span>
@@ -172,7 +172,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
           className={`p-5 border border-dashed rounded-2xl transition-colors duration-150 cursor-pointer flex flex-col sm:flex-row items-center justify-between gap-4 ${
             isDragging
               ? 'border-gilt/60 bg-amber-500/[0.04]'
-              : 'border-edge/70 bg-chassis/60 hover:border-gilt/35 hover:bg-white/[0.02]'
+              : 'border-edge/70 bg-chassis/60 hover:border-gilt/35 hover:bg-bone/[0.03]'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -209,7 +209,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
 
             <button
               type="button"
-              className="px-3.5 py-2 bg-deck hover:bg-white/[0.04] border border-edge/70 text-bone text-xs font-medium transition-colors duration-150 shrink-0 flex items-center gap-2 cursor-pointer rounded-full"
+              className="px-3.5 py-2 bg-deck hover:bg-bone/[0.05] border border-edge/70 text-bone text-xs font-medium transition-colors duration-150 shrink-0 flex items-center gap-2 cursor-pointer rounded-full"
             >
               <span className="text-amber-300 font-mono text-[10px] tracking-wider">[ IMG ]</span>
               Browse local

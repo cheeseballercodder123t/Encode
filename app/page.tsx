@@ -54,6 +54,7 @@ import { useInputSource } from '@/hooks/useInputSource';
 import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
 import { CompletedSessionView } from '@/components/CompletedSessionView';
 import { TeachMeModal } from '@/components/TeachMeModal';
+import { useModalA11y } from '@/hooks/useModalA11y';
 export default function DeepEncodeApp() {
   const { user, cloudStats, saveSchemaToCloud, deleteSchemaFromCloud, isSyncing, lastSyncedAt, lastSyncError, pendingLocalCount, backupSettingsToCloud } = useAuth();
 
@@ -177,6 +178,8 @@ export default function DeepEncodeApp() {
   const [isSegregating, setIsSegregating] = useState(false);
   const [segregationReport, setSegregationReport] = useState<SegregationReport | null>(null);
   const [showExportChoice, setShowExportChoice] = useState(false);
+  // Esc cancels the Anki/RemNote choice, the same as its own Cancel button.
+  const exportChoiceRef = useModalA11y(showExportChoice, () => setShowExportChoice(false));
   // Pre-generation selections: choose the flashcard sections + export targets
   // BEFORE hitting generate, instead of generating everything and picking later.
   const [segregateOptions, setSegregateOptions] = useState({
@@ -2241,7 +2244,7 @@ export default function DeepEncodeApp() {
 
       {/* Export Choice Modal: Anki vs RemNote */}
       {showExportChoice && segregationReport && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-chassis/90">
+        <div ref={exportChoiceRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-[60] flex items-center justify-center bg-chassis/90">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}

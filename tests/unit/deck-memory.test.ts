@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  adoptDeckKeys,
   ankiCardKeys,
   cardKey,
   clearDeckMemory,
@@ -14,6 +15,7 @@ import {
   reportCardKeys,
 } from '@/lib/deck-memory';
 import { SegregationReport } from '@/lib/types';
+import { extractAnkiCardsFromSchema } from '@/lib/anki-exporter';
 
 function report(overrides: Partial<SegregationReport> = {}): SegregationReport {
   return {
@@ -50,14 +52,33 @@ describe('fingerprints', () => {
     expect(cardKey('ADH inserts {{aquaporin-2}}.')).toBe(cardKey('ADH inserts aquaporin-2.'));
   });
 
-  it('keeps one key per card across every section', () => {
-    expect(reportCardKeys(report())).toEqual([
-      'the loop of henle reaches 1 200 mosm at the hairpin',
-      'adh inserts aquaporin 2',
-      'countercurrent multiplication',
-      'which limb pumps salt out',
-      'free water clearance',
-    ]);
+  /**
+   * The memory counts cards the EXPORTER writes, not the report's raw fields:
+   * a mechanism ships several cards, an example one per step. This is what
+   * makes a fingerprint read back out of Anki match the same card forged here.
+   */
+  it('keys exactly the fronts the Anki exporter writes', () => {
+    const exported = extractAnkiCardsFromSchema(null, report());
+    expect(reportCardKeys(report())).toHaveLength(exported.length);
+    expect(new Set(reportCardKeys(report()))).toEqual(new Set(ankiCardKeys(exported)));
+  });
+
+  it('still fingerprints a plain fact front without its cloze markers', () => {
+    const keys = reportCardKeys(report());
+    expect(keys).toContain(cardKey('The loop of Henle reaches {{c1::1,200 mOsm}} at the hairpin.'));
+    expect(keys).toContain(cardKey('Which limb pumps salt out?'));
+  });
+
+  it('fingerprints a fact by its short question when the model supplies one', () => {
+    const withQuestion = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'Full fact text.', clozeSuggestion: 'Full {{fact}} text.', question: 'Short prompt?' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    expect(reportCardKeys(withQuestion)).toEqual([cardKey('Short prompt?')]);
   });
 
   it('derives the topic key from the topic text', () => {
@@ -73,6 +94,37 @@ describe('recording and diffing', () => {
     expect(diff.known).toBe(5);
     expect(diff.fresh).toBe(0);
     expect(diff.knownIds).toEqual(['f1', 'f2', 'm1', 'q1', 'e1']);
+  });
+
+  it('counts an item as known only when every card it ships is known', () => {
+    // Half a mechanism is not a mechanism: shipping it would drop the rest.
+    const exported = extractAnkiCardsFromSchema(null, report());
+    const mechFronts = exported.filter((c) => c.id.startsWith('mech-0-')).map((c) => cardKey(c.front));
+    const partial = new Set(reportCardKeys(report()).filter((k) => !mechFronts.includes(k)));
+    const diff = diffReportAgainstMemory(report(), partial);
+    expect(diff.freshIds).toEqual(['m1']);
+    expect(diff.knownIds).toEqual(['f1', 'f2', 'q1', 'e1']);
+  });
+
+  it('adopts Anki fingerprints without counting them as an export', () => {
+    adoptDeckKeys({ topic: 'Renal Physiology', keys: reportCardKeys(report()) });
+    const record = describeDeckMemory('Renal Physiology');
+    expect(record!.exports).toBe(0);
+    expect(record!.lastSurface).toBeUndefined();
+    expect(diffReportAgainstMemory(report(), knownKeysForTopic('Renal Physiology')).known).toBe(5);
+  });
+
+  it('reports only the fingerprints that were new when adopting', () => {
+    const keys = reportCardKeys(report());
+    expect(adoptDeckKeys({ topic: 'Renal Physiology', keys: keys.slice(0, 2) })).toBe(2);
+    expect(adoptDeckKeys({ topic: 'Renal Physiology', keys })).toBe(keys.length - 2);
+    expect(adoptDeckKeys({ topic: 'Renal Physiology', keys })).toBe(0);
+  });
+
+  it('ignores an empty adoption and never invents a record for one', () => {
+    expect(adoptDeckKeys({ topic: 'Renal Physiology', keys: [] })).toBe(0);
+    expect(adoptDeckKeys({ topic: '', keys: ['x'] })).toBe(0);
+    expect(describeDeckMemory('Renal Physiology')).toBeNull();
   });
 
   it('counts only the cards that are actually new', () => {
@@ -96,13 +148,14 @@ describe('recording and diffing', () => {
   });
 
   it('unions keys instead of duplicating them on a re-export', () => {
-    recordDeckExport({ topic: 'Renal Physiology', keys: reportCardKeys(report()), surface: 'anki' });
+    const keys = reportCardKeys(report());
+    recordDeckExport({ topic: 'Renal Physiology', keys, surface: 'anki' });
     const again = recordDeckExport({
       topic: 'Renal Physiology',
       keys: reportCardKeys(report()),
       surface: 'RemNote push',
     });
-    expect(again!.keys).toHaveLength(5);
+    expect(again!.keys).toHaveLength(keys.length);
     expect(again!.exports).toBe(2);
     expect(again!.lastSurface).toBe('RemNote push');
     expect(describeDeckMemory('Renal Physiology')!.exports).toBe(2);

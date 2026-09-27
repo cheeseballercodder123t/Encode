@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { PretestSession, PretestQuestion } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 import { saveInterferenceTrap, ConfidenceTier } from '@/lib/interference-traps';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 /**
  * Predict–Observe–Explain gate.
@@ -44,6 +45,9 @@ export const PretestModal: React.FC<PretestModalProps> = ({
   const [flaws, setFlaws] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<Record<string, boolean>>({});
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen || !session) return null;
 
   const totalQuestions = session.questions.length;
@@ -82,7 +86,7 @@ export const PretestModal: React.FC<PretestModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

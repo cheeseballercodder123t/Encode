@@ -31,6 +31,7 @@ import { playSound } from '@/lib/audio';
 import { ConceptBody, MemoryHookBody, StoryBody } from './TeachSegments';
 import { GuidedProblemBody, YouTryBody } from './TeachGuided';
 import { TeachFinishPanel, TeachSegmentBody } from './TeachInteractive';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface TeachMeModalProps {
   isOpen: boolean;
@@ -128,7 +129,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
     [isOpen, libraryTick, scope, slotTopic]
   );
 
-  if (!isOpen) return null;
+
 
   const persistOptions = (next: TeachLessonOptions) => {
     setOptions(next);
@@ -186,6 +187,11 @@ export function TeachMeModal(props: TeachMeModalProps) {
     onClose();
     resetLessonState();
   };
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, handleClose);
+
+  if (!isOpen) return null;
 
   /** "SAVE IT FOR LATER": park the finished lesson and stay on the panel. */
   const handleSaveForLater = () => {
@@ -621,7 +627,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[55] flex items-center justify-center p-3 bg-chassis/85 overflow-y-auto">
+      <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-[55] flex items-center justify-center p-3 bg-chassis/85 overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}

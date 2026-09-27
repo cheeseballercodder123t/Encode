@@ -5,6 +5,7 @@ import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { GuidedPathModule, FeynmanCheckpoint } from '@/lib/types';
 import { playSound } from '@/lib/audio';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface GuidedPathRoadmapProps {
   modules: GuidedPathModule[];
@@ -24,6 +25,8 @@ export function GuidedPathRoadmap({
   settings,
 }: GuidedPathRoadmapProps) {
   const [showCheckpointModal, setShowCheckpointModal] = useState(false);
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(showCheckpointModal, () => setShowCheckpointModal(false));
   const [checkpointAnswer, setCheckpointAnswer] = useState('');
   const [evaluating, setEvaluating] = useState(false);
   const [evaluationResult, setEvaluationResult] = useState<{
@@ -93,7 +96,7 @@ export function GuidedPathRoadmap({
   const totalRoadmapXp = modules.reduce((acc, m) => acc + (m.completed ? 150 : 0), 0);
 
   return (
-    <div className="w-full border border-edge/20 bg-deck/90  p-4 sm:p-6  space-y-4">
+    <div className="w-full border border-edge/20 bg-deck/90 p-4 sm:p-6 space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-edge pb-4">
         <div>
@@ -117,7 +120,7 @@ export function GuidedPathRoadmap({
           <button
             type="button"
             onClick={() => handleOpenCheckpoint()}
-            className="flex items-center gap-2 px-3.5 py-2 hover:bg-deck text-bone font-bold text-xs   transition-all shrink-0  cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 hover:bg-deck text-bone font-bold text-xs transition-all shrink-0 cursor-pointer"
           >
             <span className="text-amber font-bold font-mono">[ * ]</span>
             <span>Unlock Next Chapter (Feynman Check)</span>
@@ -242,7 +245,7 @@ export function GuidedPathRoadmap({
       {/* Feynman Checkpoint Modal */}
       <AnimatePresence>
         {showCheckpointModal && checkpoint && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/80 overflow-y-auto">
+          <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/80 overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -372,7 +375,7 @@ export function GuidedPathRoadmap({
                         onSelectModule(currentModuleIndex + 1);
                       }
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs   cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs cursor-pointer"
                   >
                     <span>Enter Next Chapter</span>
                     <span className="text-amber font-bold font-mono">[ NEXT ]</span>
@@ -382,7 +385,7 @@ export function GuidedPathRoadmap({
                     type="button"
                     onClick={handleEvaluateCheckpoint}
                     disabled={evaluating || !checkpointAnswer.trim()}
-                    className="flex items-center gap-2 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs   disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs disabled:opacity-50 cursor-pointer"
                   >
                     {evaluating ? (
                       <>

@@ -41,7 +41,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-all">
+    <div className="rounded-lg border border-amber/30 bg-deck p-4 transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -112,7 +112,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
                     <span className="text-xs font-bold text-bone">
                       {room.roomName}
                     </span>
-                    <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
+                    <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5">
                       Anchored Item: {room.itemPlaced}
                     </span>
                   </div>
@@ -151,7 +151,7 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Self-Generated Loci Anchor
             </span>
-            <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5">
               Palace Station
             </span>
           </div>

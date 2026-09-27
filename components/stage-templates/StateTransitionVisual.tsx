@@ -43,7 +43,7 @@ export function StateTransitionVisual({ activity, field1, field2, field3, select
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-edge/30 via-[#0E111C]  p-4   transition-all">
+    <div className="rounded-lg border border-edge/30 bg-deck p-4 transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-edge/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -106,7 +106,7 @@ export function StateTransitionVisual({ activity, field1, field2, field3, select
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[9px] font-mono font-bold uppercase text-bone300 bg-inset/60 border border-edge/30 px-1.5 py-0.5 ">
+                  <span className="text-[9px] font-mono font-bold uppercase text-bone300 bg-inset/60 border border-edge/30 px-1.5 py-0.5">
                     State 0{step.stepNumber || idx + 1}
                   </span>
                   <span className="text-[10px] text-solder">
@@ -149,7 +149,7 @@ export function StateTransitionVisual({ activity, field1, field2, field3, select
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your State Machine Model
             </span>
-            <span className="text-[9px] font-mono text-bone bg-inset/60 border border-edge/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-bone bg-inset/60 border border-edge/30 px-1.5 py-0.5">
               Cycle Mapped
             </span>
           </div>

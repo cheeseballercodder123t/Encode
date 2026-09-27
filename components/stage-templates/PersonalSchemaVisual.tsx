@@ -26,7 +26,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-hazard/30 via-[#0E111C]  p-4   transition-all">
+    <div className="rounded-lg border border-hazard/30 bg-deck p-4 transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-hazard/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -75,7 +75,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
       {/* Interactive Spaced Repetition Flashcard Preview */}
       <div
         onClick={() => setIsFlipped(!isFlipped)}
-        className="p-4 border border-hazard/40 bg-deck/80 hover:bg-deck transition-all cursor-pointer text-center relative "
+        className="p-4 border border-hazard/40 bg-deck/80 hover:bg-deck transition-all cursor-pointer text-center relative"
       >
         <div className="flex items-center justify-between mb-2 text-[10px] font-mono text-hazard">
           <span>{isFlipped ? 'Back (Answer & Mechanism)' : 'Front (Socratic Cue)'}</span>
@@ -113,7 +113,7 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Personal Schema & Real-World Decision Rule
             </span>
-            <span className="text-[9px] font-mono text-hazard bg-hazard/60 border border-hazard/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-hazard bg-hazard/60 border border-hazard/30 px-1.5 py-0.5">
               Self-Reference Active
             </span>
           </div>

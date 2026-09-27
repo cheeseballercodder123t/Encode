@@ -1,4 +1,5 @@
 import { SegregationReport } from '@/lib/types';
+import { extractAnkiCardsFromSchema } from '@/lib/anki-exporter';
 
 // ─── Deck memory: what you already exported ────────────────────────────────
 //
@@ -89,26 +90,58 @@ export function memoryKeyForTopic(topic: string): string {
 }
 
 /**
- * Fingerprints for a segregation report — the same normalization the Anki
- * exporter produces fronts with, so a deck forged today and the same deck
- * shipped through the export modal land on the same keys.
+ * The fronts the Anki exporter actually writes, grouped by the report item
+ * that produced them.
+ *
+ * This deliberately asks the exporter rather than re-deriving anything: a fact
+ * ships as its question (or as a real `{{cN::}}` cloze), a mechanism ships as
+ * several cards (causal + edge case + boundary contrast), and every one of
+ * them has to be recognizable again before an item counts as shipped. When the
+ * exporter's fronts change, the keys change with it instead of drifting
+ * (pinned by `tests/unit/deck-memory.test.ts`).
+ */
+function reportItemFronts(report: SegregationReport): Record<string, string[]> {
+  const cards = extractAnkiCardsFromSchema(null, report);
+  const grouped: Record<string, string[]> = {};
+  const add = (id: string, front: string) => {
+    if (!id || !front) return;
+    (grouped[id] ||= []).push(front);
+  };
+  const byIdPrefix = (prefix: string) => cards.filter((c) => c.id.startsWith(prefix)).map((c) => c.front);
+  const byId = (id: string) => {
+    const card = cards.find((c) => c.id === id);
+    return card ? [card.front] : [];
+  };
+
+  (report.declarativeFacts || []).forEach((fact, idx) => {
+    for (const front of byId(fact.id || `fact-${idx}`)) add(fact.id, front);
+  });
+  (report.conceptualMechanisms || []).forEach((mech, idx) => {
+    for (const front of byIdPrefix(`mech-${idx}-`)) add(mech.id, front);
+  });
+  (report.practiceQuestions || []).forEach((drill, idx) => {
+    for (const front of byId(drill.id || `pq-${idx}`)) add(drill.id, front);
+  });
+  (report.workedExamples || []).forEach((example, idx) => {
+    const prefix = example.id ? `${example.id}-` : `example-${idx}-`;
+    for (const front of byIdPrefix(prefix)) add(example.id, front);
+  });
+
+  return grouped;
+}
+
+/**
+ * Fingerprints for a segregation report — the fronts the exporter writes, so a
+ * deck forged today, the same deck read back out of Anki, and the same deck
+ * shipped through the export modal all land on the same keys.
  */
 export function reportCardKeys(report: SegregationReport | null | undefined): string[] {
   if (!report) return [];
-  const keys: string[] = [];
-  for (const fact of report.declarativeFacts || []) {
-    keys.push(cardKey(fact.question || fact.factStatement || fact.clozeSuggestion || ''));
-  }
-  for (const mech of report.conceptualMechanisms || []) {
-    keys.push(cardKey(mech.conceptName || ''));
-  }
-  for (const drill of report.practiceQuestions || []) {
-    keys.push(cardKey(drill.question || ''));
-  }
-  for (const example of report.workedExamples || []) {
-    keys.push(cardKey(example.title || example.problem || ''));
-  }
-  return keys.filter(Boolean);
+  const keys = Object.values(reportItemFronts(report))
+    .flat()
+    .map(cardKey)
+    .filter(Boolean);
+  return keys.filter((key, index) => keys.indexOf(key) === index);
 }
 
 /** Fingerprints for already-extracted Anki cards (any export surface). */
@@ -118,6 +151,38 @@ export function ankiCardKeys(cards: { front: string }[]): string[] {
 
 export function loadDeckMemory(): DeckMemoryStore {
   return readStore();
+}
+
+/**
+ * Adopts fingerprints that came from somewhere other than this app —
+ * specifically, notes read back out of the real Anki collection.
+ *
+ * Unlike {@link recordDeckExport} this is not an export: it unions the keys so
+ * the diff counts them as known, but it never bumps the export counter or the
+ * surface receipt, because the learner did not ship anything.
+ */
+export function adoptDeckKeys(args: { topic: string; keys: string[] }): number {
+  const topic = (args.topic || '').trim();
+  const keys = (args.keys || []).filter(Boolean);
+  if (!topic || keys.length === 0) return 0;
+
+  const store = readStore();
+  const id = memoryKeyForTopic(topic);
+  const existing = store[id];
+  const before = new Set(existing?.keys || []);
+  const added = keys.filter((key) => !before.has(key));
+  if (added.length === 0 && existing) return 0;
+
+  const list = [...added, ...(existing?.keys || [])].filter((key, index, all) => all.indexOf(key) === index);
+  store[id] = {
+    topic: existing?.topic || topic,
+    keys: list.slice(0, MAX_KEYS_PER_TOPIC),
+    updatedAt: Date.now(),
+    exports: existing?.exports || 0,
+    lastSurface: existing?.lastSurface,
+  };
+  writeStore(store);
+  return added.length;
 }
 
 export function knownKeysForTopic(topic: string): Set<string> {
@@ -189,6 +254,10 @@ export interface DeckDiff {
 /**
  * Compares a report against the topic's memory. Card ids come from the report
  * itself so the caller can filter the exported deck by id.
+ *
+ * An item counts as known only when EVERY front it would ship is already in
+ * the memory: a mechanism that shipped three of its four cards is not "already
+ * in your deck", and calling it known would silently drop the missing one.
  */
 export function diffReportAgainstMemory(
   report: SegregationReport | null | undefined,
@@ -198,24 +267,11 @@ export function diffReportAgainstMemory(
   const knownIds: string[] = [];
   if (!report) return { freshIds, knownIds, fresh: 0, known: 0 };
 
-  const consider = (id: string, text: string) => {
-    const key = cardKey(text);
-    if (!key) return;
-    if (known.has(key)) knownIds.push(id);
+  for (const [id, fronts] of Object.entries(reportItemFronts(report))) {
+    const keys = fronts.map(cardKey).filter(Boolean);
+    if (keys.length === 0) continue;
+    if (keys.every((key) => known.has(key))) knownIds.push(id);
     else freshIds.push(id);
-  };
-
-  for (const fact of report.declarativeFacts || []) {
-    consider(fact.id, fact.question || fact.factStatement || fact.clozeSuggestion || '');
-  }
-  for (const mech of report.conceptualMechanisms || []) {
-    consider(mech.id, mech.conceptName || '');
-  }
-  for (const drill of report.practiceQuestions || []) {
-    consider(drill.id, drill.question || '');
-  }
-  for (const example of report.workedExamples || []) {
-    consider(example.id, example.title || example.problem || '');
   }
 
   return { freshIds, knownIds, fresh: freshIds.length, known: knownIds.length };

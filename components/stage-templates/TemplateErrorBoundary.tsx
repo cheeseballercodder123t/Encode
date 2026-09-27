@@ -32,7 +32,7 @@ export class TemplateErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className=" border border-amber/30 via-[#0E111C]  p-4   text-left">
+        <div className="rounded-lg border border-amber/30 bg-deck p-4 text-left">
           <div className="flex items-center gap-2 text-amber mb-2">
             <span className="text-amber font-bold font-mono">[ ! ]</span>
             <span className="text-xs font-bold uppercase tracking-wider">

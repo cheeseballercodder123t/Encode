@@ -21,6 +21,7 @@ import {
   recordDeckExport,
   reportCardKeys,
 } from '@/lib/deck-memory';
+import { AnkiDeckRead, describeAnkiRead, syncDeckMemoryFromAnki } from '@/lib/anki-memory';
 import {
   ForgeRecipe,
   buildForgeRecipe,
@@ -30,6 +31,7 @@ import {
   markForgeRecipeRun,
   saveForgeRecipe,
 } from '@/lib/forge-recipes';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 export type { ForgeExportTarget };
 
@@ -135,6 +137,9 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
   const [diff, setDiff] = useState<DeckDiff | null>(null);
   const [skipKnown, setSkipKnown] = useState(false);
+  /** What the real Anki deck said, when AnkiConnect answered. */
+  const [ankiRead, setAnkiRead] = useState<AnkiDeckRead | null>(null);
+  const [checkingAnki, setCheckingAnki] = useState(false);
   const [recipes, setRecipes] = useState<ForgeRecipe[]>([]);
   const [showRecipes, setShowRecipes] = useState(false);
   const [recipeName, setRecipeName] = useState('');
@@ -149,7 +154,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     [sections]
   );
 
-  if (!isOpen) return null;
+
 
   const resetTransient = () => {
     setPhase('setup');
@@ -160,6 +165,8 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setContradictions([]);
     setDiff(null);
     setSkipKnown(false);
+    setAnkiRead(null);
+    setCheckingAnki(false);
     setRecipeNote('');
     setMissingFiles([]);
   };
@@ -168,6 +175,11 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     onClose();
     resetTransient();
   };
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, handleClose);
+
+  if (!isOpen) return null;
 
   const addText = () => {
     const text = draftText.trim();
@@ -297,11 +309,15 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
         `${data.total ?? 0} card${data.total === 1 ? '' : 's'} forged${data.dropped ? ` · ${data.dropped} duplicate${data.dropped === 1 ? '' : 's'} dropped` : ''}`
       );
       // Deck memory: what has this topic already shipped? The learner decides
-      // whether the deck goes out whole or only the cards that are new.
+      // whether the deck goes out whole or only the cards that are new. The
+      // local answer lands instantly; the real Anki deck refines it a moment
+      // later (see checkAnkiDeck) without ever blocking the result.
       if (report) {
-        const nextDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
-        setDiff(nextDiff);
-        setSkipKnown(nextDiff.known > 0);
+        const localDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
+        setDiff(localDiff);
+        setSkipKnown(localDiff.known > 0);
+        setAnkiRead(null);
+        void checkAnkiDeck(report, true);
       }
       setPhase('done');
       playSound('success');
@@ -312,6 +328,30 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   };
 
   const handleForge = () => runForge(sources, sectionList);
+
+  /**
+   * Asks the real Anki collection what this topic already holds and folds those
+   * card fronts into the memory, so a deck built before this app existed (or a
+   * card edited in Anki since) is counted as already yours instead of coming
+   * back as new. Advisory by design: with Anki closed the local diff stands and
+   * the panel says the memory was not verified.
+   */
+  const checkAnkiDeck = async (report: SegregationReport, resetChoice = false) => {
+    setCheckingAnki(true);
+    try {
+      const result = await syncDeckMemoryFromAnki(report.topic);
+      setAnkiRead(result);
+      const nextDiff = diffReportAgainstMemory(report, knownKeysForTopic(report.topic));
+      setDiff(nextDiff);
+      // A fresh forge defaults to "only the new cards"; a manual re-check never
+      // overrides the learner's own choice.
+      setSkipKnown((prev) => (resetChoice ? nextDiff.known > 0 : prev && nextDiff.known > 0));
+    } catch {
+      setAnkiRead({ ok: false, decks: [], notes: 0, keys: [], error: 'The Anki deck could not be read.' });
+    } finally {
+      setCheckingAnki(false);
+    }
+  };
 
   const deckSize =
     (merged?.declarativeFacts.length || 0) +
@@ -339,6 +379,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     forgetDeckMemory(merged.topic);
     setDiff({ freshIds: [], knownIds: [], fresh: deckSize, known: 0 });
     setSkipKnown(false);
+    setAnkiRead(null);
     setRecipeNote(`Deck memory for "${merged.topic}" cleared.`);
   };
 
@@ -444,7 +485,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[56] flex items-center justify-center p-3 bg-chassis/85 overflow-y-auto">
+      <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-[56] flex items-center justify-center p-3 bg-chassis/85 overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.96, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -758,24 +799,48 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                 )}
 
                 {/* Deck memory: what has this topic already shipped? */}
-                {diff && diff.known > 0 && (
+                {diff && (diff.known > 0 || ankiRead) && (
                   <div data-testid="forge-memory" className="p-3 bg-deck border border-gilt/45 space-y-2">
                     <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">
                       [ DECK MEMORY ] {diff.fresh} new · {diff.known} already in your deck
                     </span>
-                    <button
-                      type="button"
-                      data-testid="forge-skip-known"
-                      onClick={() => setSkipKnown((prev) => !prev)}
-                      className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border cursor-pointer ${
-                        skipKnown ? 'bg-amber border-amber text-chassis' : 'bg-chassis border-edge text-solder'
-                      }`}
+                    <p
+                      data-testid="forge-memory-anki"
+                      title={!checkingAnki && ankiRead && !ankiRead.ok ? ankiRead.error : undefined}
+                      className="text-[10px] font-mono text-solder leading-relaxed"
                     >
-                      [ {skipKnown ? 'SHIPPING NEW CARDS ONLY' : 'SHIPPING THE WHOLE DECK'} ]
-                    </button>
+                      {checkingAnki
+                        ? 'Checking the real Anki deck…'
+                        : ankiRead
+                          ? describeAnkiRead(ankiRead)
+                          : ''}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {diff.known > 0 && (
+                        <button
+                          type="button"
+                          data-testid="forge-skip-known"
+                          onClick={() => setSkipKnown((prev) => !prev)}
+                          className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border cursor-pointer ${
+                            skipKnown ? 'bg-amber border-amber text-chassis' : 'bg-chassis border-edge text-solder'
+                          }`}
+                        >
+                          [ {skipKnown ? 'SHIPPING NEW CARDS ONLY' : 'SHIPPING THE WHOLE DECK'} ]
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        data-testid="forge-check-anki"
+                        disabled={checkingAnki || !merged}
+                        onClick={() => merged && void checkAnkiDeck(merged)}
+                        className="px-2.5 py-1.5 bg-chassis border border-edge text-[10px] font-mono font-bold uppercase tracking-wider text-solder hover:text-amber cursor-pointer disabled:opacity-40"
+                      >
+                        [ {checkingAnki ? 'CHECKING ANKI' : 'CHECK ANKI'} ]
+                      </button>
+                    </div>
                     <p className="text-[10px] font-mono text-solder leading-relaxed">
-                      Remembered from every deck this topic has already exported — {shippingCount} card
-                      {shippingCount === 1 ? '' : 's'} will ship now.
+                      Kept from every deck this topic has already shipped, plus whatever the real Anki deck holds —{' '}
+                      {shippingCount} card{shippingCount === 1 ? '' : 's'} will ship now.
                     </p>
                     <button
                       type="button"
@@ -784,6 +849,9 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                     >
                       [ FORGET THIS TOPIC&apos;S MEMORY ]
                     </button>
+                    <p className="text-[10px] font-mono text-solder/70 leading-relaxed">
+                      Forgetting clears this app&apos;s memory only — the cards in Anki are left alone.
+                    </p>
                   </div>
                 )}
 

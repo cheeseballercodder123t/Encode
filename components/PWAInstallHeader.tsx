@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useModalA11y } from '@/hooks/useModalA11y';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 
@@ -28,6 +29,8 @@ export const PWAInstallHeader: React.FC = () => {
     );
   });
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(showIOSGuide, () => setShowIOSGuide(false));
   const [isOnline, setIsOnline] = useState(() => (typeof window !== 'undefined' ? navigator.onLine : true));
 
   useEffect(() => {
@@ -87,7 +90,7 @@ export const PWAInstallHeader: React.FC = () => {
         {!isInstalled && (deferredPrompt || isIOS) && (
           <button
             onClick={handleInstallClick}
-            className="min-h-[36px] flex items-center rounded-full border border-edge/70 bg-deck px-3 text-solder hover:text-bone hover:border-gilt/40 hover:bg-white/[0.04] transition-colors duration-150 text-[10px] font-mono uppercase tracking-[0.16em] cursor-pointer whitespace-nowrap"
+            className="min-h-[36px] flex items-center rounded-full border border-edge/70 bg-deck px-3 text-solder hover:text-bone hover:border-gilt/40 hover:bg-bone/[0.05] transition-colors duration-150 text-[10px] font-mono uppercase tracking-[0.16em] cursor-pointer whitespace-nowrap"
             title="Install DeepEncode locally for offline flight/subway use"
           >
             [ INSTALL APP: PWA ]
@@ -97,7 +100,7 @@ export const PWAInstallHeader: React.FC = () => {
 
       {/* iOS Installation Guide Modal : bottom sheet on phones. */}
       {showIOSGuide && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-chassis/90 sm:p-4 overflow-y-auto">
+        <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-chassis/90 sm:p-4 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}

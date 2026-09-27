@@ -12,6 +12,7 @@ import {
 import { generateComparativeSchema } from '@/lib/comparative-synthesis';
 import { GoogleDriveModal } from './GoogleDriveModal';
 import { playSound } from '@/lib/audio';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface ComparativeSynthesisModalProps {
   isOpen: boolean;
@@ -45,6 +46,9 @@ export function ComparativeSynthesisModal({
   const [report, setReport] = useState<ComparativeSchemaReport | null>(null);
   const [activeTab, setActiveTab] = useState<'matrix' | 'contradictions' | 'complements' | 'agreed'>('contradictions');
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, targetDoc: 'A' | 'B') => {
@@ -107,10 +111,10 @@ export function ComparativeSynthesisModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-[#0F1222] border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
+      <div className="w-full max-w-4xl bg-deck border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
+        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ COMPARE ]</span>
@@ -268,7 +272,7 @@ export function ComparativeSynthesisModal({
               <button
                 onClick={handleRunSynthesis}
                 disabled={isSynthesizing}
-                className="w-full py-3.5 px-4 hover:bg-deck text-bone font-bold text-xs   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 px-4 hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
               >
                 {isSynthesizing ? (
                   <>
@@ -305,7 +309,7 @@ export function ComparativeSynthesisModal({
                   {onOpenAnkiExport && (
                     <button
                       onClick={() => onOpenAnkiExport(report)}
-                      className="px-3 py-1.5 bg-inset text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer "
+                      className="px-3 py-1.5 bg-inset text-bone font-bold text-[11px] flex items-center gap-1.5 transition-none cursor-pointer"
                     >
                       <BracketTag label="ZAP" />
                       Export Comparative Anki Cards

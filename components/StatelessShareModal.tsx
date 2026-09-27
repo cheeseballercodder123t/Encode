@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 import { SavedSchema } from '@/lib/types';
+import { useModalA11y } from '@/hooks/useModalA11y';
 import { compressSchemaForUrl, generateStatelessShareUrl } from '@/lib/url-share';
 import { playSound } from '@/lib/audio';
 
@@ -40,6 +41,9 @@ export default function StatelessShareModal({
       compressedLength: compressed.length
     };
   }, [schema]);
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
 
   if (!isOpen || !schema || !shareStats) return null;
 
@@ -81,7 +85,7 @@ export default function StatelessShareModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-chassis/85 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -91,7 +95,7 @@ export default function StatelessShareModal({
         {/* Header */}
         <div className="p-4 sm:p-6 border-b border-edge/30 flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 flex items-center justify-center   shrink-0">
+            <div className="w-12 h-12 flex items-center justify-center shrink-0">
               <span className="text-amber font-bold font-mono">[ SHARE ]</span>
             </div>
             <div>
@@ -240,7 +244,7 @@ export default function StatelessShareModal({
             <button
               type="button"
               onClick={handleCopyLink}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs   cursor-pointer"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 hover:bg-deck text-bone font-bold text-xs cursor-pointer"
             >
               {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
               <span>{copied ? 'Copied to Clipboard!' : 'Copy Share URL'}</span>

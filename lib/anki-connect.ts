@@ -195,6 +195,69 @@ export async function listAnkiDecks(opts: AnkiInvokeOptions = {}): Promise<strin
   return Array.isArray(decks) ? decks : [];
 }
 
+// ─── Reading the real deck ──────────────────────────────────────────────────
+//
+// Everything above pushes into Anki. These read back out, so the app knows
+// what is ALREADY in the collection instead of only what it pushed itself.
+// That is what makes the deck memory authoritative: a deck built before this
+// app existed, or a card edited in Anki, still counts as "already in your
+// deck" instead of coming back as new on the next forge.
+
+/**
+ * How many notes one read pulls in, and how many go in a single round trip.
+ * The memory store keeps at most 600 fingerprints per topic, so a read is
+ * capped rather than allowed to stream a 40,000-note collection into the tab.
+ */
+const MAX_NOTES_PER_READ = 1200;
+const NOTES_INFO_BATCH = 200;
+
+export interface AnkiNoteField {
+  value: string;
+  order: number;
+}
+
+export interface AnkiNoteInfo {
+  noteId: number;
+  modelName: string;
+  tags: string[];
+  cards: number[];
+  fields: Record<string, AnkiNoteField>;
+}
+
+/** Note ids matching an AnkiConnect search query, e.g. `deck:"DeepEncode::Renal"`. */
+export async function findAnkiNotes(query: string, opts: AnkiInvokeOptions = {}): Promise<number[]> {
+  const ids = await ankiInvoke<number[]>('findNotes', { query }, opts);
+  return Array.isArray(ids) ? ids.filter((id): id is number => typeof id === 'number') : [];
+}
+
+/** Field data for note ids, batched so a big deck does not blow one request. */
+export async function readAnkiNotes(
+  noteIds: number[],
+  opts: AnkiInvokeOptions = {}
+): Promise<AnkiNoteInfo[]> {
+  const ids = noteIds.filter((id) => typeof id === 'number').slice(0, MAX_NOTES_PER_READ);
+  const notes: AnkiNoteInfo[] = [];
+  for (let i = 0; i < ids.length; i += NOTES_INFO_BATCH) {
+    const info = await ankiInvoke<AnkiNoteInfo[]>('notesInfo', { notes: ids.slice(i, i + NOTES_INFO_BATCH) }, opts);
+    if (Array.isArray(info)) notes.push(...info.filter((n) => n && typeof n === 'object'));
+  }
+  return notes;
+}
+
+/**
+ * The front text of a note. Basic notes carry it in `Front` and cloze notes in
+ * `Text`; anything else falls back to the first field Anki lists, so a custom
+ * note type is read instead of silently skipped.
+ */
+export function noteFrontText(note: AnkiNoteInfo): string {
+  const fields = note?.fields || {};
+  const pick = (name: string) => (typeof fields[name]?.value === 'string' ? fields[name].value : '');
+  const direct = pick('Front') || pick('Text');
+  if (direct) return direct;
+  const first = Object.values(fields).sort((a, b) => (a?.order ?? 0) - (b?.order ?? 0))[0];
+  return typeof first?.value === 'string' ? first.value : '';
+}
+
 /** Creates the deck when it is missing; returns true when it had to create it. */
 export async function ensureAnkiDeck(deckName: string, opts: AnkiInvokeOptions = {}): Promise<boolean> {
   const decks = await listAnkiDecks(opts);

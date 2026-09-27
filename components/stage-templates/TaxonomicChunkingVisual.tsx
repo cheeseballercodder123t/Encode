@@ -45,7 +45,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-all">
+    <div className="rounded-lg border border-amber/30 bg-deck p-4 transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] font-mono font-bold uppercase text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
+                  <span className="text-[9px] font-mono font-bold uppercase text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5">
                     Bucket 0{bIdx + 1}
                   </span>
                   <span className="text-[9px] font-mono text-solder">
@@ -151,7 +151,7 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Semantic Chunking Classification
             </span>
-            <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-amber bg-amber/60 border border-amber/30 px-1.5 py-0.5">
               Chunk Model
             </span>
           </div>

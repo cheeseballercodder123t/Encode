@@ -37,7 +37,7 @@ export function FormulaSpatialVisual({ activity, field1, field2, field3, selecte
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-edge/30 via-[#0E111C]  p-4   transition-all">
+    <div className="rounded-lg border border-edge/30 bg-deck p-4 transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-edge/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export function FormulaSpatialVisual({ activity, field1, field2, field3, selecte
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Your Intuitive Equation Breakdown
             </span>
-            <span className="text-[9px] font-mono text-edge bg-inset/60 border border-edge/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-edge bg-inset/60 border border-edge/30 px-1.5 py-0.5">
               Formula Decoded
             </span>
           </div>

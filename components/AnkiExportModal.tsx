@@ -43,6 +43,7 @@ import { gateSourceFromActivity } from '@/lib/discrimination';
 import { DiscriminationGate } from '@/components/DiscriminationGate';
 import { DiscriminationCheck } from '@/lib/types';
 import { BracketTag } from '@/components/ui/BracketTag';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface AnkiExportModalProps {
   isOpen: boolean;
@@ -305,6 +306,9 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     return () => window.removeEventListener('keydown', handler, true);
   }, [isOpen, handlePushToAnki, runGate]);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleDownloadApkg = async () => {
@@ -522,10 +526,10 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
       <div className="w-full max-w-3xl bg-chassis border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
+        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ ZAP ]</span>
@@ -1118,7 +1122,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                       ))}
                     </select>
                   </div>
-                  <div className=" overflow-hidden border border-edge bg-chassis">
+                  <div className="overflow-hidden border border-edge bg-chassis">
                     <iframe
                       title="Procedural MCQ Preview"
                       srcDoc={buildPreviewSrcdoc(previewArchetype)}
