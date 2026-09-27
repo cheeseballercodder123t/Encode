@@ -10,6 +10,7 @@ import {
 } from '@/lib/google-drive';
 import { UploadedFileAsset } from '@/lib/types';
 import { playSound } from '@/lib/audio';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface GoogleDriveModalProps {
   isOpen: boolean;
@@ -60,6 +61,9 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
     }
   }, [isOpen, loadFiles]);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleConnectOAuth = async () => {
@@ -118,10 +122,10 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl bg-chassis border border-edge/30 overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between ">
+        <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-fit min-w-[2.5rem] px-2 bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
               <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
@@ -159,7 +163,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
           {!accessToken ? (
             /* Unauthenticated View */
             <div className="py-8 px-4 text-center space-y-5 max-w-md mx-auto">
-              <div className="w-16 h-16 mx-auto bg-inset/10 border border-edge/30 flex items-center justify-center text-bone  ">
+              <div className="w-16 h-16 mx-auto bg-inset/10 border border-edge/30 flex items-center justify-center text-bone">
                 <span className="text-amber font-bold font-mono">[ CLOUD ]</span>
               </div>
 
@@ -173,7 +177,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
               <button
                 onClick={handleConnectOAuth}
                 disabled={isLoading}
-                className="w-full py-3 px-4 font-bold text-xs text-bone    hover:bg-deck   flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
+                className="w-full py-3 px-4 font-bold text-xs text-bone hover:bg-deck flex items-center justify-center gap-2.5 transition-none cursor-pointer disabled:opacity-50"
               >
                 {isLoading ? (
                   <>
@@ -291,7 +295,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                       >
                         <div className="w-9 h-9 bg-inset/10 border border-edge/20 flex items-center justify-center text-bone shrink-0 group-hover:bg-inset/20 group-hover:text-bone transition-none">
                           {file.thumbnailLink ? (
-                            <img src={file.thumbnailLink} alt={file.name} className="w-9 h-9 object-cover " />
+                            <img src={file.thumbnailLink} alt={file.name} className="w-9 h-9 object-cover" />
                           ) : isPdf ? (
                             <span className="text-amber font-bold font-mono">[ FILE ]</span>
                           ) : isImg ? (

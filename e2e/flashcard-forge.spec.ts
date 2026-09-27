@@ -16,9 +16,67 @@ import { mockAiApis } from './helpers/mocks';
  *
  * The four things a REPEAT ingest needs are covered here too: a video with no
  * captions is transcribed instead of dropped, two sources that disagree become
- * one explicit conflict card, cards the topic already exported are counted as
- * such, and the whole setup can be saved and re-run as a recipe.
+ * one explicit conflict card, cards the topic already exported (or already in
+ * Anki) are counted as such, and the whole setup can be saved and re-run as a
+ * recipe.
  */
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+/**
+ * AnkiConnect, mocked at its real address. `offline` is the default here so a
+ * forge test never depends on whatever the machine running it has listening on
+ * 127.0.0.1:8765; a test that wants a real deck registers this again with
+ * `frontTexts` and its route wins.
+ */
+async function mockAnkiConnect(page: Page, opts: { frontTexts?: string[]; offline?: boolean } = {}) {
+  await page.route(
+    (url) => url.hostname === '127.0.0.1' && url.port === '8765',
+    async (route) => {
+      if (opts.offline) {
+        await route.abort('connectionrefused');
+        return;
+      }
+      if (route.request().method() === 'OPTIONS') {
+        await route.fulfill({ status: 204, headers: CORS_HEADERS });
+        return;
+      }
+      const body = route.request().postDataJSON();
+      const fronts = opts.frontTexts || [];
+      const result = (() => {
+        switch (body.action) {
+          case 'deckNames':
+            return ['Default', 'DeepEncode::Renal Physiology'];
+          case 'findNotes':
+            return fronts.map((_, i) => 100 + i);
+          case 'notesInfo':
+            return (body.params.notes as number[]).map((noteId, i) => ({
+              noteId,
+              modelName: 'Basic',
+              tags: [],
+              cards: [noteId],
+              fields: {
+                Front: { value: fronts[i] ?? '', order: 0 },
+                Back: { value: 'forgotten', order: 1 },
+              },
+            }));
+          default:
+            return null;
+        }
+      })();
+      await route.fulfill({
+        status: 200,
+        headers: CORS_HEADERS,
+        contentType: 'application/json',
+        body: JSON.stringify({ result, error: null }),
+      });
+    }
+  );
+}
 
 async function mockForge(page: Page, payload: unknown = FORGE_RESPONSE) {
   await mockAiApis(page);
@@ -29,6 +87,7 @@ async function mockForge(page: Page, payload: unknown = FORGE_RESPONSE) {
       body: JSON.stringify(payload),
     })
   );
+  await mockAnkiConnect(page, { offline: true });
 }
 
 /** Launchpad -> Forge, ready for sources to be added. */
@@ -122,6 +181,38 @@ test.describe('Flashcards Only (the Forge)', () => {
 
     await page.getByTestId('forge-skip-known').click();
     await expect(page.getByTestId('forge-skip-known')).toContainText('SHIPPING THE WHOLE DECK');
+    await expect(page.getByTestId('forge-export-primary')).toBeEnabled();
+  });
+
+  test('a deck that already exists in Anki is read back and counted as already yours', async ({ page }) => {
+    // A deck built by hand in Anki: this app has never exported this topic, so
+    // only reading the real collection can know the card is already there.
+    await mockForge(page);
+    await mockAnkiConnect(page, { frontTexts: ['Which limb pumps salt out?'] });
+    await openForge(page);
+    await addTextSource(page, 'Loop of Henle countercurrent multiplication.');
+    await page.getByTestId('forge-run').click();
+    await expect(page.getByTestId('forge-result')).toBeVisible();
+
+    const memory = page.getByTestId('forge-memory');
+    await expect(memory).toContainText('4 new · 1 already in your deck');
+    await expect(page.getByTestId('forge-memory-anki')).toContainText(
+      'Checked your Anki deck: 1 note in 1 deck.'
+    );
+    await expect(page.getByTestId('forge-skip-known')).toContainText('SHIPPING NEW CARDS ONLY');
+  });
+
+  test('with Anki closed the memory says so and stays this app\'s own', async ({ page }) => {
+    await mockForge(page);
+    await openForge(page);
+    await addTextSource(page, 'Loop of Henle countercurrent multiplication.');
+    await page.getByTestId('forge-run').click();
+    await expect(page.getByTestId('forge-result')).toBeVisible();
+
+    await expect(page.getByTestId('forge-memory-anki')).toContainText('AnkiConnect is unreachable');
+    await expect(page.getByTestId('forge-memory')).toContainText('5 new · 0 already in your deck');
+    // Nothing is known, so there is nothing to hold back and nothing to toggle.
+    await expect(page.getByTestId('forge-skip-known')).toHaveCount(0);
     await expect(page.getByTestId('forge-export-primary')).toBeEnabled();
   });
 

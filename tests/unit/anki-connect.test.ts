@@ -5,10 +5,13 @@ import {
   DEFAULT_ANKI_CONNECT_URL,
   describePushError,
   ensureAnkiDeck,
+  findAnkiNotes,
   formatPushStatus,
   loadAnkiEndpoint,
   mapCardToNote,
+  noteFrontText,
   pushCardsToAnki,
+  readAnkiNotes,
   sanitizeAnkiEndpoint,
   saveAnkiEndpoint,
 } from '@/lib/anki-connect';
@@ -192,6 +195,63 @@ describe('pushCardsToAnki', () => {
       modelNames: { result: ['Basic'], error: null },
     });
     await expect(pushCardsToAnki([makeCard()], 'DeepEncode::Topic')).rejects.toThrow(/no note type named "Cloze"/);
+  });
+});
+
+describe('reading the deck back', () => {
+  const fields = (entries: Record<string, string>) =>
+    Object.fromEntries(Object.entries(entries).map(([k, v], order) => [k, { value: v, order }]));
+
+  it('queries by search string and drops anything that is not a note id', async () => {
+    const { actionsFor } = stubAnki({ findNotes: { result: [7, 'nope', 9], error: null } });
+    expect(await findAnkiNotes('deck:"DeepEncode::Renal"')).toEqual([7, 9]);
+    expect(actionsFor('findNotes')[0].params).toEqual({ query: 'deck:"DeepEncode::Renal"' });
+  });
+
+  it('answers an empty query result with an empty list, not null', async () => {
+    stubAnki({ findNotes: { result: [], error: null } });
+    expect(await findAnkiNotes('deck:"Nothing"')).toEqual([]);
+  });
+
+  it('reads note fields in batches so a big deck stays one request each', async () => {
+    const { actionsFor } = stubAnki({
+      notesInfo: (params: any) => ({ result: params.notes.map((id: number) => ({ noteId: id, fields: {} })), error: null }),
+    });
+    const ids = Array.from({ length: 250 }, (_, i) => i + 1);
+    const notes = await readAnkiNotes(ids);
+    expect(notes).toHaveLength(250);
+    expect(actionsFor('notesInfo')).toHaveLength(2);
+    expect(actionsFor('notesInfo')[0].params.notes).toHaveLength(200);
+    expect(actionsFor('notesInfo')[1].params.notes).toHaveLength(50);
+  });
+
+  it('caps a read rather than streaming a whole collection into the tab', async () => {
+    const { actionsFor } = stubAnki({
+      notesInfo: (params: any) => ({ result: params.notes.map((id: number) => ({ noteId: id, fields: {} })), error: null }),
+    });
+    const ids = Array.from({ length: 1300 }, (_, i) => i + 1);
+    expect(await readAnkiNotes(ids)).toHaveLength(1200);
+    expect(actionsFor('notesInfo')).toHaveLength(6);
+  });
+
+  it('skips a null entry Anki returns for a deleted note', async () => {
+    stubAnki({ notesInfo: { result: [{ noteId: 1, fields: {} }, null], error: null } });
+    expect(await readAnkiNotes([1, 2])).toHaveLength(1);
+  });
+
+  it('takes the front from Front, then Text, then the first field by order', () => {
+    expect(noteFrontText({ noteId: 1, modelName: 'Basic', tags: [], cards: [], fields: fields({ Front: 'Q', Back: 'A' }) })).toBe('Q');
+    expect(noteFrontText({ noteId: 2, modelName: 'Cloze', tags: [], cards: [], fields: fields({ Text: '{{c1::x}}', Extra: 'e' }) })).toBe('{{c1::x}}');
+    expect(
+      noteFrontText({
+        noteId: 3,
+        modelName: 'Custom',
+        tags: [],
+        cards: [],
+        fields: { Second: { value: 'later', order: 9 }, First: { value: 'sooner', order: 1 } },
+      })
+    ).toBe('sooner');
+    expect(noteFrontText({ noteId: 4, modelName: 'Custom', tags: [], cards: [], fields: {} })).toBe('');
   });
 });
 

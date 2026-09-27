@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BracketTag } from './BracketTag';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -17,22 +18,9 @@ export interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, description, icon, children, footer, maxWidth = 'md', showCloseButton = true }: ModalProps) {
-  // Lock body scroll while a modal is open so mobile background content
-  // cannot scroll underneath the sheet.
-  useEffect(() => {
-    if (!isOpen) return;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isOpen]);
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && onClose) onClose(); };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  // Esc, scroll lock and focus all come from the one hook every other sheet in
+  // the app uses, so this primitive cannot drift from them.
+  const sheetRef = useModalA11y(isOpen, onClose);
 
   const maxWidthStyles: Record<string, string> = {
     sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-xl',
@@ -50,6 +38,8 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 24 }}
           transition={{ duration: 0.18 }}
+          ref={sheetRef}
+          tabIndex={-1}
           className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-edge/70 rounded-2xl shadow-raised overflow-hidden mobile-sheet-viewport flex flex-col sm:my-8`}
           onClick={e => e.stopPropagation()}
           role="dialog"
@@ -68,7 +58,7 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
                 <button
                   type="button"
                   onClick={onClose}
-                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-solder hover:text-bone hover:bg-white/[0.05] cursor-pointer font-mono text-xs transition-colors duration-150"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full text-solder hover:text-bone hover:bg-bone/[0.06] cursor-pointer font-mono text-xs transition-colors duration-150"
                   aria-label="Close modal"
                 >
                   {/* Phone: the close brackets frame the X vertically. */}

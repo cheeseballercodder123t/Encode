@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SavedSchema } from '@/lib/types';
 import { sound } from '@/lib/audio';
 import { useAuth } from '@/lib/auth-context';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface HistoryDrawerProps {
   isOpen: boolean;
@@ -35,6 +36,9 @@ export function HistoryDrawer({
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 8;
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   // Merge cloud schemas and local schemas by id
@@ -72,7 +76,7 @@ export function HistoryDrawer({
   return (
     <AnimatePresence>
       {/* Sheet-style overlay on phones: full-width drawer anchored right. */}
-      <div className="fixed inset-0 z-50 flex justify-end bg-chassis/70">
+      <div ref={sheetRef} tabIndex={-1} className="fixed inset-0 z-50 flex justify-end bg-chassis/70">
         <motion.div
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
@@ -86,7 +90,7 @@ export function HistoryDrawer({
           {/* Header */}
           <div className="p-4 sm:p-5 border-b border-edge bg-deck flex items-center justify-between gap-3 mobile-safe-bottom">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="p-2 bg-inset/10 border border-edge/30 text-bone ">
+              <div className="p-2 bg-inset/10 border border-edge/30 text-bone">
                 <span className="text-amber font-bold font-mono">[ HIST ]</span>
               </div>
               <div className="min-w-0">
@@ -120,7 +124,7 @@ export function HistoryDrawer({
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="p-4 border-b border-edge/80 bg-[#0B0D14] space-y-3">
+          <div className="p-4 border-b border-edge/80 bg-inset space-y-3">
             <div className="relative">
               <span className="text-amber font-bold font-mono text-[10px]">[ SEARCH ]</span>
               <input

@@ -7,6 +7,7 @@ import { AISettings, AIProvider } from '@/lib/types';
 import { loadAISettings, saveAISettings, DEFAULT_SETTINGS, loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
 import { getAllTemplates } from '@/lib/templates/registry';
 import { useAuth } from '@/lib/auth-context';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -106,6 +107,9 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
     onSaved(DEFAULT_SETTINGS);
   };
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const restoredNotice = settingsRestoredNotice && !importStatus
@@ -114,7 +118,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/70 ">
+      <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-chassis/70">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -124,7 +128,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
           {/* Header */}
           <div className="p-5 border-b border-edge bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-inset/10 border border-edge/30 text-bone ">
+              <div className="p-2 bg-inset/10 border border-edge/30 text-bone">
                 <span className="text-amber font-bold font-mono">[ CFG ]</span>
               </div>
               <div>
@@ -213,7 +217,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                     <span className="text-amber font-bold font-mono">[ KEY ]</span>
                     Gemini API Key (Optional)
                   </div>
-                  <span className="text-[10px] text-amber bg-amber/10 border border-amber/30 px-2 py-0.5 ">
+                  <span className="text-[10px] text-amber bg-amber/10 border border-amber/30 px-2 py-0.5">
                     Default Built-in Active
                   </span>
                 </div>
@@ -225,7 +229,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                   value={settings.geminiApiKey || ''}
                   onChange={(e) => setSettings({ ...settings, geminiApiKey: e.target.value })}
                   placeholder="AIzaSy... (Leave blank for default)"
-                  className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                  className="w-full p-2.5 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -239,7 +243,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                       value={settings.geminiModel || 'gemini-3.7-flash'}
                       onChange={(e) => setSettings({ ...settings, geminiModel: e.target.value })}
                       placeholder="e.g. gemini-3.7-flash or gemini-2.5-pro"
-                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                      className="w-full p-2 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                     <datalist id="gemini-models-list">
                       <option value="gemini-3.7-flash" />
@@ -260,7 +264,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                       value={settings.geminiCheckerModel || 'gemini-3.5-flash-lite'}
                       onChange={(e) => setSettings({ ...settings, geminiCheckerModel: e.target.value })}
                       placeholder="e.g. gemini-3.5-flash-lite or gemini-2.5-flash-lite"
-                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                      className="w-full p-2 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                     <datalist id="gemini-checker-models-list">
                       <option value="gemini-3.5-flash-lite" />
@@ -294,7 +298,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                   value={settings.openrouterApiKey || ''}
                   onChange={(e) => setSettings({ ...settings, openrouterApiKey: e.target.value })}
                   placeholder="sk-or-v1-..."
-                  className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                  className="w-full p-2.5 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -307,7 +311,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                       value={settings.openrouterModel || 'google/gemini-2.5-flash'}
                       onChange={(e) => setSettings({ ...settings, openrouterModel: e.target.value })}
                       placeholder="e.g. google/gemini-2.5-flash"
-                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                      className="w-full p-2 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
 
@@ -320,7 +324,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                       value={settings.openrouterCheckerModel || 'google/gemini-2.5-flash-lite'}
                       onChange={(e) => setSettings({ ...settings, openrouterCheckerModel: e.target.value })}
                       placeholder="e.g. google/gemini-2.5-flash-lite"
-                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                      className="w-full p-2 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -339,7 +343,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                     value={settings.openaiBaseUrl || 'https://api.openai.com/v1'}
                     onChange={(e) => setSettings({ ...settings, openaiBaseUrl: e.target.value })}
                     placeholder="https://api.openai.com/v1 or http://localhost:11434/v1"
-                    className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                    className="w-full p-2.5 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                   />
                   <span className="text-[10px] text-solder mt-1 block">Supports OpenAI, Groq, Ollama, LM Studio, or vLLM</span>
                 </div>
@@ -354,7 +358,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                     value={settings.openaiApiKey || ''}
                     onChange={(e) => setSettings({ ...settings, openaiApiKey: e.target.value })}
                     placeholder="sk-..."
-                    className="w-full p-2.5 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                    className="w-full p-2.5 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                   />
                 </div>
 
@@ -368,7 +372,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                       value={settings.openaiModel || 'gpt-4o-mini'}
                       onChange={(e) => setSettings({ ...settings, openaiModel: e.target.value })}
                       placeholder="e.g. gpt-4o-mini"
-                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                      className="w-full p-2 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
 
@@ -381,7 +385,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
                       value={settings.openaiCheckerModel || 'gpt-4o-mini'}
                       onChange={(e) => setSettings({ ...settings, openaiCheckerModel: e.target.value })}
                       placeholder="e.g. gpt-4o-mini"
-                      className="w-full p-2 bg-[#0B0D14] border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
+                      className="w-full p-2 bg-inset border border-edge text-bone outline-none focus:border-edge font-mono text-xs"
                     />
                   </div>
                 </div>
@@ -482,7 +486,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex items-center gap-1.5 px-5 py-2 bg-inset text-bone font-bold  "
+                className="flex items-center gap-1.5 px-5 py-2 bg-inset text-bone font-bold"
               >
                 {savedSuccess ? <span className="text-amber font-bold font-mono">[ OK ]</span> : null}
                 {savedSuccess ? 'Saved!' : 'Save Configuration'}

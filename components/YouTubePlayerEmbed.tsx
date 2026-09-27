@@ -38,7 +38,7 @@ export function YouTubePlayerEmbed({
   const embedUrl = `https://www.youtube-nocookie.com/embed/${youtubeData.videoId}?autoplay=1&start=${currentSeconds}&rel=0`;
 
   return (
-    <div className="w-full border border-hazard-500/20 bg-deck/80  overflow-hidden  p-4 sm:p-5 space-y-4">
+    <div className="w-full border border-hazard-500/20 bg-deck/80 overflow-hidden p-4 sm:p-5 space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-edge pb-3">
         <div className="flex items-center gap-2.5 min-w-0">

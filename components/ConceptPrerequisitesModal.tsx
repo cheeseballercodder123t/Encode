@@ -3,6 +3,7 @@ import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { PrerequisitesReport, PrerequisiteItem } from '@/lib/types';
 import { sound, playSound } from '@/lib/audio';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface ConceptPrerequisitesModalProps {
   isOpen: boolean;
@@ -22,6 +23,9 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
   const [knownMap, setKnownMap] = useState<Record<string, boolean>>({});
   const [expandedPrimer, setExpandedPrimer] = useState<string | null>(null);
 
+
+  // Esc closes, the page behind stops scrolling, focus moves in and back out.
+  const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
   const handleToggleKnown = (id: string, known: boolean) => {
@@ -37,12 +41,12 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
   const hasReviewedAll = totalPrereqs > 0 && Object.keys(knownMap).length >= totalPrereqs;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
+    <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center bg-chassis/80 p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-deck border border-amber/30 p-6   text-bone relative my-8"
+        className="w-full max-w-2xl bg-deck border border-amber/30 p-6 text-bone relative my-8"
       >
         {/* Header Badge */}
         <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">
@@ -71,7 +75,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
         </div>
 
         {/* Warning Intro Callout */}
-        <div className=" bg-amber/30 border border-amber/30 p-4 mb-6 text-sm text-amber/90 flex items-start gap-3">
+        <div className="bg-amber/30 border border-amber/30 p-4 mb-6 text-sm text-amber/90 flex items-start gap-3">
           <span className="text-amber font-bold font-mono">[ ! ]</span>
           <div>
             <p className="font-semibold text-amber">
@@ -196,7 +200,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
                 playSound('success');
                 onProceedToEncode();
               }}
-              className="px-5 py-2.5 text-xs font-bold text-bone    hover:bg-deck   flex items-center gap-2 transition-none"
+              className="px-5 py-2.5 text-xs font-bold text-bone hover:bg-deck flex items-center gap-2 transition-none"
             >
               <span>{hasReviewedAll ? "Start Cognitive Encoding" : "Proceed to Encoding"}</span>
               <BracketTag label="NEXT" />

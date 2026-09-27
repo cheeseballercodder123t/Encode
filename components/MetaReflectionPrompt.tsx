@@ -22,7 +22,7 @@ export function MetaReflectionPrompt({ stageTitle, savedReflection, onSave }: Pr
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="mt-4 border border-edge/25  p-4 space-y-3 "
+      className="mt-4 rounded-lg border border-edge/25 bg-inset p-4 space-y-3"
     >
       <div className="flex items-center gap-2">
         <span className="text-amber font-bold font-mono">[ IDEA ]</span>

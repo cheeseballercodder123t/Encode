@@ -41,7 +41,7 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
   const hasUserGenerated = Boolean(field1.trim() || field2.trim());
 
   return (
-    <div className=" border border-amber/30 via-[#0E111C]  p-4   transition-all">
+    <div className="rounded-lg border border-amber/30 bg-deck p-4 transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between border-b border-amber/20 pb-2.5 mb-3.5 gap-2">
         <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
             Axiomatic Causal Reduction & Causal Dominoes
           </span>
         </div>
-        <span className="text-[9px] font-mono font-bold text-amber-300 bg-amber-950/40 border border-amber/30 px-2 py-0.5 ">
+        <span className="text-[9px] font-mono font-bold text-amber-300 bg-amber-950/40 border border-amber/30 px-2 py-0.5">
           Generation Effect Active
         </span>
       </div>
@@ -162,7 +162,7 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
               <span className="text-amber font-bold font-mono">[ * ]</span>
               Live Axiomatic Deduction
             </span>
-            <span className="text-[9px] font-mono text-amber bg-amber-950/60 border border-amber/30 px-1.5 py-0.5 ">
+            <span className="text-[9px] font-mono text-amber bg-amber-950/60 border border-amber/30 px-1.5 py-0.5">
               Generated Model
             </span>
           </div>
