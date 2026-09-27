@@ -121,11 +121,72 @@ describe('sanitizeLesson', () => {
   });
 
   it('caps segments at MAX_SEGMENTS and strips junk ones', () => {
-    const many = Array.from({ length: 50 }, (_, i) =>
+    const many = Array.from({ length: 120 }, (_, i) =>
       i % 2 === 0 ? makeSegment({ id: `seg_${i}` }) : { id: `junk_${i}` },
     );
     const lesson = sanitizeLesson({ title: 'Big', segments: many });
-    expect(lesson!.segments.length).toBeLessThanOrEqual(24);
+    // Exhaustive lessons are long on purpose; the cap only stops runaway output.
+    expect(lesson!.segments.length).toBeLessThanOrEqual(40);
+    expect(lesson!.segments.length).toBeGreaterThan(24);
+  });
+
+  it('keeps the depth layer: why, misconceptions, recap, selfExplain, transfer', () => {
+    const seg = sanitizeSegment(
+      {
+        type: 'deepDive',
+        title: 'Where it breaks',
+        body: 'It holds until the gates inactivate.',
+        why: 'The field pulls the charged helices, so the pore opens mechanically.',
+        misconceptions: [
+          { claim: 'The pump reverses during firing', correction: 'The pump never reverses; it holds the gradient.' },
+          { claim: '', correction: '' },
+        ],
+        recapPoints: ['trigger', 'mechanism', 'boundary'],
+        transfer: { prompt: 'Where else does this happen?', modelAnswer: 'Cardiac muscle.' },
+        selfExplain: { prompt: 'Teach it back.', modelAnswer: 'Reference.', keywords: ['threshold'] },
+      },
+      0,
+    );
+    expect(seg!.type).toBe('deepDive');
+    expect(seg!.why).toContain('charged helices');
+    expect(seg!.misconceptions).toEqual([
+      { claim: 'The pump reverses during firing', correction: 'The pump never reverses; it holds the gradient.' },
+    ]);
+    expect(seg!.recapPoints).toEqual(['trigger', 'mechanism', 'boundary']);
+    expect(seg!.transfer!.modelAnswer).toBe('Cardiac muscle.');
+    expect(seg!.selfExplain!.keywords).toEqual(['threshold']);
+    // A segment that is nothing but depth is still a real segment.
+    expect(sanitizeSegment({ type: 'misconception', misconceptions: [{ claim: 'c', correction: 'x' }] }, 1)).not.toBeNull();
+  });
+
+  it('keeps the new segment types instead of falling back to concept', () => {
+    for (const type of ['deepDive', 'misconception', 'selfExplain', 'transfer', 'recap']) {
+      const seg = sanitizeSegment({ type, body: 'text' }, 0);
+      expect(seg!.type).toBe(type);
+    }
+  });
+
+  it('sanitizes objectives, glossary and the encoding seeds handed to the encoder', () => {
+    const lesson = sanitizeLesson({
+      title: 'Deep',
+      segments: [makeSegment()],
+      objectives: ['Explain the threshold', '', 'Separate it from the refractory period'],
+      glossary: [
+        { term: 'threshold', definition: 'the voltage where Na+ gates open' },
+        { term: '', definition: 'orphan' },
+      ],
+      encodingSeeds: [
+        { stageTitle: 'Stage 1', prompt: 'Why does it fire?', exemplar: 'Because the gates open.', keywords: ['gates'] },
+        { title: '', prompt: '', exemplar: '' },
+      ],
+    });
+    expect(lesson!.objectives).toEqual(['Explain the threshold', 'Separate it from the refractory period']);
+    expect(lesson!.glossary).toEqual([
+      { term: 'threshold', definition: 'the voltage where Na+ gates open' },
+    ]);
+    expect(lesson!.encodingSeeds).toEqual([
+      { title: 'Stage 1', prompt: 'Why does it fire?', exemplar: 'Because the gates open.', keywords: ['gates'] },
+    ]);
   });
 
   it('preserves masteryCheck and wrapup when present', () => {
@@ -142,6 +203,30 @@ describe('sanitizeLesson', () => {
 });
 
 describe('buildFallbackLesson', () => {
+  it('is still a detailed lesson and still hands over encoding seeds', () => {
+    const activity = makeActivity({
+      id: 'act-fb',
+      title: 'Action Potential',
+      cognitiveGoal: 'Explain why the spike happens',
+      prompt: 'Walk the mechanism.',
+      keywords: ['threshold', 'depolarization'],
+      boundaryContrast: {
+        confusableLookalike: 'Passive diffusion',
+        distinguishingRule: 'Voltage-gated opening vs passive leak.',
+      },
+    });
+    const lesson = buildFallbackLesson('Action Potentials', 'conceptual', activity);
+    // Offline must not mean shallow: depth segments, a why, a trap, a recap,
+    // objectives and a handoff payload all survive without the AI.
+    expect(lesson.segments.some((s) => s.type === 'deepDive')).toBe(true);
+    expect(lesson.segments.some((s) => s.type === 'misconception')).toBe(true);
+    expect(lesson.segments.some((s) => s.type === 'recap')).toBe(true);
+    expect(lesson.segments.some((s) => s.type === 'selfExplain')).toBe(true);
+    expect(lesson.segments.filter((s) => s.why).length).toBeGreaterThan(1);
+    expect(lesson.objectives!.length).toBeGreaterThan(1);
+    expect(lesson.encodingSeeds).toHaveLength(1);
+  });
+
   it('produces a deterministic multi-segment lesson from an activity', () => {
     const activity = makeActivity({
       id: 'act-x',

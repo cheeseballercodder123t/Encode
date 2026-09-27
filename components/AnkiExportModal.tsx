@@ -905,7 +905,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                 </div>
 
                 <button
-                  onClick={handleSyncWebhook}
+                  onClick={() => runGate(() => void handleSyncWebhook())}
                   disabled={!webhookUrl.trim() || isSyncingWebhook}
                   className="w-full py-3 px-4 bg-inset hover:bg-deck text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-50"
                 >
@@ -1113,7 +1113,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
               {/* Export Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
-                  onClick={handleDownloadProceduralApkg}
+                  onClick={() => runGate(() => void handleDownloadProceduralApkg())}
                   disabled={selectedArchetypes.length === 0}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-colors duration-150 cursor-pointer disabled:opacity-40"
                 >
@@ -1121,7 +1121,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                   Download Procedural MCQ .apkg ({selectedArchetypes.length})
                 </button>
                 <button
-                  onClick={handleDownloadProceduralTxt}
+                  onClick={() => runGate(handleDownloadProceduralTxt)}
                   disabled={selectedArchetypes.length === 0}
                   className="py-3 px-4 bg-deck hover:bg-inset border border-edge text-bone font-bold text-xs flex items-center justify-center gap-2 transition-none cursor-pointer disabled:opacity-40"
                 >

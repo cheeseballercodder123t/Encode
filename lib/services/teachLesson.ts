@@ -14,31 +14,46 @@ import {
 
 const SEGMENT_TYPES: LessonSegmentType[] = [
   'concept',
+  'deepDive',
   'checkpoint',
   'guidedProblem',
   'youTry',
+  'misconception',
+  'selfExplain',
+  'transfer',
   'memoryHook',
   'storyBeat',
+  'recap',
   'wrapup',
 ];
 
 const QUESTION_KINDS = ['mcq', 'ordering', 'matching', 'fillBlank', 'freeResponse', 'trueFalse'];
 
-const MAX_SEGMENTS = 24;
+const MAX_SEGMENTS = 40;
 const MAX_OPTIONS = 6;
 const MAX_HINTS = 4;
 const MAX_ITEMS = 8;
 const MAX_STEPS = 8;
 const MAX_TERMS = 8;
 const MAX_CHARS = 2000;
+const MAX_MISCONCEPTIONS = 4;
+const MAX_RECAP_POINTS = 8;
+const MAX_OBJECTIVES = 8;
+const MAX_GLOSSARY = 16;
+const MAX_SEEDS = 10;
 
 const DEFAULT_XP: Record<LessonSegmentType, number> = {
   concept: 5,
+  deepDive: 10,
   checkpoint: 15,
   guidedProblem: 20,
   youTry: 25,
+  misconception: 12,
+  selfExplain: 25,
+  transfer: 25,
   memoryHook: 8,
   storyBeat: 8,
+  recap: 5,
   wrapup: 0,
 };
 
@@ -159,6 +174,23 @@ function sanitizeQuestion(input: any): LessonQuestion | null {
   q.hints = strArr(input.hints, MAX_HINTS);
   return q;
 }
+/** Misconception radar: the wrong belief plus the correction that kills it. */
+function sanitizeMisconceptions(
+  input: any
+): NonNullable<LessonSegment['misconceptions']> {
+  if (!Array.isArray(input)) return [];
+  const out: NonNullable<LessonSegment['misconceptions']> = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') continue;
+    const claim = str(item.claim || item.misconception, 400);
+    const correction = str(item.correction || item.truth || item.fix, 600);
+    if (!claim && !correction) continue;
+    out.push({ claim, correction });
+    if (out.length >= MAX_MISCONCEPTIONS) break;
+  }
+  return out;
+}
+
 function sanitizeVisual(input: any): LessonSegment['visual'] {
   if (!input || typeof input !== 'object') return undefined;
   const kinds = ['steps', 'analogy', 'list', 'formula', 'diagram'];
@@ -210,6 +242,37 @@ export function sanitizeSegment(input: any, idx: number): LessonSegment | null {
     xpValue: clampInt(input.xpValue, 0, 60, DEFAULT_XP[type]),
   };
 
+  seg.why = str(input.why, MAX_CHARS) || undefined;
+
+  const misconceptions = sanitizeMisconceptions(input.misconceptions);
+  if (misconceptions.length > 0) seg.misconceptions = misconceptions;
+
+  if (Array.isArray(input.recapPoints)) {
+    const points = strArr(input.recapPoints, MAX_RECAP_POINTS);
+    if (points.length > 0) seg.recapPoints = points;
+  }
+
+  if (input.selfExplain && typeof input.selfExplain === 'object') {
+    const prompt = str(input.selfExplain.prompt, 600);
+    if (prompt) {
+      seg.selfExplain = {
+        prompt,
+        modelAnswer: str(input.selfExplain.modelAnswer, MAX_CHARS) || undefined,
+        keywords: strArr(input.selfExplain.keywords, MAX_TERMS),
+      };
+    }
+  }
+
+  if (input.transfer && typeof input.transfer === 'object') {
+    const prompt = str(input.transfer.prompt, 600);
+    if (prompt) {
+      seg.transfer = {
+        prompt,
+        modelAnswer: str(input.transfer.modelAnswer, MAX_CHARS) || undefined,
+      };
+    }
+  }
+
   const visual = sanitizeVisual(input.visual);
   if (visual) seg.visual = visual;
 
@@ -230,7 +293,11 @@ export function sanitizeSegment(input: any, idx: number): LessonSegment | null {
     !seg.steps?.length &&
     !seg.phrase &&
     !seg.narrative &&
-    !seg.visual
+    !seg.visual &&
+    !seg.selfExplain &&
+    !seg.transfer &&
+    !seg.misconceptions?.length &&
+    !seg.recapPoints?.length
   ) {
     return null;
   }
@@ -265,6 +332,36 @@ export function sanitizeLesson(input: any): TeachLesson | null {
     const hook = str(lesson.intro.hook, 600);
     const why = str(lesson.intro.whyItMatters, 600);
     if (hook || why) sanitized.intro = { hook: hook || undefined, whyItMatters: why || undefined };
+  }
+
+  const objectives = strArr(lesson.objectives, MAX_OBJECTIVES);
+  if (objectives.length > 0) sanitized.objectives = objectives;
+
+  if (Array.isArray(lesson.glossary)) {
+    const glossary: NonNullable<TeachLesson['glossary']> = [];
+    for (const item of lesson.glossary) {
+      if (!item || typeof item !== 'object') continue;
+      const term = str(item.term, 120);
+      const definition = str(item.definition, 800);
+      if (!term || !definition) continue;
+      glossary.push({ term, definition });
+      if (glossary.length >= MAX_GLOSSARY) break;
+    }
+    if (glossary.length > 0) sanitized.glossary = glossary;
+  }
+
+  if (Array.isArray(lesson.encodingSeeds)) {
+    const seeds: NonNullable<TeachLesson['encodingSeeds']> = [];
+    for (const item of lesson.encodingSeeds) {
+      if (!item || typeof item !== 'object') continue;
+      const title = str(item.title || item.stageTitle, 180);
+      const prompt = str(item.prompt || item.question, 600);
+      const exemplar = str(item.exemplar || item.modelAnswer || item.exampleAnswer, MAX_CHARS);
+      if (!title && !prompt) continue;
+      seeds.push({ title, prompt, exemplar, keywords: strArr(item.keywords, MAX_TERMS) });
+      if (seeds.length >= MAX_SEEDS) break;
+    }
+    if (seeds.length > 0) sanitized.encodingSeeds = seeds;
   }
 
   if (lesson.masteryCheck && typeof lesson.masteryCheck === 'object') {
@@ -309,13 +406,34 @@ export function buildFallbackLesson(
   if (!activity) {
     return {
       title: `${t} : Core Lesson`,
+      tagline: 'A skeleton lesson so you can still study offline',
+      objectives: [
+        `State what ${t} is in plain language`,
+        'Explain the mechanism well enough to teach it back',
+        'Name the mistake you are most likely to make',
+      ],
       segments: [
         {
           id: 'fb_concept',
           type: 'concept',
           title: 'The Core Idea',
           body: `We're going to build an intuition for ${t}, then verify it with a quick checkpoint.`,
+          why: 'A mechanism you can reconstruct from first principles survives a bad night of sleep; a memorised list does not.',
           xpValue: 5,
+        },
+        {
+          id: 'fb_deep',
+          type: 'deepDive',
+          title: 'What the mechanism actually does',
+          body: `Write the causal chain for ${t} in order: trigger → intermediate moves → outcome. If a link is missing, that link is the thing to study next.`,
+          why: 'Naming the trigger and the outcome without the middle is how a plausibly-worded but wrong answer gets built.',
+          misconceptions: [
+            {
+              claim: `"${t} just happens"`,
+              correction: 'Nothing in an exam answer is "just" anything: there is always a trigger and a sequence.',
+            },
+          ],
+          xpValue: 10,
         },
         {
           id: 'fb_ck',
@@ -331,20 +449,50 @@ export function buildFallbackLesson(
           },
           xpValue: 15,
         },
+        {
+          id: 'fb_recap',
+          type: 'recap',
+          title: 'Recap',
+          recapPoints: [
+            'Mechanism first, vocabulary second',
+            'Every answer needs a trigger and an outcome',
+            'Name the lookalike before the exam does',
+          ],
+          xpValue: 5,
+        },
         { id: 'fb_wrap', type: 'wrapup', title: 'Wrap Up', body: `Anchor ${t} in your own words and it will stick.`, xpValue: 0 },
+      ],
+      encodingSeeds: [
+        {
+          title: t,
+          prompt: `Explain the mechanism of ${t} in one sentence.`,
+          exemplar: `Trigger → mechanism → outcome, for ${t}.`,
+        },
       ],
     };
   }
 
   const gc = activity.visualData?.generationChallenge;
+  const boundary = activity.boundaryContrast;
   const segments: LessonSegment[] = [
     {
       id: 'fb_concept',
       type: 'concept',
       title: activity.title || 'The Core Idea',
       body: activity.contextSnippet || activity.prompt,
+      why: activity.cognitiveGoal,
       keyTerms: activity.keywords.slice(0, 8),
       xpValue: 5,
+    },
+    {
+      id: 'fb_deep',
+      type: 'deepDive',
+      title: 'The mechanism, link by link',
+      body: activity.prompt,
+      why: boundary?.distinguishingRule
+        ? `This is true up to the boundary you own: ${boundary.distinguishingRule}`
+        : 'Walk the chain in order; the step you cannot state is the step you do not own yet.',
+      xpValue: 10,
     },
   ];
 
@@ -356,6 +504,21 @@ export function buildFallbackLesson(
       narrative: gc.premisePrompt,
       continuation: gc.clue || 'Now work out the missing piece.',
       xpValue: 8,
+    });
+  }
+
+  if (boundary?.confusableLookalike) {
+    segments.push({
+      id: 'fb_misconception',
+      type: 'misconception',
+      title: 'Misconception radar',
+      misconceptions: [
+        {
+          claim: `Confusing "${activity.title}" with "${boundary.confusableLookalike}"`,
+          correction: boundary.distinguishingRule || 'Name the observable that only one of the pair produces.',
+        },
+      ],
+      xpValue: 12,
     });
   }
 
@@ -408,6 +571,32 @@ export function buildFallbackLesson(
   });
 
   segments.push({
+    id: 'fb_selfexplain',
+    type: 'selfExplain',
+    title: 'Explain it back',
+    selfExplain: {
+      prompt: `Teach "${activity.title}" to an imaginary classmate in three sentences, without using the source's jargon.`,
+      modelAnswer: gc?.expertCompletion || activity.scaffold.exampleAnswer,
+      keywords: activity.keywords.slice(0, 6),
+    },
+    xpValue: 25,
+  });
+
+  const keywordRecap = (activity.keywords || []).slice(0, 4);
+  segments.push({
+    id: 'fb_recap',
+    type: 'recap',
+    title: 'Recap before you encode',
+    recapPoints: [
+      activity.scaffold.field1Label ? `${activity.scaffold.field1Label}: the trigger` : 'Name the trigger',
+      activity.scaffold.field2Label ? `${activity.scaffold.field2Label}: the mechanism` : 'Walk the mechanism in order',
+      boundary?.confusableLookalike ? `Boundary: ${activity.title} vs ${boundary.confusableLookalike}` : 'Name the lookalike',
+      keywordRecap.length > 0 ? `Terms to keep: ${keywordRecap.join(', ')}` : 'Keep the terms plain',
+    ],
+    xpValue: 5,
+  });
+
+  segments.push({
     id: 'fb_wrap',
     type: 'wrapup',
     title: 'Wrap Up',
@@ -418,6 +607,23 @@ export function buildFallbackLesson(
   return {
     title: `${t} : Core Lesson`,
     tagline: `Taught from the ${mode === 'memorization' ? 'mnemonic' : 'conceptual'} schema`,
+    objectives: [
+      `Explain ${activity.title} as a causal chain`,
+      'Produce the mechanism without the source open',
+      boundary?.confusableLookalike ? `Separate it from ${boundary.confusableLookalike}` : 'Separate it from its lookalike',
+    ],
     segments,
+    glossary: activity.keywords.slice(0, 8).map((term) => ({
+      term,
+      definition: `${term} — as used in ${activity.title}.`,
+    })),
+    encodingSeeds: [
+      {
+        title: activity.title || t,
+        prompt: activity.prompt,
+        exemplar: activity.scaffold.exampleAnswer || gc?.expertCompletion || '',
+        keywords: activity.keywords.slice(0, 6),
+      },
+    ],
   };
 }

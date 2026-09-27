@@ -396,6 +396,84 @@ export const TEACH_RESPONSE = {
   },
 };
 
+// A deliberately SHORT lesson (3 segments) whose last segment is the wrapup:
+// the end-of-lesson exit panel is what these specs are about, so the walk to it
+// must be two clicks rather than twenty. It still carries the full depth shape
+// (objectives, glossary, why, misconceptions, encoding seeds) so the deep
+// rendering is asserted too.
+export const TEACH_SHORT_RESPONSE = {
+  lesson: {
+    title: 'Threshold: The Two-Minute Version',
+    tagline: 'Everything that matters about firing, nothing that does not.',
+    estimatedMin: 3,
+    intro: {
+      hook: 'A neuron sits at -70 mV. What flips it in a millisecond?',
+      whyItMatters: 'Every spike you will ever draw starts at threshold.',
+    },
+    objectives: [
+      'State why -55 mV is the trigger and not a coincidence',
+      'Separate threshold from the refractory period',
+    ],
+    glossary: [
+      { term: 'threshold', definition: 'the voltage at which voltage-gated Na+ channels open' },
+    ],
+    segments: [
+      {
+        id: 'sc1',
+        type: 'concept',
+        title: 'The Threshold',
+        body: 'At -55 mV the voltage-gated Na+ channels open and Na+ rushes in.',
+        why: 'The channel protein senses the field across the membrane, so a small voltage change physically opens the pore.',
+        misconceptions: [
+          {
+            claim: 'The Na+/K+ pump reverses to cause the spike',
+            correction: 'The pump never reverses; the spike is pure Na+ conductance.',
+          },
+        ],
+        keyTerms: ['threshold', '-55 mV'],
+        xpValue: 5,
+      },
+      {
+        id: 'sc2',
+        type: 'deepDive',
+        title: 'Where threshold stops being useful',
+        body: 'Above threshold the size of the spike stops depending on the stimulus: it is all-or-none.',
+        why: 'Once every available Na+ channel is open, a bigger stimulus has nothing left to recruit.',
+        xpValue: 10,
+      },
+      {
+        id: 'sc3',
+        type: 'wrapup',
+        title: 'Wrap Up',
+        body: 'Threshold is a mechanical gate, not a magic number.',
+        xpValue: 0,
+      },
+    ],
+    masteryCheck: {
+      prompt: 'Explain in one sentence why the spike is all-or-none.',
+      keywords: ['threshold', 'all-or-none'],
+      modelAnswer: 'Past threshold every Na+ channel is already open, so a stronger stimulus changes nothing.',
+    },
+    encodingSeeds: [
+      {
+        title: 'Threshold',
+        prompt: 'Why does -55 mV open the Na+ gates?',
+        exemplar: 'The field across the membrane physically pulls the gate open at that voltage.',
+      },
+      {
+        title: 'All-or-none',
+        prompt: 'Why does a bigger stimulus not make a bigger spike?',
+        exemplar: 'Every available channel is already open.',
+      },
+    ],
+    wrapup: {
+      summary: 'Lesson complete. The two facts that carry the whole mechanism are on the exit panel.',
+      callToAction: 'Encode these two prompts now, or park the lesson and come back to it.',
+      connectionPrompt: 'How would a demyelinated axon change the threshold behaviour?',
+    },
+  },
+};
+
 // ─── 10-second discrimination gate (/api/discrimination) ───────────────────
 // One vignette is the concept (dq1) and one the lookalike (dq2); neither names
 // either label, which is what makes the check blind.

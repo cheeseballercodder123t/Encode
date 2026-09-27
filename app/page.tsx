@@ -422,6 +422,21 @@ export default function DeepEncodeApp() {
     sound.playBeep(640, 'sine', 0.1);
   };
 
+  // End of a Teach Me lesson: "start encoding". The lesson never encodes on its
+  // own — it finishes, and this is the handoff. Where it lands depends on what
+  // the lesson was taught from: a notes lesson runs the encode pipeline from
+  // those notes, a stage lesson drops the learner back into the workbench stage
+  // they are already in (and focuses the mechanism field), and a schema lesson
+  // is already encoded, so the readout they came from is the destination.
+  const handleTeachStartEncoding = () => {
+    sound.playSuccess();
+    if (appState === 'input') {
+      void handleGenerate();
+    } else if (appState === 'encoding') {
+      setTimeout(() => field1Ref.current?.focus(), 60);
+    }
+  };
+
   // Open Stateless Share Modal helper
   // Open Stateless Share Modal helper
   const handleOpenStatelessShare = (schema?: SavedSchema) => {
@@ -2174,6 +2189,7 @@ export default function DeepEncodeApp() {
         researchContexts={researchContexts}
         settings={aiSettings}
         onAwardXP={(earnedXp: number) => addXP(earnedXp)}
+        onStartEncoding={handleTeachStartEncoding}
       />
 
       {/* Feature 51: The Blurting Method (Free Recall Blank Canvas) Modal */}

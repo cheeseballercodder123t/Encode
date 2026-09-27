@@ -72,17 +72,40 @@ export function generateSegregationRemnote(
   lines.push(`- **Parent System Anchor** :: [[${parentAnchor}]]`);
   lines.push('');
 
-  // Declarative Facts as cloze flashcards
+  // Declarative Facts. Two card shapes, because the source gives two:
+  //  - a `{{deletion}}` sentence becomes a RemNote CLOZE card (RemNote renders
+  //    {{}} as a cloze, and that deletion is the whole point of the fact);
+  //  - a short drill prompt becomes a Q :: A descriptor card.
+  // Previously the cloze suggestion was dropped whenever a question existed,
+  // so the exported deck silently lost every deletion the AI wrote.
   const facts = report.declarativeFacts || [];
   if (facts.length > 0) {
     lines.push('### 🔢 Declarative Facts');
-    facts.forEach((fact, i) => {
-      const front = fact.question?.trim()
-        ? fact.question.trim()
-        : fact.clozeSuggestion || fact.factStatement;
-      lines.push(`- ${front} :: ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
-      cardCount++;
+    facts.forEach((fact) => {
+      const cloze = (fact.clozeSuggestion || '').trim();
+      const hasCloze = cloze.includes('{{') && cloze.includes('}}');
+      const question = (fact.question || '').trim();
       factsCount++;
+
+      if (hasCloze) {
+        lines.push(`- ${cloze}`);
+        cardCount++;
+        if (question) {
+          lines.push(`  - ${question} :: ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
+          cardCount++;
+        }
+      } else if (question) {
+        lines.push(`- ${question} :: ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
+        cardCount++;
+      } else {
+        lines.push(`- ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
+        cardCount++;
+      }
+
+      if (fact.memoryHook) {
+        lines.push(`  - Remember :: ${fact.memoryHook}`);
+        cardCount++;
+      }
     });
     lines.push('');
   }
@@ -392,48 +415,103 @@ export function generateRemnoteHierarchy(
   };
 }
 
+// ─── RemNote API handoff ────────────────────────────────────────────────────
+//
+// RemNote's public write API (`api.remnote.io`, v0) is a THIRD-PARTY backend:
+// it authenticates with the `apiKey` and `userId` the user copied out of
+// RemNote's settings, and — critically — it sends no CORS headers, so a browser
+// cannot call it directly. The integration therefore goes through this app's
+// own server route (`/api/remnote`), which is also where the credentials stop
+// being visible to the page. The previous implementation posted to
+// `api.remnote.com/v1/create` with a Bearer token: wrong host, wrong API
+// version, wrong auth style, and blocked by CORS.
+
+/** RemNote's documented backend API base (keys are read in the plugin settings). */
+export const REMNOTE_API_BASE = 'https://api.remnote.io/api/v0';
+
+export interface RemnotePushAttempt {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+}
+
 /**
- * Pushes hierarchical markdown directly to RemNote via RemNote API
+ * Requests to try, in order. RemNote has shipped two create shapes over the
+ * API's life (`create_note`, `create_document`) and this ladder keeps the push
+ * working against either deployment instead of pinning one guess.
  */
-export async function pushToRemnoteApi(apiKey: string, userId: string, payload: RemnoteExportPayload): Promise<{ success: boolean; message: string; docId?: string }> {
+export function buildRemnotePushAttempts(
+  apiKey: string,
+  userId: string,
+  payload: RemnoteExportPayload,
+  title?: string
+): RemnotePushAttempt[] {
+  const headers = {
+    'Content-Type': 'application/json',
+    apiKey: apiKey.trim(),
+    userId: (userId || '').trim(),
+  };
+  const documentTitle = title || `DeepEncoded: ${payload.parentAnchor || 'Study Notes'}`;
+  return [
+    {
+      url: `${REMNOTE_API_BASE}/create_note`,
+      headers,
+      body: { note: { title: documentTitle, content: payload.markdown } },
+    },
+    {
+      url: `${REMNOTE_API_BASE}/create_document`,
+      headers,
+      body: { title: documentTitle, content: payload.markdown },
+    },
+  ];
+}
+
+/**
+ * Pushes the hierarchical markdown through this app's server route (see
+ * `app/api/remnote/route.ts`), which is the only side allowed to talk to
+ * RemNote directly. The markdown copy path stays the always-available
+ * fallback, because RemNote's public API is not always up.
+ */
+export async function pushToRemnoteApi(
+  apiKey: string,
+  userId: string,
+  payload: RemnoteExportPayload
+): Promise<{ success: boolean; message: string; docId?: string }> {
   if (!apiKey || !apiKey.trim()) {
     throw new Error("RemNote API Key is required.");
   }
 
   try {
-    // RemNote Plugin/API v1 create document endpoint
-    const res = await fetch("https://api.remnote.com/v1/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey.trim()}`,
-      },
+    const res = await fetch('/api/remnote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId: userId || undefined,
-        text: payload.markdown,
-        isDocument: true,
+        apiKey: apiKey.trim(),
+        userId: (userId || '').trim(),
+        markdown: payload.markdown,
+        title: `DeepEncoded: ${payload.parentAnchor || 'Study Notes'}`,
       }),
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      // Handle standard RemNote API payload formats
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) {
       return {
         success: false,
-        message: `RemNote API response (${res.status}): ${errText || 'Invalid API Token or permission scope'}. You can still use 1-Click Copy RemNote Markdown below!`,
+        message:
+          data?.message ||
+          `RemNote push failed (HTTP ${res.status}). Use "Copy RemNote Markdown" and paste it into RemNote instead.`,
       };
     }
 
-    const data = await res.json();
     return {
       success: true,
-      message: "Successfully pushed structured document into your RemNote Knowledge Base!",
-      docId: data?.docId || data?._id,
+      message: data.message || 'Pushed the structured document into your RemNote knowledge base.',
+      docId: data.docId,
     };
   } catch (err: any) {
     return {
       success: false,
-      message: `Network/CORS limitation: ${err.message || 'Direct push blocked'}. Use 1-Click 'Copy RemNote' to paste instantly into RemNote!`,
+      message: `Could not reach the RemNote push route: ${err?.message || 'network error'}. Use "Copy RemNote Markdown" and paste it into RemNote instead.`,
     };
   }
 }

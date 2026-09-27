@@ -15,6 +15,8 @@ import {
   buildHierarchicalDeckName,
   clozeUserWording,
   normalizeClozeTermToAnki,
+  clozeOrdinals,
+  renumberClozeOrdinals,
   computeActivityExportTags,
   sanitizeExtracted,
   withHeldBackCards,
@@ -365,6 +367,41 @@ describe('clozeUserWording / computeActivityExportTags / buildHierarchicalDeckNa
   });
 });
 
+describe('cloze ordinals (one Anki card per deletion)', () => {
+  it('reads the distinct deletion numbers a front carries', () => {
+    expect(clozeOrdinals('<b>T</b><br>Na+ {{c1::rushes}} in, K+ {{c2::leaves}}')).toEqual([1, 2]);
+    expect(clozeOrdinals('no deletion here')).toEqual([]);
+    expect(clozeOrdinals('{{c3::only}}')).toEqual([3]);
+  });
+
+  it('renumbers deletions densely from c1 without reordering them', () => {
+    expect(renumberClozeOrdinals('{{c2::B}} then {{c5::C}}')).toBe('{{c1::B}} then {{c2::C}}');
+    expect(renumberClozeOrdinals('{{c1::A}} stays {{c1::A}}')).toBe('{{c1::A}} stays {{c1::A}}');
+    // Idempotent: re-running the pass cannot drift the numbering.
+    const once = renumberClozeOrdinals('x {{c4::z}} {{c2::y}}');
+    expect(renumberClozeOrdinals(once)).toBe(once);
+  });
+
+  it('renumbers an unnumbered-past-c1 cloze front during extraction', () => {
+    // A front whose only deletion is {{c2::…}} used to reach the Cloze note
+    // type with a single ord-0 row: Anki refuses it ("No cloze 1 found"), so
+    // the deletion was silently lost. Extraction densifies the numbering.
+    const cards = extractAnkiCardsFromSchema(null, {
+      topic: 'T',
+      declarativeFacts: [
+        {
+          id: 'odd',
+          factStatement: 'Sodium enters the cell.',
+          clozeSuggestion: '{{c2::Sodium}} enters the cell.',
+        },
+      ],
+      conceptualMechanisms: [],
+    });
+    expect(cards[0].front).toContain('{{c1::Sodium}}');
+    expect(clozeOrdinals(cards[0].front)).toEqual([1]);
+  });
+});
+
 describe('generateAnkiApkgPackage (declarative, FSRS-perfect)', () => {
   it('builds a zip with a real collection.anki2 that sqlite3 validates (schema-11)', async () => {
     const apkgSchema: Partial<SavedSchema> = {
@@ -426,7 +463,7 @@ describe('generateAnkiApkgPackage (declarative, FSRS-perfect)', () => {
     writeFileSync(path, bytes);
     try {
       const script = `
-import sqlite3, json
+import sqlite3, json, re
 conn = sqlite3.connect(${JSON.stringify(path)})
 cur = conn.cursor()
 assert cur.execute('PRAGMA integrity_check').fetchall() == [('ok',)], 'integrity'
@@ -455,12 +492,24 @@ assert expected_lapse <= set(cfg['lapse'].keys()), sorted(expected_lapse - set(c
 decks = json.loads(col[1])
 deck_names = [d['name'] for d in decks.values()]
 assert 'DeepEncode::Action Potentials' in deck_names, deck_names
-notes = cur.execute('SELECT mid, flds, tags FROM notes').fetchall()
-cards = cur.execute('SELECT count(*) FROM cards').fetchone()[0]
-assert cards == len(notes), (len(notes), cards)
-cloze_mid = next(mid for mid, m in models.items() if m['name'] == 'DeepEncode Cloze')
-assert any(mid == int(cloze_mid) for mid, flds, tags in notes), notes
-assert any('Unfinished' not in tags for mid, flds, tags in notes), notes
+notes = cur.execute('SELECT id, mid, flds, tags FROM notes').fetchall()
+card_rows = cur.execute('SELECT nid, ord FROM cards').fetchall()
+# One card row per cloze deletion: never fewer than one per note, and a cloze
+# note's rows must cover exactly the deletions its front carries (ord = n-1).
+assert len(card_rows) >= len(notes), (len(notes), len(card_rows))
+by_note = {}
+for nid, ord in card_rows:
+    by_note.setdefault(nid, set()).add(ord)
+for nid, mid, flds, tags in notes:
+    assert by_note.get(nid), ('note without a card', nid)
+cloze_mid = int(next(mid for mid, m in models.items() if m['name'] == 'DeepEncode Cloze'))
+for nid, mid, flds, tags in notes:
+    if mid == cloze_mid:
+        text = flds.split(chr(31))[0]
+        ords = {int(n) for n in re.findall(r'\\{\\{c(\\d+)::', text)}
+        assert ords, flds
+        assert ords == {o + 1 for o in by_note[nid]}, (ords, by_note[nid])
+assert any('Unfinished' not in tags for nid, mid, flds, tags in notes), notes
 print('PYTHON_OK')
 `;
       const result = spawnSync(python, ['-c', script], { encoding: 'utf8' });
