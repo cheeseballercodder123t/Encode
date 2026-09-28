@@ -1,11 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { StageOutlineEntry } from '@/lib/stream-schema';
 
 /**
- * Phases shown in the loading view. Cycled on a timer because the /api/encode
- * route streams nothing back yet : this gives the user a sense of the
- * pipeline moving instead of a frozen spinner on long generations.
+ * Phases shown in the loading view.
+ *
+ * These used to be the whole story: `/api/encode` streamed nothing back, so the
+ * ticker cycled on a timer to give the user a sense of the pipeline moving.
+ * Now `/api/encode/stream` reports real events — the topic title, then each
+ * stage outline as the model finishes writing it — and those take precedence
+ * over the timer. The ticker stays as the fallback for the callers that cannot
+ * stream (a buffering proxy, a provider without stream support), because a
+ * slow generation still deserves something honest to look at.
  */
 const PHASES = [
   'Parsing source material…',
@@ -16,11 +23,19 @@ const PHASES = [
   'Sealing boundary contrasts…',
 ];
 
+export interface LiveGenerationProgress {
+  /** A phase reported by the stream itself, which always wins over the ticker. */
+  phase?: string;
+  /** Stage outlines that have already landed. */
+  outlines?: StageOutlineEntry[];
+}
+
 /**
- * Tracks elapsed generation time and cycles pipeline phase messages.
+ * Tracks elapsed generation time, the current pipeline phase, and the stage
+ * outlines that have arrived so far.
  * `startedAt === null` resets everything (generation finished / cancelled).
  */
-export function useGenerationProgress(startedAt: number | null) {
+export function useGenerationProgress(startedAt: number | null, live: LiveGenerationProgress = {}) {
   const [elapsed, setElapsed] = useState(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [trackedStart, setTrackedStart] = useState(startedAt);
@@ -47,9 +62,19 @@ export function useGenerationProgress(startedAt: number | null) {
     };
   }, [startedAt]);
 
-  // Asymptotic fill: ~50% at 14s, ~90% by 45s. Never hits 100 before done so
-  // a stuck request doesn't show a lying complete bar.
-  const pct = startedAt == null ? 0 : Math.min(90, Math.round(90 * (1 - Math.exp(-elapsed / 20))));
+  const outlines = live.outlines ?? [];
+  const phase = live.phase || PHASES[phaseIndex];
 
-  return { elapsed, phase: PHASES[phaseIndex], pct };
+  // Progress is asymptotic while nothing is known (~50% at 14s, ~90% by 45s,
+  // never reaching 100 before done, so a stuck request cannot show a lying
+  // complete bar). A real outline is a known quantity, so the bar takes the
+  // step the stream actually earned instead.
+  const pct =
+    startedAt == null
+      ? 0
+      : outlines.length > 0
+        ? Math.min(92, 20 + outlines.length * 16)
+        : Math.min(90, Math.round(90 * (1 - Math.exp(-elapsed / 20))));
+
+  return { elapsed, phase, pct, outlines };
 }

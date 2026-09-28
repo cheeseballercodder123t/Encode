@@ -23,6 +23,16 @@ service cloud.firestore {
         allow create, update: if isOwner(userId);
         allow delete: if isOwner(userId);
       }
+
+      // Deck memory: the fingerprints of card fronts this user has already
+      // exported, per topic. Fronts only (no backs, no answers, no source
+      // material), private to the owner, so a re-forge on another device still
+      // knows what is already in their deck.
+      match /memory/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
   }
 }

@@ -5,6 +5,7 @@ import {
   FORGE_MEDIA_RESPONSE,
   FORGE_MORE_RESPONSE,
   FORGE_RESPONSE,
+  FORGE_RETRY_RESPONSE,
 } from './helpers/fixtures';
 import { mockAiApis } from './helpers/mocks';
 
@@ -105,7 +106,9 @@ async function mockForgeModes(page: Page) {
         ? FORGE_MORE_RESPONSE
         : body?.mode === 'condense'
           ? FORGE_CONDENSE_RESPONSE
-          : FORGE_RESPONSE;
+          : body?.mode === 'retry'
+            ? FORGE_RETRY_RESPONSE
+            : FORGE_RESPONSE;
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -369,5 +372,101 @@ test.describe('Flashcards Only (the Forge)', () => {
 
     await page.getByRole('button', { name: /close export modal/i }).click();
     await expect(page.getByText('RemNote Hierarchical & Feynman Engine')).toBeVisible();
+  });
+
+  test('the deck summary reports the post-Wozniak count instead of the raw batch', async ({ page }) => {
+    await mockForge(page);
+    await forgeDeck(page);
+
+    // The modal claims cards go through the Wozniak pass; the pass runs at
+    // export, so the number it actually produces is shown next to the deck.
+    const wozniak = page.getByTestId('forge-wozniak');
+    await expect(wozniak).toBeVisible();
+    await expect(wozniak).toContainText('Wozniak pass:');
+    await expect(wozniak).toContainText('after sanitizing');
+  });
+
+  test('a section that came back empty is named, and generate-more is aimed at it', async ({ page }) => {
+    await mockForge(page, {
+      ...FORGE_RESPONSE,
+      coverage: {
+        sections: [
+          { section: 'facts', requested: true, cards: 2 },
+          { section: 'mechanisms', requested: true, cards: 1 },
+          { section: 'drills', requested: true, cards: 1 },
+          { section: 'examples', requested: true, cards: 0 },
+        ],
+        gaps: ['examples'],
+        note: '0 cards for examples — "generate more" will target that gap.',
+        silentSources: ['youtube:renal'],
+      },
+    });
+    await forgeDeck(page);
+
+    const coverage = page.getByTestId('forge-coverage');
+    await expect(coverage).toBeVisible();
+    await expect(coverage).toContainText('[ ! ] 0 cards for examples');
+
+    // The next "more" batch asks only for the missing section, rather than
+    // re-earning the sections that already arrived.
+    const requested: string[] = [];
+    await page.route('**/api/forge', (route) => {
+      const body = route.request().postDataJSON() as { include?: string[] } | null;
+      requested.push(...(body?.include || []));
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...FORGE_MORE_RESPONSE, coverage: undefined }),
+      });
+    });
+    await page.getByTestId('forge-more').click();
+    await expect(page.getByTestId('forge-deck-note')).toContainText('+2 more cards');
+    expect(requested).toEqual(['examples']);
+  });
+
+  test('one failed source can be re-forged on its own', async ({ page }) => {
+    await mockForgeModes(page);
+    await forgeDeck(page);
+
+    // The YouTube source failed; re-running everything would re-pay for the
+    // sources that already worked, so the row offers a targeted retry.
+    await expect(page.getByText('[ ! ] youtube:renal')).toBeVisible();
+    await page.getByTestId('forge-retry-src_4').click();
+
+    await expect(page.getByTestId('forge-deck-note')).toContainText('Retried');
+    await expect(page.getByTestId('forge-deck-note')).toContainText('+2 cards');
+    // The row is no longer a failure: it says what it finally contributed.
+    await expect(page.getByText('[ OK ] youtube:renal')).toBeVisible();
+    await expect(page.getByText('transcribed from the audio')).toBeVisible();
+  });
+
+  test('growing the deck keeps going on its own until the target, then stops', async ({ page }) => {
+    await mockForgeModes(page);
+    await forgeDeck(page);
+
+    // One batch is a guess at how much is missing. The loop keeps asking until
+    // the deck is the size you named — and stops after two empty batches,
+    // because at that point the sources genuinely have nothing left.
+    await page.getByTestId('forge-target').fill('100');
+    await page.getByTestId('forge-grow-loop').click();
+
+    await expect(page.getByTestId('forge-loop-note')).toContainText('exhausted at 7 cards (+2)', {
+      timeout: 20_000,
+    });
+    await expect(page.getByText('3 facts · 1 mechanisms · 2 drills · 1 examples')).toBeVisible();
+  });
+
+  test('a reshape of the deck can be undone in one step', async ({ page }) => {
+    await mockForgeModes(page);
+    await forgeDeck(page);
+
+    await page.getByTestId('forge-condense').click();
+    await expect(page.getByTestId('forge-deck-note')).toContainText('Condensed 5 → 3 cards');
+    await expect(page.getByText('1 facts · 1 mechanisms · 1 drills · 0 examples')).toBeVisible();
+
+    // Folding a deck you disagree with must not cost a re-forge.
+    await page.getByTestId('forge-undo').click();
+    await expect(page.getByTestId('forge-deck-note')).toContainText('Undone — the deck is back to 5 cards');
+    await expect(page.getByText('2 facts · 1 mechanisms · 1 drills · 1 examples')).toBeVisible();
   });
 });

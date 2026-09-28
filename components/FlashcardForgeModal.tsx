@@ -6,12 +6,21 @@ import { AISettings, SegregationReport, UploadedFileAsset } from '@/lib/types';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { playSound } from '@/lib/audio';
 import {
+  ForgeCoverageReport,
   ForgeExportTarget,
   ForgeSectionCounts,
   ForgeSourceKind,
   collectCardFronts,
   mergeAdditionalCards,
 } from '@/lib/services/forge';
+import { LiveForgeSource, readForgeResponse } from '@/lib/forge-stream';
+import { extractSanitizedCardsFromSchema } from '@/lib/anki-exporter';
+import {
+  DeckMemorySyncResult,
+  describeDeckMemorySync,
+  syncDeckMemoryWithCloud,
+} from '@/lib/deck-memory-cloud';
+import { useAuth } from '@/lib/auth-context';
 import type { Contradiction } from '@/lib/services/contradiction';
 import { MEDIA_ACCEPT_ATTRIBUTE, isTranscribableMedia } from '@/lib/media-types';
 import {
@@ -71,6 +80,10 @@ interface ForgeSourceOutcome {
   status: 'ok' | 'failed';
   counts: ForgeSectionCounts;
   note?: string;
+  /** The source's words, when the route counted them. */
+  words?: number;
+  /** Words-in → cards-out sanity check (see lib/services/forge.ts). */
+  yield?: { verdict: 'healthy' | 'thin' | 'silent' | 'unknown'; expected: number; note?: string };
 }
 
 interface FlashcardForgeModalProps {
@@ -95,6 +108,8 @@ const TARGETS: { id: ForgeExportTarget; label: string; blurb: string }[] = [
 ];
 
 const MAX_SOURCES = 12;
+/** Mirrors SOURCE_CONCURRENCY in the route, shown in the pre-flight estimate. */
+const SOURCE_CONCURRENCY_UI = 3;
 const FILE_TYPES = [
   'application/pdf',
   'image/png',
@@ -153,6 +168,28 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   const [deckNote, setDeckNote] = useState('');
   const [deckNoteError, setDeckNoteError] = useState(false);
   const [deckBusy, setDeckBusy] = useState<'' | 'more' | 'condense'>('');
+  /** Sources finished so far, streamed in while the rest are still running. */
+  const [liveSources, setLiveSources] = useState<LiveForgeSource[]>([]);
+  /** Sources a worker has picked up but not finished. */
+  const [liveRunning, setLiveRunning] = useState<string[]>([]);
+  const [forgePhase, setForgePhase] = useState('');
+  /** Which requested sections actually received cards — and which came back empty. */
+  const [coverage, setCoverage] = useState<ForgeCoverageReport | null>(null);
+  /**
+   * One-step back for the deck. "Generate more" and "condense" are one-way
+   * operations on the deck on screen, and a condense pass the learner changes
+   * their mind about should not cost a full re-forge to undo.
+   */
+  const [deckHistory, setDeckHistory] = useState<SegregationReport[]>([]);
+  /** "Generate more" as a loop with a target number of cards. */
+  const [moreTarget, setMoreTarget] = useState(60);
+  const [loopRunning, setLoopRunning] = useState(false);
+  const [loopNote, setLoopNote] = useState('');
+  const stopLoopRef = useRef(false);
+  /** The account's copy of the deck memory, when there is one. */
+  const [memorySync, setMemorySync] = useState<DeckMemorySyncResult | null>(null);
+  const [memorySyncing, setMemorySyncing] = useState(false);
+  const { user } = useAuth();
   const nextId = useRef(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -161,6 +198,31 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     () => SECTIONS.filter((s) => sections[s.id]).map((s) => s.id),
     [sections]
   );
+
+  /**
+   * What the Wozniak pass does to this deck, computed HERE rather than only at
+   * export time. The forge already promises that cards go through the 1-idea
+   * rule, two-way cloze symmetry and the 20-word ceiling; a promise like that
+   * belongs next to the card count, not three clicks later behind an export
+   * button. (The pass is deterministic and offline, so this is the real number,
+   * not an estimate.)
+   */
+  const wozniak = useMemo(
+    () => (merged ? extractSanitizedCardsFromSchema(null, merged) : null),
+    [merged]
+  );
+
+  /**
+   * Pre-flight cost estimate, so a twelve-source ingest is a decision rather
+   * than a surprise: one model call per source that has to be cut, plus the
+   * transcription a video without captions or a recording may need.
+   */
+  const preflight = useMemo(() => {
+    const needsAudio = sources.filter(
+      (s) => s.kind === 'youtube' || (s.kind === 'file' && s.media)
+    ).length;
+    return { calls: sources.length, needsAudio };
+  }, [sources]);
 
 
 
@@ -181,6 +243,16 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setDeckNote('');
     setDeckNoteError(false);
     setDeckBusy('');
+    setLiveSources([]);
+    setLiveRunning([]);
+    setForgePhase('');
+    setCoverage(null);
+    setDeckHistory([]);
+    setLoopRunning(false);
+    setLoopNote('');
+    stopLoopRef.current = false;
+    setMemorySync(null);
+    setMemorySyncing(false);
   };
 
   const handleClose = () => {
@@ -324,7 +396,13 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setMerged(null);
     setContradictions([]);
     setDiff(null);
+    setLiveSources([]);
+    setLiveRunning([]);
+    setForgePhase('');
     try {
+      // Streamed: the route cuts three sources at a time and reports each one
+      // the moment it lands, so a twelve-source ingest fills the log in as it
+      // goes instead of showing a blank panel until the last one finishes.
       const res = await fetch('/api/forge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -332,15 +410,22 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
           sources: sourceList.map(sourcePayloadFor),
           include: wanted,
           settings,
+          stream: true,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || 'The forge could not build a deck.');
-      }
+      const data = await readForgeResponse(res, {
+        onPhase: setForgePhase,
+        onSourceStart: (id) => setLiveRunning((prev) => (prev.includes(id) ? prev : [...prev, id])),
+        onSource: (source) => {
+          setLiveRunning((prev) => prev.filter((id) => id !== source.id));
+          setLiveSources((prev) => [...prev.filter((row) => row.id !== source.id), source]);
+        },
+      });
       const report: SegregationReport | null = data.report || null;
       setOutcomes(Array.isArray(data.sources) ? data.sources : []);
       setMerged(report);
+      setDeckHistory([]);
+      setCoverage(data.coverage || null);
       setResolved(
         Array.isArray(data.resolved)
           ? data.resolved.filter((r: any) => r && typeof r.id === 'string' && typeof r.notes === 'string')
@@ -353,18 +438,23 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       );
       // Deck memory: what has this topic already shipped? The learner decides
       // whether the deck goes out whole or only the cards that are new. The
-      // local answer lands instantly; the real Anki deck refines it a moment
-      // later (see checkAnkiDeck) without ever blocking the result.
+      // local answer lands instantly; the real Anki deck and the account's copy
+      // refine it a moment later (see checkAnkiDeck / syncCloudMemory) without
+      // ever blocking the result.
       if (report) {
         refreshMemory(report, 'reset');
         setAnkiRead(null);
         void checkAnkiDeck(report, true);
+        void syncCloudMemory(report);
       }
       setPhase('done');
       playSound('success');
     } catch (err: any) {
       setPhase('setup');
       setError(err?.message || 'The forge failed. Try again.');
+    } finally {
+      setForgePhase('');
+      setLiveRunning([]);
     }
   };
 
@@ -392,6 +482,44 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     }
   };
 
+  /**
+   * The account's copy of the deck memory. The local store already answers the
+   * question on this device; this is what makes the answer true on the next
+   * one. Advisory like the rest of the memory: a failure just means the panel
+   * says the cloud copy was not reached.
+   */
+  const syncCloudMemory = async (report: SegregationReport) => {
+    if (!user) {
+      setMemorySync({ ok: false, topics: 0, changed: false, pushed: false, error: 'Not signed in.' });
+      return;
+    }
+    setMemorySyncing(true);
+    try {
+      const result = await syncDeckMemoryWithCloud(user.uid);
+      setMemorySync(result);
+      // The account may know about cards this device did not: re-diff so the
+      // "already in your deck" count reflects everything, not just this laptop.
+      if (result.ok && result.changed) refreshMemory(report, 'keep');
+    } finally {
+      setMemorySyncing(false);
+    }
+  };
+
+  /** One step back: every reshape of the deck pushes the deck it replaced. */
+  const pushDeckHistory = (deck: SegregationReport) => {
+    setDeckHistory((prev) => [...prev.slice(-9), deck]);
+  };
+
+  const undoDeck = () => {
+    const previous = deckHistory[deckHistory.length - 1];
+    if (!previous) return;
+    playSound('click');
+    setDeckHistory((prev) => prev.slice(0, -1));
+    setMerged(previous);
+    refreshMemory(previous, 'keep');
+    noteDeck(`Undone — the deck is back to ${deckCount(previous)} cards.`);
+  };
+
   const deckSize =
     (merged?.declarativeFacts.length || 0) +
     (merged?.conceptualMechanisms.length || 0) +
@@ -400,6 +528,199 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   const emptyDeck = deckSize === 0;
   const shipsOnlyFresh = skipKnown && (diff?.known || 0) > 0;
   const shippingCount = shipsOnlyFresh ? diff?.fresh ?? deckSize : deckSize;
+
+  /**
+   * One "more" batch on the wire.
+   *
+   * `only` turns it into a RETRY: the same request, restricted to the sources
+   * the learner named, so a single failed source can be re-forged without
+   * re-running (or re-paying for) the sources that already worked. Transcripts
+   * resolved for the first forge ride along either way, so a lecture recording
+   * is never transcribed twice.
+   *
+   * `include` is aimed at the coverage gaps when there are any: if the model
+   * returned no drills, asking it again for "everything" mostly re-earns the
+   * facts it already gave. Asking for the empty section is what fills it.
+   */
+  const fetchMoreBatch = async (
+    only?: string[],
+    /**
+     * The grow loop's view of the deck, not this render's.
+     *
+     * A batch that appends cards leaves `merged` stale for the rest of the
+     * loop, and a do-not-repeat list frozen at the pre-loop deck is exactly how
+     * a loop talks itself into stopping early: the model is never told about
+     * the cards the last batch just added, so it offers them again, and the
+     * merge drops every one — two of those in a row and the loop declares the
+     * sources exhausted while they still had material left.
+     */
+    fresh: { existing?: string[]; include?: string[] } = {}
+  ): Promise<{ addition: SegregationReport | null; dropped: number; coverage: ForgeCoverageReport | null }> => {
+    if (!merged) return { addition: null, dropped: 0, coverage: null };
+    const existing = fresh.existing ?? collectCardFronts(merged);
+    const targets =
+      fresh.include ?? (!only && coverage && coverage.gaps.length > 0 ? coverage.gaps : sectionList);
+    const res = await fetch('/api/forge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: only ? 'retry' : 'more',
+        only,
+        sources: sources.map(sourcePayloadFor),
+        resolved,
+        existing,
+        include: targets,
+        settings,
+        stream: true,
+      }),
+    });
+    const data = await readForgeResponse(res, {
+      onPhase: setForgePhase,
+      onSourceStart: (id) => setLiveRunning((prev) => (prev.includes(id) ? prev : [...prev, id])),
+      onSource: (source) => {
+        setLiveRunning((prev) => prev.filter((id) => id !== source.id));
+        setLiveSources((prev) => [...prev.filter((row) => row.id !== source.id), source]);
+      },
+    });
+
+    const freshCoverage = (data?.coverage as ForgeCoverageReport | undefined) || null;
+    if (freshCoverage) setCoverage(freshCoverage);
+    // A retry rewrites just that row of the source log: the source that failed
+    // is no longer a failure, and its note says what it finally contributed.
+    if (only && Array.isArray(data?.sources)) {
+      setOutcomes((prev) =>
+        prev.map((row) => {
+          if (!only.includes(row.id)) return row;
+          const retried = (data.sources as any[]).find((s) => s && s.id === row.id);
+          if (!retried) return row;
+          return {
+            ...row,
+            status: retried.status === 'ok' ? ('ok' as const) : row.status,
+            counts: retried.counts || row.counts,
+            note: retried.note || 're-forged',
+          };
+        })
+      );
+    }
+
+    return {
+      addition: (data?.report as SegregationReport) || null,
+      dropped: Number(data?.dropped) || 0,
+      coverage: freshCoverage,
+    };
+  };
+
+  /**
+   * "Keep going until the deck is actually big enough."
+   *
+   * One batch is a guess at how much is missing; this is the loop that stops
+   * when it is done rather than when the learner gives up clicking. It stops
+   * on the target, on the Stop button, or after TWO consecutive batches that
+   * came back empty — because at that point the model is telling us the source
+   * material has no more testable items in it, and a third call would only
+   * invent cards. The count updates live.
+   */
+  const runMoreLoop = async () => {
+    if (!merged || deckBusy !== '' || loopRunning) return;
+    const target = Math.max(0, Math.floor(moreTarget));
+    let deck = merged;
+    if (target <= deckCount(deck)) {
+      setLoopNote(`The deck already holds ${deckCount(deck)} cards — raise the target to keep going.`);
+      return;
+    }
+
+    playSound('click');
+    stopLoopRef.current = false;
+    setLoopRunning(true);
+    setLoopNote(`${deckCount(deck)} / ${target} cards…`);
+    noteDeck('');
+    let emptyBatches = 0;
+    let batches = 0;
+    let added = 0;
+    // Aim every batch at whatever is STILL missing, read off the last response
+    // rather than the coverage the loop walked in with.
+    let include = coverage && coverage.gaps.length > 0 ? coverage.gaps : sectionList;
+
+    try {
+      while (deckCount(deck) < target && emptyBatches < 2 && !stopLoopRef.current) {
+        setDeckBusy('more');
+        const { addition, coverage: batchCoverage } = await fetchMoreBatch(undefined, {
+          existing: collectCardFronts(deck),
+          include,
+        });
+        if (batchCoverage) include = batchCoverage.gaps.length > 0 ? batchCoverage.gaps : sectionList;
+        batches += 1;
+        if (!addition) {
+          emptyBatches += 1;
+          setLoopNote(`Batch ${batches} returned nothing (${emptyBatches} of 2 empty — the loop stops at two).`);
+          continue;
+        }
+        const next = mergeAdditionalCards(deck, addition);
+        if (next.added === 0) {
+          emptyBatches += 1;
+          setLoopNote(`Batch ${batches} had no new cards (${emptyBatches} of 2 empty — the loop stops at two).`);
+          continue;
+        }
+        pushDeckHistory(deck);
+        deck = next.report;
+        added += next.added;
+        emptyBatches = 0;
+        setMerged(deck);
+        refreshMemory(deck, 'keep');
+        setLoopNote(`${deckCount(deck)} / ${target} cards · ${batches} extra batch${batches === 1 ? '' : 'es'} · +${added}`);
+      }
+    } catch (err: any) {
+      setLoopNote(err?.message || 'The grow loop stopped — the deck on screen is intact.');
+    } finally {
+      setDeckBusy('');
+      setLoopRunning(false);
+      setForgePhase('');
+      setLiveSources([]);
+      setLiveRunning([]);
+    }
+
+    const reached = deckCount(deck) >= target;
+    setLoopNote(
+      reached
+        ? `Target reached: ${deckCount(deck)} cards (+${added} across ${batches} extra batch${batches === 1 ? '' : 'es'}).`
+        : stopLoopRef.current
+          ? `Stopped at ${deckCount(deck)} cards (+${added}).`
+          : `Sources are exhausted at ${deckCount(deck)} cards (+${added}) — two batches came back with nothing new. Add another source to keep going.`
+    );
+    if (added > 0) playSound('success');
+  };
+
+  /** Re-forge ONE failed source, leaving the sources that worked alone. */
+  const handleRetrySource = async (id: string) => {
+    if (!merged || deckBusy !== '' || loopRunning) return;
+    const row = outcomes.find((o) => o.id === id);
+    playSound('click');
+    setDeckBusy('more');
+    setLiveSources([]);
+    setLiveRunning([]);
+    noteDeck(`Retrying ${row?.label || 'that source'}…`);
+    try {
+      const { addition } = await fetchMoreBatch([id]);
+      if (!addition) throw new Error('That source returned nothing again — the reason is in its row.');
+      const next = mergeAdditionalCards(merged, addition);
+      if (next.added === 0) {
+        noteDeck(`Retrying ${row?.label || 'that source'} produced no new cards — the deck already covers it.`);
+        return;
+      }
+      pushDeckHistory(merged);
+      setMerged(next.report);
+      refreshMemory(next.report, 'keep');
+      noteDeck(`Retried ${row?.label || 'the source'}: +${next.added} card${next.added === 1 ? '' : 's'} — the deck now holds ${deckCount(next.report)}.`);
+      playSound('success');
+    } catch (err: any) {
+      noteDeck(err?.message || 'Retrying that source failed.', true);
+    } finally {
+      setDeckBusy('');
+      setForgePhase('');
+      setLiveSources([]);
+      setLiveRunning([]);
+    }
+  };
 
   /**
    * "That is not enough cards." Re-runs the SAME sources, but the prompt is
@@ -414,22 +735,10 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     playSound('click');
     setDeckBusy('more');
     noteDeck('');
+    setLiveSources([]);
+    setLiveRunning([]);
     try {
-      const res = await fetch('/api/forge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'more',
-          sources: sources.map(sourcePayloadFor),
-          resolved,
-          existing: collectCardFronts(base),
-          include: sectionList,
-          settings,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'The forge could not add more cards.');
-      const addition: SegregationReport | null = data.report || null;
+      const { addition } = await fetchMoreBatch();
       if (!addition) {
         noteDeck('The model returned no additional cards.');
         return;
@@ -441,6 +750,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
         );
         return;
       }
+      pushDeckHistory(base);
       setMerged(next.report);
       refreshMemory(next.report, 'keep');
       noteDeck(
@@ -453,6 +763,9 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       noteDeck(err?.message || 'Adding more cards failed.', true);
     } finally {
       setDeckBusy('');
+      setForgePhase('');
+      setLiveSources([]);
+      setLiveRunning([]);
     }
   };
 
@@ -487,6 +800,9 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       // The condensed deck keeps the topic it came from, so deck memory and the
       // export still recognise it as the same topic.
       const nextDeck: SegregationReport = { ...condensed, topic: base.topic || condensed.topic };
+      // One step back: folding a deck the learner disagrees with must not cost
+      // a full re-forge.
+      pushDeckHistory(base);
       setMerged(nextDeck);
       // The conflict panel quoted cards that may have just been merged away.
       setContradictions([]);
@@ -504,8 +820,10 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     if (!merged) return;
     playSound('success');
     const report = shipsOnlyFresh && diff ? keepOnlyFreshCards(merged, diff.freshIds) : merged;
-    // Remember what actually shipped, so next week's forge can say so.
+    // Remember what actually shipped, so next week's forge can say so — on this
+    // device, and (when signed in) on the account, so the next machine knows.
     recordDeckExport({ topic: report.topic, keys: reportCardKeys(report), surface: which });
+    void syncDeckMemoryWithCloud(user?.uid || null);
     onClose();
     resetTransient();
     onDeckReady(report, which);
@@ -879,14 +1197,32 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                 {phase === 'forging' && (
                   <div className="p-3 bg-deck border border-amber/40 space-y-2">
                     <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider">
-                      [ FORGING ] cutting {sources.length} source{sources.length === 1 ? '' : 's'} into cards…
+                      [ FORGING ]{' '}
+                      {forgePhase || `cutting ${sources.length} source${sources.length === 1 ? '' : 's'} into cards…`}
                     </span>
-                    <div className="flex flex-wrap gap-1">
-                      {sources.map((s) => (
-                        <span key={s.id} className="px-2 py-0.5 bg-chassis border border-edge text-[10px] font-mono text-solder">
-                          {s.label.slice(0, 28)}
-                        </span>
-                      ))}
+                    <p className="text-[10px] font-mono text-solder leading-relaxed">
+                      Three sources run at a time, and each row lands the moment its cards are back — no waiting for
+                      the slowest source to see the fastest.
+                    </p>
+                    <div className="space-y-1" data-testid="forge-live-sources">
+                      {sources.map((s) => {
+                        const done = liveSources.find((row) => row.id === s.id);
+                        const running = liveRunning.includes(s.id);
+                        const total = done
+                          ? done.counts.facts + done.counts.mechanisms + done.counts.drills + done.counts.examples
+                          : 0;
+                        return (
+                          <div key={s.id} className="flex items-center gap-2 text-[10px] font-mono">
+                            <span className={done ? 'text-signal' : running ? 'text-amber' : 'text-solder'}>
+                              {done ? '[ OK ]' : running ? '[ CUTTING ]' : '[ QUEUED ]'}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-bone">{s.label}</span>
+                            <span className="text-solder shrink-0">
+                              {done ? `${total} card${total === 1 ? '' : 's'}` : running ? '…' : '—'}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -904,6 +1240,30 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                     {merged.practiceQuestions?.length || 0} drills · {merged.workedExamples?.length || 0} examples
                   </p>
                   <p className="text-[10px] font-mono text-solder">{merged.topic}</p>
+                  {/* The deck the export will actually hold, not the raw batch. */}
+                  {wozniak && (
+                    <p className="text-[10px] font-mono text-solder leading-relaxed" data-testid="forge-wozniak">
+                      Wozniak pass: <span className="text-bone font-bold">{wozniak.cards.length}</span> card
+                      {wozniak.cards.length === 1 ? '' : 's'} after sanitizing
+                      {wozniak.addedSymmetric > 0 ? ` (+${wozniak.addedSymmetric} reverse cloze)` : ''}
+                      {wozniak.heldBack.length > 0
+                        ? ` · ${wozniak.heldBack.length} held back by the 20-word ceiling`
+                        : ''}
+                      {wozniak.cards.length !== deckSize ? ` · ${deckSize} forged` : ''}.
+                    </p>
+                  )}
+                  {/* A card count says how big the deck is, not whether it is
+                      complete — this is the section that came back empty. */}
+                  {coverage && (
+                    <p className="text-[10px] font-mono leading-relaxed" data-testid="forge-coverage">
+                      <span className={coverage.gaps.length > 0 ? 'text-hazard' : 'text-signal'}>
+                        {coverage.gaps.length > 0 ? '[ ! ] ' : '[ OK ] '}
+                      </span>
+                      <span className={coverage.gaps.length > 0 ? 'text-hazard' : 'text-solder'}>
+                        {coverage.note}
+                      </span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Too few cards, or too many: both are one click from here. */}
@@ -934,6 +1294,63 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                       {deckBusy === 'condense' ? '[ CONDENSING… ]' : '[ CONDENSE SOME FLASHCARDS ]'}
                     </button>
                   </div>
+
+                  {/* "More" as a loop with a target: one batch is a guess at how
+                      much is missing, so this keeps going until the deck is the
+                      size you asked for, the sources run dry (two empty batches),
+                      or you stop it. The count below is live. */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[10px] font-mono text-solder uppercase tracking-wider">Grow to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={600}
+                      value={moreTarget}
+                      onChange={(e) => setMoreTarget(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                      aria-label="Target card count for the grow loop"
+                      data-testid="forge-target"
+                      className="w-20 px-2 py-1 bg-chassis border border-edge text-[11px] text-bone font-mono focus:outline-none focus:border-amber"
+                    />
+                    <span className="text-[10px] font-mono text-solder">cards</span>
+                    <button
+                      type="button"
+                      data-testid="forge-grow-loop"
+                      onClick={runMoreLoop}
+                      disabled={deckBusy !== '' || loopRunning || emptyDeck}
+                      className="px-3 py-2 bg-chassis border border-amber/60 text-amber text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
+                    >
+                      {loopRunning ? '[ GROWING… ]' : '[ GROW TO TARGET ]'}
+                    </button>
+                    {loopRunning && (
+                      <button
+                        type="button"
+                        data-testid="forge-stop-loop"
+                        onClick={() => {
+                          stopLoopRef.current = true;
+                        }}
+                        className="px-3 py-2 bg-chassis border border-hazard/60 text-hazard text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                      >
+                        [ STOP ]
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      data-testid="forge-undo"
+                      onClick={undoDeck}
+                      disabled={deckHistory.length === 0 || deckBusy !== ''}
+                      title="Put the deck back the way it was before the last reshape"
+                      className="px-3 py-2 bg-chassis border border-edge text-solder hover:text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
+                    >
+                      {deckHistory.length > 0
+                        ? `[ UNDO — BACK TO ${deckCount(deckHistory[deckHistory.length - 1])} CARDS ]`
+                        : '[ UNDO ]'}
+                    </button>
+                  </div>
+                  {loopNote && (
+                    <p data-testid="forge-loop-note" className="text-[10px] font-mono text-solder leading-relaxed">
+                      {loopNote}
+                    </p>
+                  )}
                   {deckNote && (
                     <p
                       data-testid="forge-deck-note"
@@ -991,6 +1408,13 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                           ? describeAnkiRead(ankiRead)
                           : ''}
                     </p>
+                    {/* The account's copy of the memory, so the same deck is not
+                        "new" again on the next device. */}
+                    {(memorySync || memorySyncing) && (
+                      <p data-testid="forge-memory-cloud" className="text-[10px] font-mono text-solder leading-relaxed">
+                        {describeDeckMemorySync(memorySync, memorySyncing)}
+                      </p>
+                    )}
                     <div className="flex flex-wrap items-center gap-2">
                       {diff.known > 0 && (
                         <button
@@ -1051,6 +1475,26 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                         </span>
                       )}
                       {o.status !== 'ok' && o.note ? <span> — {o.note}</span> : null}
+                      {/* A source that under-produced is a failure the deck should
+                          not hide: it can be re-forged on its own. */}
+                      {o.status === 'ok' &&
+                        o.yield &&
+                        (o.yield.verdict === 'thin' || o.yield.verdict === 'silent') && (
+                          <p className="text-[10px] font-mono text-hazard/90 mt-0.5">
+                            Under-mined: {o.yield.note} — retry this source, or turn on more card sections.
+                          </p>
+                        )}
+                      {o.status !== 'ok' && (
+                        <button
+                          type="button"
+                          data-testid={`forge-retry-${o.id}`}
+                          onClick={() => void handleRetrySource(o.id)}
+                          disabled={deckBusy !== '' || loopRunning}
+                          className="ml-2 px-2 py-0.5 bg-chassis border border-hazard/50 text-hazard text-[10px] font-mono font-bold uppercase cursor-pointer disabled:opacity-40"
+                        >
+                          [ RETRY ]
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1099,8 +1543,18 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
           </div>
 
           <div className="px-4 py-3 border-t border-edge bg-deck flex items-center justify-between gap-3">
-            <span className="text-[10px] font-mono text-solder">
+            <span className="text-[10px] font-mono text-solder leading-relaxed">
               {sectionList.length === 0 ? 'Pick at least one card section' : `${sectionList.length} section(s) selected`}
+              {/* Pre-flight cost estimate: an ingest is a decision, not a surprise. */}
+              {sources.length > 0 && (
+                <>
+                  {' · '}
+                  {sources.length} source{sources.length === 1 ? '' : 's'} · ~{preflight.calls} model call
+                  {preflight.calls === 1 ? '' : 's'}
+                  {preflight.needsAudio > 0 ? ` · up to ${preflight.needsAudio} transcribed` : ''}
+                  {preflight.calls > SOURCE_CONCURRENCY_UI ? ` · cut ${SOURCE_CONCURRENCY_UI} at a time` : ''}
+                </>
+              )}
             </span>
             <div className="flex items-center gap-2">
               <button type="button" onClick={handleClose} className="px-4 py-2 bg-inset text-bone text-xs font-bold cursor-pointer">

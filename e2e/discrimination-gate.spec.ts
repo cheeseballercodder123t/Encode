@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { MOCK_NOTES, GATE_ENCODE_RESPONSE, DISCRIMINATION_RESPONSE } from './helpers/fixtures';
-import { mockAiApis, startEncodeFromNotes, confirmReadiness, expectStage } from './helpers/mocks';
+import { ENCODE_ROUTE, mockAiApis, startEncodeFromNotes, confirmReadiness, expectStage } from './helpers/mocks';
 
 /**
  * The 10-second discrimination gate in front of every export path.
@@ -14,7 +14,7 @@ import { mockAiApis, startEncodeFromNotes, confirmReadiness, expectStage } from 
 
 async function sessionWithPair(page: Page) {
   await mockAiApis(page);
-  await page.route('**/api/encode', (route) =>
+  await page.route(ENCODE_ROUTE, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

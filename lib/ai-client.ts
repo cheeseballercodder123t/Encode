@@ -326,3 +326,189 @@ export async function generateJSONWithProvider({
 
   throw new Error(`Unsupported provider: ${provider}`);
 }
+
+// ─── Streaming text generation ──────────────────────────────────────────────
+//
+// `generateJSONWithProvider` is all-or-nothing: it returns the parsed object
+// once the model has finished writing it. The encode stream route wants the
+// bytes as they arrive, so the stage outlines can be shown while the rest of
+// the schema is still being written. This is the same request with the same
+// credentials and the same context handling — only the transport differs.
+//
+// Providers are tried in the same order the non-streaming path uses, and a
+// model that fails before it has emitted anything falls through to the next
+// one. Once a delta has been yielded the fallback is gone on purpose: the
+// consumer has already been shown that prefix, so silently switching models
+// would splice two different generations together.
+
+export interface StreamTextOptions {
+  systemPrompt: string;
+  userPrompt: string;
+  settings?: Partial<AISettings>;
+  isChecker?: boolean;
+  file?: UploadedFileAsset | null;
+}
+
+export async function* streamTextWithProvider({
+  systemPrompt,
+  userPrompt,
+  settings,
+  isChecker = false,
+  file = null,
+}: StreamTextOptions): AsyncGenerator<string, void, void> {
+  const provider = settings?.provider || 'gemini';
+
+  if (provider === 'gemini') {
+    const apiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("No Gemini API key found. Please provide a Gemini API Key in Settings or configure GEMINI_API_KEY.");
+    }
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+
+    const preferred = isChecker
+      ? settings?.geminiCheckerModel || 'gemini-3.5-flash'
+      : settings?.geminiModel || 'gemini-3.7-flash';
+    const modelsToTry = [preferred];
+    for (const fallback of ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash']) {
+      if (!modelsToTry.includes(fallback)) modelsToTry.push(fallback);
+    }
+
+    const parts: any[] = [{ text: systemPrompt }, { text: userPrompt }];
+    if (file && file.base64Data && file.type) {
+      parts.push({ inlineData: { mimeType: file.type, data: file.base64Data } });
+    }
+    const config: any = {
+      responseMimeType: 'application/json',
+      temperature: isChecker ? 0.3 : 0.6,
+    };
+
+    let lastError: any = null;
+    for (const model of modelsToTry) {
+      let emitted = false;
+      try {
+        const response = await ai.models.generateContentStream({
+          model,
+          contents: [{ role: 'user', parts }],
+          config,
+        });
+        for await (const chunk of response) {
+          const text = chunk.text;
+          if (text) {
+            emitted = true;
+            yield text;
+          }
+        }
+        return;
+      } catch (err: any) {
+        lastError = err;
+        if (emitted) throw err;
+        const errStr = String(err?.message || err).toLowerCase();
+        if (
+          errStr.includes('quota') ||
+          errStr.includes('429') ||
+          errStr.includes('resource_exhausted') ||
+          errStr.includes('limit')
+        ) {
+          console.warn(`Gemini stream model ${model} hit a rate limit, falling back…`);
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError || new Error('All Gemini stream fallbacks failed.');
+  }
+
+  if (provider === 'openrouter' || provider === 'openai') {
+    const isOpenRouter = provider === 'openrouter';
+    const apiKey = isOpenRouter ? settings?.openrouterApiKey : settings?.openaiApiKey;
+    if (!apiKey) {
+      throw new Error(
+        isOpenRouter
+          ? 'No OpenRouter API key found. Please enter your OpenRouter Key in Settings.'
+          : 'No OpenAI API key found. Please enter your OpenAI Compatible Key in Settings.'
+      );
+    }
+
+    const baseUrl = isOpenRouter
+      ? 'https://openrouter.ai/api/v1'
+      : (settings?.openaiBaseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const modelName = isOpenRouter
+      ? isChecker
+        ? settings?.openrouterCheckerModel || 'google/gemini-2.5-flash-lite'
+        : settings?.openrouterModel || 'google/gemini-2.5-flash'
+      : isChecker
+        ? settings?.openaiCheckerModel || 'gpt-4o-mini'
+        : settings?.openaiModel || 'gpt-4o-mini';
+
+    // Only images travel inline on the OpenAI-compatible APIs; a PDF is handled
+    // by the non-streaming path, which can attach it properly.
+    let userContent: any = userPrompt;
+    if (file && file.base64Data && file.type?.startsWith('image/')) {
+      userContent = [
+        { type: 'text', text: userPrompt },
+        { type: 'image_url', image_url: { url: `data:${file.type};base64,${file.base64Data}` } },
+      ];
+    }
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    };
+    if (isOpenRouter) {
+      headers['HTTP-Referer'] = 'https://ai.studio/build';
+      headers['X-Title'] = 'DeepEncode';
+    }
+
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: modelName,
+        stream: true,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON matching the requested structure.` },
+          { role: 'user', content: userContent },
+        ],
+        temperature: isChecker ? 0.3 : 0.6,
+      }),
+    });
+
+    if (!res.ok || !res.body) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(
+        `${isOpenRouter ? 'OpenRouter' : 'OpenAI-compatible'} stream error (${res.status}): ${errBody}`
+      );
+    }
+
+    // Server-sent events: one `data: {json}` line per delta, terminated by
+    // `data: [DONE]`. Chunks are split on newlines but a chunk can end mid-line,
+    // so the tail is carried over until its newline arrives.
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let carry = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      carry += decoder.decode(value, { stream: true });
+      let newline = carry.indexOf('\n');
+      while (newline >= 0) {
+        const line = carry.slice(0, newline).trim();
+        carry = carry.slice(newline + 1);
+        newline = carry.indexOf('\n');
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') return;
+        try {
+          const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content;
+          if (delta) yield delta;
+        } catch {
+          // A keep-alive or a partial frame: the next line will carry it.
+        }
+      }
+    }
+    return;
+  }
+
+  throw new Error(`Unsupported provider: ${provider}`);
+}

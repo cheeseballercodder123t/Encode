@@ -6,6 +6,7 @@ import {
   WorkedExampleItem,
 } from '@/lib/types';
 import { ClaimInput, Contradiction, detectContradictions } from './contradiction';
+import { SegregationSection } from './segregation';
 
 // ─── Forge : many sources in, one deck out, no encoding ─────────────────────
 //
@@ -49,6 +50,15 @@ export interface ForgedSourceResult extends ForgeSource {
   counts: ForgeSectionCounts;
   /** Why a source produced nothing, shown verbatim in the forge log. */
   note?: string;
+  /** Source words the cards were cut from, when the route could count them. */
+  words?: number;
+  /**
+   * Words-in → cards-out sanity check. A source that quietly under-produced
+   * ("Lecture 4 slides → 3 cards from 4,200 words") is a failure the forge
+   * should name, because the alternative is a deck that looks complete and is
+   * not. Purely advisory: it never changes what the source contributed.
+   */
+  yield?: ForgeSourceYield;
 }
 
 export interface ForgeResult {
@@ -72,6 +82,8 @@ export interface ForgeMergeInput {
   source: ForgeSource;
   report: SegregationReport | null;
   note?: string;
+  /** Words of source text this batch was generated from, for the yield check. */
+  words?: number;
 }
 
 /** How the merge resolved cross-source conflicts. */
@@ -93,6 +105,247 @@ export function dedupeKey(value: string): string {
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// ─── Near-duplicate detection ──────────────────────────────────────────────
+//
+// Exact-key matching only catches a duplicate the model re-punctuated. In
+// practice the same card comes back re-worded ("the loop of Henle can reach
+// 1,200 mOsm" for "the loop of Henle reaches 1,200 mOsm"), which the second
+// pass of a forge — and "generate more" over the same source — will happily
+// ship twice. Two texts are therefore compared by trigram similarity.
+//
+// The one thing this must never do is collapse two DIFFERENT facts that look
+// alike, because that is silent data loss on the cards the app exists to keep
+// apart:
+//   · "the half-life is 4 h" vs "…is 6 h" — a quantity changed;
+//   · "drug A clears faster" vs "drug B clears faster" — an entity changed.
+// So the comparison is gated on protected tokens first: if the two texts carry
+// different numbers or different mid-sentence proper nouns, they are NOT
+// duplicates however similar the rest reads. Numbers and named entities are
+// exactly the discriminable half of a card, and the contradiction pass (not
+// this one) is what pairs those up.
+
+/** Trigram Jaccard at or above this collapses two cards into one. */
+export const NEAR_DUPLICATE_THRESHOLD = 0.8;
+/** Below this normalized length, trigram similarity is too noisy to trust. */
+export const NEAR_DUPLICATE_MIN_LENGTH = 32;
+
+function trigrams(value: string): Set<string> {
+  const grams = new Set<string>();
+  const padded = `  ${value} `;
+  for (let i = 0; i < padded.length - 2; i += 1) {
+    grams.add(padded.slice(i, i + 3));
+  }
+  return grams;
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let shared = 0;
+  for (const gram of a) if (b.has(gram)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+
+/**
+ * Cues that flip a claim's direction. Two cards that disagree this way are a
+ * contradiction the deck should show, not a duplicate it should hide, so a
+ * pair carrying different polarity reads is never collapsed.
+ */
+const POLARITY_CUES = /\b(not|no|never|cannot|without|unless|fails?|prevents?|inhibits?|blocks?|removes?|disables?|decreases?|lowers?|reduces?)\b/i;
+
+/**
+ * Numbers and mid-sentence proper nouns, normalized. Two texts whose protected
+ * tokens differ are describing different things, whatever else they share.
+ */
+function protectedTokens(value: string): string {
+  const tokens = (value || '').match(/[A-Za-z0-9][A-Za-z0-9'-]*/g) || [];
+  const found = new Set<string>();
+  tokens.forEach((token, index) => {
+    if (/\d/.test(token)) {
+      found.add(token.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      return;
+    }
+    if (index > 0 && /^[A-Z]/.test(token)) found.add(token.toLowerCase());
+  });
+  return [...found].sort().join('|');
+}
+
+/** 0–1 similarity of two card texts (1 = the same card once normalized). */
+export function similarity(a: string, b: string): number {
+  const ka = dedupeKey(a);
+  const kb = dedupeKey(b);
+  if (!ka || !kb) return 0;
+  if (ka === kb) return 1;
+  return jaccard(trigrams(ka), trigrams(kb));
+}
+
+/** True when `a` and `b` are the same card, re-worded. */
+export function isNearDuplicate(a: string, b: string): boolean {
+  const ka = dedupeKey(a);
+  const kb = dedupeKey(b);
+  if (!ka || !kb) return false;
+  if (ka === kb) return true;
+  if (ka.length < NEAR_DUPLICATE_MIN_LENGTH || kb.length < NEAR_DUPLICATE_MIN_LENGTH) return false;
+  if (Math.abs(ka.length - kb.length) > Math.max(16, ka.length * 0.25)) return false;
+  if (protectedTokens(a) !== protectedTokens(b)) return false;
+  if (POLARITY_CUES.test(a) !== POLARITY_CUES.test(b)) return false;
+  return jaccard(trigrams(ka), trigrams(kb)) >= NEAR_DUPLICATE_THRESHOLD;
+}
+
+export interface NearDuplicateIndex {
+  /** True when this text is already present, exactly or re-worded. */
+  has(value: string): boolean;
+  /** Records a text as present. Returns true when it was not already there. */
+  add(value: string): boolean;
+}
+
+/**
+ * Append-only duplicate index. Exact keys are O(1); near-duplicates are only
+ * compared against entries in a comparable length band, so a 700-card deck
+ * merges in milliseconds.
+ */
+export function createNearDuplicateIndex(seed: Iterable<string> = []): NearDuplicateIndex {
+  const exact = new Set<string>();
+  const entries: string[] = [];
+
+  const add = (value: string): boolean => {
+    const key = dedupeKey(value);
+    if (!key) return false;
+    if (exact.has(key)) return false;
+    exact.add(key);
+    entries.push(value);
+    return true;
+  };
+
+  for (const value of seed) add(value);
+
+  return {
+    add,
+    has(value: string) {
+      const key = dedupeKey(value);
+      if (!key) return false;
+      if (exact.has(key)) return true;
+      if (key.length < NEAR_DUPLICATE_MIN_LENGTH) return false;
+      return entries.some((entry) => isNearDuplicate(entry, value));
+    },
+  };
+}
+
+// ─── Per-source yield sanity check ──────────────────────────────────────────
+//
+// The forge's failure mode is not a crash, it is a silent one: a 4,200-word
+// slide export comes back with three cards and the deck looks finished. Roughly
+// one card per 250 words of source is what these prompts actually produce; well
+// under that, the source is named as under-mined so the learner can re-forge
+// just that one instead of accepting a deck with a hole in it.
+
+export type ForgeYieldVerdict = 'healthy' | 'thin' | 'silent' | 'unknown';
+
+export interface ForgeSourceYield {
+  words: number;
+  cards: number;
+  /** Cards this many words should have produced (0 when unjudgeable). */
+  expected: number;
+  verdict: ForgeYieldVerdict;
+  /** One line for the source log, on the sources worth mentioning. */
+  note?: string;
+}
+
+/** Cards per source word the card prompts are calibrated to produce. */
+const WORDS_PER_CARD = 250;
+/** Under this many words there is not enough material to judge. */
+const MIN_JUDGEABLE_WORDS = 60;
+
+/** Deterministic thousands separator (no locale, so tests never flake). */
+export function formatCount(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+export function sourceYield(words: number, cards: number): ForgeSourceYield {
+  const safeWords = Math.max(0, Math.round(words || 0));
+  const safeCards = Math.max(0, cards || 0);
+
+  if (safeWords <= 0) {
+    return { words: 0, cards: safeCards, expected: 0, verdict: 'unknown' };
+  }
+
+  const expected = Math.max(2, Math.round(safeWords / WORDS_PER_CARD));
+  if (safeCards === 0) {
+    return {
+      words: safeWords,
+      cards: 0,
+      expected,
+      verdict: 'silent',
+      note: `${formatCount(safeWords)} words in, 0 cards out`,
+    };
+  }
+  if (safeWords < MIN_JUDGEABLE_WORDS) {
+    return { words: safeWords, cards: safeCards, expected: 0, verdict: 'unknown' };
+  }
+  if (safeCards < expected) {
+    return {
+      words: safeWords,
+      cards: safeCards,
+      expected,
+      verdict: 'thin',
+      note: `${formatCount(safeWords)} words in but only ${safeCards} card${safeCards === 1 ? '' : 's'} out (about ${expected} expected)`,
+    };
+  }
+  return { words: safeWords, cards: safeCards, expected, verdict: 'healthy' };
+}
+
+// ─── Coverage: which sections actually got cards ────────────────────────────
+//
+// A card count says how big the deck is, not whether it is complete. If the
+// learner asked for drills and the model returned none, the deck is missing a
+// section, and "generate more" should be aimed at THAT gap rather than at the
+// whole source again.
+
+export interface ForgeSectionCoverage {
+  section: SegregationSection;
+  requested: boolean;
+  cards: number;
+}
+
+export interface ForgeCoverageReport {
+  sections: ForgeSectionCoverage[];
+  /** Requested sections that came back empty — what "generate more" targets. */
+  gaps: SegregationSection[];
+  /** One line naming the gaps, or a confirmation that there are none. */
+  note: string;
+  /** Labels of sources that contributed nothing at all. */
+  silentSources: string[];
+}
+
+const SECTION_ORDER: SegregationSection[] = ['facts', 'mechanisms', 'drills', 'examples'];
+
+function isRequested(want: Record<SegregationSection, boolean> | undefined, section: SegregationSection): boolean {
+  // No `include` list at all means "everything was requested".
+  return !want || want[section] !== false;
+}
+
+export function buildCoverageReport(
+  counts: ForgeSectionCounts,
+  want?: Record<SegregationSection, boolean>,
+  sources: ForgedSourceResult[] = []
+): ForgeCoverageReport {
+  const sections = SECTION_ORDER.map((section) => ({
+    section,
+    requested: isRequested(want, section),
+    cards: counts[section] || 0,
+  }));
+  const gaps = sections.filter((s) => s.requested && s.cards === 0).map((s) => s.section);
+  const silentSources = sources
+    .filter((source) => source.counts.facts + source.counts.mechanisms + source.counts.drills + source.counts.examples === 0)
+    .map((source) => source.label);
+
+  const note =
+    gaps.length === 0
+      ? 'Every requested section received cards.'
+      : `0 cards for ${gaps.join(', ')} — "generate more" will target that gap.`;
+
+  return { sections, gaps, note, silentSources };
 }
 
 function namespaceId(sourceId: string, id: unknown, fallback: string): string {
@@ -212,8 +465,10 @@ export function mergeSegregationReports(
   options: ForgeMergeOptions = {}
 ): ForgeResult {
   const sources: ForgedSourceResult[] = [];
-  const seen = new Set<string>();
+  const index = createNearDuplicateIndex();
+  const exactKeys = new Set<string>();
   let dropped = 0;
+  let droppedNear = 0;
 
   const facts: DeclarativeFactItem[] = [];
   const mechanisms: ConceptualMechanismItem[] = [];
@@ -222,13 +477,21 @@ export function mergeSegregationReports(
   /** Every surviving fact, with the source it came from, for conflict detection. */
   const claims: ClaimInput[] = [];
 
-  const take = (key: string): boolean => {
+  // Content-keyed, not id-keyed: the same card arriving from two sources (or
+  // the same card re-worded) is one card. Near-duplicates are counted
+  // separately so the source note can say which kind of drop happened.
+  const take = (value: string): boolean => {
+    const key = dedupeKey(value);
     if (!key) return false;
-    if (seen.has(key)) {
+    if (index.has(value)) {
       dropped += 1;
+      // An exact key was already here; anything else was collapsed as a
+      // re-words of a card that arrived earlier.
+      if (!exactKeys.has(key)) droppedNear += 1;
       return false;
     }
-    seen.add(key);
+    index.add(value);
+    exactKeys.add(key);
     return true;
   };
 
@@ -246,9 +509,10 @@ export function mergeSegregationReports(
 
     const before: ForgeSectionCounts = countReportSections(report);
     const kept: ForgeSectionCounts = { ...EMPTY_COUNTS };
+    const nearBefore = droppedNear;
 
     for (const fact of report.declarativeFacts) {
-      if (!take(dedupeKey(fact.factStatement))) continue;
+      if (!take(fact.factStatement)) continue;
       facts.push(fact);
       kept.facts += 1;
       claims.push({
@@ -259,17 +523,17 @@ export function mergeSegregationReports(
       });
     }
     for (const mech of report.conceptualMechanisms) {
-      if (!take(dedupeKey(mech.conceptName))) continue;
+      if (!take(mech.conceptName)) continue;
       mechanisms.push(mech);
       kept.mechanisms += 1;
     }
     for (const drill of report.practiceQuestions || []) {
-      if (!take(dedupeKey(drill.question))) continue;
+      if (!take(drill.question)) continue;
       drills.push(drill);
       kept.drills += 1;
     }
     for (const example of report.workedExamples || []) {
-      if (!take(dedupeKey(`${example.title} ${example.problem}`))) continue;
+      if (!take(`${example.title} ${example.problem}`)) continue;
       examples.push(example);
       kept.examples += 1;
     }
@@ -277,12 +541,25 @@ export function mergeSegregationReports(
     const sourceDropped =
       before.facts + before.mechanisms + before.drills + before.examples -
       (kept.facts + kept.mechanisms + kept.drills + kept.examples);
+    const sourceNear = droppedNear - nearBefore;
+    const keptTotal = kept.facts + kept.mechanisms + kept.drills + kept.examples;
+    // Words-in → cards-out, so a silently under-producing source is named
+    // instead of being averaged away by the sources that worked.
+    const yieldCheck = input.words !== undefined ? sourceYield(input.words, keptTotal) : undefined;
+    const yieldNote = yieldCheck && (yieldCheck.verdict === 'thin' || yieldCheck.verdict === 'silent')
+      ? yieldCheck.note
+      : undefined;
 
     sources.push({
       ...input.source,
       status: 'ok',
       counts: kept,
-      note: sourceDropped > 0 ? `${sourceDropped} card(s) already in the deck` : input.note,
+      note:
+        sourceDropped > 0
+          ? `${sourceDropped} card(s) already in the deck${sourceNear > 0 ? ` (${sourceNear} near-duplicate)` : ''}`
+          : yieldNote || input.note,
+      words: input.words,
+      yield: yieldCheck,
     });
   }
 
@@ -372,15 +649,19 @@ export interface AdditionalCardsResult {
  */
 export function dropKnownCards(addition: SegregationReport, known: Set<string>): AdditionalCardsResult {
   let dropped = 0;
-  const seen = new Set(known);
+  // Seeded with the deck's card fronts, so a re-worded repeat of a card the
+  // learner already has is dropped rather than appended as a "new" card.
+  // Callers pass RAW fronts: the near-duplicate guard reads the original
+  // wording, and a pre-normalized key has already thrown that away (which would
+  // make it fall back to exact matching, i.e. to the behaviour this replaced).
+  const index = createNearDuplicateIndex(known);
   const take = (value: string): boolean => {
-    const key = dedupeKey(value);
-    if (!key) return true;
-    if (seen.has(key)) {
+    if (!dedupeKey(value)) return true;
+    if (index.has(value)) {
       dropped += 1;
       return false;
     }
-    seen.add(key);
+    index.add(value);
     return true;
   };
 

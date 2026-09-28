@@ -1,14 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import {
   ForgeSource,
+  buildCoverageReport,
   collectCardFronts,
   countReportSections,
+  createNearDuplicateIndex,
   dedupeKey,
   dropKnownCards,
+  formatCount,
+  isNearDuplicate,
   isEmptyForgeReport,
   mergeAdditionalCards,
   mergeSegregationReports,
   normalizeSegregationReport,
+  similarity,
+  sourceYield,
   summarizeMerge,
   totalReportCards,
 } from '@/lib/services/forge';
@@ -350,5 +356,233 @@ describe('extending a forged deck ("generate more" / "condense")', () => {
     expect(added).toBe(0);
     expect(dropped).toBe(1);
     expect(unchanged).toBe(base);
+  });
+
+  it('drops a RE-WORDED repeat of a card the deck already has', () => {
+    // The exact-key test above only catches punctuation. The model re-words
+    // when it is asked not to repeat itself, and a re-worded repeat is still a
+    // repeat: "can reach" is the same card as "reaches".
+    const base = report({
+      declarativeFacts: [
+        {
+          id: 'f1',
+          factStatement: 'The loop of Henle reaches 1,200 mOsm at the hairpin of the medulla.',
+          clozeSuggestion: 'reaches {{1,200 mOsm}}',
+        },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const addition = report({
+      declarativeFacts: [
+        {
+          id: 'a',
+          factStatement: 'The loop of Henle can reach 1,200 mOsm at the hairpin of the medulla.',
+          clozeSuggestion: 'x',
+        },
+        { id: 'b', factStatement: 'Vasa recta run parallel to the loop of Henle.', clozeSuggestion: 'y' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    // The route seeds this with the deck's raw fronts (not normalized keys).
+    const { report: fresh, added, dropped } = dropKnownCards(addition, new Set(collectCardFronts(base)));
+    expect(added).toBe(1);
+    expect(dropped).toBe(1);
+    expect(fresh.declarativeFacts.map((f) => f.id)).toEqual(['b']);
+  });
+});
+
+describe('near-duplicate detection', () => {
+  it('collapses a re-worded card, however the wording shifted', () => {
+    expect(
+      similarity(
+        'The loop of Henle can reach 1,200 mOsm at the hairpin of the medulla.',
+        'The loop of Henle reaches 1,200 mOsm at the hairpin of the medulla.'
+      )
+    ).toBeGreaterThanOrEqual(0.8);
+    expect(
+      isNearDuplicate(
+        'ADH inserts aquaporin-2 channels into the collecting duct membrane.',
+        'ADH inserts aquaporin-2 channels in the collecting duct membrane.'
+      )
+    ).toBe(true);
+  });
+
+  it('never collapses a card whose quantity changed', () => {
+    // A different number is a different fact (and the contradiction pass, not
+    // this one, is what pairs those two up).
+    expect(
+      isNearDuplicate(
+        'The half-life of the drug is 4 h in plasma.',
+        'The half-life of the drug is 6 h in plasma.'
+      )
+    ).toBe(false);
+  });
+
+  it('never collapses a card whose named entity changed', () => {
+    expect(
+      isNearDuplicate('Drug A clears faster than Drug B in renal failure.', 'Drug C clears faster than Drug B in renal failure.')
+    ).toBe(false);
+  });
+
+  it('never collapses a claim whose polarity flipped', () => {
+    expect(
+      isNearDuplicate(
+        'The thick ascending limb reabsorbs sodium without water.',
+        'The thick ascending limb reabsorbs sodium and water.'
+      )
+    ).toBe(false);
+  });
+
+  it('only treats long-enough text as comparable', () => {
+    expect(isNearDuplicate('ADH acts on the duct', 'ADH acts on that duct')).toBe(false);
+    expect(isNearDuplicate('ADH acts on the duct', 'ADH acts on the duct')).toBe(true);
+  });
+
+  it('counts a collapsed re-wording in the merge and says so in the source note', () => {
+    const slides = report({
+      declarativeFacts: [
+        {
+          id: 'f1',
+          factStatement: 'The loop of Henle reaches 1,200 mOsm at the hairpin of the medulla.',
+          clozeSuggestion: 'reaches {{1,200 mOsm}}',
+        },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const lecture = report({
+      declarativeFacts: [
+        {
+          id: 'f1',
+          factStatement: 'The loop of Henle can reach 1,200 mOsm at the hairpin of the medulla.',
+          clozeSuggestion: 'can reach {{1,200 mOsm}}',
+        },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    const merged = mergeSegregationReports([
+      { source: textSource, report: slides },
+      { source: pdfSource, report: lecture },
+    ]);
+
+    expect(merged.report.declarativeFacts).toHaveLength(1);
+    expect(merged.dropped).toBe(1);
+    expect(merged.sources[1].note).toContain('already in the deck');
+    expect(merged.sources[1].note).toContain('near-duplicate');
+  });
+
+  it('reports an exact duplicate as a duplicate, not as a near-duplicate', () => {
+    const merged = mergeSegregationReports([
+      { source: textSource, report: report() },
+      {
+        source: pdfSource,
+        report: report({
+          declarativeFacts: [
+            { id: 'dup', factStatement: 'the loop of henle reaches 1,200 mosm.', clozeSuggestion: 'dup' },
+          ],
+          conceptualMechanisms: [],
+          practiceQuestions: [],
+          workedExamples: [],
+        }),
+      },
+    ]);
+    expect(merged.sources[1].note).toContain('already in the deck');
+    expect(merged.sources[1].note).not.toContain('near-duplicate');
+  });
+
+  it('indexes exact keys in O(1) and near-duplicates by comparison', () => {
+    const index = createNearDuplicateIndex(['ADH inserts aquaporin-2 channels into the collecting duct membrane.']);
+    expect(index.has('adh inserts aquaporin-2 channels into the collecting duct membrane.')).toBe(true);
+    expect(index.has('ADH inserts aquaporin-2 channels in the collecting duct membrane.')).toBe(true);
+    expect(index.has('Vasa recta run parallel to the loop of Henle in the medulla.')).toBe(false);
+    expect(index.add('Vasa recta run parallel to the loop of Henle in the medulla.')).toBe(true);
+    expect(index.add('vasa recta run parallel to the loop of henle in the medulla.')).toBe(false);
+  });
+});
+
+describe('per-source yield sanity check', () => {
+  it('names a source that under-produced for its size', () => {
+    const thin = sourceYield(4200, 3);
+    expect(thin.verdict).toBe('thin');
+    expect(thin.expected).toBe(17);
+    expect(thin.note).toBe('4,200 words in but only 3 cards out (about 17 expected)');
+  });
+
+  it('names a source that produced nothing, and says how much went in', () => {
+    const silent = sourceYield(5000, 0);
+    expect(silent.verdict).toBe('silent');
+    expect(silent.note).toBe('5,000 words in, 0 cards out');
+  });
+
+  it('does not judge a source too small to judge', () => {
+    expect(sourceYield(40, 1).verdict).toBe('unknown');
+    expect(sourceYield(0, 0).verdict).toBe('unknown');
+  });
+
+  it('leaves a source that hit its volume target alone', () => {
+    expect(sourceYield(500, 4).verdict).toBe('healthy');
+    expect(sourceYield(500, 4).note).toBeUndefined();
+  });
+
+  it('carries the verdict onto the source row the forge renders', () => {
+    const merged = mergeSegregationReports([
+      {
+        source: textSource,
+        report: report({
+          declarativeFacts: [{ id: 'f1', factStatement: 'The loop of Henle reaches 1,200 mOsm.', clozeSuggestion: 'x' }],
+          conceptualMechanisms: [],
+          practiceQuestions: [],
+          workedExamples: [],
+        }),
+        words: 4200,
+      },
+    ]);
+    expect(merged.sources[0].words).toBe(4200);
+    expect(merged.sources[0].yield?.verdict).toBe('thin');
+    expect(merged.sources[0].note).toContain('4,200 words in but only 1 card out');
+  });
+
+  it('formats counts deterministically, without a locale', () => {
+    expect(formatCount(4200)).toBe('4,200');
+    expect(formatCount(420)).toBe('420');
+    expect(formatCount(1234567)).toBe('1,234,567');
+  });
+});
+
+describe('coverage report', () => {
+  it('names the requested sections that received no cards', () => {
+    const want = { facts: true, mechanisms: true, drills: true, examples: false };
+    const coverage = buildCoverageReport({ facts: 4, mechanisms: 2, drills: 0, examples: 0 }, want);
+
+    expect(coverage.gaps).toEqual(['drills']);
+    expect(coverage.note).toContain('0 cards for drills');
+    expect(coverage.sections.find((s) => s.section === 'examples')?.requested).toBe(false);
+  });
+
+  it('confirms a complete deck instead of inventing a gap', () => {
+    const coverage = buildCoverageReport(
+      { facts: 4, mechanisms: 2, drills: 3, examples: 1 },
+      { facts: true, mechanisms: true, drills: true, examples: true }
+    );
+    expect(coverage.gaps).toEqual([]);
+    expect(coverage.note).toBe('Every requested section received cards.');
+  });
+
+  it('names the sources that contributed nothing at all', () => {
+    const merged = mergeSegregationReports([
+      { source: textSource, report: report() },
+      { source: videoSource, report: null, note: 'No captions.' },
+    ]);
+    const coverage = buildCoverageReport(merged.counts, undefined, merged.sources);
+    expect(coverage.silentSources).toEqual(['youtube:renal']);
   });
 });

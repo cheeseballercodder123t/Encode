@@ -1,11 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { MOCK_NOTES } from './helpers/fixtures';
-import {
-  mockAiApis,
-  startEncodeFromNotes,
-  confirmReadiness,
-  expectStage,
-} from './helpers/mocks';
+import { ENCODE_ROUTE, mockAiApis, startEncodeFromNotes, confirmReadiness, expectStage } from './helpers/mocks';
 
 /**
  * Resilience suite: the failure paths the happy-path specs never touch.
@@ -19,7 +14,7 @@ test.describe('Generation resilience', () => {
   test('API 500 on /api/encode falls back to the offline generator workout', async ({ page }) => {
     await mockAiApis(page);
     // Override AFTER mockAiApis : the last registered matching route wins.
-    await page.route('**/api/encode', (route) =>
+    await page.route(ENCODE_ROUTE, (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Provider down' }) })
     );
 
@@ -34,7 +29,7 @@ test.describe('Generation resilience', () => {
   test('cancel mid-generation aborts the request and returns to the input view', async ({ page }) => {
     await mockAiApis(page);
     // Hang the request: never fulfill, so the loading view stays up.
-    await page.route('**/api/encode', async () => {
+    await page.route(ENCODE_ROUTE, async () => {
       await new Promise(() => {}); // never resolves
     });
 
@@ -53,7 +48,7 @@ test.describe('Generation resilience', () => {
 
   test('reloading mid-generation boots into a clean input state', async ({ page }) => {
     await mockAiApis(page);
-    await page.route('**/api/encode', async () => {
+    await page.route(ENCODE_ROUTE, async () => {
       await new Promise(() => {}); // hang
     });
 
