@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { MOCK_NOTES, FRAME_ENCODE_RESPONSE } from './helpers/fixtures';
-import { mockAiApis, confirmReadiness, startEncodeFromNotes, expectStage } from './helpers/mocks';
+import { ENCODE_ROUTE, mockAiApis, confirmReadiness, startEncodeFromNotes, expectStage } from './helpers/mocks';
 
 /**
  * Two scaffold surfaces that make the learner produce the missing link:
@@ -17,7 +17,7 @@ import { mockAiApis, confirmReadiness, startEncodeFromNotes, expectStage } from 
 async function encodeFrameStage(page: Page) {
   await mockAiApis(page);
   // The mocked encoder returns a stage carrying both surfaces.
-  await page.route('**/api/encode', (route) =>
+  await page.route(ENCODE_ROUTE, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

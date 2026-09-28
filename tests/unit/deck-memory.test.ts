@@ -8,9 +8,11 @@ import {
   describeDeckMemory,
   diffReportAgainstMemory,
   forgetDeckMemory,
+  deckMemoryStoresEqual,
   keepOnlyFreshCards,
   knownKeysForTopic,
   memoryKeyForTopic,
+  mergeDeckMemoryStores,
   recordDeckExport,
   reportCardKeys,
 } from '@/lib/deck-memory';
@@ -206,5 +208,63 @@ describe('shipping only the new cards', () => {
   it('returns the deck untouched when there is nothing fresh to keep', () => {
     const original = report();
     expect(keepOnlyFreshCards(original, [])).toBe(original);
+  });
+});
+
+describe('merging the account\'s memory with this device\'s', () => {
+  // The cloud mirror is what makes "already in your deck" true on the second
+  // machine. The merge is a union (a device that was offline for a week must
+  // not lose its memory to a device with one newer record), so the pure half is
+  // pinned here — no Firebase, no network.
+  const local = {
+    'renal-physiology': {
+      topic: 'Renal Physiology',
+      keys: ['loop of henle reaches 1 200 mosm', 'adh inserts aquaporin 2'],
+      updatedAt: 1000,
+      exports: 2,
+      lastSurface: 'anki',
+    },
+  };
+  const remote = {
+    'renal-physiology': {
+      topic: 'Renal Physiology',
+      keys: ['adh inserts aquaporin 2', 'vasa recta run parallel'],
+      updatedAt: 2000,
+      exports: 1,
+      lastSurface: 'remnote',
+    },
+    'cardiac-cycle': {
+      topic: 'Cardiac Cycle',
+      keys: ['sa node fires first'],
+      updatedAt: 1500,
+      exports: 1,
+    },
+  };
+
+  it('unions the fingerprints instead of letting the newer record win', () => {
+    const merged = mergeDeckMemoryStores(local, remote);
+    expect(new Set(merged['renal-physiology'].keys)).toEqual(
+      new Set(['loop of henle reaches 1 200 mosm', 'adh inserts aquaporin 2', 'vasa recta run parallel'])
+    );
+    // The counter is the larger of the two, and the receipt comes from the
+    // record that moved last.
+    expect(merged['renal-physiology'].exports).toBe(2);
+    expect(merged['renal-physiology'].lastSurface).toBe('remnote');
+    expect(merged['cardiac-cycle'].keys).toEqual(['sa node fires first']);
+  });
+
+  it('keeps local-only and remote-only topics', () => {
+    const merged = mergeDeckMemoryStores({ only: { topic: 'Only', keys: ['a'], updatedAt: 1, exports: 1 } }, {});
+    expect(Object.keys(merged)).toEqual(['only']);
+    const other = mergeDeckMemoryStores({}, { only: { topic: 'Only', keys: ['a'], updatedAt: 1, exports: 1 } });
+    expect(Object.keys(other)).toEqual(['only']);
+  });
+
+  it('tells an unchanged memory from a grown one', () => {
+    expect(deckMemoryStoresEqual(local, local)).toBe(true);
+    expect(deckMemoryStoresEqual(local, mergeDeckMemoryStores(local, remote))).toBe(false);
+    expect(deckMemoryStoresEqual(local, { ...local, extra: { topic: 'Extra', keys: ['x'], updatedAt: 1, exports: 1 } })).toBe(
+      false
+    );
   });
 });

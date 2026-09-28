@@ -682,6 +682,25 @@ export const FORGE_MORE_RESPONSE = {
   resolved: [],
 };
 
+// One failed source re-forged on its own: the batch is restricted to that
+// source, so only its new cards come back — and its row stops being a failure.
+export const FORGE_RETRY_RESPONSE = {
+  ...FORGE_MORE_RESPONSE,
+  mode: 'retry',
+  sources: [
+    {
+      id: 'src_4',
+      kind: 'youtube',
+      label: 'youtube:renal',
+      status: 'ok',
+      counts: { facts: 1, mechanisms: 0, drills: 1, examples: 0 },
+      note: 'transcribed from the audio (no captions)',
+      words: 1240,
+      yield: { words: 1240, cards: 2, expected: 5, verdict: 'thin', note: '1,240 words in but only 2 cards out (about 5 expected)' },
+    },
+  ],
+};
+
 // The same deck folded down: five cards become three, purely by merging overlap.
 export const FORGE_CONDENSE_RESPONSE = {
   mode: 'condense',

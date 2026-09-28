@@ -154,6 +154,69 @@ export function loadDeckMemory(): DeckMemoryStore {
 }
 
 /**
+ * Replaces the whole local store. Used by the cloud mirror, which merges the
+ * remote copy into the local one and then writes the result back — the merge
+ * itself is {@link mergeDeckMemoryStores}, so it stays unit-testable without
+ * Firebase.
+ */
+export function saveDeckMemoryStore(store: DeckMemoryStore): void {
+  writeStore(store);
+}
+
+/**
+ * Unions two memory stores topic by topic.
+ *
+ * This is deliberately additive rather than last-write-wins: the memory exists
+ * to say "you already have this card", and clobbering one device's record with
+ * the other's newer timestamp would resurrect a whole deck as "new" and let it
+ * be exported a second time. Fingerprints are unioned, the export counter takes
+ * the larger of the two, and the receipt comes from whichever record moved last.
+ */
+export function mergeDeckMemoryStores(local: DeckMemoryStore, remote: DeckMemoryStore): DeckMemoryStore {
+  const merged: DeckMemoryStore = {};
+  const topics = new Set([...Object.keys(local || {}), ...Object.keys(remote || {})]);
+
+  for (const id of topics) {
+    const a = local?.[id];
+    const b = remote?.[id];
+    if (!a && !b) continue;
+    if (!a) {
+      merged[id] = b;
+      continue;
+    }
+    if (!b) {
+      merged[id] = a;
+      continue;
+    }
+    const keys = [...b.keys, ...a.keys].filter((key, index, all) => all.indexOf(key) === index);
+    const newer = (b.updatedAt || 0) > (a.updatedAt || 0) ? b : a;
+    merged[id] = {
+      topic: a.topic || b.topic,
+      keys: keys.slice(0, MAX_KEYS_PER_TOPIC),
+      updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0),
+      exports: Math.max(a.exports || 0, b.exports || 0),
+      lastSurface: newer.lastSurface,
+    };
+  }
+
+  return merged;
+}
+
+/** True when two stores hold exactly the same memory. */
+export function deckMemoryStoresEqual(a: DeckMemoryStore, b: DeckMemoryStore): boolean {
+  const ids = new Set([...Object.keys(a || {}), ...Object.keys(b || {})]);
+  for (const id of ids) {
+    const left = a?.[id];
+    const right = b?.[id];
+    if (!left || !right) return false;
+    if (left.keys.length !== right.keys.length) return false;
+    if (left.keys.some((key, index) => right.keys[index] !== key)) return false;
+    if ((left.exports || 0) !== (right.exports || 0)) return false;
+  }
+  return true;
+}
+
+/**
  * Adopts fingerprints that came from somewhere other than this app —
  * specifically, notes read back out of the real Anki collection.
  *

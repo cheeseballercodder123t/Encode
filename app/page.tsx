@@ -48,7 +48,9 @@ import {
 } from '@/lib/anki-exporter';
 import { computeSessionTelemetry, detectTabooTerms } from '@/lib/cognitive-telemetry';
 import { useSession } from '@/hooks/useSession';
-import { useGenerationProgress } from '@/hooks/useGenerationProgress';
+import { useGenerationProgress } from '@/hooks/useGenerationProgress'
+import { requestEncodedSchema } from '@/lib/encode-stream'
+import type { StageOutlineEntry } from '@/lib/stream-schema';
 import { useSettings } from '@/hooks/useSettings';
 import { useInputSource } from '@/hooks/useInputSource';
 import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
@@ -244,8 +246,18 @@ export default function DeepEncodeApp() {
   const [genStartedAt, setGenStartedAt] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Live elapsed timer + cycling phase message for the loading view.
-  const { elapsed, phase, pct } = useGenerationProgress(genStartedAt);
+  // Live generation reporting: the streaming route tells us the topic title,
+  // the pipeline phase it is actually in, and each stage outline as it lands.
+  // These override the fallback phase ticker (see useGenerationProgress).
+  const [streamTitle, setStreamTitle] = useState('');
+  const [streamPhase, setStreamPhase] = useState('');
+  const [streamOutlines, setStreamOutlines] = useState<StageOutlineEntry[]>([]);
+
+  // Live elapsed timer, phase message and streamed outlines for the loading view.
+  const { elapsed, phase, pct, outlines } = useGenerationProgress(genStartedAt, {
+    phase: streamPhase,
+    outlines: streamOutlines,
+  });
 
   const field1Ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
@@ -671,6 +683,9 @@ export default function DeepEncodeApp() {
     incrementModelCall(aiSettings.geminiModel || 'gemini-3.7-flash');
 
     setGenStartedAt(Date.now());
+    setStreamTitle('');
+    setStreamPhase('');
+    setStreamOutlines([]);
     abortRef.current = new AbortController();
     saveGenerationInProgress({
       startedAt: Date.now(),
@@ -704,11 +719,18 @@ export default function DeepEncodeApp() {
 
     try {
       const sRate = computeSuccessRate(userResponses);
-      const response = await fetch('/api/encode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      // Streamed: the outline (and the topic title) arrive while the full schema
+      // is still being written, so the loading view reports the real stages
+      // instead of cycling a timer. A server or proxy that answers with plain
+      // JSON is read as JSON by the same helper.
+      const data = await requestEncodedSchema({
         signal: abortRef.current?.signal,
-        body: JSON.stringify({
+        handlers: {
+          onTitle: setStreamTitle,
+          onPhase: setStreamPhase,
+          onOutline: (next) => setStreamOutlines(next),
+        },
+        body: {
           notes: rawNotes,
           mode: encodingMode,
           settings: aiSettings,
@@ -720,15 +742,8 @@ export default function DeepEncodeApp() {
           interleaveMode,
           gear,
           hiddenTemplates: loadStudyPrefs().hiddenTemplates
-        }),
+        },
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to generate schema');
-      }
-
-      const data = await response.json();
 
       if (data.isGuidedPath && data.guidedModules && data.guidedModules.length > 0) {
         // Guided Path Mode Active
@@ -794,6 +809,7 @@ export default function DeepEncodeApp() {
     } finally {
       clearGenerationInProgress();
       setGenStartedAt(null);
+      setStreamPhase('');
       abortRef.current = null;
     }
   };
@@ -1980,6 +1996,14 @@ export default function DeepEncodeApp() {
                       ? 'Constructing Mnemonic & Chunking Blueprint...'
                       : 'Deconstructing Semantic Schemas...'}
             </h2>
+            {streamTitle && (
+              <p
+                className="text-amber-200/90 font-mono text-[11px] uppercase tracking-[0.18em] mb-2"
+                data-testid="gen-title"
+              >
+                {streamTitle}
+              </p>
+            )}
             <p className="text-solder max-w-md text-sm leading-relaxed">
               {activeTab === 'youtube'
                 ? 'Gemini 3.7 Flash is extracting key lecture milestones, visual animations, and timestamp anchors.'
@@ -2005,6 +2029,26 @@ export default function DeepEncodeApp() {
                 <span className="text-solder" data-testid="gen-phase">{phase}</span>
                 <span className="text-amber" data-testid="gen-elapsed">{elapsed}s elapsed</span>
               </div>
+              {outlines.length > 0 && (
+                <div className="mt-4 space-y-1 text-left" data-testid="gen-outlines">
+                  <span className="block text-[10px] font-mono uppercase tracking-[0.2em] text-solder">
+                    Stages outlined so far
+                  </span>
+                  {outlines.map((stage) => (
+                    <motion.div
+                      key={`${stage.stageNumber}-${stage.title}`}
+                      initial={{ opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="flex items-baseline gap-2 bg-deck border border-gilt/30 rounded-lg px-2.5 py-1.5"
+                    >
+                      <span className="text-[10px] font-mono text-amber shrink-0">
+                        {String(stage.stageNumber ?? 0).padStart(2, "0")}
+                      </span>
+                      <span className="text-[11px] font-mono text-bone leading-snug">{stage.title}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleCancelGeneration}

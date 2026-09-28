@@ -25,9 +25,19 @@ import {
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
 
+// Both encode entry points.
+//
+// The app streams (`/api/encode/stream`, newline-delimited JSON with the stage
+// outlines as they land) and falls back to plain JSON, so a spec that wants to
+// control the generation payload has to intercept BOTH paths — a URL glob for
+// the plain route alone would silently stop matching the request the UI now
+// makes, and the spec would be testing the real route's offline fallback.
+export const ENCODE_ROUTE = (url: URL) =>
+  url.pathname === '/api/encode' || url.pathname === '/api/encode/stream';
+
 /** Mocks every AI-backed API route the UI can hit. No network, no API keys. */
 export async function mockAiApis(page: Page) {
-  await page.route('**/api/encode', (route) =>
+  await page.route(ENCODE_ROUTE, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ENCODE_RESPONSE) })
   );
 
