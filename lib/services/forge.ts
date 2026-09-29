@@ -308,6 +308,22 @@ export interface ForgeSectionCoverage {
   cards: number;
 }
 
+export interface ForgeSectionGap {
+  section: SegregationSection;
+  /**
+   * The sources that returned not one card for this section.
+   *
+   * For a gap this is every source that was cut (a section with 0 cards had 0
+   * from each of them), which is exactly the point: "drills are missing from
+   * Lecture 4 slides AND Problem set 4" is a different note from "the model
+   * forgot the drills" — it is a note about the reading, and it is the one you
+   * can act on before paying for another pass over the same slides.
+   */
+  silentIn: string[];
+  /** One line naming who is empty where, for the panel. */
+  note: string;
+}
+
 export interface ForgeCoverageReport {
   sections: ForgeSectionCoverage[];
   /** Requested sections that came back empty — what "generate more" targets. */
@@ -316,6 +332,13 @@ export interface ForgeCoverageReport {
   note: string;
   /** Labels of sources that contributed nothing at all. */
   silentSources: string[];
+  /**
+   * Per gap, which source owns it. A merged deck loses provenance as soon as
+   * the cards are deduped, so without this the report can only say a section is
+   * empty — never that it is empty because one lecture's slides never covered
+   * it, which is a note about the SOURCE and not about the model.
+   */
+  gapOwners: ForgeSectionGap[];
 }
 
 const SECTION_ORDER: SegregationSection[] = ['facts', 'mechanisms', 'drills', 'examples'];
@@ -340,12 +363,32 @@ export function buildCoverageReport(
     .filter((source) => source.counts.facts + source.counts.mechanisms + source.counts.drills + source.counts.examples === 0)
     .map((source) => source.label);
 
+  // Only sources that were actually cut are blamed: a source that failed before
+  // the model saw it is already named in the forge log, and counting it as
+  // "silent on examples" would blame it for a section it never reached.
+  const cut = sources.filter((source) => source.status === 'ok');
+  const gapOwners: ForgeSectionGap[] = gaps.map((section) => {
+    const silentIn = cut.filter((source) => (source.counts[section] || 0) === 0).map((source) => source.label);
+    return {
+      section,
+      silentIn,
+      // Deliberately not "the material has no examples": a section can also be
+      // empty because every card for it was a duplicate of one already in the
+      // deck, and a note that guesses wrong there sends the learner off to find
+      // material they already had.
+      note:
+        silentIn.length > 0
+          ? `no source produced ${section} (${silentIn.join(', ')}) — ask again only if the material really contains it`
+          : `no source produced ${section} — ask again only if the material really contains it`,
+    };
+  });
+
   const note =
     gaps.length === 0
       ? 'Every requested section received cards.'
       : `0 cards for ${gaps.join(', ')} — "generate more" will target that gap.`;
 
-  return { sections, gaps, note, silentSources };
+  return { sections, gaps, note, silentSources, gapOwners };
 }
 
 function namespaceId(sourceId: string, id: unknown, fallback: string): string {
@@ -589,6 +632,13 @@ export function mergeSegregationReports(
     practiceQuestions: drills,
     workedExamples: examples,
     compressionRatio: summarizeMerge(dropped, sources.filter((s) => s.status === 'ok').length, contradictions.length),
+    // Provenance travels with the deck. The card ids already carry the source
+    // (`src_2-f1`), but an id is not a name: the split export wants to write
+    // "Lecture 4 slides" on the page, and the coverage report wants to say
+    // WHICH lecture was empty rather than a section name.
+    sourceLabels: Object.fromEntries(
+      sources.filter((s) => s.status === 'ok' && s.label).map((s) => [s.id, s.label])
+    ),
   };
 
   return {
@@ -696,6 +746,9 @@ export function mergeAdditionalCards(base: SegregationReport, addition: Segregat
       practiceQuestions: [...(base.practiceQuestions || []), ...(fresh.practiceQuestions || [])],
       workedExamples: [...(base.workedExamples || []), ...(fresh.workedExamples || [])],
       compressionRatio: base.compressionRatio,
+      // A grown deck keeps the provenance it was built with, so a card added by
+      // "generate more" still lands in its source's document.
+      sourceLabels: { ...(fresh.sourceLabels || {}), ...(base.sourceLabels || {}) },
     },
     added,
     dropped,

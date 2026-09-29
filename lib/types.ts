@@ -425,6 +425,13 @@ export interface SegregationReport {
   /** Step-by-step worked examples derived from the source material. */
   workedExamples?: WorkedExampleItem[];
   compressionRatio?: string;
+  /**
+   * Source id → the learner's name for that input ("Lecture 4 slides"), set by
+   * the forge's merge. Card ids already carry the source prefix (`src_2-f1`),
+   * so this is what turns that prefix back into a name a page can be titled
+   * with — and lets a merged deck still be split or blamed per source.
+   */
+  sourceLabels?: Record<string, string>;
 }
 
 export interface ComparativeDocumentAsset {

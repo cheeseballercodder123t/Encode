@@ -32,6 +32,27 @@ import {
 // control the generation payload has to intercept BOTH paths — a URL glob for
 // the plain route alone would silently stop matching the request the UI now
 // makes, and the spec would be testing the real route's offline fallback.
+/**
+ * Rewrites a mocked forge payload so its source rows carry the ids the client
+ * actually sent.
+ *
+ * The real route echoes `{...source}` straight back, and the client keys the
+ * forge log, the retry buttons and the deck-memory source ledger off those ids.
+ * A fixture with invented ids (`src_4`) therefore drifts from the app: the
+ * ledger can no longer match a source it just cut, and a retry addresses a
+ * source the request never contained.
+ */
+export function forgePayloadForRequest(payload: any, request: { postDataJSON: () => any }) {
+  const sent = (request.postDataJSON() as { sources?: { id?: string; label?: string }[] } | null)?.sources || [];
+  if (!payload || !Array.isArray(payload.sources) || sent.length === 0) return payload;
+  return {
+    ...payload,
+    sources: payload.sources.map((source: any, index: number) =>
+      sent[index]?.id ? { ...source, id: sent[index].id } : source
+    ),
+  };
+}
+
 export const ENCODE_ROUTE = (url: URL) =>
   url.pathname === '/api/encode' || url.pathname === '/api/encode/stream';
 

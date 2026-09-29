@@ -13,15 +13,25 @@ import { countWords, stripHtml, splitDenseCloze } from './fsrs-audit';
 //                              becomes two cards, one idea each.
 //   2. The 20-Word Ceiling   : front + back over 20 words is refused from the
 //                              export (held back) after auto-splitting fails.
-//   3. Two-Way Cloze Symmetry: every causal link A → B also gets a reverse
-//                              card clozing B, so recall is bidirectional.
+//   3. Two-Way Symmetry       : every causal link A → B also gets a card that
+//                              names B and asks for A, so recall is genuinely
+//                              bidirectional. (It used to emit `A causes
+//                              {{B}}` — the SAME direction as the card the
+//                              learner already had, with a cloze painted on
+//                              top, so every causal card shipped twice and the
+//                              second copy taught nothing new.)
 
 /** Hard export ceiling for front + back word count (minimum information principle). */
 export const WOZNIAK_WORD_CEILING = 20;
 
-/** Verbs that mark a causal link worth a symmetric card. */
+/**
+ * Verbs that mark a causal link worth a symmetric card. Non-capturing on
+ * purpose: this alternation used to be group 2 of the reverse-card regex, so
+ * `m[2]` (read as "the effect") was the VERB — every reverse card clozed the
+ * word "causes" itself. Groups are now exactly (cause, effect).
+ */
 const CAUSAL_VERB_SRC =
-  '(causes?|caused|triggers?|triggered|produces?|produced|leads? to|led to|results? in|resulted in|drives?|inhibits?|prevents?|enables?)';
+  '(?:causes?|caused|triggers?|triggered|produces?|produced|leads? to|led to|results? in|resulted in|drives?|inhibits?|prevents?|enables?)';
 
 export interface WozniakHeldCard {
   card: AnkiCardItem;
@@ -79,9 +89,17 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Rule 3 : two-way cloze symmetry. For every causal link "A causes B" in the
- * card's readable text, emit a reverse card that clozes B. The mechanism text
- * travels on the reverse back so both directions rehearse the same physics.
+ * Rule 3 : two-way symmetry, in the direction the learner does not already have.
+ *
+ * For every causal link "A causes B" in the card's readable text, emit a card
+ * whose FRONT names B and whose BACK is A: given the effect, produce the cause.
+ * That is the retrieval the forward card never rehearses. It is also the fix for
+ * a real defect — the previous version emitted `A causes {{c1::B}}`, which clozes
+ * B on a copy of the same sentence, i.e. the SAME direction as the card the
+ * learner already had. Nothing was reversed and every causal card shipped twice.
+ *
+ * Returns null when the sentence has no causal link to reverse, or when the two
+ * sides are the same text (there is nothing to ask for).
  */
 export function buildSymmetricCard(card: AnkiCardItem): AnkiCardItem | null {
   const source = stripHtml(card.isCloze ? card.front : card.back);
@@ -97,14 +115,23 @@ export function buildSymmetricCard(card: AnkiCardItem): AnkiCardItem | null {
   const cause = m[1].trim().replace(/\s+/g, ' ');
   const effect = m[2].trim().replace(/\s+/g, ' ');
   if (!cause || !effect) return null;
+  // "X causes X": the reverse would ask for the thing it already shows.
+  if (cause.toLowerCase() === effect.toLowerCase()) return null;
 
-  const front = `<b>Reverse direction</b><br>${escapeHtml(cause)} causes {{c1::${escapeHtml(effect)}}}`;
-  const back = `${escapeHtml(card.isCloze ? card.back : card.front)}<br><i>Both directions must recall — interference dies when recall is symmetric.</i>`;
+  // Deliberately short. This card has to survive the same 20-word ceiling as
+  // every other card (that ceiling is the reason the deck is reviewable at
+  // all), and a reverse prompt with a paragraph bolted onto it would just be
+  // held back — a "fix" that silently ships nothing. The TwoWayCloze tag
+  // records where it came from.
+  const front = `<b>Reverse direction</b><br>${escapeHtml(effect)}<br><br>What produces this?`;
+  const back = escapeHtml(cause);
   return {
     id: `${card.id}-reverse`,
     front,
     back,
-    isCloze: true,
+    // A plain reverse prompt, not a cloze: the point is producing the cause from
+    // the effect, and a cloze of the same sentence cannot ask that.
+    isCloze: false,
     tags: [...card.tags, 'TwoWayCloze'],
     sm2: { ...card.sm2 },
   };

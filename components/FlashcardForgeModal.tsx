@@ -25,13 +25,18 @@ import type { Contradiction } from '@/lib/services/contradiction';
 import { MEDIA_ACCEPT_ATTRIBUTE, isTranscribableMedia } from '@/lib/media-types';
 import {
   DeckDiff,
+  DeckMemorySource,
+  deckSourceKey,
   diffReportAgainstMemory,
+  forgedSourceLedger,
   forgetDeckMemory,
   keepOnlyFreshCards,
   knownKeysForTopic,
   recordDeckExport,
+  recordDeckSources,
   reportCardKeys,
 } from '@/lib/deck-memory';
+import { generateSegregationRemnote } from '@/lib/remnote';
 import { AnkiDeckRead, describeAnkiRead, syncDeckMemoryFromAnki } from '@/lib/anki-memory';
 import {
   ForgeRecipe,
@@ -189,6 +194,17 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   /** The account's copy of the deck memory, when there is one. */
   const [memorySync, setMemorySync] = useState<DeckMemorySyncResult | null>(null);
   const [memorySyncing, setMemorySyncing] = useState(false);
+  /** Bumped when this session writes to the memory, so the panel re-reads it. */
+  const [memoryVersion, setMemoryVersion] = useState(0);
+  /**
+   * Source ids the learner has chosen to leave out of the next pass.
+   *
+   * Deck memory knows which sources have already been cut into this app's
+   * decks, so a re-ingest can say so BEFORE it spends a model call — but it
+   * never silently drops a source the learner put in the list: the skip is
+   * offered, counted, and reversible.
+   */
+  const [skippedSources, setSkippedSources] = useState<string[]>([]);
   const { user } = useAuth();
   const nextId = useRef(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -213,16 +229,53 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   );
 
   /**
+   * The sources in this run — everything the learner added, minus anything they
+   * chose to skip. Every path (forge, "generate more", a retry) cuts from here,
+   * so a skipped lecture is not quietly re-bought by the next pass.
+   */
+  const activeSources = useMemo(
+    () => sources.filter((s) => !skippedSources.includes(s.id)),
+    [sources, skippedSources]
+  );
+
+  /**
    * Pre-flight cost estimate, so a twelve-source ingest is a decision rather
    * than a surprise: one model call per source that has to be cut, plus the
    * transcription a video without captions or a recording may need.
    */
   const preflight = useMemo(() => {
-    const needsAudio = sources.filter(
+    const needsAudio = activeSources.filter(
       (s) => s.kind === 'youtube' || (s.kind === 'file' && s.media)
     ).length;
-    return { calls: sources.length, needsAudio };
-  }, [sources]);
+    return { calls: activeSources.length, needsAudio };
+  }, [activeSources]);
+
+  /**
+   * Sources this app has already cut into cards, matched against the setup.
+   *
+   * The card memory answers "have I shipped this card" after the fact; this
+   * answers "have I already paid for this lecture" before it, which is the only
+   * version of the question that can save money. It reads across topics because
+   * the deck has no topic until the merge produces one.
+   */
+  const forgedBefore = useMemo(() => {
+    // Read through the version counter: the store is localStorage, so a forge
+    // that just wrote to it changes nothing this component can observe.
+    void memoryVersion;
+    const ledger = forgedSourceLedger();
+    const found = new Map<string, DeckMemorySource & { topic: string }>();
+    for (const source of sources) {
+      const hit = ledger.get(deckSourceKey(source));
+      if (hit) found.set(source.id, hit);
+    }
+    return found;
+  }, [sources, memoryVersion]);
+
+  /** What the Wozniak pass leaves, and which fronts can only be asked one way. */
+  const frontQuality = useMemo(
+    () => (merged ? generateSegregationRemnote(merged).frontQuality || null : null),
+    [merged]
+  );
 
 
 
@@ -253,6 +306,9 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     stopLoopRef.current = false;
     setMemorySync(null);
     setMemorySyncing(false);
+    // A reopened sheet starts from "use everything you added": the skips were a
+    // decision about one run, not a setting.
+    setSkippedSources([]);
   };
 
   const handleClose = () => {
@@ -444,8 +500,12 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
       if (report) {
         refreshMemory(report, 'reset');
         setAnkiRead(null);
-        void checkAnkiDeck(report, true);
         void syncCloudMemory(report);
+        void checkAnkiDeck(report, true);
+        // Remember WHICH sources this deck was built from. Next Monday the same
+        // lecture can be skipped before it costs a model call, instead of being
+        // re-cut and then diffed back out as "already in your deck".
+        rememberForgedSources(report.topic, Array.isArray(data.sources) ? data.sources : []);
       }
       setPhase('done');
       playSound('success');
@@ -458,7 +518,7 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     }
   };
 
-  const handleForge = () => runForge(sources, sectionList);
+  const handleForge = () => runForge(activeSources, sectionList);
 
   /**
    * Asks the real Anki collection what this topic already holds and folds those
@@ -506,6 +566,37 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
   };
 
   /** One step back: every reshape of the deck pushes the deck it replaced. */
+  /**
+   * Writes the sources that were actually cut into the memory's source ledger.
+   * Only sources the route reported on are recorded, so a source that failed
+   * before the model saw it does not come back as "already forged".
+   */
+  const rememberForgedSources = (
+    topic: string,
+    cut: { id: string; label?: string; counts?: ForgeSectionCounts }[]
+  ) => {
+    const drafts = new Map(sources.map((s) => [s.id, s]));
+    const entries: { key: string; label: string; cards: number }[] = [];
+    for (const source of cut) {
+      const draft = drafts.get(source.id);
+      if (!draft) continue;
+      const counts = source.counts;
+      entries.push({
+        key: deckSourceKey(draft),
+        label: draft.label || source.label || '',
+        cards: counts ? counts.facts + counts.mechanisms + counts.drills + counts.examples : 0,
+      });
+    }
+    if (entries.length === 0) return;
+    recordDeckSources({ topic, sources: entries });
+    setMemoryVersion((version) => version + 1);
+  };
+
+  const toggleSourceSkip = (id: string) => {
+    playSound('click');
+    setSkippedSources((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
   const pushDeckHistory = (deck: SegregationReport) => {
     setDeckHistory((prev) => [...prev.slice(-9), deck]);
   };
@@ -560,13 +651,16 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     const existing = fresh.existing ?? collectCardFronts(merged);
     const targets =
       fresh.include ?? (!only && coverage && coverage.gaps.length > 0 ? coverage.gaps : sectionList);
+    // A retry names its source explicitly, so it is sent even if that source is
+    // currently skipped: the learner asked for THAT one, not for the batch.
+    const payloadSources = only ? sources.filter((s) => only.includes(s.id)) : activeSources;
     const res = await fetch('/api/forge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         mode: only ? 'retry' : 'more',
         only,
-        sources: sources.map(sourcePayloadFor),
+        sources: payloadSources.map(sourcePayloadFor),
         resolved,
         existing,
         include: targets,
@@ -913,12 +1007,33 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     setRecipeNote(`Deleted "${recipe.name}".`);
   };
 
-  const renderSourceRow = (source: ForgeSourceDraft) => (
-    <div key={source.id} className="flex items-center gap-2 p-2 bg-deck border border-edge/40">
+  const renderSourceRow = (source: ForgeSourceDraft) => {
+    const forged = forgedBefore.get(source.id);
+    const skipped = skippedSources.includes(source.id);
+    return (
+    <div
+      key={source.id}
+      className={`flex items-center gap-2 p-2 bg-deck border ${
+        skipped ? 'border-edge/40 opacity-60' : forged ? 'border-gilt/40' : 'border-edge/40'
+      }`}
+    >
       <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider shrink-0">
         [ {source.kind === 'youtube' ? 'YT' : source.kind === 'file' ? (source.media ? 'AUDIO' : 'FILE') : 'TEXT'} ]
       </span>
-      <span className="min-w-0 flex-1 text-[11px] font-mono text-bone truncate">{source.label}</span>
+      <span className={`min-w-0 flex-1 text-[11px] font-mono truncate ${skipped ? 'text-solder line-through' : 'text-bone'}`}>
+        {source.label}
+      </span>
+      {/* Already cut into a deck before: the count and the topic it landed in,
+          so "skip this" is an informed click rather than a guess. */}
+      {forged && (
+        <span
+          data-testid={`forge-forged-${source.id}`}
+          title={`Already forged into "${forged.topic}" — ${forged.cards} card${forged.cards === 1 ? '' : 's'} on ${new Date(forged.at).toLocaleDateString()}`}
+          className="shrink-0 px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase border border-gilt/50 text-amber"
+        >
+          [ FORGED × {forged.cards} ]
+        </span>
+      )}
       <span className="text-[10px] font-mono text-solder shrink-0">
         {source.kind === 'text'
           ? `${(source.notes || '').split(/\s+/).filter(Boolean).length} words`
@@ -928,6 +1043,18 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
               : `${Math.round((source.file?.size || 0) / 1024)} KB`
             : 'captions / audio'}
       </span>
+      {forged && (
+        <button
+          type="button"
+          data-testid={`forge-skip-${source.id}`}
+          onClick={() => toggleSourceSkip(source.id)}
+          aria-pressed={skipped}
+          title={skipped ? 'Include this source in the next pass' : 'Leave this source out — you have already cut it'}
+          className="shrink-0 px-2 py-1 bg-chassis border border-edge text-solder hover:text-amber text-[10px] font-mono font-bold cursor-pointer"
+        >
+          {skipped ? '[ USE ]' : '[ SKIP ]'}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => removeSource(source.id)}
@@ -937,7 +1064,8 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
         [ X ]
       </button>
     </div>
-  );
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -1098,6 +1226,36 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                     <p className="text-[10px] font-mono text-hazard">
                       Re-attach from the recipe: {missingFiles.join(', ')}
                     </p>
+                  )}
+                  {/* Memory-aware ingest: deck memory already knows which of
+                      these lectures were cut before, so it says so BEFORE the
+                      model calls are spent rather than after the diff. */}
+                  {forgedBefore.size > 0 && (
+                    <div className="p-2.5 bg-deck border border-gilt/40 space-y-1" data-testid="forge-known-sources">
+                      <p className="text-[10px] font-mono text-amber leading-relaxed">
+                        {skippedSources.length > 0 ? '[ - ] ' : '[ ! ] '}
+                        {forgedBefore.size} of {sources.length} source
+                        {sources.length === 1 ? '' : 's'} already cut into a deck
+                        {skippedSources.length > 0
+                          ? ` — ${skippedSources.length} skipped, ${activeSources.length} will run`
+                          : ` (${[...forgedBefore.values()].reduce((n, s) => n + s.cards, 0)} cards so far)`}
+                        .
+                      </p>
+                      <button
+                        type="button"
+                        data-testid="forge-skip-forged"
+                        onClick={() => {
+                          playSound('click');
+                          const knownIds = [...forgedBefore.keys()];
+                          setSkippedSources((prev) => (prev.length > 0 ? [] : knownIds));
+                        }}
+                        className="text-[10px] font-mono font-bold text-amber underline cursor-pointer"
+                      >
+                        {skippedSources.length > 0
+                          ? 'use them again'
+                          : `skip ${forgedBefore.size} already-forged source${forgedBefore.size === 1 ? '' : 's'}`}
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -1262,6 +1420,34 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                       <span className={coverage.gaps.length > 0 ? 'text-hazard' : 'text-solder'}>
                         {coverage.note}
                       </span>
+                    </p>
+                  )}
+                  {/* A gap is only actionable if you know whose it is: a section
+                      missing from ONE lecture is a prompt to re-ask, a section
+                      missing from every source is a prompt to read something
+                      else instead of paying for a third pass over the same
+                      slides. */}
+                  {coverage && coverage.gapOwners.length > 0 && (
+                    <ul className="text-[10px] font-mono text-solder leading-relaxed" data-testid="forge-gap-owners">
+                      {coverage.gapOwners.map((gap) => (
+                        <li key={gap.section} className={gap.silentIn.length > 0 ? 'text-hazard' : undefined}>
+                          - {gap.note}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {/* The direction rule, stated up front: a front that is a
+                      label (Step 2, vs X, Why) can only ever be asked one way,
+                      and that is a note about the SOURCE, not about the model. */}
+                  {frontQuality && (
+                    <p className="text-[10px] font-mono text-solder leading-relaxed" data-testid="forge-front-quality">
+                      Fronts: {frontQuality.twoWay} two-way · {frontQuality.forwardOnly} one way only
+                      {frontQuality.labelled > 0
+                        ? ` — ${frontQuality.labelled} are labels or questions (${frontQuality.examples.join(', ')}${
+                            frontQuality.labelled > frontQuality.examples.length ? ', …' : ''
+                          })`
+                        : ''}
+                      .
                     </p>
                   )}
                 </div>
@@ -1549,9 +1735,10 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
               {sources.length > 0 && (
                 <>
                   {' · '}
-                  {sources.length} source{sources.length === 1 ? '' : 's'} · ~{preflight.calls} model call
+                  {activeSources.length} source{activeSources.length === 1 ? '' : 's'} · ~{preflight.calls} model call
                   {preflight.calls === 1 ? '' : 's'}
                   {preflight.needsAudio > 0 ? ` · up to ${preflight.needsAudio} transcribed` : ''}
+                  {skippedSources.length > 0 ? ` · ${skippedSources.length} skipped` : ''}
                   {preflight.calls > SOURCE_CONCURRENCY_UI ? ` · cut ${SOURCE_CONCURRENCY_UI} at a time` : ''}
                 </>
               )}
@@ -1565,10 +1752,12 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
                   type="button"
                   data-testid="forge-run"
                   onClick={handleForge}
-                  disabled={sources.length === 0 || sectionList.length === 0 || phase === 'forging'}
+                  disabled={activeSources.length === 0 || sectionList.length === 0 || phase === 'forging'}
                   className="px-5 py-2.5 bg-amber border border-amber text-chassis text-xs font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
                 >
-                  {phase === 'forging' ? '[ FORGING… ]' : `[ FORGE ${sources.length || ''} SOURCE${sources.length === 1 ? '' : 'S'} ]`}
+                  {phase === 'forging'
+                    ? '[ FORGING… ]'
+                    : `[ FORGE ${activeSources.length || ''} SOURCE${activeSources.length === 1 ? '' : 'S'} ]`}
                 </button>
               )}
             </div>

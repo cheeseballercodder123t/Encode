@@ -585,4 +585,65 @@ describe('coverage report', () => {
     const coverage = buildCoverageReport(merged.counts, undefined, merged.sources);
     expect(coverage.silentSources).toEqual(['youtube:renal']);
   });
+
+  it('names which source owns a gap instead of only which section is empty', () => {
+    const want = { facts: true, mechanisms: true, drills: true, examples: true };
+    const coverage = buildCoverageReport(
+      { facts: 4, mechanisms: 2, drills: 0, examples: 3 },
+      want,
+      [
+        { id: 'src_1', label: 'Lecture 4 slides', status: 'ok', counts: { facts: 4, mechanisms: 2, drills: 0, examples: 3 } },
+        { id: 'src_2', label: 'Problem set 4', status: 'ok', counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 } },
+        { id: 'src_3', label: 'youtube:renal', status: 'failed', counts: { facts: 0, mechanisms: 0, drills: 0, examples: 0 } },
+      ] as any
+    );
+
+    expect(coverage.gaps).toEqual(['drills']);
+    expect(coverage.gapOwners).toHaveLength(1);
+    // The attribution is what turns "0 cards for drills" into an instruction:
+    // both lectures came back without a single drill, so asking the same two
+    // sources again is the wrong move.
+    expect(coverage.gapOwners[0].section).toBe('drills');
+    expect(coverage.gapOwners[0].silentIn).toEqual(['Lecture 4 slides', 'Problem set 4']);
+    expect(coverage.gapOwners[0].note).toContain('no source produced drills');
+    expect(coverage.gapOwners[0].note).toContain('ask again only if the material really contains it');
+    // A source that failed before the model saw it is not blamed for a section:
+    // it never got to answer, and its row already says so.
+    expect(coverage.gapOwners[0].silentIn).not.toContain('youtube:renal');
+
+    // With no source detail at all the gap is still reported, just unnamed.
+    const bare = buildCoverageReport({ facts: 1, mechanisms: 0, drills: 0, examples: 0 }, want);
+    expect(bare.gapOwners[0].silentIn).toEqual([]);
+    expect(bare.gapOwners.map((gap) => gap.section)).toEqual(['mechanisms', 'drills', 'examples']);
+    expect(bare.gapOwners[1].note).toBe(
+      'no source produced drills — ask again only if the material really contains it'
+    );
+    expect(bare.gaps).toEqual(['mechanisms', 'drills', 'examples']);
+  });
+
+  it('carries source labels onto the merged deck so a split export can title pages', () => {
+    const merged = mergeSegregationReports([
+      { source: textSource, report: report() },
+      { source: videoSource, report: null, note: 'No captions.' },
+    ]);
+
+    // Only the sources that were actually cut are named: a failed source has no
+    // cards for a document to hold.
+    expect(merged.report.sourceLabels).toEqual({ [textSource.id]: textSource.label });
+  });
+
+  it('keeps provenance when a grown deck is appended to', () => {
+    const merged = mergeSegregationReports([{ source: textSource, report: report() }]);
+    const more = mergeAdditionalCards(merged.report, {
+      topic: merged.report.topic,
+      declarativeFacts: [{ id: 'src_1-f9', factStatement: 'Loop diuretics block NKCC2.', clozeSuggestion: 'Loop diuretics block {{NKCC2}}.' }],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+      sourceLabels: { src_1: 'Lecture 4 slides' },
+    });
+
+    expect(more.report.sourceLabels).toEqual(merged.report.sourceLabels);
+    expect(more.report.declarativeFacts.some((f) => f.factStatement.includes('NKCC2'))).toBe(true);
+  });
 });

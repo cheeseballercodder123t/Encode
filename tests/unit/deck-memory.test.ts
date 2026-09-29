@@ -5,8 +5,10 @@ import {
   ankiCardKeys,
   cardKey,
   clearDeckMemory,
+  deckSourceKey,
   describeDeckMemory,
   diffReportAgainstMemory,
+  forgedSourceLedger,
   forgetDeckMemory,
   deckMemoryStoresEqual,
   keepOnlyFreshCards,
@@ -14,6 +16,7 @@ import {
   memoryKeyForTopic,
   mergeDeckMemoryStores,
   recordDeckExport,
+  recordDeckSources,
   reportCardKeys,
 } from '@/lib/deck-memory';
 import { SegregationReport } from '@/lib/types';
@@ -266,5 +269,114 @@ describe('merging the account\'s memory with this device\'s', () => {
     expect(deckMemoryStoresEqual(local, { ...local, extra: { topic: 'Extra', keys: ['x'], updatedAt: 1, exports: 1 } })).toBe(
       false
     );
+  });
+
+  it('unions the source ledger the same way as the fingerprints', () => {
+    const ledgerA = [{ key: 'url:lecture 4', label: 'Lecture 4', cards: 12, at: 100 }];
+    const ledgerB = [{ key: 'url:lecture 4', label: 'Lecture 4 (revised)', cards: 14, at: 200 }];
+    const merged = mergeDeckMemoryStores(
+      { t: { topic: 'T', keys: ['a'], updatedAt: 1, exports: 1, sources: ledgerA } },
+      { t: { topic: 'T', keys: ['a'], updatedAt: 1, exports: 1, sources: ledgerB } }
+    );
+    // The fresher cut of the same lecture wins; the key is what makes them the
+    // same source, so the ledger cannot grow one entry per revision.
+    expect(merged.t.sources).toEqual([{ key: 'url:lecture 4', label: 'Lecture 4 (revised)', cards: 14, at: 200 }]);
+    // And a ledger difference is a memory difference, or the cloud copy would
+    // never be written back.
+    expect(
+      deckMemoryStoresEqual(
+        { t: { topic: 'T', keys: ['a'], updatedAt: 1, exports: 1 } },
+        { t: { topic: 'T', keys: ['a'], updatedAt: 1, exports: 1, sources: ledgerA } }
+      )
+    ).toBe(false);
+  });
+});
+
+describe('the source ledger (memory-aware ingest)', () => {
+  const slideSource = {
+    kind: 'file' as const,
+    label: 'lecture-4-slides.pdf',
+  };
+  const videoSource = { kind: 'youtube' as const, label: 'https://youtu.be/abc', url: 'https://youtu.be/abc' };
+  const notesSource = {
+    kind: 'text' as const,
+    label: 'The loop of Henle reaches 1,200 mOsm…',
+    notes: 'The loop of Henle reaches 1,200 mOsm at the hairpin. ' + 'x'.repeat(900),
+  };
+
+  it('fingerprints a source by what it is, not by the id this session minted', () => {
+    // A URL is its own identity — the query string may carry tracking, but the
+    // video is the same video.
+    expect(deckSourceKey(videoSource)).toBe(deckSourceKey({ ...videoSource, label: 'renamed' }));
+    // A file is its name: re-attaching the same PDF is the same ingest.
+    expect(deckSourceKey(slideSource)).toBe(deckSourceKey({ ...slideSource }));
+    expect(deckSourceKey(slideSource)).not.toBe(deckSourceKey({ kind: 'file', label: 'lecture-5-slides.pdf' }));
+    // Notes are their opening words, so an edited tail is still one source and
+    // a different lecture is not.
+    const edited = deckSourceKey({
+      ...notesSource,
+      notes: notesSource.notes.slice(0, 400) + ' A completely rewritten second half.',
+    });
+    expect(edited).toBe(deckSourceKey(notesSource));
+    expect(deckSourceKey({ kind: 'text', label: 'other', notes: 'Cardiac output is stroke volume times rate.' })).not.toBe(
+      deckSourceKey(notesSource)
+    );
+  });
+
+  it('remembers which sources built a deck, and finds them again by key', () => {
+    recordDeckSources({
+      topic: 'Renal Physiology',
+      sources: [
+        { key: deckSourceKey(slideSource), label: slideSource.label, cards: 12 },
+        { key: deckSourceKey(videoSource), label: videoSource.label, cards: 4 },
+      ],
+      timestamp: 5000,
+    });
+
+    const ledger = forgedSourceLedger();
+    expect(ledger.get(deckSourceKey(slideSource))).toMatchObject({
+      label: 'lecture-4-slides.pdf',
+      cards: 12,
+      topic: 'Renal Physiology',
+    });
+    expect(ledger.get(deckSourceKey(videoSource))?.cards).toBe(4);
+    // A source never cut here is not in the ledger: the panel only offers to
+    // skip what it has actually seen.
+    expect(ledger.has(deckSourceKey(notesSource))).toBe(false);
+    // Recording the source alone must not claim any cards were exported.
+    expect(describeDeckMemory('Renal Physiology')?.keys).toEqual([]);
+  });
+
+  it('updates a re-forged source in place instead of stacking entries', () => {
+    recordDeckSources({
+      topic: 'Renal Physiology',
+      sources: [{ key: deckSourceKey(slideSource), label: slideSource.label, cards: 12 }],
+      timestamp: 1000,
+    });
+    const after = recordDeckSources({
+      topic: 'Renal Physiology',
+      sources: [{ key: deckSourceKey(slideSource), cards: 15 }],
+      timestamp: 9000,
+    });
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ cards: 15, at: 9000, label: 'lecture-4-slides.pdf' });
+
+    // The same lecture in a different topic is a second entry under its own
+    // topic, and the ledger's freshness rule picks the newer cut.
+    recordDeckSources({
+      topic: 'Acid-Base',
+      sources: [{ key: deckSourceKey(slideSource), label: 'lecture-4-slides.pdf', cards: 3 }],
+      timestamp: 20000,
+    });
+    expect(forgedSourceLedger().get(deckSourceKey(slideSource))).toMatchObject({ cards: 3, topic: 'Acid-Base' });
+  });
+
+  it('forgets the ledger with the topic', () => {
+    recordDeckSources({
+      topic: 'Renal Physiology',
+      sources: [{ key: deckSourceKey(slideSource), label: 'slides', cards: 1 }],
+    });
+    forgetDeckMemory('Renal Physiology');
+    expect(forgedSourceLedger().size).toBe(0);
   });
 });

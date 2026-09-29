@@ -7,6 +7,7 @@ import { SavedSchema } from '@/lib/types';
 import { sound } from '@/lib/audio';
 import { useAuth } from '@/lib/auth-context';
 import { useModalA11y } from '@/hooks/useModalA11y';
+import { generateRemnoteHierarchy } from '@/lib/remnote';
 
 interface HistoryDrawerProps {
   isOpen: boolean;
@@ -60,13 +61,13 @@ export function HistoryDrawer({
   );
 
   const handleCopyRemNote = (s: SavedSchema) => {
-    let content = `# ${s.topicSummary}\n\n`;
-    s.activities.forEach(act => {
-      const resp = s.userResponses[act.id] || { field1: '', field2: '', field3: '' };
-      content += `${act.title} :: ${resp.field1}\n`;
-      content += `  - Elaborative Mechanism :: ${resp.field2}\n`;
-      if (resp.field3) content += `  - Connection Anchor :: ${resp.field3}\n`;
-    });
+    // The shared renderer, so a card copied from history has the same shape as
+    // one copied from the export sheet — including which lines get a reverse.
+    const content = generateRemnoteHierarchy({
+      topicSummary: s.topicSummary,
+      activities: s.activities,
+      userResponses: s.userResponses,
+    }).markdown;
     navigator.clipboard.writeText(content);
     setCopiedId(s.id);
     sound.playBeep(880, 'sine', 0.1);

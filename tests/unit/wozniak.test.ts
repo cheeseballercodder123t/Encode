@@ -6,6 +6,7 @@ import {
   WOZNIAK_WORD_CEILING,
 } from '@/lib/wozniak';
 import { AnkiCardItem, sanitizeExtracted } from '@/lib/anki-exporter';
+import { countWords } from '@/lib/fsrs-audit';
 
 function card(overrides: Partial<AnkiCardItem> & { id?: string }): AnkiCardItem {
   return {
@@ -44,18 +45,40 @@ describe('wozniak 1-idea rule', () => {
   });
 });
 
-describe('wozniak two-way cloze symmetry', () => {
-  it('builds a reverse card clozing the effect of a causal link', () => {
-    const c = card({ back: 'Depolarization causes voltage-gated channels to open' });
-    const rev = buildSymmetricCard(c);
+describe('wozniak two-way symmetry', () => {
+  it('asks for the CAUSE from the effect instead of repeating the causal link', () => {
+    const c = card({
+      front: 'How does depolarization begin?',
+      back: 'Depolarization causes voltage-gated channels to open',
+    });
+    const rev = buildSymmetricCard(c)!;
     expect(rev).not.toBeNull();
-    expect(rev!.front).toContain('Reverse direction');
-    expect(rev!.front).toContain('{{c1::');
-    expect(rev!.tags).toContain('TwoWayCloze');
+    expect(rev.front).toContain('Reverse direction');
+    // The prompt names the EFFECT...
+    expect(rev.front).toContain('voltage-gated channels to open');
+    expect(rev.front).toContain('What produces this?');
+    // ...and the answer is the CAUSE. The old version clozed the effect on a
+    // copy of the cause sentence, which is the direction the learner already
+    // had: it shipped the same retrieval twice.
+    expect(rev.back).toBe('Depolarization');
+    expect(rev.front).not.toContain('{{c1::');
+    expect(rev.isCloze).toBe(false);
+    expect(rev.tags).toContain('TwoWayCloze');
+    // The verb itself is never the effect (the capture-group bug that made
+    // every one of these cards say `X causes {{c1::causes}}`).
+    expect(rev.front).not.toContain('causes');
+    // Long enough to be a real prompt, short enough to clear the ceiling.
+    expect(countWords(`${rev.front} ${rev.back}`)).toBeLessThanOrEqual(WOZNIAK_WORD_CEILING);
   });
 
   it('returns null for non-causal text', () => {
     expect(buildSymmetricCard(card({ back: 'The mitochondrion has two membranes' }))).toBeNull();
+  });
+
+  it('returns null when a link does not reverse (the two sides are the same)', () => {
+    // "X causes X" has nothing to ask for, so no card is invented for it.
+    expect(buildSymmetricCard(card({ back: 'Graded potentials result in graded potentials' }))).toBeNull();
+    expect(buildSymmetricCard(card({ back: 'Depolarization triggers depolarization' }))).toBeNull();
   });
 
   it('uses a cloze front body as the causal source', () => {
@@ -64,9 +87,12 @@ describe('wozniak two-way cloze symmetry', () => {
       front: '{{c1::Threshold crossing}} triggers the action potential',
       back: 'mechanism',
     });
-    const rev = buildSymmetricCard(c);
+    const rev = buildSymmetricCard(c)!;
     expect(rev).not.toBeNull();
-    expect(rev!.front).toContain('Threshold crossing');
+    // Effect on the front, cause in the answer.
+    expect(rev.front).toContain('the action potential');
+    expect(rev.front).not.toContain('triggers');
+    expect(rev.back).toBe('Threshold crossing');
   });
 });
 
