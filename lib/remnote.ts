@@ -1,4 +1,4 @@
-import { Activity, SavedSchema, SegregationReport } from './types';
+import { SavedSchema, SegregationReport } from './types';
 
 export interface FactItem {
   id: string;
@@ -31,6 +31,92 @@ export interface FeynmanClozeItem {
   cognitiveSpeedAdvantage: string;
 }
 
+// ─── RemNote card syntax ────────────────────────────────────────────────────
+//
+// Every delimiter here is read out of RemNote's own "How to Import Flashcards
+// from Text", because guessing them is how the previous version shipped cards
+// nobody could answer:
+//
+//   `::`    TWO-WAY Concept card — "name → definition" and the reverse,
+//           "definition → name".
+//   `>>`    FORWARD-ONLY Basic card — front → back.
+//   `>>>`   MULTI-LINE front — every nested bullet is part of the answer.
+//   `>>1.`  LIST-ANSWER front — nested bullets are the list items.
+//   `{{}}`  A cloze deletion, forward-only, all by itself.
+//   `{({})}` A hint, shown on demand against the deletion it follows.
+//   `#[[Extra Card Detail]]` A child that appears on the card's BACK and
+//           generates no card of its own.
+
+/** Two-way Concept card: front → back and back → front. */
+export const REMNOTE_TWO_WAY = '::';
+/** Forward-only Basic card: front → back. */
+export const REMNOTE_FORWARD = '>>';
+/** Multi-line front: the nested bullets are the card's answer. */
+export const REMNOTE_MULTI_LINE = '>>>';
+/** List-answer front: the nested bullets are the card's list items. */
+export const REMNOTE_LIST_ANSWER = '>>1.';
+/** Marks a child bullet as detail on the parent card's back, not a card. */
+export const REMNOTE_DETAIL = '#[[Extra Card Detail]]';
+
+export type RemnoteCardDirection = 'two-way' | 'forward';
+export type RemnoteCardKind = RemnoteCardDirection | 'cloze' | 'multi-line' | 'list-answer';
+
+/** One card the export will produce, as the learner will meet it. */
+export interface RemnoteCard {
+  id: string;
+  /** Section that rendered it (facts / mechanisms / drills / examples / …). */
+  section: string;
+  /** Source the card came from, when the deck carries provenance. */
+  sourceId?: string;
+  /** The front, as RemNote will show it. */
+  front: string;
+  kind: RemnoteCardKind;
+  /** False when `::` and `>>` are not a meaningful choice (cloze, multi-line). */
+  reversible: boolean;
+  /** Why it ships the way it does, in the learner's words. */
+  reason?: string;
+  /** Bullets that ride on this card's back as Extra Card Detail. */
+  detail: string[];
+}
+
+/**
+ * Reasons that mean the front is not a *name*. These cards can only ever be
+ * asked in one direction, and the front is a label rather than the thing being
+ * learned — which is worth saying out loud before the deck is exported.
+ */
+const WEAK_FRONT_REASONS = new Set(['labelled prompt', 'numbered step', 'contrast row', 'question front']);
+
+export interface RemnoteFrontQuality {
+  total: number;
+  twoWay: number;
+  forwardOnly: number;
+  clozes: number;
+  /** Multi-line and list-answer cards: one front, several parts. */
+  multiPart: number;
+  /** Forward-only cards whose front is a label or a question. */
+  labelled: number;
+  /** Up to three sample fronts, so the note is concrete. */
+  examples: string[];
+  note: string;
+}
+
+/** One pasteable document: a card section, or a whole source. */
+export interface RemnoteDocument {
+  id: string;
+  /** Page title, topic-prefixed so a paste lands somewhere named. */
+  title: string;
+  /** Page-name suggestion (RemNote-safe, no punctuation it would strip). */
+  filename: string;
+  markdown: string;
+  cardCount: number;
+  /** Concept ↔ definition cards: the only ones worth a reverse. */
+  twoWayCount: number;
+  /** Questions, labels, clozes and multi-part cards: front → back only. */
+  forwardCount: number;
+  /** Ids of the cards inside this document, in order. */
+  cardIds: string[];
+}
+
 export interface RemnoteExportPayload {
   markdown: string;
   cardCount: number;
@@ -39,22 +125,529 @@ export interface RemnoteExportPayload {
   hierarchicalDeck: string;
   parentAnchor?: string;
   feynmanClozings?: FeynmanClozeItem[];
+  /** One document per card section (or per source), each independently copyable. */
+  documents?: RemnoteDocument[];
+  /** Every card in the deck, in shipping order — what the preview lists. */
+  cards?: RemnoteCard[];
+  /** How many fronts are labels/questions rather than names. */
+  frontQuality?: RemnoteFrontQuality;
+  /** Total two-way (concept ↔ definition) cards across the deck. */
+  twoWayCount?: number;
+  /** Total forward-only cards across the deck. */
+  forwardCount?: number;
 }
 
 /**
  * Contextual Anchoring (Feature 86) with the facts/drills/examples sections
- * rendered as proper RemNote flashcards (`::` descriptors), never notes.
+ * rendered as proper RemNote cards, never notes. Card *direction* is chosen
+ * per line, explanations ride along as Extra Card Detail, and the deck is split
+ * into one copyable document per section or per source.
  */
 export interface RemnoteOptions {
   parentAnchor?: string;
   preferFeynmanCloze?: boolean;
+  /** false forces every card forward-only. Default: two-way where it is real. */
+  twoWayCards?: boolean;
+  /**
+   * Attach "Why it matters" / "Traps" / "Takeaway" to the card they belong to
+   * as Extra Card Detail (they show on the back and generate no card) instead
+   * of shipping them as cards of their own. Default true. Needs RemNote Pro:
+   * without it the tagged bullets paste as plain notes.
+   */
+  explanationsAsDetail?: boolean;
+  /** Per-card `::` / `>>` overrides, keyed by `RemnoteCard.id`. */
+  directionOverrides?: Record<string, RemnoteCardDirection>;
+  /** 'section' (default) splits by card section; 'source' by where cards came from. */
+  groupBy?: 'section' | 'source';
+  /** Source id → label, so source grouping can name its documents. */
+  sourceLabels?: Record<string, string>;
+}
+
+/**
+ * Renders one bullet as a RemNote card with an explicit direction. Direction is
+ * a required decision at the call site on purpose: only the renderer knows
+ * whether the front it is writing is a concept name (a real reverse card) or a
+ * labelled prompt (no reverse).
+ */
+export function remnoteCard(
+  front: string,
+  back: string,
+  direction: RemnoteCardDirection,
+  indent = ''
+): string {
+  const delimiter = direction === 'two-way' ? REMNOTE_TWO_WAY : REMNOTE_FORWARD;
+  return `${indent}- ${front} ${delimiter} ${back}`;
+}
+
+/**
+ * RemNote cloze hints: `{{deletion}}{({hint})}`. A mnemonic belongs on the
+ * deletion it explains, not on a second card whose only content is the
+ * mnemonic — that card can never be answered on its own.
+ */
+export function attachClozeHint(text: string, hint: string): string {
+  const clean = (hint || '').trim().replace(/[{}]/g, '');
+  if (!clean || !text.includes('{{')) return text;
+  // Only the first deletion: a hint repeated on every blank is noise.
+  return text.replace(/\{\{[^{}]*\}\}/, (match) => `${match}{({${clean}})}`);
+}
+
+/** A RemNote page name derived from the document title. */
+export function remnoteDocumentFilename(title: string): string {
+  const safe = title
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  return safe.slice(0, 80) || 'DeepEncode';
+}
+
+/** True when the text already carries a `{{cloze}}` deletion. */
+function hasClozeDeletion(text: string): boolean {
+  return text.includes('{{') && text.includes('}}');
+}
+
+/**
+ * Unwraps a deletion into plain prose, hint and all.
+ *
+ * A `{{deletion}}` is a card. On a line that ships as Extra Card Detail RemNote
+ * shows it on the card BACK and never asks it, so the braces would be literal
+ * `{{ }}` dressing on the reveal — the deletion has to become ordinary text,
+ * and any `{({hint})}` that explained it goes with it.
+ */
+function stripClozeDeletions(text: string): string {
+  return text
+    .replace(/\{\(\([^()]*\)\)\}/g, '')
+    .replace(/\{\{([^{}]*)\}\}/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * The source a card came from. `mergeSegregationReports` namespaces every item
+ * id with its source (`src_2-f1`), so the prefix before the first dash is the
+ * provenance — which is how a merged deck can still be split per lecture.
+ */
+export function sourceIdOfItem(id: string | undefined): string | undefined {
+  const raw = (id || '').trim();
+  if (!raw) return undefined;
+  const dash = raw.indexOf('-');
+  if (dash <= 0) return undefined;
+  return raw.slice(0, dash);
+}
+
+// ─── Render context and section drafts ──────────────────────────────────────
+
+interface SourceBucket {
+  id: string;
+  label: string;
+  lines: string[];
+  cardIds: string[];
+  cardCount: number;
+  twoWayCount: number;
+  forwardCount: number;
+  lastSection?: string;
+}
+
+interface RenderContext {
+  parentAnchor: string;
+  topic: string;
+  twoWay: boolean;
+  explanationsAsDetail: boolean;
+  overrides: Record<string, RemnoteCardDirection>;
+  groupBySource: boolean;
+  sourceLabels: Record<string, string>;
+  buckets: Map<string, SourceBucket>;
+}
+
+/** One card section, in both the shapes it has to be rendered as. */
+interface RemnoteSectionDraft {
+  id: string;
+  /** Heading used inside the single combined document. */
+  heading: string;
+  /** Suffix used when this section is copied as its own document. */
+  documentTitle: string;
+  /** Rendered bullets, children already indented. */
+  lines: string[];
+  cards: RemnoteCard[];
+  cardCount: number;
+  twoWayCount: number;
+  forwardCount: number;
+  /** Card ordinal within the section — the second half of every card id. */
+  ordinal: number;
+  /** Source of the item currently being rendered, for provenance. */
+  activeSource?: string;
+}
+
+function newSection(id: string, heading: string, documentTitle: string): RemnoteSectionDraft {
+  return {
+    id,
+    heading,
+    documentTitle,
+    lines: [],
+    cards: [],
+    cardCount: 0,
+    twoWayCount: 0,
+    forwardCount: 0,
+    ordinal: 0,
+  };
+}
+
+/** Appends a bullet, mirroring it into the source bucket when grouping by source. */
+function emit(ctx: RenderContext, section: RemnoteSectionDraft, line: string): void {
+  section.lines.push(line);
+  if (!ctx.groupBySource) return;
+
+  const sourceId = section.activeSource || 'unattributed';
+  let bucket = ctx.buckets.get(sourceId);
+  if (!bucket) {
+    bucket = {
+      id: sourceId,
+      label: ctx.sourceLabels[sourceId] || sourceId,
+      lines: [],
+      cardIds: [],
+      cardCount: 0,
+      twoWayCount: 0,
+      forwardCount: 0,
+    };
+    ctx.buckets.set(sourceId, bucket);
+  }
+  if (bucket.lastSection !== section.id) {
+    if (bucket.lines.length > 0) bucket.lines.push('');
+    bucket.lines.push(`### ${section.heading}`);
+    bucket.lastSection = section.id;
+  }
+  bucket.lines.push(line);
+}
+
+function registerCard(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft,
+  card: RemnoteCard
+): void {
+  section.cards.push(card);
+  section.cardCount += 1;
+  if (card.kind === 'two-way') section.twoWayCount += 1;
+  else section.forwardCount += 1;
+
+  if (!ctx.groupBySource) return;
+  const bucket = ctx.buckets.get(card.sourceId || 'unattributed');
+  if (!bucket) return;
+  bucket.cardIds.push(card.id);
+  bucket.cardCount += 1;
+  if (card.kind === 'two-way') bucket.twoWayCount += 1;
+  else bucket.forwardCount += 1;
+}
+
+function nextCardId(section: RemnoteSectionDraft): string {
+  return `${section.id}:${section.ordinal++}`;
+}
+
+/**
+ * A bullet that is already a Cloze card. RemNote reads the `{{}}` as the card
+ * and generates no reverse, so a `::` here was pure noise — and on a line whose
+ * back is a deletion it asked for the label back.
+ */
+function pushCloze(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft,
+  text: string,
+  opts: { indent?: string; reason?: string; front?: string } = {}
+): void {
+  emit(ctx, section, `${opts.indent || ''}- ${text}`);
+  registerCard(ctx, section, {
+    id: nextCardId(section),
+    section: section.id,
+    sourceId: section.activeSource,
+    front: opts.front || text,
+    kind: 'cloze',
+    reversible: false,
+    reason: opts.reason || 'a {{deletion}} is already a forward-only cloze',
+    detail: [],
+  });
+}
+
+/**
+ * A labelled pair. A back carrying a `{{deletion}}` is delegated to pushCloze,
+ * with the label kept inline as the prompt's own context rather than bolted on
+ * through a delimiter RemNote would then have to reconcile with the braces.
+ */
+function pushCard(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft,
+  front: string,
+  back: string,
+  direction: RemnoteCardDirection,
+  opts: { indent?: string; reason?: string } = {}
+): void {
+  if (hasClozeDeletion(back)) {
+    pushCloze(ctx, section, front ? `${front}: ${back}` : back, {
+      indent: opts.indent,
+      reason: opts.reason,
+      front,
+    });
+    return;
+  }
+  const id = nextCardId(section);
+  const chosen = ctx.overrides[id] || direction;
+  emit(ctx, section, remnoteCard(front, back, chosen, opts.indent));
+  registerCard(ctx, section, {
+    id,
+    section: section.id,
+    sourceId: section.activeSource,
+    front,
+    kind: chosen,
+    reversible: true,
+    reason: opts.reason,
+    detail: [],
+  });
+}
+
+/**
+ * One front with several parts. RemNote shows the nested bullets together when
+ * the card is answered, so a step chain is one card instead of five — and it is
+ * deliberately NOT reversible: there is no sensible "name the label" reverse of
+ * a list.
+ *
+ * Note the gotcha this shape carries: inside a multi-line card every nested
+ * bullet is a card item, so Extra Card Detail cannot be nested here (RemNote
+ * documents having to outdent such a bullet first). Extras for these cards
+ * belong in the item list.
+ */
+function pushMultiPart(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft,
+  front: string,
+  items: string[],
+  opts: { kind: 'multi-line' | 'list-answer'; reason: string; indent?: string }
+): void {
+  const indent = opts.indent || '';
+  const delimiter = opts.kind === 'multi-line' ? REMNOTE_MULTI_LINE : REMNOTE_LIST_ANSWER;
+  emit(ctx, section, `${indent}- ${front} ${delimiter}`);
+  for (const item of items) emit(ctx, section, `${indent}  - ${item}`);
+  registerCard(ctx, section, {
+    id: nextCardId(section),
+    section: section.id,
+    sourceId: section.activeSource,
+    front,
+    kind: opts.kind,
+    reversible: false,
+    reason: opts.reason,
+    detail: [],
+  });
+}
+
+/**
+ * A bullet that shows on the parent card's back and generates no card of its
+ * own. This is what RemNote's Extra Card Detail powerup is for: a mnemonic, a
+ * trap to avoid, a citation, or the explanation behind an answer you have
+ * already given. Needs RemNote Pro.
+ */
+function pushDetail(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft,
+  label: string,
+  value: string
+): void {
+  const text = stripClozeDeletions((value || '').trim());
+  if (!text) return;
+  const card = section.cards[section.cards.length - 1];
+  if (card) card.detail.push(`${label}: ${text}`);
+  emit(ctx, section, `  - ${label}: ${text} ${REMNOTE_DETAIL}`);
+}
+
+/**
+ * An explanation attached to the card above it. With `explanationsAsDetail`
+ * off, the same text ships as its own forward-only card instead — the shape
+ * this export used to use for everything, which is why a single concept could
+ * arrive as five cards.
+ */
+function pushExtra(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft,
+  label: string,
+  value: string,
+  reason: string
+): void {
+  const text = (value || '').trim();
+  if (!text) return;
+  // Extra Card Detail is reveal-only, so a value the SOURCE itself clozed is a
+  // deliberate test that would be buried there — it stays a card, and pushCard
+  // delegates the deletion to a real cloze. Only clozes this renderer
+  // manufactured for the card shape get demoted to detail.
+  if (ctx.explanationsAsDetail && !hasClozeDeletion(text)) {
+    pushDetail(ctx, section, label, text);
+    return;
+  }
+  pushCard(ctx, section, label, text, 'forward', { indent: '  ', reason });
+}
+
+/** A plain bullet: real content that must not generate a card of its own. */
+function pushNote(ctx: RenderContext, section: RemnoteSectionDraft, text: string, indent = ''): void {
+  emit(ctx, section, `${indent}- ${text}`);
+}
+
+/**
+ * Turns a deck's fronts into the one thing a card count cannot tell you: how
+ * many cards can only ever be asked one way, and why.
+ */
+export function summarizeFrontQuality(cards: RemnoteCard[]): RemnoteFrontQuality {
+  const twoWay = cards.filter((card) => card.kind === 'two-way').length;
+  const clozes = cards.filter((card) => card.kind === 'cloze').length;
+  const multiPart = cards.filter((card) => card.kind === 'multi-line' || card.kind === 'list-answer').length;
+  const weak = cards.filter((card) => card.reason && WEAK_FRONT_REASONS.has(card.reason));
+  const examples = weak.slice(0, 3).map((card) => card.front);
+
+  const note =
+    weak.length === 0
+      ? 'Every card front is the thing being recalled.'
+      : `${weak.length} of ${cards.length} cards have a labelled or question front (${examples.join(', ')}${
+          weak.length > examples.length ? ', …' : ''
+        }) — RemNote can only ask those one way, and the label is not what you are learning.`;
+
+  return {
+    total: cards.length,
+    twoWay,
+    forwardOnly: cards.length - twoWay,
+    clozes,
+    multiPart,
+    labelled: weak.length,
+    examples,
+    note,
+  };
+}
+
+function renderSectionDocument(
+  ctx: RenderContext,
+  section: RemnoteSectionDraft
+): RemnoteDocument {
+  const title = `${ctx.topic} — ${section.documentTitle}`;
+  const markdown = [
+    `# 🌐 ${ctx.parentAnchor}`,
+    `## 📁 ${title}`,
+    `- **Parent System Anchor** [[${ctx.parentAnchor}]]`,
+    '',
+    `### ${section.heading}`,
+    ...section.lines,
+  ]
+    .join('\n')
+    .replace(/\n+$/, '');
+  return {
+    id: section.id,
+    title,
+    filename: remnoteDocumentFilename(title),
+    markdown,
+    cardCount: section.cardCount,
+    twoWayCount: section.twoWayCount,
+    forwardCount: section.forwardCount,
+    cardIds: section.cards.map((card) => card.id),
+  };
+}
+
+function renderSourceDocuments(ctx: RenderContext): RemnoteDocument[] {
+  const documents: RemnoteDocument[] = [];
+  for (const bucket of ctx.buckets.values()) {
+    if (bucket.cardCount === 0) continue;
+    const title = bucket.label;
+    documents.push({
+      id: bucket.id,
+      title,
+      filename: remnoteDocumentFilename(title),
+      markdown: [
+        `# 🌐 ${ctx.parentAnchor}`,
+        `## 📁 ${title}`,
+        `- **Parent System Anchor** [[${ctx.parentAnchor}]]`,
+        '',
+        ...bucket.lines,
+      ]
+        .join('\n')
+        .replace(/\n+$/, ''),
+      cardCount: bucket.cardCount,
+      twoWayCount: bucket.twoWayCount,
+      forwardCount: bucket.forwardCount,
+      cardIds: bucket.cardIds,
+    });
+  }
+  return documents;
+}
+
+function assemblePayload(
+  ctx: RenderContext,
+  sections: RemnoteSectionDraft[],
+  headerNotes: string[] = []
+): {
+  markdown: string;
+  cardCount: number;
+  twoWayCount: number;
+  forwardCount: number;
+  cards: RemnoteCard[];
+  documents: RemnoteDocument[];
+  frontQuality: RemnoteFrontQuality;
+} {
+  const used = sections.filter((s) => s.lines.length > 0);
+  const cards = used.flatMap((s) => s.cards);
+  const lines: string[] = [
+    `# 🌐 ${ctx.parentAnchor}`,
+    `## 📁 DeepEncoded: ${ctx.topic}`,
+    `- **Parent System Anchor** [[${ctx.parentAnchor}]]`,
+    // Session metadata is a note, never a card: nobody re-answers "what is the
+    // encoded date".
+    ...headerNotes.map((note) => `- ${note}`),
+    '',
+  ];
+  for (const section of used) {
+    lines.push(`### ${section.heading}`);
+    lines.push(...section.lines);
+    lines.push('');
+  }
+
+  // A section of pure notes has nothing to practice, so it never becomes a
+  // document of its own (the combined markdown still carries the note, so
+  // nothing the encoder wrote is thrown away).
+  const documents = ctx.groupBySource
+    ? renderSourceDocuments(ctx)
+    : used.filter((s) => s.cardCount > 0).map((s) => renderSectionDocument(ctx, s));
+
+  return {
+    markdown: lines.join('\n').replace(/\n+$/, ''),
+    cardCount: used.reduce((n, s) => n + s.cardCount, 0),
+    twoWayCount: used.reduce((n, s) => n + s.twoWayCount, 0),
+    forwardCount: used.reduce((n, s) => n + s.forwardCount, 0),
+    cards,
+    documents,
+    frontQuality: summarizeFrontQuality(cards),
+  };
+}
+
+function createContext(
+  options: RemnoteOptions | undefined,
+  parentAnchor: string,
+  topic: string
+): RenderContext {
+  const sourceLabels = options?.sourceLabels || {};
+  return {
+    parentAnchor,
+    topic,
+    twoWay: options?.twoWayCards !== false,
+    explanationsAsDetail: options?.explanationsAsDetail !== false,
+    overrides: options?.directionOverrides || {},
+    // Source grouping needs names to name its documents with; a bare report
+    // (the encode flow, a hand-built deck) has no provenance to group by, so it
+    // silently falls back to the section split rather than making one document
+    // per card.
+    groupBySource: options?.groupBy === 'source' && Object.keys(sourceLabels).length > 0,
+    sourceLabels,
+    buckets: new Map(),
+  };
 }
 
 /**
  * Renders a SegregationReport (facts + mechanisms + drills + examples) into
- * RemNote markdown where EVERY content line is a `::` descriptor (flashcard),
- * not a plain note. Cloze cards keep their {{}} deletions for RemNote cloze
- * rendering. Used by the segregate/export modal.
+ * RemNote markdown where EVERY content line is a card, not a plain note.
+ * Cloze cards keep their {{}} deletions for RemNote cloze rendering.
+ *
+ * Also returns `documents`: one per non-empty section (or per source), each a
+ * standalone page the learner can copy on its own, and `cards`: what RemNote
+ * will actually ask, so the reverse of a two-way card is visible before it is
+ * pasted rather than during review.
  */
 export function generateSegregationRemnote(
   report: SegregationReport,
@@ -62,128 +655,127 @@ export function generateSegregationRemnote(
 ): RemnoteExportPayload {
   const topic = report.topic || 'DeepEncode Cognitive Schema';
   const parentAnchor = options?.parentAnchor || inferParentSystemAnchor(topic);
-  const lines: string[] = [];
-  let cardCount = 0;
+  const ctx = createContext(options, parentAnchor, topic);
+  const twoWay: RemnoteCardDirection = ctx.twoWay ? 'two-way' : 'forward';
   let factsCount = 0;
   let conceptsCount = 0;
 
-  lines.push(`# 🌐 ${parentAnchor}`);
-  lines.push(`## 📁 DeepEncoded: ${topic}`);
-  lines.push(`- **Parent System Anchor** :: [[${parentAnchor}]]`);
-  lines.push('');
-
   // Declarative Facts. Two card shapes, because the source gives two:
-  //  - a `{{deletion}}` sentence becomes a RemNote CLOZE card (RemNote renders
-  //    {{}} as a cloze, and that deletion is the whole point of the fact);
-  //  - a short drill prompt becomes a Q :: A descriptor card.
-  // Previously the cloze suggestion was dropped whenever a question existed,
-  // so the exported deck silently lost every deletion the AI wrote.
-  const facts = report.declarativeFacts || [];
-  if (facts.length > 0) {
-    lines.push('### 🔢 Declarative Facts');
-    facts.forEach((fact) => {
-      const cloze = (fact.clozeSuggestion || '').trim();
-      const hasCloze = cloze.includes('{{') && cloze.includes('}}');
-      const question = (fact.question || '').trim();
-      factsCount++;
+  //  - a `{{deletion}}` sentence becomes a RemNote CLOZE card, and the memory
+  //    hook rides on it as a hint (`{{deletion}}{({hook})}`) instead of
+  //    becoming a second card whose only content is the mnemonic;
+  //  - a short drill prompt becomes a forward-only Q >> A card.
+  const facts = newSection('facts', '🔢 Declarative Facts', 'Declarative Facts');
+  for (const fact of report.declarativeFacts || []) {
+    facts.activeSource = sourceIdOfItem(fact.id);
+    // Whether THIS fact produced a card: the section accumulates cards across
+    // facts, so a section-level check would attach one fact's hook to another
+    // fact's card.
+    const cardsBefore = facts.cards.length;
+    const cloze = (fact.clozeSuggestion || '').trim();
+    const clozeDeletion = hasClozeDeletion(cloze);
+    const question = (fact.question || '').trim();
+    const hook = (fact.memoryHook || '').trim();
+    const tag = fact.tag ? ` (${fact.tag})` : '';
+    factsCount++;
 
-      if (hasCloze) {
-        lines.push(`- ${cloze}`);
-        cardCount++;
-        if (question) {
-          lines.push(`  - ${question} :: ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
-          cardCount++;
-        }
-      } else if (question) {
-        lines.push(`- ${question} :: ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
-        cardCount++;
-      } else {
-        lines.push(`- ${fact.factStatement}${fact.tag ? ` (${fact.tag})` : ''}`);
-        cardCount++;
+    if (clozeDeletion) {
+      pushCloze(ctx, facts, hook ? attachClozeHint(cloze, hook) : cloze, { front: cloze });
+      if (question) {
+        pushCard(ctx, facts, question, `${fact.factStatement}${tag}`, 'forward', {
+          indent: '  ',
+          reason: 'question front',
+        });
       }
-
-      if (fact.memoryHook) {
-        lines.push(`  - Remember :: ${fact.memoryHook}`);
-        cardCount++;
-      }
-    });
-    lines.push('');
-  }
-
-  // Conceptual Mechanisms : 4-quadrant flashcards
-  const mechs = report.conceptualMechanisms || [];
-  if (mechs.length > 0) {
-    lines.push('### 🧠 4-Quadrant Mechanisms');
-    mechs.forEach((mech, i) => {
-      lines.push(`- ${mech.conceptName} :: ${mech.whatIsIt}`);
-      cardCount++;
-      conceptsCount++;
-      if (mech.whyItMatters) {
-        lines.push(`  - Why it matters :: ${mech.whyItMatters}`);
-        cardCount++;
-      }
-      if (mech.howItWorks) {
-        const cloze = optimizeCloze(mech.howItWorks, mech.conceptName);
-        lines.push(`  - How it works :: ${cloze}`);
-        cardCount++;
-      }
-      if (mech.whatIfEdgeCase) {
-        lines.push(`  - What if it fails :: ${mech.whatIfEdgeCase}`);
-        cardCount++;
-      }
-      if (mech.boundaryContrast) {
-        lines.push(`  - vs ${mech.boundaryContrast.confusableLookalike} :: ${mech.boundaryContrast.distinguishingRule}`);
-        cardCount++;
-      }
-    });
-    lines.push('');
-  }
-
-  // Practice Drills as Q/A flashcards
-  const drills = report.practiceQuestions || [];
-  if (drills.length > 0) {
-    lines.push('### ⚡ Practice Drills');
-    drills.forEach((d) => {
-      lines.push(`- ${d.question} :: ${d.answer}`);
-      cardCount++;
-      if (d.whyCorrect) {
-        lines.push(`  - Why :: ${d.whyCorrect}`);
-        cardCount++;
-      }
-      if (d.distractors && d.distractors.length > 0) {
-        lines.push(`  - Traps :: ${d.distractors.join(' / ')}`);
-        cardCount++;
-      }
-    });
-    lines.push('');
-  }
-
-  // Worked Examples as step flashcard chains
-  const examples = report.workedExamples || [];
-  if (examples.length > 0) {
-    lines.push('### 🧮 Worked Examples');
-    examples.forEach((ex) => {
-      lines.push(`- ${ex.title || 'Worked example'} :: ${ex.problem}`);
-      cardCount++;
-      (ex.steps || []).forEach((step, sIdx) => {
-        lines.push(`  - Step ${sIdx + 1} :: ${step}`);
-        cardCount++;
+    } else if (question) {
+      pushCard(ctx, facts, question, `${fact.factStatement}${tag}`, 'forward', {
+        reason: 'question front',
       });
-      if (ex.takeaway) {
-        lines.push(`  - Takeaway :: ${ex.takeaway}`);
-        cardCount++;
-      }
-    });
-    lines.push('');
+    } else {
+      // No front to ask for: the statement is content, and inventing a front
+      // from it is how the unanswerable "…(Constant) → name the label" card
+      // used to get made. It rides along as a note instead.
+      pushNote(ctx, facts, `${fact.factStatement}${tag}`);
+    }
+
+    // Only when it did not already become a cloze hint above, and only when
+    // this fact produced a card for the hook to hang on.
+    if (hook && !clozeDeletion) {
+      if (facts.cards.length > cardsBefore) pushDetail(ctx, facts, 'Memory hook', hook);
+      else pushNote(ctx, facts, `Memory hook: ${hook}`, '  ');
+    }
   }
 
-  const markdown = lines.join('\n');
+  // Conceptual mechanisms: 4-quadrant cards. Only the headline is a reverse
+  // card worth having — `whatIsIt` genuinely identifies the concept, so
+  // "given this definition, name the concept" is a real retrieval. The three
+  // labelled quadrants under it are not: they become Extra Card Detail, which
+  // is why one concept costs one card instead of five.
+  const mechs = newSection('mechanisms', '🧠 4-Quadrant Mechanisms', 'Mechanisms');
+  for (const mech of report.conceptualMechanisms || []) {
+    mechs.activeSource = sourceIdOfItem(mech.id);
+    pushCard(ctx, mechs, mech.conceptName, mech.whatIsIt, twoWay);
+    conceptsCount++;
+    pushExtra(ctx, mechs, 'Why it matters', mech.whyItMatters, 'labelled prompt');
+    if (mech.howItWorks) {
+      // As detail this quadrant is reveal-only, so clozing it would manufacture
+      // a test RemNote never asks — it ships as the prose it is. As a card, the
+      // cloze is exactly what makes the mechanism askable.
+      pushExtra(
+        ctx,
+        mechs,
+        'How it works',
+        ctx.explanationsAsDetail ? mech.howItWorks : optimizeCloze(mech.howItWorks, mech.conceptName),
+        'labelled prompt'
+      );
+    }
+    pushExtra(ctx, mechs, 'What if it fails', mech.whatIfEdgeCase, 'labelled prompt');
+    if (mech.boundaryContrast) {
+      // A contrast row: the front names the lookalike, so the reverse would ask
+      // "given the distinguishing rule, name the thing it distinguishes".
+      pushExtra(
+        ctx,
+        mechs,
+        `vs ${mech.boundaryContrast.confusableLookalike}`,
+        mech.boundaryContrast.distinguishingRule,
+        'contrast row'
+      );
+    }
+  }
+
+  // Practice drills: short questions, forward-only by construction. "Why" and
+  // "Traps" are exactly what Extra Card Detail exists for — a misconception
+  // worth seeing after the answer, not a card of its own.
+  const drills = newSection('drills', '⚡ Practice Drills', 'Practice Drills');
+  for (const d of report.practiceQuestions || []) {
+    drills.activeSource = sourceIdOfItem(d.id);
+    pushCard(ctx, drills, d.question, d.answer, 'forward', { reason: 'question front' });
+    pushExtra(ctx, drills, 'Why', d.whyCorrect || '', 'labelled prompt');
+    if (d.distractors && d.distractors.length > 0) {
+      pushExtra(ctx, drills, 'Traps', d.distractors.join(' / '), 'labelled prompt');
+    }
+  }
+
+  // Worked examples: one multi-line card per example. The chain of steps is one
+  // answer with several parts, not five cards that each ask for a fragment.
+  const examples = newSection('examples', '🧮 Worked Examples', 'Worked Examples');
+  for (const ex of report.workedExamples || []) {
+    examples.activeSource = sourceIdOfItem(ex.id);
+    const front = [ex.title, ex.problem].filter(Boolean).join(' — ') || 'Worked example';
+    const items = [...(ex.steps || [])];
+    if (ex.takeaway) items.push(`Takeaway: ${ex.takeaway}`);
+    pushMultiPart(ctx, examples, front, items, {
+      kind: 'multi-line',
+      reason: 'a step chain is one answer with several parts',
+    });
+  }
+
+  const assembled = assemblePayload(ctx, [facts, mechs, drills, examples]);
   return {
-    markdown,
-    cardCount,
+    ...assembled,
     factsCount,
     conceptsCount,
-    hierarchicalDeck: markdown,
+    hierarchicalDeck: assembled.markdown,
     parentAnchor,
   };
 }
@@ -286,16 +878,23 @@ export function compressSemantically(raw: string): string {
 }
 
 /**
- * Converts a complete SavedSchema or active activities into strict RemNote hierarchical markdown
+ * Converts a completed SavedSchema or active activities into strict RemNote
+ * hierarchical markdown.
  * Hierarchy rules:
  * - Parent System Anchor (Feature 86: Contextual Anchoring)
  *   - Document / Title: [[Parent System]] > [[Topic]]
- *     - Concept Name :: [Feynman Explanation / Definition with {{Cloze}}] (Feature 83: Feynman-to-Cloze)
- *       - Child: What :: [What]
- *       - Child: Why :: [Why]
- *       - Child: How (Mechanism) :: [How with {{Cloze}}]
- *       - Child: What If (Edge Case) :: [What If]
- *       - Child: Boundary Test :: [Versus trap]
+ *     - Concept Name (two-way) :: [Feynman Explanation / Definition with {{Cloze}}] (Feature 83)
+ *       - Child: What >> [What]
+ *       - Child: Why >> [Why]
+ *       - Child: How (Mechanism) >> [How, with {{Cloze}}]
+ *       - Child: What If (Edge Case) >> [What If]
+ *       - Child: Boundary Test >> [Versus trap]
+ *
+ * The three quadrant prompts are questions, so they are forward-only: asking
+ * "given 'S4 swings outward', which quadrant prompt is that?" is not a card
+ * anybody can answer. They stay cards here (unlike the forge's AI-written
+ * quadrants, which ride along as Extra Card Detail) because these answers are
+ * the learner's own writing — the thing the deck exists to test.
  */
 export function generateRemnoteHierarchy(
   schema: Partial<SavedSchema>,
@@ -304,112 +903,123 @@ export function generateRemnoteHierarchy(
   const topic = schema.topicSummary || 'DeepEncode Cognitive Schema';
   const parentAnchor = options?.parentAnchor || inferParentSystemAnchor(topic);
   const preferFeynman = options?.preferFeynmanCloze !== false;
-  
+  const ctx = createContext(options, parentAnchor, topic);
+  const twoWay: RemnoteCardDirection = ctx.twoWay ? 'two-way' : 'forward';
+
   const feynmanClozings = generateFeynmanClozes(schema);
-  const lines: string[] = [];
-
-  // Feature 86: Contextual Anchoring (Parent-Child Enforcement)
-  lines.push(`# 🌐 ${parentAnchor}`);
-  lines.push(`## 📁 DeepEncoded: ${topic}`);
-  lines.push(`- **Parent System Anchor** :: [[${parentAnchor}]]`);
-  lines.push(`- **Learning Mode** :: ${schema.mode === 'memorization' ? 'Taxonomic Memorization' : 'First-Principles Conceptual'}`);
-  lines.push(`- **Feynman Cloze Pipeline** :: ${preferFeynman ? 'Active (User Vocabulary Clozing)' : 'Standard Academic'}`);
-  lines.push(`- **Mastery XP** :: ${schema.xpEarned || 150} XP`);
-  lines.push(`- **Encoded Date** :: ${new Date(schema.timestamp || Date.now()).toLocaleDateString()}`);
-  lines.push('');
-
-  let cardCount = 0;
   let factsCount = 0;
   let conceptsCount = 0;
 
-  // Render Research Contexts if present
-  if (schema.researchContexts && schema.researchContexts.length > 0) {
-    lines.push(`### 🔍 Foundational Deep Research Prerequisites`);
-    for (const ctx of schema.researchContexts) {
-      lines.push(`- ${ctx.conceptAdded} :: ${compressSemantically(ctx.explanation)}`);
-      lines.push(`  - Prerequisite Gap Detected :: {{${ctx.detectedGap}}}`);
-      if (ctx.sourceTitle) {
-        lines.push(`  - Authoritative Reference :: ${ctx.sourceTitle}`);
-      }
-      cardCount += 2;
+  // Foundational deep-research prerequisites. `conceptAdded` is a NAME, so the
+  // reverse card here is real: given the explanation, name the concept.
+  const prereqs = newSection('prerequisites', '🔍 Foundational Deep Research Prerequisites', 'Prerequisites');
+  for (const rc of schema.researchContexts || []) {
+    prereqs.activeSource = sourceIdOfItem(rc.id);
+    pushCard(ctx, prereqs, rc.conceptAdded, compressSemantically(rc.explanation), twoWay);
+    if (rc.sourceTitle) {
+      // A citation is the textbook case for Extra Card Detail: it belongs on the
+      // card, and nobody re-answers "who wrote this".
+      pushDetail(ctx, prereqs, 'Authoritative reference', rc.sourceTitle);
     }
-    lines.push('');
-  }
-
-  // Render Activities (Stages) into Concept-Descriptor cards
-  if (schema.activities && schema.activities.length > 0) {
-    lines.push(`### 🧠 4-Quadrant Cognitive Matrix & Mechanisms`);
-
-    schema.activities.forEach((act, idx) => {
-      const resp = schema.userResponses?.[act.id];
-      const stageName = act.title || `Stage ${idx + 1}`;
-      
-      // Feature 83: The Feynman-to-Cloze Pipeline - Prioritize student's own vocabulary
-      const userWhat = resp?.field1?.trim() || '';
-      const userWhy = resp?.field2?.trim() || '';
-      const userHow = resp?.field3?.trim() || '';
-      
-      const primaryExplanation = userWhat || act.scaffold.exampleAnswer || act.contextSnippet || act.cognitiveGoal;
-
-      lines.push(`- ${act.stageNumber || idx + 1}. ${stageName} :: ${compressSemantically(act.cognitiveGoal)}`);
-      
-      // Quadrant 1: What (Feynman Cloze)
-      if (userWhat) {
-        const clozeF1 = optimizeCloze(compressSemantically(userWhat), act.keywords?.[0]);
-        lines.push(`  - What is it? (Personal Feynman) :: ${clozeF1}`);
-        cardCount++;
-        conceptsCount++;
-      } else if (act.scaffold.exampleAnswer || act.contextSnippet) {
-        const fallback = act.scaffold.exampleAnswer || act.contextSnippet;
-        const clozeF1 = optimizeCloze(compressSemantically(fallback), act.keywords?.[0]);
-        lines.push(`  - What is it? (Definition) :: ${clozeF1}`);
-        cardCount++;
-        conceptsCount++;
-      }
-
-      // Quadrant 2: Why
-      if (userWhy) {
-        const clozeF2 = optimizeCloze(compressSemantically(userWhy), act.keywords?.[1]);
-        lines.push(`  - Why does it matter? (Significance) :: ${clozeF2}`);
-        cardCount++;
-      } else {
-        lines.push(`  - Why does it matter? (Significance) :: {{Crucial step for system operation and preventing collapse}}`);
-        cardCount++;
-      }
-
-      // Quadrant 3: How (Mechanism with Feynman Cloze)
-      if (userHow) {
-        const clozeF3 = optimizeCloze(compressSemantically(userHow), act.keywords?.[2]);
-        lines.push(`  - How does it work? (Mechanism) :: ${clozeF3}`);
-        cardCount++;
-      } else if (act.prompt) {
-        const clozeF3 = optimizeCloze(compressSemantically(act.prompt), act.keywords?.[2]);
-        lines.push(`  - How does it work? (Mechanism) :: ${clozeF3}`);
-        cardCount++;
-      }
-
-      // Quadrant 4: What If / Counterfactual Edge Case
-      lines.push(`  - What If it is removed or fails? (Edge Case) :: If {{${act.keywords?.[0] || 'the core mechanism'}}} is absent, the system fails to maintain equilibrium.`);
-      cardCount++;
-
-      // Keywords Cloze Deck
-      if (act.keywords && act.keywords.length > 0) {
-        lines.push(`  - Core Semantic Triggers :: ${act.keywords.map(k => `{{${k}}}`).join(', ')}`);
-        cardCount++;
-        factsCount++;
-      }
-
-      lines.push('');
+    // A gap you must close is exactly what SHOULD be tested, so it stays a card.
+    pushCard(ctx, prereqs, 'Prerequisite gap', `{{${rc.detectedGap}}}`, 'forward', {
+      indent: '  ',
+      reason: 'a gap to close is worth testing',
     });
   }
 
-  const markdown = lines.join('\n');
+  // Activities (stages) as 4-quadrant cards.
+  const stages = newSection('stages', '🧠 4-Quadrant Cognitive Matrix & Mechanisms', 'Stages');
+  (schema.activities || []).forEach((act, idx) => {
+    stages.activeSource = sourceIdOfItem(act.id);
+    const resp = schema.userResponses?.[act.id];
+    const stageName = act.title || `Stage ${idx + 1}`;
+    const userWhat = resp?.field1?.trim() || '';
+    const userWhy = resp?.field2?.trim() || '';
+    const userHow = resp?.field3?.trim() || '';
+
+    // Forward-only: the front carries the ordinal ("3. Stage"), and "given the
+    // goal, name stage 3" is not a question anyone can answer.
+    pushCard(ctx, stages, `${act.stageNumber || idx + 1}. ${stageName}`, compressSemantically(act.cognitiveGoal), 'forward', {
+      reason: 'numbered step',
+    });
+
+    // Feature 83: the Feynman-to-Cloze pipeline — the learner's own vocabulary
+    // first. A `{{deletion}}` carries the card on its own; the quadrant label
+    // rides along as the prompt's context.
+    if (userWhat) {
+      pushCard(ctx, stages, 'What is it? (Personal Feynman)', optimizeCloze(compressSemantically(userWhat), act.keywords?.[0]), 'forward', {
+        indent: '  ',
+        reason: 'question front',
+      });
+      conceptsCount++;
+    } else if (act.scaffold.exampleAnswer || act.contextSnippet) {
+      const fallback = act.scaffold.exampleAnswer || act.contextSnippet;
+      pushCard(ctx, stages, 'What is it? (Definition)', optimizeCloze(compressSemantically(fallback), act.keywords?.[0]), 'forward', {
+        indent: '  ',
+        reason: 'question front',
+      });
+      conceptsCount++;
+    }
+
+    if (userWhy) {
+      pushCard(ctx, stages, 'Why does it matter? (Significance)', optimizeCloze(compressSemantically(userWhy), act.keywords?.[1]), 'forward', {
+        indent: '  ',
+        reason: 'question front',
+      });
+    } else {
+      pushCard(ctx, stages, 'Why does it matter? (Significance)', '{{Crucial step for system operation and preventing collapse}}', 'forward', {
+        indent: '  ',
+        reason: 'question front',
+      });
+    }
+
+    if (userHow) {
+      pushCard(ctx, stages, 'How does it work? (Mechanism)', optimizeCloze(compressSemantically(userHow), act.keywords?.[2]), 'forward', {
+        indent: '  ',
+        reason: 'question front',
+      });
+    } else if (act.prompt) {
+      pushCard(ctx, stages, 'How does it work? (Mechanism)', optimizeCloze(compressSemantically(act.prompt), act.keywords?.[2]), 'forward', {
+        indent: '  ',
+        reason: 'question front',
+      });
+    }
+
+    pushCard(
+      ctx,
+      stages,
+      'What If it is removed or fails? (Edge Case)',
+      `If {{${act.keywords?.[0] || 'the core mechanism'}}} is absent, the system fails to maintain equilibrium.`,
+      'forward',
+      { indent: '  ', reason: 'question front' }
+    );
+
+    if (act.keywords && act.keywords.length > 0) {
+      // A list of trigger terms is one answer with several items: a list-answer
+      // card, not five cards that each ask for one word.
+      pushMultiPart(ctx, stages, 'Core semantic triggers', act.keywords.map((k) => `${k}`), {
+        kind: 'list-answer',
+        reason: 'a list is one answer with several items',
+        indent: '  ',
+      });
+      factsCount++;
+    }
+
+    emit(ctx, stages, '');
+  });
+
+  const assembled = assemblePayload(ctx, [prereqs, stages], [
+    `**Learning Mode** ${schema.mode === 'memorization' ? 'Taxonomic Memorization' : 'First-Principles Conceptual'}`,
+    `**Feynman Cloze Pipeline** ${preferFeynman ? 'Active (User Vocabulary Clozing)' : 'Standard Academic'}`,
+    `**Mastery XP** ${schema.xpEarned || 150} XP`,
+    `**Encoded Date** ${new Date(schema.timestamp || Date.now()).toLocaleDateString()}`,
+  ]);
   return {
-    markdown,
-    cardCount,
+    ...assembled,
     factsCount,
     conceptsCount,
-    hierarchicalDeck: markdown,
+    hierarchicalDeck: assembled.markdown,
     parentAnchor,
     feynmanClozings,
   };
@@ -466,21 +1076,23 @@ export function buildRemnotePushAttempts(
   ];
 }
 
-/**
- * Pushes the hierarchical markdown through this app's server route (see
- * `app/api/remnote/route.ts`), which is the only side allowed to talk to
- * RemNote directly. The markdown copy path stays the always-available
- * fallback, because RemNote's public API is not always up.
- */
-export async function pushToRemnoteApi(
+export interface RemnotePushResult {
+  success: boolean;
+  message: string;
+  docId?: string;
+  /** Documents RemNote accepted. */
+  pushed?: number;
+  /** Documents that did not land (0 when everything did). */
+  failed?: number;
+}
+
+/** One document, through this app's server route. */
+async function postRemnoteDocument(
   apiKey: string,
   userId: string,
-  payload: RemnoteExportPayload
-): Promise<{ success: boolean; message: string; docId?: string }> {
-  if (!apiKey || !apiKey.trim()) {
-    throw new Error("RemNote API Key is required.");
-  }
-
+  title: string,
+  markdown: string
+): Promise<{ ok: boolean; message: string; docId?: string }> {
   try {
     const res = await fetch('/api/remnote', {
       method: 'POST',
@@ -488,31 +1100,97 @@ export async function pushToRemnoteApi(
       body: JSON.stringify({
         apiKey: apiKey.trim(),
         userId: (userId || '').trim(),
-        markdown: payload.markdown,
-        title: `DeepEncoded: ${payload.parentAnchor || 'Study Notes'}`,
+        markdown,
+        title,
       }),
     });
 
     const data = await res.json().catch(() => null);
     if (!res.ok || !data?.success) {
       return {
-        success: false,
+        ok: false,
         message:
           data?.message ||
-          `RemNote push failed (HTTP ${res.status}). Use "Copy RemNote Markdown" and paste it into RemNote instead.`,
+          `RemNote push failed (HTTP ${res.status}). Copy the document and paste it into RemNote instead.`,
       };
     }
 
     return {
-      success: true,
+      ok: true,
       message: data.message || 'Pushed the structured document into your RemNote knowledge base.',
       docId: data.docId,
     };
   } catch (err: any) {
     return {
-      success: false,
-      message: `Could not reach the RemNote push route: ${err?.message || 'network error'}. Use "Copy RemNote Markdown" and paste it into RemNote instead.`,
+      ok: false,
+      message: `Could not reach the RemNote push route: ${err?.message || 'network error'}. Copy the document and paste it into RemNote instead.`,
     };
   }
 }
 
+/**
+ * Pushes the hierarchical markdown through this app's server route (see
+ * `app/api/remnote/route.ts`), which is the only side allowed to talk to
+ * RemNote directly.
+ *
+ * A payload carrying `documents` is pushed as one document per section, in
+ * order, matching what the export surface offers to copy — RemNote's API
+ * creates one document per call, so a four-section deck becomes four named
+ * pages rather than one undifferentiated dump. The ladder is sequential and
+ * stops at the first refusal, and the failure text says how much landed: a
+ * half-pushed deck has to be recognisable as one, not reported as either a
+ * success or a total failure. The copy buttons stay the always-available
+ * fallback, because RemNote's public API is not always up.
+ */
+export async function pushToRemnoteApi(
+  apiKey: string,
+  userId: string,
+  payload: RemnoteExportPayload
+): Promise<RemnotePushResult> {
+  if (!apiKey || !apiKey.trim()) {
+    throw new Error("RemNote API Key is required.");
+  }
+
+  const documents =
+    payload.documents && payload.documents.length > 0
+      ? payload.documents.map((d) => ({ title: d.title, markdown: d.markdown }))
+      : [
+          {
+            title: `DeepEncoded: ${payload.parentAnchor || 'Study Notes'}`,
+            markdown: payload.markdown,
+          },
+        ];
+
+  let pushed = 0;
+  let docId: string | undefined;
+  let lastMessage = '';
+
+  for (const document of documents) {
+    const result = await postRemnoteDocument(apiKey, userId, document.title, document.markdown);
+    if (!result.ok) {
+      return {
+        success: false,
+        message:
+          pushed > 0
+            ? `Pushed ${pushed} of ${documents.length} documents, then RemNote refused "${document.title}". ${result.message}`
+            : result.message,
+        pushed,
+        failed: documents.length - pushed,
+      };
+    }
+    pushed += 1;
+    docId = result.docId ?? docId;
+    lastMessage = result.message;
+  }
+
+  return {
+    success: true,
+    message:
+      documents.length > 1
+        ? `Pushed ${documents.length} RemNote documents — one per card section.`
+        : lastMessage,
+    docId,
+    pushed,
+    failed: 0,
+  };
+}

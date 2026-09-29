@@ -7,7 +7,7 @@ import {
   FORGE_RESPONSE,
   FORGE_RETRY_RESPONSE,
 } from './helpers/fixtures';
-import { mockAiApis } from './helpers/mocks';
+import { forgePayloadForRequest, mockAiApis } from './helpers/mocks';
 
 /**
  * Flashcards Only: the path for when you do not want a workout.
@@ -81,13 +81,13 @@ async function mockAnkiConnect(page: Page, opts: { frontTexts?: string[]; offlin
   );
 }
 
-async function mockForge(page: Page, payload: unknown = FORGE_RESPONSE) {
+async function mockForge(page: Page, payload: any = FORGE_RESPONSE) {
   await mockAiApis(page);
   await page.route('**/api/forge', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(forgePayloadForRequest(payload, route.request())),
     })
   );
   await mockAnkiConnect(page, { offline: true });
@@ -112,7 +112,7 @@ async function mockForgeModes(page: Page) {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(forgePayloadForRequest(payload, route.request())),
     });
   });
   await mockAnkiConnect(page, { offline: true });
@@ -337,7 +337,7 @@ test.describe('Flashcards Only (the Forge)', () => {
     await expect(page.getByText('1,200 mOsm').first()).toBeVisible();
   });
 
-  test('the RemNote target renders the forged cards as RemNote cards', async ({ page }) => {
+  test('the RemNote target splits the deck into one copyable document per section', async ({ page }) => {
     await mockForge(page);
     await forgeDeck(page);
 
@@ -346,11 +346,102 @@ test.describe('Flashcards Only (the Forge)', () => {
     await expect(page.getByText('RemNote Hierarchical & Feynman Engine')).toBeVisible();
     await expect(page.getByText('Deconstruction: Renal Physiology')).toBeVisible();
 
-    // The cloze fact survives as a RemNote cloze card (its deletion intact).
     await page.getByRole('button', { name: /RemNote Markdown/i }).click();
-    const markdown = page.locator('textarea[readonly]');
-    await expect(markdown).toContainText('The loop of Henle reaches {{1,200 mOsm}} at the hairpin.');
-    await expect(markdown).toContainText('Countercurrent multiplication ::');
+
+    // One document per card section, each named after the topic it came from,
+    // instead of one blob the learner has to carve up by hand.
+    await expect(page.getByTestId('remnote-doc-facts')).toContainText('Renal Physiology — Declarative Facts');
+    await expect(page.getByTestId('remnote-doc-mechanisms')).toContainText('Renal Physiology — Mechanisms');
+    await expect(page.getByTestId('remnote-doc-drills')).toContainText('Renal Physiology — Practice Drills');
+    await expect(page.getByTestId('remnote-doc-examples')).toContainText('Renal Physiology — Worked Examples');
+
+    // The cloze fact survives as a RemNote cloze card (its deletion intact),
+    // with the memory hook attached as a hint on the deletion it explains
+    // instead of as a second card whose only content is the mnemonic.
+    await expect(page.getByTestId('remnote-doc-facts').locator('textarea')).toContainText(
+      'The loop of Henle reaches {{1,200 mOsm}}{({Hairpin = highest.})} at the hairpin.'
+    );
+
+    // A concept name keeps its reverse card: "given this definition, name the
+    // concept" is a real retrieval...
+    const mechanisms = page.getByTestId('remnote-doc-mechanisms').locator('textarea');
+    await expect(mechanisms).toContainText('Countercurrent multiplication ::');
+    // ...and the quadrants under it ride along as Extra Card Detail, which the
+    // card back shows and RemNote never turns into a card of its own. As cards
+    // they were five per concept, each asking for a tag back.
+    await expect(mechanisms).toContainText('Why it matters: ');
+    await expect(mechanisms).toContainText('#[[Extra Card Detail]]');
+    await expect(mechanisms).not.toContainText('Why it matters >>');
+    await expect(mechanisms).not.toContainText('Why it matters ::');
+
+    await expect(page.getByTestId('remnote-direction-summary')).toContainText('1 two-way');
+
+    // What RemNote will actually ASK, per card, with the direction it asks it
+    // in — and which fronts can only ever be asked one way.
+    await expect(page.getByTestId('remnote-card-list')).toContainText('Countercurrent multiplication');
+    await expect(page.getByTestId('remnote-front-quality')).toContainText('cards have a labelled or question front');
+    await expect(page.getByTestId('remnote-front-quality')).toContainText('one way');
+
+    // The per-card control: the deck-wide toggle cannot express one line you DO
+    // want reversed, and this is where that exception is made.
+    await page.getByTestId('remnote-direction-mechanisms-0-one').click();
+    await expect(mechanisms).toContainText('Countercurrent multiplication >>');
+    await expect(page.getByTestId('remnote-direction-summary')).toContainText('0 two-way');
+    // Clicking the same direction again restores the renderer's own decision.
+    await page.getByTestId('remnote-direction-mechanisms-0-one').click();
+    await expect(mechanisms).toContainText('Countercurrent multiplication ::');
+
+    // Explanations as cards again, for anyone who wants the old shape.
+    await page.getByTestId('remnote-explanations-detail').uncheck();
+    await expect(mechanisms).toContainText('Why it matters >>');
+    await expect(mechanisms).not.toContainText('#[[Extra Card Detail]]');
+    await page.getByTestId('remnote-explanations-detail').check();
+    await expect(mechanisms).toContainText('#[[Extra Card Detail]]');
+
+    // One click copies one document — the whole point of the split.
+    await page.getByTestId('remnote-copy-facts').click();
+    await expect(page.getByTestId('remnote-copy-facts')).toContainText('Copied');
+
+    // The toggle is the escape hatch: turn every card forward-only.
+    await page.getByTestId('remnote-two-way').uncheck();
+    await expect(page.getByTestId('remnote-direction-summary')).toContainText('0 two-way');
+    await expect(mechanisms).toContainText('Countercurrent multiplication >>');
+  });
+
+  test('a source that was already forged can be skipped before it costs a call', async ({ page }) => {
+    await mockForge(page);
+    await openForge(page);
+    await addTextSource(page, 'Loop of Henle countercurrent multiplication.');
+    await page.getByTestId('forge-run').click();
+    await expect(page.getByTestId('forge-result')).toBeVisible();
+
+    // Next Monday: the same lecture ingests again. The forge remembers which
+    // sources built a deck, so the setup says so BEFORE the model call is spent
+    // instead of re-cutting it and diffing the repeats back out afterwards.
+    await page.getByRole('button', { name: /close forge/i }).click();
+    await page.getByRole('button', { name: /flashcards only/i }).click();
+
+    await expect(page.getByTestId('forge-known-sources')).toBeVisible();
+    await expect(page.getByTestId('forge-known-sources')).toContainText('1 of 1 source already cut into a deck');
+    // The row says where it landed, so "skip" is an informed click.
+    const forged = page.getByTitle(/Already forged into "Renal Physiology"/);
+    await expect(forged).toBeVisible();
+    await expect(forged).toContainText('FORGED');
+
+    // Nothing is skipped silently: the offer is one click, and it is counted.
+    await expect(page.getByTestId('forge-run')).toContainText('FORGE 1 SOURCE');
+    await page.getByTestId('forge-skip-forged').click();
+    await expect(page.getByTestId('forge-known-sources')).toContainText('1 skipped, 0 will run');
+    await expect(page.getByTitle('Include this source in the next pass')).toContainText('[ USE ]');
+    // Nothing left to pay for, so there is nothing to run — and the pre-flight
+    // says so in calls rather than sources.
+    await expect(page.getByTestId('forge-run')).toBeDisabled();
+    await expect(page.getByText(/0 sources · ~0 model calls · 1 skipped/)).toBeVisible();
+
+    // And it is reversible: a source you DO want re-cut is one click away.
+    await page.getByTestId('forge-skip-forged').click();
+    await expect(page.getByTestId('forge-run')).toBeEnabled();
+    await expect(page.getByTestId('forge-run')).toContainText('FORGE 1 SOURCE');
   });
 
   test('target BOTH stacks RemNote behind Anki instead of opening two modals', async ({ page }) => {
@@ -399,6 +490,13 @@ test.describe('Flashcards Only (the Forge)', () => {
         gaps: ['examples'],
         note: '0 cards for examples — "generate more" will target that gap.',
         silentSources: ['youtube:renal'],
+        gapOwners: [
+          {
+            section: 'examples',
+            silentIn: ['Slides', 'youtube:renal'],
+            note: 'no source produced examples (Slides, youtube:renal) — ask again only if the material really contains it',
+          },
+        ],
       },
     });
     await forgeDeck(page);
@@ -406,6 +504,9 @@ test.describe('Flashcards Only (the Forge)', () => {
     const coverage = page.getByTestId('forge-coverage');
     await expect(coverage).toBeVisible();
     await expect(coverage).toContainText('[ ! ] 0 cards for examples');
+    // "0 cards for examples" is a fact about the deck; naming the sources that
+    // came back without any is the part you can act on.
+    await expect(page.getByTestId('forge-gap-owners')).toContainText('no source produced examples (Slides, youtube:renal)');
 
     // The next "more" batch asks only for the missing section, rather than
     // re-earning the sections that already arrived.

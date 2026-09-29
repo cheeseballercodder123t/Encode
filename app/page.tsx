@@ -33,6 +33,7 @@ import { AnkiExportModal } from '@/components/AnkiExportModal';
 import { FlashcardForgeModal, type ForgeExportTarget } from '@/components/FlashcardForgeModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
 import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
+import { generateRemnoteHierarchy } from '@/lib/remnote';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
@@ -1375,13 +1376,11 @@ export default function DeepEncodeApp() {
     let content = '';
 
     if (format === 'remnote') {
-      content = `# ${topicSummary}\n\n`;
-      activities.forEach(act => {
-        const resp = userResponses[act.id] || { field1: '', field2: '', field3: '' };
-        content += `${act.title} :: ${resp.field1}\n`;
-        content += `  - Elaborative Mechanism :: ${resp.field2}\n`;
-        if (resp.field3) content += `  - Connection Anchor :: ${resp.field3}\n`;
-      });
+      // One renderer for every RemNote surface: this inline builder used `::`
+      // on every line, which turned each labelled descriptor into a reverse
+      // card RemNote could only ask back as "given 'S4 swings outward', name
+      // the label". RemNote export logic belongs in lib/remnote.ts.
+      content = generateRemnoteHierarchy({ topicSummary, activities, userResponses }).markdown;
     } else if (format === 'anki') {
       content = `# Anki Cloze Cards: ${topicSummary}\n\n`;
       activities.forEach((act, idx) => {

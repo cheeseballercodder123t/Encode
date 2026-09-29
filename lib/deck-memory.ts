@@ -17,6 +17,17 @@ import { extractAnkiCardsFromSchema } from '@/lib/anki-exporter';
 // a card whose front was edited counts as new, and forgetting the topic is one
 // button away. Local-only, like every other library in this app.
 
+export interface DeckMemorySource {
+  /** Fingerprint of the source itself: its URL, file name, or text head. */
+  key: string;
+  /** What the learner called it ("Lecture 4 slides"). */
+  label: string;
+  /** Cards it contributed the last time it was forged. */
+  cards: number;
+  /** When it was last forged. */
+  at: number;
+}
+
 export interface DeckMemoryRecord {
   topic: string;
   /** Fingerprints of the card fronts already handed to an export surface. */
@@ -26,12 +37,22 @@ export interface DeckMemoryRecord {
   exports: number;
   /** Last surface it went to, for the panel's one-line receipt. */
   lastSurface?: string;
+  /**
+   * Which sources this topic was built from.
+   *
+   * The card memory answers "have I shipped this card"; this answers the other
+   * question a repeat ingest needs before it spends anything: "have I already
+   * cut this lecture". Fingerprints of the sources, not their text — a source's
+   * key is its URL, its file name or the head of its pasted notes.
+   */
+  sources?: DeckMemorySource[];
 }
 
 const STORAGE_KEY = 'encode.deck-memory.v1';
 const MAX_TOPICS = 60;
 const MAX_KEYS_PER_TOPIC = 600;
 const MAX_KEY_LENGTH = 160;
+const MAX_SOURCES_PER_TOPIC = 60;
 
 type DeckMemoryStore = Record<string, DeckMemoryRecord>;
 
@@ -52,6 +73,7 @@ function readStore(): DeckMemoryStore {
         updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
         exports: typeof record.exports === 'number' ? record.exports : 1,
         lastSurface: typeof record.lastSurface === 'string' ? record.lastSurface : undefined,
+        sources: readSourceLedger(record.sources),
       };
     }
     return out;
@@ -87,6 +109,45 @@ export function cardKey(text: string): string {
 
 export function memoryKeyForTopic(topic: string): string {
   return cardKey(topic) || 'forged-deck';
+}
+
+function readSourceLedger(raw: unknown): DeckMemorySource[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const ledger: DeckMemorySource[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as DeckMemorySource;
+    if (typeof record.key !== 'string' || !record.key) continue;
+    ledger.push({
+      key: record.key,
+      label: typeof record.label === 'string' && record.label ? record.label : record.key,
+      cards: typeof record.cards === 'number' ? record.cards : 0,
+      at: typeof record.at === 'number' ? record.at : 0,
+    });
+  }
+  return ledger.length > 0 ? ledger : undefined;
+}
+
+/**
+ * Fingerprint for a forge source: what makes two runs the same ingest.
+ *
+ * A URL is its own identity, a file is its name, and pasted notes are their
+ * opening words (a source edited halfway down is still the same source). Ids
+ * are deliberately not used: they are minted per session, so the same lecture
+ * would look new every time it was added.
+ */
+export function deckSourceKey(source: {
+  kind?: string;
+  url?: string;
+  label?: string;
+  notes?: string;
+}): string {
+  const url = (source?.url || '').trim();
+  if (url) return `url:${cardKey(url)}`;
+  const label = (source?.label || '').trim();
+  const notes = (source?.notes || '').trim();
+  if (notes) return `text:${(source?.kind || 'text')}:${cardKey(notes.slice(0, 400))}`;
+  return `label:${cardKey(label)}`;
 }
 
 /**
@@ -154,6 +215,67 @@ export function loadDeckMemory(): DeckMemoryStore {
 }
 
 /**
+ * Every source this app has already cut into cards, keyed by its fingerprint
+ * and labelled with the topic it landed in.
+ *
+ * Scanned ACROSS topics on purpose: at setup time the forge does not know what
+ * the deck will be called yet (the topic comes out of the merge), so "have I
+ * already forged this lecture?" can only be answered by looking everywhere. The
+ * freshest entry per key wins.
+ */
+export function forgedSourceLedger(): Map<string, DeckMemorySource & { topic: string }> {
+  const ledger = new Map<string, DeckMemorySource & { topic: string }>();
+  for (const record of Object.values(readStore())) {
+    for (const source of record.sources || []) {
+      const existing = ledger.get(source.key);
+      if (existing && existing.at >= source.at) continue;
+      ledger.set(source.key, { ...source, topic: record.topic });
+    }
+  }
+  return ledger;
+}
+
+/**
+ * Records which sources built a topic's deck. Called after a forge lands, so
+ * the next run can say "you already cut this lecture" before spending a model
+ * call on it. Labels are refreshed, counts are the last run's, and the ledger
+ * is capped so a long-lived topic cannot grow without bound.
+ */
+export function recordDeckSources(args: {
+  topic: string;
+  sources: { key: string; label?: string; cards?: number }[];
+  timestamp?: number;
+}): DeckMemorySource[] {
+  const topic = (args.topic || '').trim();
+  const incoming = (args.sources || []).filter((s) => s && s.key);
+  if (!topic || incoming.length === 0) return [];
+
+  const store = readStore();
+  const id = memoryKeyForTopic(topic);
+  const existing = store[id] || {
+    topic,
+    keys: [],
+    updatedAt: 0,
+    exports: 0,
+  };
+  const at = args.timestamp ?? Date.now();
+  const byKey = new Map((existing.sources || []).map((s) => [s.key, s]));
+  for (const source of incoming) {
+    const prior = byKey.get(source.key);
+    byKey.set(source.key, {
+      key: source.key,
+      label: (source.label || '').trim() || prior?.label || source.key,
+      cards: typeof source.cards === 'number' ? source.cards : prior?.cards || 0,
+      at,
+    });
+  }
+  const sources = [...byKey.values()].sort((a, b) => b.at - a.at).slice(0, MAX_SOURCES_PER_TOPIC);
+  store[id] = { ...existing, topic: existing.topic || topic, sources };
+  writeStore(store);
+  return sources;
+}
+
+/**
  * Replaces the whole local store. Used by the cloud mirror, which merges the
  * remote copy into the local one and then writes the result back — the merge
  * itself is {@link mergeDeckMemoryStores}, so it stays unit-testable without
@@ -196,6 +318,10 @@ export function mergeDeckMemoryStores(local: DeckMemoryStore, remote: DeckMemory
       updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0),
       exports: Math.max(a.exports || 0, b.exports || 0),
       lastSurface: newer.lastSurface,
+      // The source ledger unions like the fingers: forging this topic on a
+      // second device is still material already cut, and dropping it would make
+      // that device re-offer (and re-pay for) sources it has already seen.
+      sources: mergeSourceLedgers(a.sources, b.sources),
     };
   }
 
@@ -212,8 +338,31 @@ export function deckMemoryStoresEqual(a: DeckMemoryStore, b: DeckMemoryStore): b
     if (left.keys.length !== right.keys.length) return false;
     if (left.keys.some((key, index) => right.keys[index] !== key)) return false;
     if ((left.exports || 0) !== (right.exports || 0)) return false;
+    if (!sourceLedgersEqual(left.sources, right.sources)) return false;
   }
   return true;
+}
+
+/** Newest entry per source key, newest first. */
+function mergeSourceLedgers(
+  a: DeckMemorySource[] | undefined,
+  b: DeckMemorySource[] | undefined
+): DeckMemorySource[] | undefined {
+  const byKey = new Map<string, DeckMemorySource>();
+  for (const source of [...(b || []), ...(a || [])]) {
+    const existing = byKey.get(source.key);
+    if (existing && existing.at > source.at) continue;
+    byKey.set(source.key, source);
+  }
+  if (byKey.size === 0) return undefined;
+  return [...byKey.values()].sort((x, y) => y.at - x.at).slice(0, MAX_SOURCES_PER_TOPIC);
+}
+
+function sourceLedgersEqual(a: DeckMemorySource[] | undefined, b: DeckMemorySource[] | undefined): boolean {
+  const left = a || [];
+  const right = b || [];
+  if (left.length !== right.length) return false;
+  return left.every((source, index) => source.key === right[index]?.key && source.at === right[index]?.at);
 }
 
 /**
