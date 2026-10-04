@@ -48,6 +48,7 @@ import {
   saveForgeRecipe,
 } from '@/lib/forge-recipes';
 import { useModalA11y } from '@/hooks/useModalA11y';
+import { detectSlideDeck, parseSlideDeck } from '@/lib/services/slide-deck-parser';
 
 export type { ForgeExportTarget };
 
@@ -167,6 +168,7 @@ export function FlashcardForgeModal({
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
   const [diff, setDiff] = useState<DeckDiff | null>(null);
   const [skipKnown, setSkipKnown] = useState(false);
+  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
   /** What the real Anki deck said, when AnkiConnect answered. */
   const [ankiRead, setAnkiRead] = useState<AnkiDeckRead | null>(null);
   const [checkingAnki, setCheckingAnki] = useState(false);
@@ -226,15 +228,28 @@ export function FlashcardForgeModal({
   // Auto-seed source draft from initialNotes (e.g. from Companion Extension or Launchpad)
   React.useEffect(() => {
     if (isOpen && initialNotes && initialNotes.trim() && sources.length === 0) {
-      const text = initialNotes.trim();
-      setSources([
-        {
-          id: idFor('initial_notes'),
-          kind: 'text',
-          label: `${text.slice(0, 42).replace(/\s+/g, ' ')}${text.length > 42 ? '…' : ''}`,
-          notes: text,
-        },
-      ]);
+      const parsed = parseSlideDeck(initialNotes);
+      if (parsed.isSlideDeck && parsed.slides.length >= 2) {
+        const slidesToAdd = parsed.slides.slice(0, MAX_SOURCES);
+        setSources(
+          slidesToAdd.map((s) => ({
+            id: idFor(`slide_${s.slideNumber}`),
+            kind: 'text',
+            label: s.title,
+            notes: s.combinedText,
+          }))
+        );
+      } else {
+        const text = initialNotes.trim();
+        setSources([
+          {
+            id: idFor('initial_notes'),
+            kind: 'text',
+            label: `${text.slice(0, 42).replace(/\s+/g, ' ')}${text.length > 42 ? '…' : ''}`,
+            notes: text,
+          },
+        ]);
+      }
     }
   }, [isOpen, initialNotes]);
 
@@ -344,6 +359,8 @@ export function FlashcardForgeModal({
 
   if (!isOpen) return null;
 
+  const draftSlideDeck = useMemo(() => parseSlideDeck(draftText), [draftText]);
+
   const addText = () => {
     const text = draftText.trim();
     if (!text) return;
@@ -356,6 +373,24 @@ export function FlashcardForgeModal({
         label: `${text.slice(0, 42).replace(/\s+/g, ' ')}${text.length > 42 ? '…' : ''}`,
         notes: text,
       },
+    ]);
+    setDraftText('');
+  };
+
+  const addSegmentedSlides = () => {
+    if (!draftSlideDeck.isSlideDeck || draftSlideDeck.slides.length === 0) return;
+    playSound('success');
+    const remaining = MAX_SOURCES - sources.length;
+    const toAdd = draftSlideDeck.slides.slice(0, remaining);
+
+    setSources((prev) => [
+      ...prev,
+      ...toAdd.map((s) => ({
+        id: idFor(`slide_${s.slideNumber}`),
+        kind: 'text' as const,
+        label: s.title,
+        notes: s.combinedText,
+      })),
     ]);
     setDraftText('');
   };
@@ -1041,7 +1076,17 @@ export function FlashcardForgeModal({
       }`}
     >
       <span className="text-[10px] font-mono font-bold text-amber uppercase tracking-wider shrink-0">
-        [ {source.kind === 'youtube' ? 'YT' : source.kind === 'file' ? (source.media ? 'AUDIO' : 'FILE') : 'TEXT'} ]
+        [{' '}
+        {source.kind === 'youtube'
+          ? 'YT'
+          : source.kind === 'file'
+            ? source.media
+              ? 'AUDIO'
+              : 'FILE'
+            : source.id.includes('slide_')
+              ? 'SLIDE'
+              : 'TEXT'}{' '}
+        ]
       </span>
       <span className={`min-w-0 flex-1 text-[11px] font-mono truncate ${skipped ? 'text-solder line-through' : 'text-bone'}`}>
         {source.label}
@@ -1293,14 +1338,27 @@ export function FlashcardForgeModal({
                     placeholder="Paste a topic's notes, a lecture summary, or a list of facts…"
                     className="w-full p-3 bg-deck border border-edge text-xs text-bone placeholder-solder focus:outline-none focus:border-amber resize-none font-mono leading-relaxed"
                   />
-                  <button
-                    type="button"
-                    onClick={addText}
-                    disabled={!draftText.trim() || sources.length >= MAX_SOURCES}
-                    className="px-3 py-1.5 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
-                  >
-                    [ + ADD TEXT SOURCE ]
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={addText}
+                      disabled={!draftText.trim() || sources.length >= MAX_SOURCES}
+                      className="px-3 py-1.5 bg-chassis border border-edge text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40"
+                    >
+                      [ + ADD TEXT SOURCE ]
+                    </button>
+                    {draftSlideDeck.isSlideDeck && (
+                      <button
+                        type="button"
+                        onClick={addSegmentedSlides}
+                        disabled={sources.length >= MAX_SOURCES}
+                        className="px-3 py-1.5 bg-amber border border-amber text-chassis text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer shadow-gilt hover:brightness-110"
+                        title="Splits this presentation into individual slide sources for high-resolution card generation"
+                      >
+                        [ ⚡ SPLIT INTO {draftSlideDeck.slides.length} SLIDE SOURCES ]
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -1742,6 +1800,23 @@ export function FlashcardForgeModal({
                       [ REMNOTE EXPORT ]
                     </button>
                   </div>
+                  <button
+                    type="button"
+                    data-testid="forge-copy-remnote-direct"
+                    onClick={async () => {
+                      if (!merged) return;
+                      const text = generateSegregationRemnote(merged);
+                      await navigator.clipboard.writeText(text);
+                      playSound('success');
+                      setCopiedMarkdown(true);
+                      setTimeout(() => setCopiedMarkdown(false), 2500);
+                    }}
+                    disabled={emptyDeck || deckBusy !== ''}
+                    className="w-full px-3 py-2 bg-chassis border border-edge hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40 transition-colors"
+                    title="Copy hierarchical RemNote markdown directly to clipboard"
+                  >
+                    {copiedMarkdown ? '[ ✅ REMNOTE MARKDOWN COPIED TO CLIPBOARD ]' : '[ 📋 1-CLICK COPY REMNOTE / NOTION MARKDOWN ]'}
+                  </button>
                 </div>
                 <p className="text-[10px] font-mono text-solder">
                   Both surfaces ship this same deck: the Wozniak pass runs before either, and duplicates are counted

@@ -6,6 +6,7 @@ import { FileUploader } from './FileUploader';
 import { FluffGuillotineModal } from './FluffGuillotineModal';
 import { UploadedFileAsset, EncodingMode, EncodingGear } from '@/lib/types';
 import { playSound } from '@/lib/audio';
+import { parseSlideDeck } from '@/lib/services/slide-deck-parser';
 
 const MEMORIZATION_TRIGGERS = [
   'periodic table', 'elements', 'amino acid', 'cranial nerve', 'bones', 
@@ -237,10 +238,9 @@ export function ZenLaunchpad({
     return MEMORIZATION_TRIGGERS.some(kw => lower.includes(kw));
   }, [notes, mode]);
 
-  // Smart Slide Deck Auto-Detection
-  const detectedSlides = useMemo(() => {
-    if (!notes.trim()) return false;
-    return /slide\s+\d+|---\s*slide content\s*---|presentation:\s*|speaker notes:/i.test(notes);
+  // Smart Slide Deck Auto-Detection & Segmentation
+  const parsedSlideDeck = useMemo(() => {
+    return parseSlideDeck(notes);
   }, [notes]);
 
   const moduleState: Record<(typeof MODULES)[number]['key'], { on: boolean; toggle: () => void }> = {
@@ -365,7 +365,7 @@ export function ZenLaunchpad({
 
             {/* Slide Deck auto-detection: provides 1-click Express Forge shortcut */}
             <AnimatePresence>
-              {detectedSlides && (
+              {parsedSlideDeck.isSlideDeck && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -374,8 +374,11 @@ export function ZenLaunchpad({
                 >
                   <div className="flex flex-col gap-2.5 border border-amber-500/40 bg-amber-950/20 p-3.5 sm:flex-row sm:items-center sm:justify-between rounded-lg">
                     <p className="text-[11px] leading-relaxed text-slate-ink">
-                      <span className="text-amber-300 font-semibold">⚡ Lecture Slides Detected.</span>{' '}
-                      Pasted from Google Slides or Gemini. You can forge high-yield Anki cards directly or start an interactive workout.
+                      <span className="text-amber-300 font-semibold">
+                        ⚡ Lecture Deck Detected ({parsedSlideDeck.slides.length} slides
+                        {parsedSlideDeck.presentationTitle ? ` · ${parsedSlideDeck.presentationTitle}` : ''}).
+                      </span>{' '}
+                      Pasted from Google Slides, PowerPoint, or Gemini. DeepEncode segments every slide to forge atomic cards without quality loss.
                     </p>
                     <button
                       type="button"
@@ -385,7 +388,7 @@ export function ZenLaunchpad({
                       }}
                       className="self-start sm:self-auto shrink-0 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-inset font-bold text-[11px] rounded-full transition-colors duration-150 cursor-pointer whitespace-nowrap shadow-gilt"
                     >
-                      1-Click Anki Forge
+                      1-Click Anki Forge ({parsedSlideDeck.slides.length} Slides)
                     </button>
                   </div>
                 </motion.div>
