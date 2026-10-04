@@ -278,8 +278,21 @@ export async function confirmReadiness(_page: Page) {
 /** Fill notes on the launchpad and start generation (no pre-session gate). */
 export async function startEncodeFromNotes(page: Page, notes: string) {
   await page.goto('/');
-  await page.getByPlaceholder(/Paste study material/).fill(notes);
-  await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
+  const notesBox = page.getByPlaceholder(/Paste study material/);
+  const build = page.getByRole('button', { name: 'Build Cognitive Schema' });
+  await notesBox.fill(notes);
+  // On a cold dev server the input event can land before React has hydrated,
+  // so onChange never sees it and the button stays disabled forever. The
+  // status line mirrors React state, so give it a moment to reflect the fill,
+  // and re-fill once if the event was lost to that race.
+  const ready = page.getByText(/words · ready to encode/);
+  try {
+    await expect(ready).toBeVisible({ timeout: 3000 });
+  } catch {
+    await notesBox.fill(notes);
+    await expect(ready).toBeVisible({ timeout: 5000 });
+  }
+  await build.click();
 }
 
 export async function expectStage(page: Page, stage: number) {
