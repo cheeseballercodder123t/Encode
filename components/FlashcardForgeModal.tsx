@@ -1823,8 +1823,8 @@ export function FlashcardForgeModal({
                     data-testid="forge-copy-remnote-direct"
                     onClick={async () => {
                       if (!merged) return;
-                      const text = generateSegregationRemnote(merged);
-                      await navigator.clipboard.writeText(text);
+                      const payload = generateSegregationRemnote(merged);
+                      await navigator.clipboard.writeText(payload.markdown);
                       playSound('success');
                       setCopiedMarkdown(true);
                       setTimeout(() => setCopiedMarkdown(false), 2500);
