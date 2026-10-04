@@ -7,6 +7,7 @@ import { FluffGuillotineModal } from './FluffGuillotineModal';
 import { UploadedFileAsset, EncodingMode, EncodingGear } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 import { parseSlideDeck } from '@/lib/services/slide-deck-parser';
+import { TOY_EXAMPLES } from '@/lib/toy-models/examples';
 
 const MEMORIZATION_TRIGGERS = [
   'periodic table', 'elements', 'amino acid', 'cranial nerve', 'bones', 
@@ -124,6 +125,9 @@ interface ZenLaunchpadProps {
   /** Flashcards Only: sources in, deck out — no workout, no stages. */
   onForge: () => void;
   isLoading: boolean;
+  onTryToyExample: (id: string) => void;
+  /** Don't accept server-rendered control clicks before state hydration. */
+  ready: boolean;
 }
 
 /**
@@ -158,7 +162,7 @@ function SegmentedControl<T extends string>({
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex bg-inset border border-edge/70 rounded-full p-1"
+      className="studio-segment inline-flex bg-inset border border-edge/70 rounded-full p-1"
     >
       {options.map((opt) => {
         const active = value === opt.value;
@@ -226,6 +230,8 @@ export function ZenLaunchpad({
   onGenerate,
   onTeach,
   onForge,
+  onTryToyExample,
+  ready,
   isLoading
 }: ZenLaunchpadProps) {
   // Fluff Guillotine: pre-encoding semantic triage over the pasted notes.
@@ -257,20 +263,23 @@ export function ZenLaunchpad({
     setNotes(preset.notes);
   };
 
-  const hasContent =
-    notes.trim().length > 0 ||
-    !!selectedFile ||
-    (sourceType === 'youtube' && youtubeUrl.trim().length > 0);
+  const hasContent = sourceType === 'youtube'
+    ? youtubeUrl.trim().length > 0
+    : notes.trim().length > 0 || !!selectedFile;
 
   const wordCount = notes.trim() ? notes.trim().split(/\s+/).length : 0;
 
   return (
-    <div className="w-full max-w-5xl mx-auto">
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_19rem] border border-edge/70 bg-deck rounded-2xl overflow-hidden shadow-panel">
+    <div className="studio-launchpad w-full mx-auto" inert={!ready} aria-busy={!ready}>
+      <div className="studio-section-heading">
+        <div><span className="studio-section-index">01 /</span><h3>Your encoding workbench</h3></div>
+        <span className="studio-section-note">YOUR MATERIAL. YOUR PACE. YOUR AHA.</span>
+      </div>
+      <div className="studio-console grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] border border-edge/70 bg-deck overflow-hidden shadow-panel">
 
         {/* ── Writing surface ───────────────────────────────────────────── */}
-        <div className="flex min-w-0 flex-col">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-edge/50 px-4 py-3">
+        <div className="studio-writing-surface flex min-w-0 flex-col">
+          <div className="studio-source-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-edge/50 px-5 py-4">
             <SegmentedControl
               ariaLabel="Input source"
               value={sourceType}
@@ -301,21 +310,29 @@ export function ZenLaunchpad({
             />
           </div>
 
-          <div className="flex flex-1 flex-col gap-3 p-4 sm:p-5">
+          <div className="studio-source-body flex flex-1 flex-col gap-3 p-5 sm:p-6">
+            <div className="studio-source-label">
+              <label htmlFor={sourceType === 'youtube' ? 'studio-video' : 'studio-notes'}>
+                {sourceType === 'youtube' ? 'A lecture worth understanding' : 'What are we making sense of today?'}
+              </label>
+              <span>{sourceType === 'youtube' ? 'VIDEO INPUT' : 'SOURCE INPUT'}</span>
+            </div>
             {sourceType !== 'youtube' && (
               <textarea
+                id="studio-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Paste study material, complex concepts, or lists to encode (e.g. Periodic Table, action potentials, Krebs cycle)... Optional when a file is attached; your notes steer what the encoder pulls from the file."
                 rows={8}
                 aria-label="Study notes (optional when a file is attached)"
-                className="w-full flex-1 min-h-[10rem] bg-inset border border-edge/70 focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none resize-y rounded-lg leading-relaxed p-4 font-sans transition-colors duration-150 shadow-panel"
+                className="studio-notes w-full flex-1 min-h-[13rem] bg-inset border border-edge/70 focus:border-amber-500/60 text-sm text-bone placeholder-solder focus:outline-none resize-y leading-relaxed p-5 font-sans transition-colors duration-150"
               />
             )}
 
             {sourceType === 'youtube' && (
               <div className="space-y-2">
                 <input
+                  id="studio-video"
                   type="url"
                   value={youtubeUrl}
                   onChange={(e) => setYoutubeUrl(e.target.value)}
@@ -437,34 +454,12 @@ export function ZenLaunchpad({
             </AnimatePresence>
 
 
-            {/* Examples: quiet tiles, not pills. */}
-            <div className="mt-1">
-              <RailHeading>Examples</RailHeading>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {LAUNCHPAD_PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => handleApplyPreset(p)}
-                    className="flex items-baseline gap-2.5 px-3 py-2 text-left bg-chassis/60 border border-edge/60 hover:border-gilt/40 hover:bg-white/[0.03] rounded-lg transition-colors duration-150 cursor-pointer"
-                  >
-                    <span className="font-mono text-[10px] font-semibold text-amber-300 shrink-0">{p.icon}</span>
-                    <span className="text-xs text-slate-ink truncate">{p.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Actions: left-aligned under the writing surface. */}
-            <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
-              {wordCount > 0 && (
-                <span
-                  className="font-mono text-[11px] text-solder"
-                  aria-label={`${wordCount} words`}
-                >
-                  {wordCount.toLocaleString()} words
-                </span>
-              )}
+            <div className="studio-actions mt-auto flex flex-wrap items-center gap-2 pt-2">
+              <span className="studio-input-status font-mono text-[10px] text-solder" aria-live="polite">
+                <span className={hasContent ? 'studio-status-dot' : 'studio-idle-dot'} />
+                {sourceType !== 'youtube' && wordCount > 0 ? `${wordCount.toLocaleString()} words · ready to encode` : hasContent ? 'Source ready' : 'Awaiting your material'}
+              </span>
               <span className="flex-1" aria-hidden />
               {notes.trim().length > 0 && (
                 <button
@@ -500,18 +495,21 @@ export function ZenLaunchpad({
                 type="button"
                 onClick={onGenerate}
                 disabled={!hasContent || isLoading}
-                className="px-6 py-2.5 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-inset text-xs font-semibold shadow-gilt transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
+                className="studio-build-button bg-gradient-to-b from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-inset font-semibold shadow-gilt transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none cursor-pointer"
               >
-                {isLoading ? 'Encoding…' : 'Build cognitive schema'}
+                <span>{isLoading ? 'Encoding…' : 'Build cognitive schema'}</span>
+                <span className="studio-build-shortcut" aria-hidden="true">CTRL / ⌘ + ENTER</span>
+                <span className="studio-build-arrow" aria-hidden="true">↗</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* ── Rail: how deep this session goes, and which modules ride along ── */}
-        <aside className="flex flex-col border-t border-edge/60 bg-chassis/40 lg:border-t-0 lg:border-l">
-          <div className="p-5 border-b border-edge/50">
+        <aside className="studio-tuning-rail flex flex-col border-t border-edge/60 bg-chassis/40 lg:border-t-0 lg:border-l">
+          <div className="p-5 sm:p-6 border-b border-edge/50">
             <RailHeading>Session depth</RailHeading>
+            <p className="studio-depth-prompt">Meet your mind where it is.</p>
             <div role="group" aria-label="Session depth" className="space-y-1.5">
               {GEARS.map((g) => {
                 const active = g.id === gear;
@@ -525,7 +523,7 @@ export function ZenLaunchpad({
                       playSound('click');
                       setGear(g.id);
                     }}
-                    className={`w-full text-left px-3.5 py-3 rounded-xl border transition-colors duration-150 cursor-pointer ${
+                    className={`studio-gear w-full text-left px-3.5 py-3 border transition-colors duration-150 cursor-pointer ${
                       active
                         ? 'border-gilt/40 bg-amber-500/[0.07]'
                         : 'border-transparent hover:bg-white/[0.03]'
@@ -557,9 +555,12 @@ export function ZenLaunchpad({
             </div>
           </div>
 
-          <div className="p-5">
-            <RailHeading>Tuning</RailHeading>
-            <div className="space-y-1.5">
+          <details className="studio-tuning-details p-5 sm:p-6">
+            <summary>
+              <span className="label-caps">Fine-tune your session</span>
+              <span>{Object.values(moduleState).filter((state) => state.on).length} active <span aria-hidden="true">+</span></span>
+            </summary>
+            <div className="space-y-1.5 mt-3">
               {MODULES.map((m) => {
                 const state = moduleState[m.key];
                 return (
@@ -593,8 +594,31 @@ export function ZenLaunchpad({
                 );
               })}
             </div>
+          </details>
+          <div className="studio-rail-note">
+            <span className="studio-rail-symbol" aria-hidden="true">✳</span>
+            <p>Understanding is built,<br /><em>not downloaded.</em></p>
+            <span>ACTIVE ENCODING / EVERY GEAR</span>
           </div>
         </aside>
+      </div>
+
+      <div className="studio-presets">
+        <div className="studio-presets-heading"><span>NEED A SPARK?</span><p>Start with a little curiosity.</p></div>
+        <div className="studio-presets-grid">
+          {LAUNCHPAD_PRESETS.map((preset) => (
+            <button key={preset.id} type="button" onClick={() => handleApplyPreset(preset)} className="studio-preset">
+              <span className="studio-preset-code">{preset.icon}<span aria-hidden="true">↗</span></span>
+              <span className="studio-preset-title">{preset.title}</span>
+              <span className="studio-preset-mode">{preset.mode === 'conceptual' ? 'UNDERSTAND' : 'REMEMBER'}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="toy-launch-strip">
+        <div><span className="label-caps">Hands-on laboratories</span><p>Don’t memorize the law. Discover it.</p><span>Five explicit teaching examples · no API key needed</span></div>
+        <div role="group" aria-label="Try an interactive laboratory">{TOY_EXAMPLES.map((example, index) => <button type="button" key={example.id} onClick={() => onTryToyExample(example.id)}><span>0{index + 1}</span>{example.label}<span aria-hidden="true">↗</span></button>)}</div>
       </div>
 
       {/* Fluff Guillotine: heatmap the source, then strip the noise in one tap. */}

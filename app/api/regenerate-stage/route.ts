@@ -1,6 +1,8 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { validateEncodedSchema } from '@/lib/ai-output-validation';
+import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 
 // Allow time for single-stage regeneration
 export const maxDuration = 30;
@@ -26,6 +28,7 @@ const stageResponseSchema = {
       items: { type: Type.STRING },
     },
     templateType: { type: Type.STRING },
+    toyModel: toyModelSchema,
     prompt: { type: Type.STRING, description: "The overarching guiding challenge" },
     boundaryContrast: {
       type: Type.OBJECT,
@@ -79,7 +82,8 @@ Rules:
 3. Always include 'boundaryContrast' (confusableLookalike + distinguishingRule) for the stage's concept.
 4. Keep 'templateType' from the original stage unless it caused the mismatch; prefer first_principles, cause_effect, analogy_matrix, contrast_grid, state_transition, memory_palace, mnemonic_peg, taxonomic_chunking, or personal_schema.
 5. Mode: ${mode}. Never mention or moralize about the rejection; just output the replacement stage.
-${reasonContext}`;
+${reasonContext}
+${TOY_MODEL_INSTRUCTION}`;
 
     const userPrompt = `TOPIC: ${topicSummary || 'Cognitive Schema'}
 
@@ -105,7 +109,7 @@ Generate the replacement stage JSON now.`;
 
     return NextResponse.json({
       activity: {
-        ...regenerated,
+        ...validateEncodedSchema({ activities: [regenerated] }, mode, activity.contextSnippet).activities[0],
         stageNumber: activity.stageNumber || 1,
       },
     });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EncodingGear, UploadedFileAsset } from '@/lib/types';
 import { loadStudyPrefs, saveStudyPrefs } from '@/lib/storage';
 import { getSessionStateIDB, putSessionStateIDB, deleteSessionStateIDB } from '@/lib/db';
@@ -17,7 +17,12 @@ export type StrictnessLevel = 'sherpa' | 'feynman' | 'viva';
  */
 export function useInputSource() {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<InputSourceTab>('text');
+  const [activeTab, setStoredActiveTab] = useState<InputSourceTab>('text');
+  const sourceTouched = useRef(false);
+  const setActiveTab = useCallback((tab: InputSourceTab) => {
+    sourceTouched.current = true;
+    setStoredActiveTab(tab);
+  }, []);
   const [rawNotes, setRawNotes] = useState('');
   const [uploadedFile, setUploadedFile] = useState<UploadedFileAsset | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -65,7 +70,7 @@ export function useInputSource() {
   useEffect(() => {
     try {
       const prefs = loadStudyPrefs();
-      setActiveTab(prefs.activeTab);
+      if (!sourceTouched.current) setStoredActiveTab(prefs.activeTab);
       setEnableDeepResearch(prefs.enableDeepResearch);
       setEnableGuidedPath(prefs.enableGuidedPath);
       setStrictnessLevel(prefs.strictnessLevel);
@@ -95,6 +100,7 @@ export function useInputSource() {
   }, [rawNotes]);
 
   return {
+    prefsLoaded,
     activeTab,
     setActiveTab,
     rawNotes,

@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEncodedSchema } from "@/lib/ai-output-validation";
+import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 import { extractYouTubeId, fetchYouTubeMeta, fetchYouTubeTranscript } from "@/lib/services/youtubeTranscript";
 
 const youtubeSchemaResponse = {
@@ -42,6 +43,7 @@ const youtubeSchemaResponse = {
             items: { type: Type.STRING }
           },
           templateType: { type: Type.STRING },
+          toyModel: toyModelSchema,
           prompt: { type: Type.STRING },
           videoTimestamp: {
             type: Type.OBJECT,
@@ -119,7 +121,9 @@ Your tasks:
 1. Deconstruct the lecture into its core progression.
 2. Identify 4-6 key timestamp inflection points where the presenter introduces pivotal definitions, visual diagrams, mathematical proofs, or counter-intuitive examples.
 3. Generate exactly 5 scaffolded active cognitive exercises. Each exercise MUST include a 'videoTimestamp' object tied to a genuine milestone in the video.
-4. Provide structured scaffold fields, domain options, and crystal-clear example responses.`;
+4. Provide structured scaffold fields, domain options, and crystal-clear example responses.
+${TOY_MODEL_INSTRUCTION}
+No verified transcript means no grounded lab: omit toyModel when transcript is absent.`;
 
     const userPrompt = `Generate a comprehensive timestamped cognitive schema for the YouTube lecture:
 URL: https://www.youtube.com/watch?v=${videoId}
@@ -140,7 +144,7 @@ ${transcriptSnippet ? `VERIFIED VIDEO TRANSCRIPT:\n${transcriptSnippet}` : ''}`;
     });
 
     const responsePayload = {
-      ...validateEncodedSchema(parsedResult, mode),
+      ...validateEncodedSchema(parsedResult, mode, transcriptSnippet || ''),
       youtubeData: {
         videoId,
         videoUrl: `https://www.youtube.com/watch?v=${videoId}`,

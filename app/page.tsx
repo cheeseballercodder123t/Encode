@@ -35,6 +35,9 @@ import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModa
 import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { generateRemnoteHierarchy } from '@/lib/remnote';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
+import { StudioIntro } from '@/components/StudioIntro';
+import { TOY_EXAMPLES, activityForToyExample } from '@/lib/toy-models/examples';
+import { toySessionId } from '@/lib/toy-models/progress';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
@@ -64,6 +67,7 @@ export default function DeepEncodeApp() {
   // ─── Extracted state hooks ─────────────────────────────────────────────────
   // Input sources & generation toggles (useInputSource)
   const {
+    prefsLoaded,
     activeTab, setActiveTab,
     rawNotes, setRawNotes,
     uploadedFile, setUploadedFile,
@@ -599,8 +603,15 @@ export default function DeepEncodeApp() {
     handleGenerate();
   };
 
+  // The window listener is long-lived, but its launch action must read the
+  // latest source, notes, gear and settings instead of the initial render.
+  const initiateGenerateRef = useRef(handleInitiateGenerate);
+  useEffect(() => {
+    initiateGenerateRef.current = handleInitiateGenerate;
+  });
+
   // Main Generation Handler (Text / File / YouTube)
-  const handleGenerate = async (confirmedConfidence?: number) => {
+  async function handleGenerate(confirmedConfidence?: number) {
     const userConfidenceVal = confirmedConfidence || preSessionConfidence;
 
     if (activeTab === 'youtube') {
@@ -819,7 +830,7 @@ export default function DeepEncodeApp() {
       setStreamPhase('');
       abortRef.current = null;
     }
-  };
+  }
 
   // Check if all activities for current module in Guided Path are answered
   const isAllActivitiesDoneForCurrentModule = useMemo(() => {
@@ -964,6 +975,21 @@ export default function DeepEncodeApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appState, youtubeData, currentActivityIndex, userResponses]);
 
+  const saveLabCheckpointRef = useRef(saveSchemaToLibrary);
+  useEffect(() => { saveLabCheckpointRef.current = saveSchemaToLibrary; }, [saveSchemaToLibrary]);
+
+  // Lab sessions persist the actual config and responses, not only a local
+  // slider cache, so the existing Library/Firestore path can resume them.
+  useEffect(() => {
+    const id = toySessionId(activities, topicSummary);
+    if (appState !== 'encoding' || !id || youtubeData || isGuidedPathMode) return;
+    if (!Object.values(userResponses).some((response) => response.toyModelProgress)) return;
+    const timer = setTimeout(() => {
+      void saveLabCheckpointRef.current({ id, timestamp: Date.now(), topicSummary, mode: encodingMode, xpEarned: xp, activities, userResponses, sourceFileName: uploadedFile?.name, researchContexts });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [activities, appState, encodingMode, isGuidedPathMode, researchContexts, topicSummary, uploadedFile?.name, userResponses, xp, youtubeData]);
+
   // End Session Batch Metacognitive Performance Review
   const handleEndSessionReview = async (customResponses?: Record<string, StageResponse>, customActivities?: Activity[]) => {
     const acts = customActivities || activities;
@@ -1042,6 +1068,7 @@ export default function DeepEncodeApp() {
     const updatedResponses: Record<string, StageResponse> = {
       ...userResponses,
       [currentActivity.id]: {
+        ...userResponses[currentActivity.id],
         field1,
         field2,
         field3,
@@ -1070,7 +1097,7 @@ export default function DeepEncodeApp() {
 
         // Auto-save completed schema to local storage & cloud
         const newSavedSchema: SavedSchema = {
-          id: `schema_${Date.now()}`,
+          id: toySessionId(activities, topicSummary) || `schema_${Date.now()}`,
           timestamp: Date.now(),
           topicSummary: topicSummary || 'Synthesized Schema',
           mode: encodingMode,
@@ -1101,6 +1128,7 @@ export default function DeepEncodeApp() {
     const updatedResponses: Record<string, StageResponse> = {
       ...userResponses,
       [currentActivity.id]: {
+        ...userResponses[currentActivity.id],
         field1: '',
         field2: '',
         field3: '',
@@ -1121,7 +1149,7 @@ export default function DeepEncodeApp() {
       sound.playLevelUp();
       setAppState('completed');
       const newSavedSchema: SavedSchema = {
-        id: `schema_${Date.now()}`,
+        id: toySessionId(activities, topicSummary) || `schema_${Date.now()}`,
         timestamp: Date.now(),
         topicSummary: topicSummary || 'Synthesized Schema',
         mode: encodingMode,
@@ -1243,7 +1271,7 @@ export default function DeepEncodeApp() {
           isComparativeModalOpen || isEndSessionReviewOpen;
         if (anyModalOpen) return;
         e.preventDefault();
-        handleInitiateGenerate();
+        initiateGenerateRef.current();
       }
     };
     window.addEventListener('keydown', handler);
@@ -1310,11 +1338,11 @@ export default function DeepEncodeApp() {
   // Resume an incomplete schema back into the encoding workbench at its first
   // unfinished stage. Used by both the input-screen shortcut and the completed
   // view's "continue where you left off" button.
-  const handleContinueToEncoding = (saved: SavedSchema) => {
+  const handleContinueToEncoding = useCallback((saved: SavedSchema) => {
     resumeToEncoding(saved);
     setAppState('encoding');
     sound.playSuccess();
-  };
+  }, [resumeToEncoding, setAppState]);
 
   const handleContinueToEncodingWrapper = useCallback(() => {
     if (currentSavedSchema) handleContinueToEncoding(currentSavedSchema);
@@ -1417,27 +1445,25 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="min-h-screen min-h-dvh bg-chassis text-bone flex flex-col items-center py-5 sm:py-10 px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
+    <main className="studio-shell min-h-screen min-h-dvh text-bone flex flex-col items-center px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
 
-      <div className="w-full max-w-5xl relative z-10 flex-1 flex flex-col">
+      <div className="w-full max-w-6xl relative z-10 flex-1 flex flex-col">
 
-        {/* Masthead: the wordmark on vellum, then one quiet cluster of
-            controls. No framed strip and no rule across the page — the header
-            is typography and air, so the top of the app is not a band. */}
-        <header className="mb-6 animate-dawn">
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-5">
-            <div className="min-w-0">
-              <div className="flex items-baseline gap-3">
-                <h1 className="text-[26px] font-semibold leading-none tracking-tight text-bone">DeepEncode</h1>
-                <span className="label-caps">local-first</span>
+        {/* The masthead keeps every existing workspace action within reach. */}
+        <header className="studio-masthead animate-dawn">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+            <div className="studio-brand">
+              <svg viewBox="0 0 40 44" fill="none" aria-hidden="true">
+                <path d="M20 2L37 12V32L20 42L3 32V12L20 2Z" stroke="currentColor" />
+                <path d="M20 10L30 16V28L20 34L10 28V16L20 10ZM20 10V22M10 16L20 22L30 16M20 22V34" stroke="currentColor" />
+              </svg>
+              <div>
+                <h1>DeepEncode<span aria-hidden="true">✳</span></h1>
+                <p>COGNITIVE SCIENCE / HUMAN UNDERSTANDING</p>
               </div>
-              <div className="mt-3 h-px w-24 gilt-rule" aria-hidden />
-              <p className="mt-3 max-w-md text-[11px] leading-relaxed text-solder">
-                Notes, PDFs, images and lecture videos become encoder stages: one paradox, one thought experiment, one mechanism written in your own words.
-              </p>
             </div>
 
-          <nav className="flex flex-wrap items-center justify-end gap-1.5 max-w-full" aria-label="Workspace">
+          <nav className="studio-nav flex flex-wrap items-center justify-end gap-1 max-w-full" aria-label="Workspace">
             {/* Offline & Install Indicator */}
             <PWAInstallHeader />
 
@@ -1654,6 +1680,8 @@ export default function DeepEncodeApp() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full flex flex-col gap-4 sm:gap-5"
           >
+            <StudioIntro />
+
             {/* Interrupted generation notice: the tab was closed mid-encode. */}
             {interruptedGen && (
               <div
@@ -1761,6 +1789,7 @@ export default function DeepEncodeApp() {
 
             {/* Unified Zen Launchpad (Inputs, Mode, Studio Tuning & Inspiration Chips) */}
             <ZenLaunchpad
+              ready={prefsLoaded}
               notes={rawNotes}
               setNotes={setRawNotes}
               mode={encodingMode}
@@ -1788,13 +1817,28 @@ export default function DeepEncodeApp() {
               onTeach={() => handleOpenTeach('notes')}
               onForge={() => setIsForgeOpen(true)}
               isLoading={false}
+              onTryToyExample={(id) => {
+                const example = TOY_EXAMPLES.find((item) => item.id === id);
+                if (!example) return;
+                const activity = activityForToyExample(example);
+                resetSession();
+                setRawNotes(example.notes);
+                setUploadedFile(null);
+                setYoutubeUrl('');
+                setActiveTab('text');
+                setActivities([activity]);
+                setTopicSummary(example.config.title);
+                setCurrentActivityIndex(0);
+                loadStageInputs(0, [activity], {});
+                setAppState('encoding');
+              }}
             />
 
                         {/* Bench: audits and export targets share one panel, in two
                 columns, instead of two centered rows of pills stacked above a
                 three-column telemetry band. Each audit is its own bordered
                 block so the page reads as a working list. */}
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4">
+            <div className="studio-bench grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4">
               <div className="min-w-0 p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="label-caps whitespace-nowrap">
@@ -2100,6 +2144,10 @@ export default function DeepEncodeApp() {
               currentActivityIndex={currentActivityIndex}
               setCurrentActivityIndex={setCurrentActivityIndex}
               userResponses={userResponses}
+              onToyProgress={(activityId, progress) => setUserResponses((previous) => ({
+                ...previous,
+                [activityId]: { ...(previous[activityId] || { field1: '', field2: '' }), toyModelProgress: progress },
+              }))}
               field1={field1}
               setField1={setField1}
               field2={field2}
@@ -2169,6 +2217,11 @@ export default function DeepEncodeApp() {
           />
         )}
 
+        <footer className="studio-footer">
+          <span><span className="studio-status-dot" /> LOCAL-FIRST BY DESIGN</span>
+          <span>Not a shortcut to answers. A better way to think.</span>
+          <span>DEEPENCODE / COGNITIVE STUDIO</span>
+        </footer>
       </div>
 
       {/* Auth / Cloud Sync Modal */}

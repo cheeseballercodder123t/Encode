@@ -1,4 +1,5 @@
 import { SavedSchema, SegregationReport } from './types';
+import { toyBoundaryCard } from './toy-models/progress';
 
 export interface FactItem {
   id: string;
@@ -966,6 +967,10 @@ export function generateRemnoteHierarchy(
     stages.activeSource = sourceIdOfItem(act.id);
     const resp = schema.userResponses?.[act.id];
     const stageName = act.title || `Stage ${idx + 1}`;
+    const boundaryCard = toyBoundaryCard(act, resp);
+    if (boundaryCard) {
+      pushCard(ctx, stages, boundaryCard.front, boundaryCard.back, 'forward', { reason: 'prediction-boundary interference trap' });
+    }
     const userWhat = resp?.field1?.trim() || '';
     const userWhy = resp?.field2?.trim() || '';
     const userHow = resp?.field3?.trim() || '';

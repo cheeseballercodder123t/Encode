@@ -21,21 +21,28 @@ export function useSchemaLibrary(
   saveSchemaToCloud?: CloudSync,
   deleteSchemaFromCloud?: (id: string) => Promise<void> | void
 ) {
-  const [savedSchemas, setSavedSchemas] = useState<SavedSchema[]>(() => loadSavedSchemas());
+  // Empty server/client first render prevents library counts from mismatching
+  // SSR when local sessions already exist. Hydrate the external stores afterward.
+  const [savedSchemas, setSavedSchemas] = useState<SavedSchema[]>([]);
 
   // Hydrate local-first Offline IndexedDB schemas on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) setSavedSchemas(loadSavedSchemas());
+    }, 0);
     initIndexedDB().then(async () => {
       try {
         const idbSchemas = await getAllSchemasFromIDB();
-        if (idbSchemas && idbSchemas.length > 0) {
+        if (!cancelled && idbSchemas && idbSchemas.length > 0) {
           setSavedSchemas(idbSchemas);
         }
       } catch (e) {
         console.warn('IDB schemas load warning:', e);
       }
     }).catch(err => console.warn('IDB init error:', err));
+    return () => { cancelled = true; clearTimeout(timer); };
   }, []);
 
   const saveSchema = useCallback(async (schema: SavedSchema) => {

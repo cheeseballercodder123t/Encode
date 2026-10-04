@@ -14,11 +14,12 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
-    baseURL: 'http://127.0.0.1:4310',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:4310',
     trace: 'retain-on-failure',
     navigationTimeout: 120_000, // first `next dev` compile of the page is slow
   },
-  webServer: {
+  // The managed preview already owns its server; do not launch another one.
+  webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
     command: 'npm run dev -- -p 4310',
     url: 'http://127.0.0.1:4310',
     reuseExistingServer: !process.env.CI,

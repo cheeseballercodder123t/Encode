@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import { 
   User, 
   onAuthStateChanged, 
@@ -52,7 +52,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [cloudSchemas, setCloudSchemas] = useState<SavedSchema[]>([]);
@@ -65,11 +70,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // How many local schemas are not yet in the cloud : derived, not state, so
   // the UI can show "N pending" without a cascading render pass.
   const pendingLocalCount = React.useMemo(() => {
-    const local = loadSavedSchemas();
+    const local = hydrated ? loadSavedSchemas() : [];
     if (!user) return local.length;
     const cloudIds = new Set(cloudSchemas.map((s) => s.id));
     return local.filter((s) => !cloudIds.has(s.id)).length;
-  }, [user, cloudSchemas]);
+  }, [user, cloudSchemas, hydrated]);
 
   // Listen to Auth State
   useEffect(() => {

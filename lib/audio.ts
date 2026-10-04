@@ -37,6 +37,20 @@ class SoundFX {
     }
   }
 
+  private lastScrubAt = 0;
+
+  /** Throttled quiet scrub feedback, never more than one tick per 80ms. */
+  playScrubTick() {
+    const now = Date.now();
+    if (now - this.lastScrubAt < 80) return;
+    this.lastScrubAt = now;
+    this.playBeep(400, 'sine', 0.035, 0.012);
+  }
+
+  playLabUnlock() { this.playBeep(659.25, 'sine', 0.09, 0.025); }
+  playLabEquilibrium() { this.playSuccess(); }
+  playLabFailure() { this.playBeep(80, 'sine', 0.22, 0.04); }
+
   playSuccess() {
     this.playBeep(523.25, 'triangle', 0.1, 0.06); // C5
     setTimeout(() => this.playBeep(659.25, 'triangle', 0.1, 0.06), 80); // E5

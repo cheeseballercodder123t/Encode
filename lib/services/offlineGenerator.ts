@@ -1,5 +1,6 @@
 import { Activity, EncodingMode, SavedSchema, VisualTemplateType } from '@/lib/types';
 import { selectOptimalTemplates, TEMPLATE_CATALOG } from './templateSelector';
+import { activityForToyExample, findGroundedToyExample } from '../toy-models/examples';
 
 interface ExtractedFacts {
   topicTitle: string;
@@ -53,6 +54,11 @@ export function generateOfflineWorkout(
   mode: EncodingMode = 'conceptual',
   hiddenTemplates: string[] = []
 ): { topicSummary: string; activities: Activity[] } {
+  const example = findGroundedToyExample(rawText);
+  if (example) {
+    const activity = activityForToyExample(example);
+    if (!hiddenTemplates.includes(activity.templateType)) return { topicSummary: example.config.title, activities: [activity] };
+  }
   const features = extractTextFeatures(rawText);
   const selectedTemplates = selectOptimalTemplates(rawText || features.topicTitle, mode, 5, hiddenTemplates);
 
