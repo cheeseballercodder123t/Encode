@@ -5,6 +5,7 @@ import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
 import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
 import { loadInterferenceTraps } from './interference-traps';
 import { CONTRADICTION_TAG } from './services/contradiction';
+import { parseSlideDeck, parseDiagramLabels } from './services/slide-deck-parser';
 
 export { classifyDeckQuality };
 
@@ -337,7 +338,8 @@ function buildUserWordingCards(
  */
 export function extractAnkiCardsFromSchema(
   schema?: Partial<SavedSchema> | null,
-  report?: SegregationReport | null
+  report?: SegregationReport | null,
+  notes?: string
 ): AnkiCardItem[] {
   const initialSM2 = calculateSM2(4); // Default initialized with 1-day initial SM2 interval
   const activities: Activity[] = schema?.activities || [];
@@ -458,6 +460,112 @@ export function extractAnkiCardsFromSchema(
       });
     }
   });
+
+  // 2d. Confusable Pairs / Discrimination Matrix Cards
+  if (report?.confusablePairs && report.confusablePairs.length > 0) {
+    report.confusablePairs.forEach((pair, idx) => {
+      const tableHtml = `
+<table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; border:1px solid #475569; font-family:sans-serif;">
+  <thead>
+    <tr style="background:#1e293b; color:#f8fafc;">
+      <th style="border:1px solid #475569; padding:5px 8px; text-align:left;">Axis: ${pair.distinguishingAxis}</th>
+      <th style="border:1px solid #475569; padding:5px 8px; text-align:left;">${pair.conceptA}</th>
+      <th style="border:1px solid #475569; padding:5px 8px; text-align:left;">${pair.conceptB}</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background:#0f172a; color:#e2e8f0;">
+      <td style="border:1px solid #475569; padding:5px 8px; font-weight:600;">Key Feature</td>
+      <td style="border:1px solid #475569; padding:5px 8px;">${pair.conceptAFeature}</td>
+      <td style="border:1px solid #475569; padding:5px 8px;">${pair.conceptBFeature}</td>
+    </tr>
+    <tr style="background:#1e293b; color:#fef08a;">
+      <td style="border:1px solid #475569; padding:5px 8px; font-weight:600;">Boundary Switch</td>
+      <td colspan="2" style="border:1px solid #475569; padding:5px 8px;"><b>${pair.boundaryCondition}</b></td>
+    </tr>
+  </tbody>
+</table>`.trim();
+
+      cards.push({
+        id: pair.id || `cp-${idx}-matrix`,
+        front: `<b>Lookalike Discrimination Matrix:</b><br>Under what exact condition does the system use <b>${pair.conceptA}</b> vs <b>${pair.conceptB}</b>?`,
+        back: `<b>Boundary Condition:</b> ${pair.boundaryCondition}<br>${tableHtml}`,
+        isCloze: false,
+        tags: ['DeepEncode', 'ConfusablePair', 'DiscriminationMatrix'],
+        sm2: { ...initialSM2 },
+      });
+
+      if (pair.diagnosticVignette && pair.diagnosticAnswer) {
+        cards.push({
+          id: `${pair.id || `cp-${idx}`}-vignette`,
+          front: `<b>Diagnostic Discrimination Drill:</b><br>${pair.diagnosticVignette}<br><br><i>Which applies: <b>${pair.conceptA}</b> or <b>${pair.conceptB}</b>?</i>`,
+          back: `<b>Answer:</b> {{c1::${pair.conceptA}}} (vs ${pair.conceptB})<br><b>Rule:</b> ${pair.diagnosticAnswer}`,
+          isCloze: true,
+          tags: ['DeepEncode', 'DiagnosticDrill', 'InterferenceTrap'],
+          sm2: { ...initialSM2 },
+        });
+      }
+    });
+  }
+
+  // 2e. Diagram Occlusion Cards (from lecture slide notes or active slide extract)
+  if (notes) {
+    const parsed = parseSlideDeck(notes);
+    if (parsed.isSlideDeck && parsed.slides.length > 0) {
+      parsed.slides.forEach((slide) => {
+        if (slide.diagramLabels && slide.diagramLabels.length >= 2) {
+          const labels = slide.diagramLabels;
+          labels.slice(0, 4).forEach((targetSlot) => {
+            const visualMap = labels
+              .map((l) => {
+                if (l.index === targetSlot.index) {
+                  return `<b>[ Slot #${l.index}: ? ]</b>${l.position ? ` (${l.position})` : ''}`;
+                }
+                return `Slot #${l.index}: ${l.label}${l.position ? ` (${l.position})` : ''}`;
+              })
+              .join('<br>');
+
+            cards.push({
+              id: `slide-${slide.slideNumber}-occlusion-${targetSlot.index}`,
+              front: `<b>Visual Diagram Occlusion:</b><br>${slide.title}<br><br>Which component or step corresponds to <b>[ Slot #${targetSlot.index} ]</b>${targetSlot.position ? ` (${targetSlot.position})` : ''}?<br><br><div style="background:#1e293b; border:1px solid #334155; border-radius:6px; padding:10px; font-family:monospace; font-size:12px; line-height:1.6; color:#94a3b8;">${visualMap}</div>`,
+              back: `<b>Slot #${targetSlot.index} = {{c1::${targetSlot.label}}}</b><br>${targetSlot.position ? `<i>Position: ${targetSlot.position}</i><br>` : ''}<b>Slide:</b> ${slide.title}`,
+              isCloze: true,
+              tags: ['DeepEncode', 'DiagramOcclusion', 'VisualCloze'],
+              sm2: { ...initialSM2 },
+            });
+          });
+        }
+      });
+    } else {
+      const singleDiagramLabels = parseDiagramLabels(notes);
+      if (singleDiagramLabels.length >= 2) {
+        const slideNumMatch = notes.match(/Slide\s*(\d+)/i);
+        const slideNumber = slideNumMatch ? parseInt(slideNumMatch[1], 10) : 1;
+        const titleMatch = notes.match(/(?:#+\s*Slide\s*\d*[:.-]?\s*([^\n]+)|Slide\s*\d*[:.-]?\s*([^\n]+)|Presentation:\s*([^\n]+))/i);
+        const slideTitle = (titleMatch?.[1] || titleMatch?.[2] || titleMatch?.[3] || `Slide ${slideNumber}`).trim();
+
+        singleDiagramLabels.slice(0, 4).forEach((targetSlot) => {
+          const visualMap = singleDiagramLabels
+            .map((l) => {
+              if (l.index === targetSlot.index) {
+                return `<b>[ Slot #${l.index}: ? ]</b>${l.position ? ` (${l.position})` : ''}`;
+              }
+              return `Slot #${l.index}: ${l.label}${l.position ? ` (${l.position})` : ''}`;
+            })
+            .join('<br>');
+
+          cards.push({
+            id: `slide-${slideNumber}-occlusion-${targetSlot.index}`,
+            front: `<b>Visual Diagram Occlusion:</b><br>${slideTitle}<br><br>Which component or step corresponds to <b>[ Slot #${targetSlot.index} ]</b>${targetSlot.position ? ` (${targetSlot.position})` : ''}?<br><br><div style="background:#1e293b; border:1px solid #334155; border-radius:6px; padding:10px; font-family:monospace; font-size:12px; line-height:1.6; color:#94a3b8;">${visualMap}</div>`,
+            back: `<b>Slot #${targetSlot.index} = {{c1::${targetSlot.label}}}</b><br>${targetSlot.position ? `<i>Position: ${targetSlot.position}</i><br>` : ''}<b>Slide:</b> ${slideTitle}`,
+            isCloze: true,
+            tags: ['DeepEncode', 'DiagramOcclusion', 'VisualCloze'],
+            sm2: { ...initialSM2 },
+          });
+        });
+      }
+    }
+  }
 
   // 3. Fallback from SavedSchema Activities if report is empty
   if (cards.length === 0 && schema?.activities) {

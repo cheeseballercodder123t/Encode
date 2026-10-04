@@ -1,5 +1,6 @@
 import {
   ConceptualMechanismItem,
+  ConfusablePairItem,
   DeclarativeFactItem,
   PracticeQuestionItem,
   SegregationReport,
@@ -458,8 +459,42 @@ export function normalizeSegregationReport(raw: any, sourceId = 'src'): Segregat
       takeaway: text(ex.takeaway) || undefined,
     }));
 
+  const confusablePairs: ConfusablePairItem[] = (Array.isArray(raw.confusablePairs) ? raw.confusablePairs : [])
+    .filter((cp: any) => cp && typeof cp === 'object' && text(cp.conceptA) && text(cp.conceptB))
+    .slice(0, 10)
+    .map((cp: any, i: number) => ({
+      id: namespaceId(sourceId, cp.id, `cp_${i + 1}`),
+      conceptA: text(cp.conceptA),
+      conceptB: text(cp.conceptB),
+      distinguishingAxis: text(cp.distinguishingAxis) || 'Distinguishing Rule',
+      boundaryCondition: text(cp.boundaryCondition) || 'Boundary switch condition',
+      conceptAFeature: text(cp.conceptAFeature) || text(cp.conceptA),
+      conceptBFeature: text(cp.conceptBFeature) || text(cp.conceptB),
+      diagnosticVignette: text(cp.diagnosticVignette) || `Which concept applies: ${text(cp.conceptA)} or ${text(cp.conceptB)}?`,
+      diagnosticAnswer: text(cp.diagnosticAnswer) || `${text(cp.conceptA)} vs ${text(cp.conceptB)}`,
+    }));
+
+  // Auto-synthesize confusable pairs from mechanisms that carry boundaryContrast if none explicitly provided
+  if (confusablePairs.length === 0 && mechanisms.length > 0) {
+    mechanisms.forEach((m, idx) => {
+      if (m.boundaryContrast && m.boundaryContrast.confusableLookalike && m.boundaryContrast.distinguishingRule) {
+        confusablePairs.push({
+          id: namespaceId(sourceId, `derived_cp_${idx + 1}`, `cp_${idx + 1}`),
+          conceptA: m.conceptName,
+          conceptB: m.boundaryContrast.confusableLookalike,
+          distinguishingAxis: 'Distinguishing Rule',
+          boundaryCondition: m.boundaryContrast.distinguishingRule,
+          conceptAFeature: m.howItWorks || m.whatIsIt || m.conceptName,
+          conceptBFeature: `Lookalike to ${m.conceptName}`,
+          diagnosticVignette: `Under what exact condition is ${m.conceptName} distinguished from ${m.boundaryContrast.confusableLookalike}?`,
+          diagnosticAnswer: m.boundaryContrast.distinguishingRule,
+        });
+      }
+    });
+  }
+
   const topic = text(raw.topic);
-  if (facts.length === 0 && mechanisms.length === 0 && drills.length === 0 && examples.length === 0) {
+  if (facts.length === 0 && mechanisms.length === 0 && drills.length === 0 && examples.length === 0 && confusablePairs.length === 0) {
     return null;
   }
 
@@ -469,6 +504,7 @@ export function normalizeSegregationReport(raw: any, sourceId = 'src'): Segregat
     conceptualMechanisms: mechanisms,
     practiceQuestions: drills,
     workedExamples: examples,
+    confusablePairs: confusablePairs.length > 0 ? confusablePairs : undefined,
     compressionRatio: text(raw.compressionRatio) || undefined,
   };
 }
@@ -624,13 +660,24 @@ export function mergeSegregationReports(
   }
 
   const allFacts = [...conflictCards, ...survivingFacts];
-  const total = allFacts.length + mechanisms.length + drills.length + examples.length;
+
+  const confusablePairs: ConfusablePairItem[] = [];
+  for (const input of inputs) {
+    if (!input.report?.confusablePairs) continue;
+    for (const cp of input.report.confusablePairs) {
+      if (!take(`${cp.conceptA} vs ${cp.conceptB}`)) continue;
+      confusablePairs.push(cp);
+    }
+  }
+
+  const total = allFacts.length + mechanisms.length + drills.length + examples.length + confusablePairs.length;
   const report: SegregationReport = {
     topic: topic?.trim() || inputs.find((i) => i.report?.topic)?.report?.topic || 'Forged Deck',
     declarativeFacts: allFacts,
     conceptualMechanisms: mechanisms,
     practiceQuestions: drills,
     workedExamples: examples,
+    confusablePairs: confusablePairs.length > 0 ? confusablePairs : undefined,
     compressionRatio: summarizeMerge(dropped, sources.filter((s) => s.status === 'ok').length, contradictions.length),
     // Provenance travels with the deck. The card ids already carry the source
     // (`src_2-f1`), but an id is not a name: the split export wants to write

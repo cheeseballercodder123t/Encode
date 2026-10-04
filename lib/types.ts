@@ -416,6 +416,22 @@ export interface ConceptualMechanismItem {
   };
 }
 
+export interface ConfusablePairItem {
+  id: string;
+  conceptA: string;
+  conceptB: string;
+  /** Primary axis of discrimination, e.g. "Rate law & Intermediate" or "Neurotransmitter & Receptor" */
+  distinguishingAxis: string;
+  /** Boundary condition: under what exact condition does the system use A vs B? */
+  boundaryCondition: string;
+  conceptAFeature: string;
+  conceptBFeature: string;
+  /** Vignette question testing edge-case classification between the pair */
+  diagnosticVignette: string;
+  /** Ground truth answer and the tell that settles it */
+  diagnosticAnswer: string;
+}
+
 export interface SegregationReport {
   topic: string;
   declarativeFacts: DeclarativeFactItem[];
@@ -424,6 +440,8 @@ export interface SegregationReport {
   practiceQuestions?: PracticeQuestionItem[];
   /** Step-by-step worked examples derived from the source material. */
   workedExamples?: WorkedExampleItem[];
+  /** Confusable pairs & discrimination matrix cards separating lookalikes. */
+  confusablePairs?: ConfusablePairItem[];
   compressionRatio?: string;
   /**
    * Source id → the learner's name for that input ("Lecture 4 slides"), set by

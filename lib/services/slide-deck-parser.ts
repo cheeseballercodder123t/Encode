@@ -9,6 +9,12 @@
 // with isolated titles, slide numbers, body text, and speaker notes so the
 // Flashcard Forge can forge high-resolution cards per slide concurrently.
 
+export interface DiagramOcclusionLabel {
+  index: number;
+  label: string;
+  position?: string;
+}
+
 export interface ParsedSlide {
   slideNumber: number;
   title: string;
@@ -18,6 +24,8 @@ export interface ParsedSlide {
   wordCount: number;
   isLikelyFluff?: boolean;
   fluffReason?: string;
+  hasDiagram?: boolean;
+  diagramLabels?: DiagramOcclusionLabel[];
 }
 
 export interface SlideDeckParseResult {
@@ -54,20 +62,67 @@ function extractPresentationTitle(text: string): { title?: string; remainingText
 }
 
 /**
- * Parses slide content into body and optional speaker notes.
+ * Extracts diagram occlusion labels from raw text with spatial slot markers.
  */
-function parseSlideContent(rawChunk: string): { body: string; speakerNotes?: string } {
+export function parseDiagramLabels(text: string): DiagramOcclusionLabel[] {
+  const diagramSplit = text.split(/(?:---+\s*Diagram & Spatial Labels\s*---+|Diagram & Spatial Labels:\s*)/i);
+  if (diagramSplit.length <= 1) return [];
+  const rawLabels = diagramSplit[1].split(/(?:---+\s*Speaker Notes\s*---+|---+\s*Selected Text\s*---+|\n\s*#+\s*Slide|\n\s*Slide\s+\d+)/i)[0].trim();
+  const labelLines = rawLabels.split('\n').map((l) => l.trim()).filter(Boolean);
+  const parsedLabels: DiagramOcclusionLabel[] = [];
+  labelLines.forEach((line, idx) => {
+    const m = line.match(/(?:\[(?:Slot|Label)\s*(\d+)\]|(\d+)\.)[:.-]?\s*"([^"]+)"(?:\s*\(([^)]+)\))?/i);
+    if (m) {
+      parsedLabels.push({
+        index: m[1] ? parseInt(m[1], 10) : m[2] ? parseInt(m[2], 10) : idx + 1,
+        label: m[3].trim(),
+        position: m[4]?.trim(),
+      });
+    } else {
+      const bulletMatch = line.match(/^[#\-*•\d.:()]+\s*(.+?)(?:\s*\(([^)]+)\))?$/);
+      if (bulletMatch && bulletMatch[1]) {
+        parsedLabels.push({
+          index: idx + 1,
+          label: bulletMatch[1].replace(/^["']|["']$/g, '').trim(),
+          position: bulletMatch[2]?.trim(),
+        });
+      }
+    }
+  });
+  return parsedLabels;
+}
+
+/**
+ * Parses slide content into body, optional speaker notes, and diagram labels.
+ */
+function parseSlideContent(rawChunk: string): {
+  body: string;
+  speakerNotes?: string;
+  diagramLabels?: DiagramOcclusionLabel[];
+} {
   const notesSplit = rawChunk.split(/(?:---+\s*Speaker Notes\s*---+|Speaker Notes:\s*)/i);
-  let body = notesSplit[0]
-    .replace(/---+\s*Slide Content\s*---+/gi, '')
-    .trim();
+  let mainContent = notesSplit[0];
   let speakerNotes: string | undefined = undefined;
 
   if (notesSplit.length > 1) {
     speakerNotes = notesSplit.slice(1).join('\n').trim();
   }
 
-  return { body, speakerNotes };
+  const diagramLabels = parseDiagramLabels(mainContent);
+  const diagramSplit = mainContent.split(/(?:---+\s*Diagram & Spatial Labels\s*---+|Diagram & Spatial Labels:\s*)/i);
+  if (diagramSplit.length > 1) {
+    mainContent = diagramSplit[0];
+  }
+
+  const body = mainContent
+    .replace(/---+\s*Slide Content\s*---+/gi, '')
+    .trim();
+
+  return {
+    body,
+    speakerNotes,
+    diagramLabels: diagramLabels.length > 0 ? diagramLabels : undefined,
+  };
 }
 
 /**
@@ -169,15 +224,18 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
     if (hrSplit.length >= 2 && hrSplit.every((chunk) => chunk.length > 10)) {
       const slides: ParsedSlide[] = hrSplit.map((chunk, idx) => {
         const slideNumber = idx + 1;
-        const { body, speakerNotes } = parseSlideContent(chunk);
+        const { body, speakerNotes, diagramLabels } = parseSlideContent(chunk);
         const title = deriveSlideTitle(body, slideNumber);
         const words = chunk.split(/\s+/).length;
         const fluffCheck = detectSlideFluff(body, title, slideNumber, hrSplit.length);
+        const hasDiagram = Boolean(diagramLabels && diagramLabels.length > 0);
         return {
           slideNumber,
           title,
           body,
           speakerNotes,
+          diagramLabels,
+          hasDiagram,
           combinedText: chunk,
           wordCount: words,
           isLikelyFluff: fluffCheck.isFluff,
@@ -222,18 +280,21 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
       ? parseInt(currentMatch[3], 10)
       : i + 1;
 
-    const { body, speakerNotes } = parseSlideContent(contentText);
+    const { body, speakerNotes, diagramLabels } = parseSlideContent(contentText);
     const title = deriveSlideTitle(body || contentText, slideNumber);
     const combined = currentMatch[0].trim() + '\n' + contentText;
     const words = combined.split(/\s+/).length;
 
     const fluffCheck = detectSlideFluff(body || contentText, title, slideNumber, matches.length);
+    const hasDiagram = Boolean(diagramLabels && diagramLabels.length > 0);
 
     slides.push({
       slideNumber,
       title,
       body: body || contentText,
       speakerNotes,
+      diagramLabels,
+      hasDiagram,
       combinedText: combined,
       wordCount: words,
       isLikelyFluff: fluffCheck.isFluff,

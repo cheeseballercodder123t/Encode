@@ -770,7 +770,39 @@ export function generateSegregationRemnote(
     });
   }
 
-  const assembled = assemblePayload(ctx, [facts, mechs, drills, examples]);
+  // Confusable Pairs / Discrimination Matrix
+  const confusableSection = newSection('confusable', '⚖️ Confusable Pairs & Discrimination Matrix', 'Discrimination Matrix');
+  for (const pair of report.confusablePairs || []) {
+    confusableSection.activeSource = sourceIdOfItem(pair.id);
+    pushCard(
+      ctx,
+      confusableSection,
+      `When does the system switch from ${pair.conceptA} to ${pair.conceptB}?`,
+      pair.boundaryCondition,
+      'forward',
+      { reason: 'boundary condition question' }
+    );
+    pushExtra(ctx, confusableSection, 'Distinguishing Axis', pair.distinguishingAxis, 'contrast row');
+    pushExtra(ctx, confusableSection, `${pair.conceptA} Feature`, pair.conceptAFeature, 'contrast row');
+    pushExtra(ctx, confusableSection, `${pair.conceptB} Feature`, pair.conceptBFeature, 'contrast row');
+    if (pair.diagnosticVignette && pair.diagnosticAnswer) {
+      pushCard(
+        ctx,
+        confusableSection,
+        `Vignette: ${pair.diagnosticVignette} (${pair.conceptA} vs ${pair.conceptB})`,
+        pair.diagnosticAnswer,
+        'forward',
+        { indent: '  ', reason: 'diagnostic drill' }
+      );
+    }
+  }
+
+  const sectionsToAssemble = [facts, mechs, drills, examples];
+  if (report.confusablePairs && report.confusablePairs.length > 0) {
+    sectionsToAssemble.push(confusableSection);
+  }
+
+  const assembled = assemblePayload(ctx, sectionsToAssemble);
   return {
     ...assembled,
     factsCount,

@@ -260,6 +260,30 @@ describe('extractAnkiCardsFromSchema', () => {
     expect(cards[0].tags).toContain('SchemaActivity');
   });
 
+  it('generates Diagram Occlusion visual cloze cards from slide notes', () => {
+    const slideNotes = `
+# Slide 3: Citric Acid Cycle
+--- Diagram & Spatial Labels ---
+[Slot 1]: "Oxaloacetate" (Top Left)
+[Slot 2]: "Citrate Synthase" (Top Center)
+[Slot 3]: "Isocitrate" (Right Middle)
+
+Enzyme pathway steps for ATP generation.
+`.trim();
+
+    const cards = extractAnkiCardsFromSchema(null, null, slideNotes);
+    expect(cards).toHaveLength(3);
+    const first = cards[0];
+    expect(first.id).toBe('slide-3-occlusion-1');
+    expect(first.tags).toContain('DiagramOcclusion');
+    expect(first.tags).toContain('VisualCloze');
+    expect(first.isCloze).toBe(true);
+    expect(first.front).toContain('Visual Diagram Occlusion');
+    expect(first.front).toContain('Citric Acid Cycle');
+    expect(first.front).toContain('[ Slot #1: ? ]');
+    expect(first.back).toContain('{{c1::Oxaloacetate}}');
+  });
+
   it('returns an empty list when given nothing', () => {
     expect(extractAnkiCardsFromSchema(null, null)).toEqual([]);
   });

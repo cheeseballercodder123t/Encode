@@ -155,7 +155,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setPrevIsOpen(true);
     setPrevReport(report);
     setPrevSchema(schema);
-    setDeck(sanitizeExtracted(withInterferenceTraps(extractAnkiCardsFromSchema(schema, report))));
+    setDeck(sanitizeExtracted(withInterferenceTraps(extractAnkiCardsFromSchema(schema, report, notes))));
     setManualCards(null);
     setIncludeHeldBack(false);
     const title = report?.topic || schema?.topicSummary || 'Cognitive_Schema';

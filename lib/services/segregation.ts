@@ -94,6 +94,25 @@ export const segregationSchema = {
         required: ["id", "title", "problem", "steps"]
       }
     },
+    confusablePairs: {
+      type: Type.ARRAY,
+      description: "Confusable Pairs / Discrimination Matrix: 2-4 pairs of closely related concepts students confuse on exams (e.g. SN1 vs SN2, Mitosis vs Meiosis, Sympathetic vs Parasympathetic).",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          conceptA: { type: Type.STRING },
+          conceptB: { type: Type.STRING },
+          distinguishingAxis: { type: Type.STRING, description: "Primary dimension of contrast, e.g. 'Rate law & Intermediate' or 'Function & Neurotransmitter'" },
+          boundaryCondition: { type: Type.STRING, description: "Exact trigger or condition under which the system switches from A to B" },
+          conceptAFeature: { type: Type.STRING, description: "Distinctive characteristic of Concept A" },
+          conceptBFeature: { type: Type.STRING, description: "Distinctive characteristic of Concept B" },
+          diagnosticVignette: { type: Type.STRING, description: "Exam-style edge-case vignette testing which of the two applies" },
+          diagnosticAnswer: { type: Type.STRING, description: "Which concept applies and why" }
+        },
+        required: ["id", "conceptA", "conceptB", "distinguishingAxis", "boundaryCondition", "conceptAFeature", "conceptBFeature", "diagnosticVignette", "diagnosticAnswer"]
+      }
+    },
     compressionRatio: {
       type: Type.STRING,
       description: "Estimated fluff reduction e.g. '62% Fluff Eliminated'"
@@ -159,6 +178,7 @@ VOLUME TARGETS (hit every minimum — under-producing is a failure):
 - conceptualMechanisms: 4-8 mechanisms, one per distinct process/law/framework.
 - practiceQuestions: 12-24 rapid-fire Q/A drills covering different facts, numbers, steps, and discriminations.
 - workedExamples: 2-4 step-by-step worked examples.
+- confusablePairs: 2-4 pairs of concepts students confuse on exams (e.g. SN1 vs SN2, Mitosis vs Meiosis, Type I vs Type II error). Test the boundary condition: under what exact condition does the system switch from A to B?
 If at least facts+mechs selected, hit 30-64 total cards; otherwise fill the selected sections generously. A lecture that yields fewer than 50 cards was under-mined: work through the reverse of every card, the second-order consequences, the neighbouring-term distinctions and each named step before you stop.
 
 ${CARD_BREVITY_RULES}

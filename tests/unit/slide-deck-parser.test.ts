@@ -135,6 +135,31 @@ References: Lehninger Principles of Biochemistry`;
     expect(result.slides[3].fluffReason).toBe('Q&A / End slide');
   });
 
+  it('parses diagram and spatial labels into structured occlusion models', () => {
+    const raw = `Slide 1 of 2
+--- Slide Content ---
+Action Potential Membrane Diagram
+--- Diagram & Spatial Labels ---
+[Slot 1]: "Na+/K+ ATPase Pump" (Top Center)
+[Slot 2]: "Voltage-gated Na+ Channel" (Left Middle)
+[Slot 3]: "Voltage-gated K+ Channel" (Right Middle)
+[Slot 4]: "Resting Potential: -70mV" (Intracellular)
+
+Slide 2 of 2
+--- Slide Content ---
+Synaptic Transmission Overview
+Chemical signals convert electrical potentials across the cleft.`;
+
+    const result = parseSlideDeck(raw);
+    expect(result.isSlideDeck).toBe(true);
+    expect(result.slides[0].hasDiagram).toBe(true);
+    expect(result.slides[0].diagramLabels).toHaveLength(4);
+    expect(result.slides[0].diagramLabels?.[0].label).toBe('Na+/K+ ATPase Pump');
+    expect(result.slides[0].diagramLabels?.[0].position).toBe('Top Center');
+    expect(result.slides[0].diagramLabels?.[1].label).toBe('Voltage-gated Na+ Channel');
+    expect(result.slides[1].hasDiagram).toBe(false);
+  });
+
   it('gracefully returns isSlideDeck false for standard paragraphs and single slides', () => {
     expect(detectSlideDeck('')).toBe(false);
     expect(parseSlideDeck('').isSlideDeck).toBe(false);
