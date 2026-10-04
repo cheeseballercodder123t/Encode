@@ -16,6 +16,8 @@ export interface ParsedSlide {
   speakerNotes?: string;
   combinedText: string;
   wordCount: number;
+  isLikelyFluff?: boolean;
+  fluffReason?: string;
 }
 
 export interface SlideDeckParseResult {
@@ -23,6 +25,8 @@ export interface SlideDeckParseResult {
   presentationTitle?: string;
   slides: ParsedSlide[];
   totalWordCount: number;
+  contentSlidesCount: number;
+  fluffSlidesCount: number;
 }
 
 const SLIDE_HEADER_REGEX = /(?:^|\n)\s*(?:---+)?\s*(?:Slide\s+(\d+)(?:\s*(?:of|\/)\s*\d+)?|\[Slide\s+(\d+)\]|#+\s*Slide\s+(\d+))(?:\s*---+|\s*[:.-])?\s*/gi;
@@ -84,12 +88,74 @@ function deriveSlideTitle(body: string, slideNumber: number): string {
 }
 
 /**
+ * Detects if a slide is likely low-yield fluff (course admin, agenda, end slide, or empty divider).
+ */
+export function detectSlideFluff(
+  body: string,
+  title: string,
+  slideNumber: number,
+  totalSlides?: number
+): { isFluff: boolean; reason?: string } {
+  const combined = `${title}\n${body}`.trim();
+  const words = combined.split(/\s+/).filter(Boolean).length;
+
+  // 1. Title / Course administration on first slide
+  if (slideNumber === 1) {
+    const hasLogistics =
+      /\b(?:syllabus|welcome to|instructor:|professor:|office hours|fall\s*20\d\d|spring\s*20\d\d|course overview|lecture \d+ overview)\b/i.test(
+        combined
+      );
+    const isVeryShort =
+      words < 15 &&
+      !/\b(?:voltage|membrane|enzyme|reaction|algorithm|theorem|formula|equation|circuit|cell|protein|pump)\b/i.test(
+        combined
+      );
+    if (hasLogistics || isVeryShort) {
+      return { isFluff: true, reason: 'Title / Course logistics' };
+    }
+  }
+
+  // 2. Agenda / Outline / Table of Contents
+  if (
+    /\b(?:agenda|table of contents|lecture overview|class outline|roadmap|today's plan|schedule)\b/i.test(
+      title
+    ) &&
+    words < 60
+  ) {
+    return { isFluff: true, reason: 'Agenda / Outline' };
+  }
+
+  // 3. Wrap-up, Q&A, References, Acknowledgments
+  if (
+    /\b(?:questions\??|q\s*&\s*a|any questions|thank you|thanks!|references|bibliography|sources|reading list|announcements|homework|reminders)\b/i.test(
+      title
+    )
+  ) {
+    return { isFluff: true, reason: 'Q&A / End slide' };
+  }
+
+  if (
+    words < 15 &&
+    /\b(?:questions\??|thank you|see you next class|have a great weekend)\b/i.test(combined)
+  ) {
+    return { isFluff: true, reason: 'Q&A / End slide' };
+  }
+
+  // 4. Section Divider / Almost empty
+  if (words < 8 && !/\b(?:definition|formula|equation)\b/i.test(combined)) {
+    return { isFluff: true, reason: 'Divider slide' };
+  }
+
+  return { isFluff: false };
+}
+
+/**
  * Parses full multi-slide presentation text into discrete slide models.
  */
 export function parseSlideDeck(rawText: string): SlideDeckParseResult {
   const trimmed = (rawText || '').trim();
   if (!trimmed) {
-    return { isSlideDeck: false, slides: [], totalWordCount: 0 };
+    return { isSlideDeck: false, slides: [], totalWordCount: 0, contentSlidesCount: 0, fluffSlidesCount: 0 };
   }
 
   const { title: presentationTitle, remainingText } = extractPresentationTitle(trimmed);
@@ -106,6 +172,7 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
         const { body, speakerNotes } = parseSlideContent(chunk);
         const title = deriveSlideTitle(body, slideNumber);
         const words = chunk.split(/\s+/).length;
+        const fluffCheck = detectSlideFluff(body, title, slideNumber, hrSplit.length);
         return {
           slideNumber,
           title,
@@ -113,6 +180,8 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
           speakerNotes,
           combinedText: chunk,
           wordCount: words,
+          isLikelyFluff: fluffCheck.isFluff,
+          fluffReason: fluffCheck.reason,
         };
       });
 
@@ -122,6 +191,8 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
         presentationTitle,
         slides,
         totalWordCount: totalWords,
+        contentSlidesCount: slides.filter((s) => !s.isLikelyFluff).length,
+        fluffSlidesCount: slides.filter((s) => !!s.isLikelyFluff).length,
       };
     }
 
@@ -130,6 +201,8 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
       presentationTitle,
       slides: [],
       totalWordCount: trimmed.split(/\s+/).length,
+      contentSlidesCount: 0,
+      fluffSlidesCount: 0,
     };
   }
 
@@ -154,6 +227,8 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
     const combined = currentMatch[0].trim() + '\n' + contentText;
     const words = combined.split(/\s+/).length;
 
+    const fluffCheck = detectSlideFluff(body || contentText, title, slideNumber, matches.length);
+
     slides.push({
       slideNumber,
       title,
@@ -161,6 +236,8 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
       speakerNotes,
       combinedText: combined,
       wordCount: words,
+      isLikelyFluff: fluffCheck.isFluff,
+      fluffReason: fluffCheck.reason,
     });
   }
 
@@ -172,5 +249,7 @@ export function parseSlideDeck(rawText: string): SlideDeckParseResult {
     presentationTitle,
     slides: isSlideDeck ? slides : [],
     totalWordCount,
+    contentSlidesCount: isSlideDeck ? slides.filter((s) => !s.isLikelyFluff).length : 0,
+    fluffSlidesCount: isSlideDeck ? slides.filter((s) => !!s.isLikelyFluff).length : 0,
   };
 }

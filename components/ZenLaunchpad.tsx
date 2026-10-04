@@ -230,6 +230,7 @@ export function ZenLaunchpad({
 }: ZenLaunchpadProps) {
   // Fluff Guillotine: pre-encoding semantic triage over the pasted notes.
   const [showTriage, setShowTriage] = useState(false);
+  const [showSlideTray, setShowSlideTray] = useState(false);
 
   // Smart Mnemonic Auto-Detection
   const detectedMnemonic = useMemo(() => {
@@ -372,24 +373,64 @@ export function ZenLaunchpad({
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="flex flex-col gap-2.5 border border-amber-500/40 bg-amber-950/20 p-3.5 sm:flex-row sm:items-center sm:justify-between rounded-lg">
-                    <p className="text-[11px] leading-relaxed text-slate-ink">
-                      <span className="text-amber-300 font-semibold">
-                        ⚡ Lecture Deck Detected ({parsedSlideDeck.slides.length} slides
-                        {parsedSlideDeck.presentationTitle ? ` · ${parsedSlideDeck.presentationTitle}` : ''}).
-                      </span>{' '}
-                      Pasted from Google Slides, PowerPoint, or Gemini. DeepEncode segments every slide to forge atomic cards without quality loss.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSound('pop');
-                        onForge();
-                      }}
-                      className="self-start sm:self-auto shrink-0 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-inset font-bold text-[11px] rounded-full transition-colors duration-150 cursor-pointer whitespace-nowrap shadow-gilt"
-                    >
-                      1-Click Anki Forge ({parsedSlideDeck.slides.length} Slides)
-                    </button>
+                  <div className="flex flex-col gap-2.5 border border-amber-500/40 bg-amber-950/20 p-3.5 rounded-lg">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                      <p className="text-[11px] leading-relaxed text-slate-ink">
+                        <span className="text-amber-300 font-semibold">
+                          ⚡ Lecture Deck Detected ({parsedSlideDeck.slides.length} slides
+                          {parsedSlideDeck.fluffSlidesCount > 0
+                            ? ` · ${parsedSlideDeck.contentSlidesCount} content, ${parsedSlideDeck.fluffSlidesCount} admin`
+                            : ''}
+                          {parsedSlideDeck.presentationTitle ? ` · ${parsedSlideDeck.presentationTitle}` : ''}).
+                        </span>{' '}
+                        DeepEncode segments every slide to forge atomic cards without quality loss.
+                      </p>
+                      <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playSound('click');
+                            setShowSlideTray((v) => !v);
+                          }}
+                          className="px-2.5 py-1.5 border border-edge/60 hover:border-amber-500/50 text-[11px] font-mono text-solder hover:text-bone rounded-full transition-colors duration-150 cursor-pointer"
+                        >
+                          {showSlideTray ? 'Hide Slides' : 'Inspect Slides'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playSound('pop');
+                            onForge();
+                          }}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-inset font-bold text-[11px] rounded-full transition-colors duration-150 cursor-pointer whitespace-nowrap shadow-gilt"
+                        >
+                          1-Click Anki Forge ({parsedSlideDeck.contentSlidesCount > 0 ? `${parsedSlideDeck.contentSlidesCount} Content Slides` : `${parsedSlideDeck.slides.length} Slides`})
+                        </button>
+                      </div>
+                    </div>
+
+                    {showSlideTray && (
+                      <div className="pt-2 border-t border-edge/40 space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {parsedSlideDeck.slides.map((s) => (
+                          <div
+                            key={s.slideNumber}
+                            className="flex items-center gap-2 px-2.5 py-1.5 bg-deck/80 border border-edge/40 rounded text-[11px] font-mono"
+                          >
+                            <span
+                              className={`shrink-0 px-1.5 py-0.5 text-[9px] font-bold rounded ${
+                                s.isLikelyFluff
+                                  ? 'bg-hazard-950/60 text-hazard-300 border border-hazard-500/30'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                              }`}
+                            >
+                              {s.isLikelyFluff ? s.fluffReason || 'ADMIN' : 'CONTENT'}
+                            </span>
+                            <span className="text-bone truncate flex-1">{s.title}</span>
+                            <span className="text-solder text-[10px] shrink-0">{s.wordCount} words</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}

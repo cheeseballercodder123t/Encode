@@ -230,7 +230,8 @@ export function FlashcardForgeModal({
     if (isOpen && initialNotes && initialNotes.trim() && sources.length === 0) {
       const parsed = parseSlideDeck(initialNotes);
       if (parsed.isSlideDeck && parsed.slides.length >= 2) {
-        const slidesToAdd = parsed.slides.slice(0, MAX_SOURCES);
+        const substantive = parsed.slides.filter((s) => !s.isLikelyFluff);
+        const slidesToAdd = (substantive.length > 0 ? substantive : parsed.slides).slice(0, MAX_SOURCES);
         setSources(
           slidesToAdd.map((s) => ({
             id: idFor(`slide_${s.slideNumber}`),
@@ -377,11 +378,15 @@ export function FlashcardForgeModal({
     setDraftText('');
   };
 
-  const addSegmentedSlides = () => {
+  const addSegmentedSlides = (contentOnly = true) => {
     if (!draftSlideDeck.isSlideDeck || draftSlideDeck.slides.length === 0) return;
     playSound('success');
     const remaining = MAX_SOURCES - sources.length;
-    const toAdd = draftSlideDeck.slides.slice(0, remaining);
+    const pool =
+      contentOnly && draftSlideDeck.contentSlidesCount > 0
+        ? draftSlideDeck.slides.filter((s) => !s.isLikelyFluff)
+        : draftSlideDeck.slides;
+    const toAdd = pool.slice(0, remaining);
 
     setSources((prev) => [
       ...prev,
@@ -1348,15 +1353,28 @@ export function FlashcardForgeModal({
                       [ + ADD TEXT SOURCE ]
                     </button>
                     {draftSlideDeck.isSlideDeck && (
-                      <button
-                        type="button"
-                        onClick={addSegmentedSlides}
-                        disabled={sources.length >= MAX_SOURCES}
-                        className="px-3 py-1.5 bg-amber border border-amber text-chassis text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer shadow-gilt hover:brightness-110"
-                        title="Splits this presentation into individual slide sources for high-resolution card generation"
-                      >
-                        [ ⚡ SPLIT INTO {draftSlideDeck.slides.length} SLIDE SOURCES ]
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => addSegmentedSlides(true)}
+                          disabled={sources.length >= MAX_SOURCES}
+                          className="px-3 py-1.5 bg-amber border border-amber text-chassis text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer shadow-gilt hover:brightness-110"
+                          title="Splits this presentation into core content slide sources, excluding title/agenda/admin slides"
+                        >
+                          [ ⚡ SPLIT ({draftSlideDeck.contentSlidesCount > 0 ? `${draftSlideDeck.contentSlidesCount} CONTENT SLIDES` : `${draftSlideDeck.slides.length} SLIDES`}) ]
+                        </button>
+                        {draftSlideDeck.fluffSlidesCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => addSegmentedSlides(false)}
+                            disabled={sources.length >= MAX_SOURCES}
+                            className="px-3 py-1.5 bg-chassis border border-edge text-solder hover:text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+                            title="Include all slides including title, agenda, and Q&A slides"
+                          >
+                            [ + ALL {draftSlideDeck.slides.length} SLIDES ]
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
