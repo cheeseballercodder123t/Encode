@@ -97,6 +97,8 @@ interface FlashcardForgeModalProps {
   settings: AISettings;
   /** Hands the merged deck to the export surface the learner chose. */
   onDeckReady: (report: SegregationReport, target: ForgeExportTarget) => void;
+  /** Pre-loaded notes (from extension, launchpad, or query params). */
+  initialNotes?: string;
 }
 
 const SECTIONS: { id: keyof ForgeSectionCounts; label: string; blurb: string }[] = [
@@ -140,7 +142,13 @@ const MEDIA_TYPES = [
   'video/x-matroska',
 ];
 
-export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: FlashcardForgeModalProps) {
+export function FlashcardForgeModal({
+  isOpen,
+  onClose,
+  settings,
+  onDeckReady,
+  initialNotes,
+}: FlashcardForgeModalProps) {
   const [sources, setSources] = useState<ForgeSourceDraft[]>([]);
   const [draftText, setDraftText] = useState('');
   const [draftUrl, setDraftUrl] = useState('');
@@ -214,6 +222,21 @@ export function FlashcardForgeModal({ isOpen, onClose, settings, onDeckReady }: 
     () => SECTIONS.filter((s) => sections[s.id]).map((s) => s.id),
     [sections]
   );
+
+  // Auto-seed source draft from initialNotes (e.g. from Companion Extension or Launchpad)
+  React.useEffect(() => {
+    if (isOpen && initialNotes && initialNotes.trim() && sources.length === 0) {
+      const text = initialNotes.trim();
+      setSources([
+        {
+          id: idFor('initial_notes'),
+          kind: 'text',
+          label: `${text.slice(0, 42).replace(/\s+/g, ' ')}${text.length > 42 ? '…' : ''}`,
+          notes: text,
+        },
+      ]);
+    }
+  }, [isOpen, initialNotes]);
 
   /**
    * What the Wozniak pass does to this deck, computed HERE rather than only at

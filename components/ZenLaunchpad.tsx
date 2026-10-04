@@ -237,6 +237,12 @@ export function ZenLaunchpad({
     return MEMORIZATION_TRIGGERS.some(kw => lower.includes(kw));
   }, [notes, mode]);
 
+  // Smart Slide Deck Auto-Detection
+  const detectedSlides = useMemo(() => {
+    if (!notes.trim()) return false;
+    return /slide\s+\d+|---\s*slide content\s*---|presentation:\s*|speaker notes:/i.test(notes);
+  }, [notes]);
+
   const moduleState: Record<(typeof MODULES)[number]['key'], { on: boolean; toggle: () => void }> = {
     deepResearch: { on: enableDeepResearch, toggle: () => setEnableDeepResearch(!enableDeepResearch) },
     guidedPath: { on: enableGuidedPath, toggle: () => setEnableGuidedPath(!enableGuidedPath) },
@@ -356,6 +362,36 @@ export function ZenLaunchpad({
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Slide Deck auto-detection: provides 1-click Express Forge shortcut */}
+            <AnimatePresence>
+              {detectedSlides && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex flex-col gap-2.5 border border-amber-500/40 bg-amber-950/20 p-3.5 sm:flex-row sm:items-center sm:justify-between rounded-lg">
+                    <p className="text-[11px] leading-relaxed text-slate-ink">
+                      <span className="text-amber-300 font-semibold">⚡ Lecture Slides Detected.</span>{' '}
+                      Pasted from Google Slides or Gemini. You can forge high-yield Anki cards directly or start an interactive workout.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playSound('pop');
+                        onForge();
+                      }}
+                      className="self-start sm:self-auto shrink-0 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-inset font-bold text-[11px] rounded-full transition-colors duration-150 cursor-pointer whitespace-nowrap shadow-gilt"
+                    >
+                      1-Click Anki Forge
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
 
             {/* Examples: quiet tiles, not pills. */}
             <div className="mt-1">

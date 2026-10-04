@@ -275,12 +275,18 @@ export default function DeepEncodeApp() {
       try {
         const searchParams = new URLSearchParams(window.location.search);
         
-        // Check for 1-Click Bookmarklet text input (?notes=... or ?text=...)
-        const rawNotesParam = searchParams.get('notes') || searchParams.get('text');
+        // Check for 1-Click Extension / Bookmarklet text input (?notes=... or ?text=... or ?source=...)
+        const rawNotesParam = searchParams.get('notes') || searchParams.get('text') || searchParams.get('source');
         if (rawNotesParam) {
-          setRawNotes(decodeURIComponent(rawNotesParam));
+          const decoded = decodeURIComponent(rawNotesParam);
+          setRawNotes(decoded);
           setActiveTab('text');
           sound.playSuccess();
+
+          // Auto-launch forge if requested by extension
+          if (searchParams.get('auto') === 'forge' || searchParams.get('forge') === 'true') {
+            setIsForgeOpen(true);
+          }
         }
 
         const shareParam = searchParams.get('share') || searchParams.get('data');
@@ -2366,6 +2372,7 @@ export default function DeepEncodeApp() {
         onClose={() => setIsForgeOpen(false)}
         settings={aiSettings}
         onDeckReady={handleForgeDeckReady}
+        initialNotes={rawNotes}
       />
 
       {/* Feature: Multi-Document Comparative 4-Quadrant Synthesis */}
