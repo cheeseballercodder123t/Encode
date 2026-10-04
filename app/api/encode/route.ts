@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEncodedSchema } from "@/lib/ai-output-validation";
+import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 import { FIRST_PRINCIPLES_ENGINE, FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 
@@ -289,6 +290,7 @@ const standardResponseSchema = {
             required: ["confusableLookalike", "distinguishingRule"]
           },
           visualData: visualDataSchema,
+          toyModel: toyModelSchema,
           researchContext: {
             type: Type.OBJECT,
             properties: {
@@ -413,6 +415,7 @@ const guidedPathResponseSchema = {
                   required: ["confusableLookalike", "distinguishingRule"]
                 },
                 visualData: visualDataSchema,
+                toyModel: toyModelSchema,
                 scaffold: {
                   type: Type.OBJECT,
                   properties: {
@@ -614,7 +617,7 @@ Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting pote
 For every stage specify the chosen 'templateType' and populate 'visualData' with rich structured nodes/mappings/trees/gauges plus 'generationChallenge', clear scaffold labels, domain presets and concrete example answers, and ALWAYS include 'boundaryContrast'.`;
     }
 
-    systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}`;
+    systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}\n${TOY_MODEL_INSTRUCTION}`;
 
     let userPrompt = '';
     if (hasNotes) {
@@ -645,7 +648,7 @@ For every stage specify the chosen 'templateType' and populate 'visualData' with
       const validatedGuidedModules = parsedResult.guidedModules
         .filter((mod: any) => mod && typeof mod === 'object' && Array.isArray(mod.activities))
         .map((mod: any) => {
-          const validated = validateEncodedSchema({ ...mod, activities: mod.activities }, mode);
+          const validated = validateEncodedSchema({ ...mod, activities: mod.activities }, mode, hasFile ? undefined : notes);
           return {
             ...mod,
             title: mod.title || validated.topicSummary,
@@ -679,7 +682,7 @@ For every stage specify the chosen 'templateType' and populate 'visualData' with
     // Standard / non-modular response : coerce into the shape the workbench
     // depends on (missing scaffolds get safe defaults, empty activity lists
     // get a fallback stage).
-    const validated = validateEncodedSchema(parsedResult, mode);
+    const validated = validateEncodedSchema(parsedResult, mode, hasFile ? undefined : notes);
     return NextResponse.json({
       topicSummary: validated.topicSummary,
       activities: validated.activities,

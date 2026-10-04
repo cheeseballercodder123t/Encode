@@ -92,6 +92,9 @@ import { ActivityVisualData, GenerationChallenge, VisualTemplateType } from './t
 
 
 export interface Activity {
+  /** Fixed-engine lab; absent when no safely grounded archetype fits. */
+  toyModel?: import('./toy-models/types').ToyModelConfig;
+  toyModelIssues?: string[];
   id: string;
   stageNumber: number;
   title: string;
@@ -127,6 +130,7 @@ export interface Activity {
 }
 
 export interface StageResponse {
+  toyModelProgress?: import('./toy-models/types').ToyModelProgress;
   field1: string;
   field2: string;
   field3?: string;

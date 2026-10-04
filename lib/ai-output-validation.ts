@@ -17,6 +17,8 @@ import {
   StageResponse,
 } from './types';
 
+import { validateToyModelConfig } from './toy-models/validation';
+
 // ─── JSON sanitizing ─────────────────────────────────────────────────────────
 
 /** Strips ```json fences, BOMs and leading/trailing prose so JSON.parse succeeds. */
@@ -72,7 +74,7 @@ function asStringArray(v: unknown): string[] {
  * activities, and synthesizes a single generic stage when the model returned
  * zero usable ones (never stuck on an empty workbench).
  */
-export function validateEncodedSchema(raw: unknown, mode: EncodingMode): {
+export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?: string): {
   topicSummary: string;
   activities: Activity[];
   researchContexts: unknown[];
@@ -88,7 +90,10 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode): {
         .filter((a): a is Record<string, any> => a && typeof a === 'object')
         .map((a, i) => {
           const scaffold = (a.scaffold && typeof a.scaffold === 'object' ? a.scaffold : {}) as Record<string, any>;
+          const toy = a.toyModel === undefined ? undefined : validateToyModelConfig(a.toyModel, source);
           return {
+            toyModel: toy?.sanitizedConfig,
+            toyModelIssues: toy ? toy.issues : undefined,
             id: asString(a.id, `stage-${i + 1}`),
             stageNumber: typeof a.stageNumber === 'number' && a.stageNumber > 0 ? a.stageNumber : i + 1,
             title: asString(a.title, `Stage ${i + 1}`),

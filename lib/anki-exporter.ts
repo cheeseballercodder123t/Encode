@@ -4,6 +4,7 @@ import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from '.
 import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
 import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
 import { loadInterferenceTraps } from './interference-traps';
+import { toyBoundaryCard } from './toy-models/progress';
 import { CONTRADICTION_TAG } from './services/contradiction';
 import { parseSlideDeck, parseDiagramLabels } from './services/slide-deck-parser';
 
@@ -336,6 +337,13 @@ function buildUserWordingCards(
  *      tagged `Unfinished`, dense ones tagged `LeechCandidate`.
  *   2. SegregationReport quadrant cards when present.
  */
+function buildToyBoundaryAnkiCard(activity: Activity, response: StageResponse | undefined, sm2: AnkiCardItem['sm2']): AnkiCardItem[] {
+  const card = toyBoundaryCard(activity, response);
+  if (!card) return [];
+  const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return [{ id: card.id, front: escape(card.front), back: escape(card.back), isCloze: false, tags: ['DeepEncode', 'InterferenceTrap', 'ToyModel', card.type, card.correctPrediction ? 'PredictionConfirmed' : 'PredictionCorrected'], sm2: { ...sm2 } }];
+}
+
 export function extractAnkiCardsFromSchema(
   schema?: Partial<SavedSchema> | null,
   report?: SegregationReport | null,
@@ -349,6 +357,7 @@ export function extractAnkiCardsFromSchema(
   const userCards: AnkiCardItem[] = [];
   activities.forEach((act, idx) => {
     if (!act) return;
+    userCards.push(...buildToyBoundaryAnkiCard(act, schema?.userResponses?.[act.id], initialSM2));
     userCards.push(...buildUserWordingCards(act, schema?.userResponses?.[act.id], idx, initialSM2));
   });
   if (userCards.length > 0) return applyContextTags(userCards, contextTags);
@@ -603,7 +612,8 @@ export function extractStageAnkiCards(
   topicSummary?: string
 ): AnkiCardItem[] {
   if (!activity) return [];
-  const cards = buildUserWordingCards(activity, response, index, calculateSM2(4));
+  const sm2 = calculateSM2(4);
+  const cards = [...buildToyBoundaryAnkiCard(activity, response, sm2), ...buildUserWordingCards(activity, response, index, sm2)];
   const topic = sanitizeTopicSegment(topicSummary || '');
   const contextTags = topic ? [`Topic::${topic.replace(/\s+/g, '_')}`] : [];
   return applyContextTags(cards, contextTags);
@@ -643,7 +653,7 @@ export function extractWeakAnkiCardsFromSchema(
   });
   // User-wording cards carry stage ids as `act-<stageId>-<suffix>`.
   const weak = all.filter((c) => {
-    const m = /^act-(.+)-(?:main|mech|boundary|cue)$/.exec(c.id || '');
+    const m = /^act-(.+)-(?:main|mech|boundary|cue|toy-boundary)$/.exec(c.id || '');
     if (!m) return true; // report-backed cards have no stage id: keep them
     return weakIds.has(m[1]);
   });

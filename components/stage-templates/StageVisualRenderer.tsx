@@ -1,6 +1,10 @@
 'use client';
 
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useMemo } from 'react';
+import { validateToyModelConfig } from '@/lib/toy-models/validation';
+import { modelFingerprint } from '@/lib/toy-models/engine';
+import type { ToyModelProgress } from '@/lib/toy-models/types';
+const ToyModelLab = lazy(() => import('@/components/toy-models/ToyModelLab').then((module) => ({ default: module.ToyModelLab })));
 import { Activity } from '@/lib/types';
 import { TemplateErrorBoundary } from './TemplateErrorBoundary';
 import { TEMPLATE_REGISTRY } from '@/lib/templates/registry';
@@ -18,6 +22,8 @@ interface VisualComponentProps {
    * completed link into the stage answer; without it they render statically.
    */
   onAdopt?: (text: string) => void;
+  toyProgress?: ToyModelProgress;
+  onToyProgress?: (progress: ToyModelProgress) => void;
 }
 
 // All visual components still lazy-loaded for code-splitting
@@ -61,7 +67,9 @@ function TemplateLoadingSkeleton() {
   );
 }
 
-export function StageVisualRenderer({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
+export function StageVisualRenderer({ activity, field1, field2, field3, selectedPreset, onAdopt, toyProgress, onToyProgress }: Props) {
+  const toyValidation = useMemo(() => activity.toyModel ? validateToyModelConfig(activity.toyModel) : undefined, [activity.toyModel]);
+  const toyConfig = toyValidation?.sanitizedConfig;
   const type = activity.templateType || '';
   const visualData = activity.visualData;
 
@@ -92,6 +100,8 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
   return (
     <TemplateErrorBoundary templateType={type}>
       <Suspense fallback={<TemplateLoadingSkeleton />}>
+        {toyConfig ? <ToyModelLab key={`${activity.id}-${modelFingerprint(toyConfig)}`} activityId={activity.id} config={toyConfig} progress={toyProgress} onProgress={onToyProgress} onAdopt={onAdopt} /> : <>
+          {(activity.toyModelIssues?.length || toyValidation?.issues.length) ? <div className="mb-3 p-3 border border-hazard-500/30 rounded-lg text-xs text-slate-ink" role="status">Interactive model unavailable: {(activity.toyModelIssues || toyValidation?.issues || []).join('; ')}. The original stage remains usable.</div> : null}
         <Component
           activity={activity}
           field1={field1}
@@ -100,6 +110,7 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
           selectedPreset={selectedPreset}
           onAdopt={onAdopt}
         />
+        </>}
       </Suspense>
     </TemplateErrorBoundary>
   );

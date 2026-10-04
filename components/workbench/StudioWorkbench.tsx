@@ -35,6 +35,7 @@ interface StudioWorkbenchProps {
   currentActivityIndex: number;
   setCurrentActivityIndex: (idx: number) => void;
   userResponses: Record<string, StageResponse>;
+  onToyProgress?: (activityId: string, progress: import('@/lib/toy-models/types').ToyModelProgress) => void;
   field1: string;
   setField1: (v: string | ((prev: string) => string)) => void;
   field2: string;
@@ -168,6 +169,7 @@ export function StudioWorkbench({
   currentActivityIndex,
   setCurrentActivityIndex,
   userResponses,
+  onToyProgress,
   field1,
   setField1,
   field2,
@@ -494,6 +496,7 @@ export function StudioWorkbench({
         ...userResponses,
         ...(currentActivity ? {
           [currentActivity.id]: {
+            ...userResponses[currentActivity.id],
             field1,
             field2,
             field3,
@@ -828,6 +831,8 @@ export function StudioWorkbench({
             {/* Interactive Visual Canvas / Storyboard / Sabotage */}
             <StageVisualRenderer
               activity={currentActivity}
+              toyProgress={userResponses[currentActivity.id]?.toyModelProgress}
+              onToyProgress={(progress) => onToyProgress?.(currentActivity.id, progress)}
               field1={field1}
               field2={field2}
               field3={field3}

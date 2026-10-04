@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import './toy-models.css';
 import { AuthProvider } from '@/lib/auth-context';
 
 export const viewport: Viewport = {
