@@ -3,21 +3,20 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Button, Card, CardContent, Badge, Input } from './ui/index';
 import { useModalA11y } from '@/hooks/useModalA11y';
+// Stats, exports and paging all come from the shared analytics service, so this
+// sheet and any other reader of a session can never report different numbers.
+import {
+  computeLibraryStats,
+  downloadFile,
+  exportToCSV,
+  exportToJSON,
+  paginateSessions,
+} from '@/lib/services/sessionAnalytics';
 
 interface UsageStats {
   date: string;
   callsByModel: Record<string, number>;
   weeklyCallsByModel: Record<string, number>;
-}
-
-interface SessionStats {
-  totalStages: number;
-  answeredStages: number;
-  avgConfidence: number;
-  avgCheckCount: number;
-  successRate: number;
-  reflectionsWritten: number;
-  templateBreakdown: Record<string, number>;
 }
 
 interface Props {
@@ -37,41 +36,6 @@ function loadUsageStats(): UsageStats {
     }
     return parsed;
   } catch { return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} }; }
-}
-
-function computeAllStats(schemas: import('@/lib/types').SavedSchema[]): SessionStats {
-  let totalStages = 0, answeredStages = 0, confTotal = 0, confCount = 0;
-  let checkTotal = 0, checkCount = 0, successes = 0, scored = 0, reflections = 0;
-  const templateBreakdown: Record<string, number> = {};
-
-  for (const s of schemas) {
-    for (const act of s.activities || []) {
-      totalStages++;
-      templateBreakdown[act.templateType] = (templateBreakdown[act.templateType] || 0) + 1;
-      const r = s.userResponses?.[act.id];
-      if (!r) continue;
-      if (r.field1?.trim()) answeredStages++;
-      if (r.confidenceScore != null) { confTotal += r.confidenceScore; confCount++; }
-      if (r.checkCount) { checkTotal += r.checkCount; checkCount++; }
-      if (r.feynmanReview) {
-        scored++;
-        // The examiner reports a boolean rather than a grade. Sessions saved
-        // before that change still carry a grade; read it as a fallback.
-        const review = r.feynmanReview as { secured?: boolean; grade?: string };
-        if (review.secured === true || review.grade === 'mastered' || review.grade === 'good') successes++;
-      }
-      if (r.reflection?.trim()) reflections++;
-    }
-  }
-
-  return {
-    totalStages, answeredStages,
-    avgConfidence: confCount ? Math.round(confTotal / confCount) : 0,
-    avgCheckCount: checkCount ? Math.round((checkTotal / checkCount) * 10) / 10 : 0,
-    successRate: scored ? Math.round((successes / scored) * 100) : 0,
-    reflectionsWritten: reflections,
-    templateBreakdown,
-  };
 }
 
 export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
@@ -102,14 +66,14 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
     );
   }, [savedSchemas, searchQuery]);
 
-  // Pagination : clamp to a valid page so narrowing the search can never leave
-  // the user stranded on an out-of-range page (replaces the reset-on-search effect).
-  const totalPages = Math.max(1, Math.ceil(filteredSchemas.length / itemsPerPage));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedSchemas = useMemo(() => {
-    const startIndex = (safePage - 1) * itemsPerPage;
-    return filteredSchemas.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredSchemas, safePage, itemsPerPage]);
+  // Pagination : the shared helper clamps to a valid page, so narrowing the
+  // search can never leave the user stranded on an out-of-range page (it
+  // replaces the old reset-on-search effect).
+  const { items: paginatedSchemas, page: safePage, totalPages } = paginateSessions(
+    filteredSchemas,
+    currentPage,
+    itemsPerPage
+  );
 
   // Windowed page numbers : at most 5 buttons, ellipsed around the current page.
   const pageButtons = useMemo(() => {
@@ -125,47 +89,23 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   const sheetRef = useModalA11y(isOpen, onClose);
   if (!isOpen) return null;
 
-  const stats = computeAllStats(savedSchemas);
+  const stats = computeLibraryStats(savedSchemas);
+  // The service keeps `successRate` a fraction and its averages unrounded, so
+  // rounding happens here — the one point where a number reaches the screen.
+  const successPct = Math.round(stats.successRate * 100);
+  const avgConfidencePct = Math.round(stats.avgConfidence);
   const totalSessions = savedSchemas.length;
   const filteredCount = filteredSchemas.length;
   const totalCalls = Object.values(usage.callsByModel).reduce((a, b) => a + b, 0);
   const weeklyTotal = Object.values(usage.weeklyCallsByModel).reduce((a, b) => a + b, 0);
 
+  // Exports go through the service, which is what the CSV/JSON tests cover.
   const handleExportCSV = () => {
-    const rows: string[] = ['session_id,timestamp,topic,mode,stage,template,confidence,check_count,mechanism_landed,reflection'];
-    for (const s of filteredSchemas) {
-      for (const act of s.activities || []) {
-        const r = s.userResponses?.[act.id];
-        if (!r) continue;
-        rows.push([
-          s.id, s.timestamp,
-          `"${(s.topicSummary || '').replace(/"/g, '""')}"`,
-          s.mode, act.stageNumber, act.templateType,
-          r.confidenceScore ?? '',
-          r.checkCount ?? 0,
-          r.feynmanReview?.secured === true ? 'yes' : r.feynmanReview ? 'open' : '',
-          `"${(r.reflection || '').replace(/"/g, '""')}"`,
-        ].join(','));
-      }
-    }
-    const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `encode-sessions-${Date.now()}.csv`; a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(exportToCSV(filteredSchemas), `encode-sessions-${Date.now()}.csv`, 'text/csv');
   };
 
   const handleExportJSON = () => {
-    const data = filteredSchemas.map(s => ({
-      id: s.id, timestamp: s.timestamp, topic: s.topicSummary, mode: s.mode, xpEarned: s.xpEarned,
-      stages: (s.activities || []).map(act => ({
-        stage: act.stageNumber, title: act.title, template: act.templateType,
-        response: s.userResponses?.[act.id] || null,
-      })),
-    }));
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `encode-sessions-${Date.now()}.json`; a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(exportToJSON(filteredSchemas), `encode-sessions-${Date.now()}.json`, 'application/json');
   };
 
   return (
@@ -196,8 +136,8 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
           {[
             { label: 'SESSIONS', value: String(totalSessions) },
-            { label: 'SUCCESS RATE', value: `${stats.successRate}%` },
-            { label: 'AVG CONFIDENCE', value: stats.avgConfidence ? `${stats.avgConfidence}/100` : '--' },
+            { label: 'SUCCESS RATE', value: `${successPct}%` },
+            { label: 'AVG CONFIDENCE', value: stats.avgConfidence ? `${avgConfidencePct}/100` : '--' },
             { label: 'REFLECTIONS', value: String(stats.reflectionsWritten) },
           ].map(({ label, value }) => (
             <Card key={label}>
@@ -209,19 +149,19 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
           ))}
         </div>
 
-        {stats.successRate > 0 && (
+        {successPct > 0 && (
           <Card className="mb-3">
             <CardContent className="p-3">
               <p className="text-[10px] text-solder uppercase tracking-wider mb-2">OVERALL SUCCESS RATE</p>
               <div className="w-full bg-chassis h-2">
                 <motion.div
                   initial={{ width: 0 }}
-                  animate={{ width: `${stats.successRate}%` }}
+                  animate={{ width: `${successPct}%` }}
                   transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className={`h-2 ${stats.successRate >= 80 ? 'bg-amber' : stats.successRate >= 60 ? 'bg-amber/70' : 'bg-hazard'}`}
+                  className={`h-2 ${successPct >= 80 ? 'bg-amber' : successPct >= 60 ? 'bg-amber/70' : 'bg-hazard'}`}
                 />
               </div>
-              <p className="text-right text-[10px] text-solder mt-1">{stats.successRate}%</p>
+              <p className="text-right text-[10px] text-solder mt-1">{successPct}%</p>
             </CardContent>
           </Card>
         )}

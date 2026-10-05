@@ -1,3 +1,28 @@
+import React, { lazy } from 'react';
+import type { Activity } from '@/lib/types';
+import type { ToyModelProgress } from '@/lib/toy-models/types';
+
+/**
+ * The props bundle every stage visual accepts. It lives here, next to the
+ * registry, because `TemplateDefinition.component` has to be typed at the point
+ * the component is registered — not in the renderer that happens to draw it.
+ */
+export interface TemplateComponentProps {
+  activity: Activity;
+  field1: string;
+  field2: string;
+  field3?: string;
+  selectedPreset?: string;
+  /**
+   * Optional write-back hook. Templates that can blank one of their own cells
+   * (first principles, analogy matrix, state transition) use it to put the
+   * completed link into the stage answer; without it they render statically.
+   */
+  onAdopt?: (text: string) => void;
+  toyProgress?: ToyModelProgress;
+  onToyProgress?: (progress: ToyModelProgress) => void;
+}
+
 export interface TemplateDefinition {
   id: string;
   title: string;
@@ -11,8 +36,47 @@ export interface TemplateDefinition {
   icon: string;
   accentColor: string;
   systemPromptDirective: string;
+  /**
+   * The renderer for this template, code-split so a registered template that a
+   * session never uses costs nothing on the first paint.
+   */
+  component: React.ComponentType<TemplateComponentProps>;
 }
 
+/**
+ * The id → renderer table the stage renderer dispatches through. Declared once,
+ * here, so the id a stage carries is the only thing that decides which visual
+ * draws it — the renderer holds no table of its own. Each visual is lazy-loaded
+ * for code-splitting, and the cast is needed because every template narrows its
+ * own props while the renderer hands the whole shared bundle to whichever one
+ * it resolved.
+ */
+// One shared lazy instance, so `interleaved_srs` renders the personal-schema
+// template through the very same component object rather than a second copy of
+// it (and React sees one code-split chunk, not two).
+const PERSONAL_SCHEMA_VISUAL = lazy(() => import('@/components/stage-templates/PersonalSchemaVisual').then(m => ({ default: m.PersonalSchemaVisual })));
+
+export const TEMPLATE_COMPONENTS = {
+  first_principles: lazy(() => import('@/components/stage-templates/FirstPrinciplesVisual').then(m => ({ default: m.FirstPrinciplesVisual }))),
+  cause_effect: lazy(() => import('@/components/stage-templates/CauseEffectVisual').then(m => ({ default: m.CauseEffectVisual }))),
+  visual_blueprint: lazy(() => import('@/components/stage-templates/VisualBlueprintVisual').then(m => ({ default: m.VisualBlueprintVisual }))),
+  analogy_matrix: lazy(() => import('@/components/stage-templates/AnalogyMatrixVisual').then(m => ({ default: m.AnalogyMatrixVisual }))),
+  concept_hierarchy: lazy(() => import('@/components/stage-templates/ConceptHierarchyVisual').then(m => ({ default: m.ConceptHierarchyVisual }))),
+  state_transition: lazy(() => import('@/components/stage-templates/StateTransitionVisual').then(m => ({ default: m.StateTransitionVisual }))),
+  boundary_stress_test: lazy(() => import('@/components/stage-templates/BoundaryStressTestVisual').then(m => ({ default: m.BoundaryStressTestVisual }))),
+  taxonomic_chunking: lazy(() => import('@/components/stage-templates/TaxonomicChunkingVisual').then(m => ({ default: m.TaxonomicChunkingVisual }))),
+  mnemonic_peg: lazy(() => import('@/components/stage-templates/MnemonicPegVisual').then(m => ({ default: m.MnemonicPegVisual }))),
+  memory_palace: lazy(() => import('@/components/stage-templates/MemoryPalaceVisual').then(m => ({ default: m.MemoryPalaceVisual }))),
+  contrast_grid: lazy(() => import('@/components/stage-templates/ContrastGridVisual').then(m => ({ default: m.ContrastGridVisual }))),
+  formula_spatial_grid: lazy(() => import('@/components/stage-templates/FormulaSpatialVisual').then(m => ({ default: m.FormulaSpatialVisual }))),
+  personal_schema: PERSONAL_SCHEMA_VISUAL,
+  // `interleaved_srs` deliberately has no registry entry of its own: it is the
+  // personal-schema workout driven by the interleaving scheduler, so it borrows
+  // that renderer here instead of becoming a 16th choosable template.
+  interleaved_srs: PERSONAL_SCHEMA_VISUAL,
+  mnemonic_storyboard: lazy(() => import('@/components/stage-templates/MnemonicStoryboardVisual').then(m => ({ default: m.MnemonicStoryboardVisual }))),
+  broken_model_debug: lazy(() => import('@/components/stage-templates/BrokenModelVisual').then(m => ({ default: m.BrokenModelVisual }))),
+} as Record<string, React.ComponentType<TemplateComponentProps>>;
 export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
   first_principles: {
     id: 'first_principles',
@@ -26,6 +90,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'indigo',
     systemPromptDirective:
       'Generate a first_principles schema with causal nodes (input → mechanism → outcome). Include an underlyingAxiom.',
+    component: TEMPLATE_COMPONENTS.first_principles,
   },
   cause_effect: {
     id: 'cause_effect',
@@ -39,6 +104,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'amber',
     systemPromptDirective:
       'Generate a cause_effect schema with disturbanceShock, cascadeImpact, breakdownState, and counterfactualQuestion.',
+    component: TEMPLATE_COMPONENTS.cause_effect,
   },
   analogy_matrix: {
     id: 'analogy_matrix',
@@ -52,6 +118,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'violet',
     systemPromptDirective:
       'Generate an analogy_matrix schema with analogyMappings array and whereAnalogyBreaks critical boundary.',
+    component: TEMPLATE_COMPONENTS.analogy_matrix,
   },
   concept_hierarchy: {
     id: 'concept_hierarchy',
@@ -65,6 +132,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'emerald',
     systemPromptDirective:
       'Generate a concept_hierarchy schema with hierarchyTree (rootNode + branches with subItems).',
+    component: TEMPLATE_COMPONENTS.concept_hierarchy,
   },
   state_transition: {
     id: 'state_transition',
@@ -78,6 +146,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'cyan',
     systemPromptDirective:
       'Generate a state_transition schema with flowSteps array and resetCondition.',
+    component: TEMPLATE_COMPONENTS.state_transition,
   },
   boundary_stress_test: {
     id: 'boundary_stress_test',
@@ -91,6 +160,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'rose',
     systemPromptDirective:
       'Generate a boundary_stress_test schema with boundaryGauges array and failureEnvelopeSummary.',
+    component: TEMPLATE_COMPONENTS.boundary_stress_test,
   },
   visual_blueprint: {
     id: 'visual_blueprint',
@@ -104,6 +174,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'sky',
     systemPromptDirective:
       'Generate a visual_blueprint schema with spatial anchors and motionVector.',
+    component: TEMPLATE_COMPONENTS.visual_blueprint,
   },
   contrast_grid: {
     id: 'contrast_grid',
@@ -117,6 +188,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'amber',
     systemPromptDirective:
       'Generate a contrast_grid schema with contrastMatrix (axisX, axisY, quadrants with trapWarning).',
+    component: TEMPLATE_COMPONENTS.contrast_grid,
   },
   taxonomic_chunking: {
     id: 'taxonomic_chunking',
@@ -130,6 +202,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'emerald',
     systemPromptDirective:
       'Generate a taxonomic_chunking schema with chunkBuckets array (bucketName, items, colorHint).',
+    component: TEMPLATE_COMPONENTS.taxonomic_chunking,
   },
   mnemonic_peg: {
     id: 'mnemonic_peg',
@@ -143,6 +216,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'violet',
     systemPromptDirective:
       'Generate a mnemonic_peg schema with acronymLetters array (letter, word, mnemonicCue).',
+    component: TEMPLATE_COMPONENTS.mnemonic_peg,
   },
   memory_palace: {
     id: 'memory_palace',
@@ -156,6 +230,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'indigo',
     systemPromptDirective:
       'Generate a memory_palace schema with palaceRooms array (roomName, locusNumber, itemPlaced, vividSensoryHook).',
+    component: TEMPLATE_COMPONENTS.memory_palace,
   },
   formula_spatial_grid: {
     id: 'formula_spatial_grid',
@@ -169,6 +244,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'slate',
     systemPromptDirective:
       'Generate a formula_spatial_grid schema with formulaEquation and formulaComponents (symbol, meaning, role, unitDimension).',
+    component: TEMPLATE_COMPONENTS.formula_spatial_grid,
   },
   personal_schema: {
     id: 'personal_schema',
@@ -182,6 +258,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'rose',
     systemPromptDirective:
       'Generate a personal_schema with selfReferenceQuestion, realWorldScenario, flashcardFront, and flashcardBack.',
+    component: TEMPLATE_COMPONENTS.personal_schema,
   },
   mnemonic_storyboard: {
     id: 'mnemonic_storyboard',
@@ -195,6 +272,7 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'emerald',
     systemPromptDirective:
       'Generate a mnemonic_storyboard with questTitle, narrativeStory connecting elements, and interactive tiles (symbol, name, numberOrOrder, mnemonicHook, categoryTag).',
+    component: TEMPLATE_COMPONENTS.mnemonic_storyboard,
   },
   broken_model_debug: {
     id: 'broken_model_debug',
@@ -208,8 +286,22 @@ export const TEMPLATE_REGISTRY: Record<string, TemplateDefinition> = {
     accentColor: 'rose',
     systemPromptDirective:
       'Generate a broken_model_debug schema with brokenModel (scenarioTitle, flawCount, studentMisconceptionPremise, sabotagedNodes with isFlawed, expertCorrection).',
+    component: TEMPLATE_COMPONENTS.broken_model_debug,
   },
 };
+
+/**
+ * Adds (or replaces) one template at runtime, so shipping a new workout is
+ * "register it", never "go edit the renderer's switch statement". The id is the
+ * one the encoder emits as `templateType` and the one the renderer resolves, so
+ * a definition registered here renders immediately.
+ */
+export function registerTemplate(definition: TemplateDefinition): void {
+  TEMPLATE_REGISTRY[definition.id] = definition;
+  // The renderer dispatches off this table, so a definition registered at
+  // runtime is drawable immediately — not "registered but invisible".
+  TEMPLATE_COMPONENTS[definition.id] = definition.component;
+}
 
 export function getTemplateDefinition(id: string): TemplateDefinition | undefined {
   return TEMPLATE_REGISTRY[id];
@@ -222,3 +314,4 @@ export function getTemplatesByCategory(category: string): TemplateDefinition[] {
 export function getAllTemplates(): TemplateDefinition[] {
   return Object.values(TEMPLATE_REGISTRY);
 }
+

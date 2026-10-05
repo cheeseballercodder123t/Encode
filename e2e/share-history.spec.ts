@@ -77,3 +77,77 @@ test.describe('Settings & analytics', () => {
     await expect(page.getByText('AI Engine & API Keys')).toBeVisible();
   });
 });
+
+test.describe('Analytics core', () => {
+  /**
+   * The analytics sheet reads its numbers from the shared session-analytics
+   * service, so the header must describe the whole library (not the page it is
+   * showing), and the log has to page instead of rendering every session at
+   * once. Neither is visible from a unit test: both are about what the sheet
+   * puts on screen for a real history.
+   */
+  const SESSIONS = 12;
+
+  function seededHistory() {
+    return Array.from({ length: SESSIONS }, (_, i) =>
+      makeSavedSchema({
+        id: `analytics_${i}`,
+        timestamp: Date.parse('2026-01-01T00:00:00Z') + i,
+        topicSummary: `Analytics Topic ${i}`,
+        activities: [makeActivity({ id: `analytics-act-${i}` })],
+        userResponses: {
+          [`analytics-act-${i}`]: {
+            field1: 'answer',
+            field2: 'mechanism',
+            confidenceScore: 80,
+            checkCount: 2,
+            // Half the sessions landed the mechanism, half carried a reflection.
+            reflection: i % 2 === 0 ? 'I noticed the mechanism in my own words.' : '',
+            feynmanReview: { secured: i % 2 === 0, feedback: '' },
+          },
+        },
+      })
+    );
+  }
+
+  /** The value card that sits beside a labelled stat. */
+  const statValue = (page: import('@playwright/test').Page, label: string) =>
+    page.getByText(label, { exact: true }).locator('xpath=following-sibling::p[1]');
+
+  test('reports library stats and pages a long session log', async ({ page }) => {
+    const schemas = seededHistory();
+    await page.addInitScript((s) => {
+      (window as any).localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify(s));
+    }, schemas);
+
+    await mockAiApis(page);
+    await page.goto('/');
+    await page.locator('button[title^="Metacognitive Analytics"]').click();
+    await expect(page.getByText('SYS.07 // ANALYTICS CORE')).toBeVisible();
+
+    // Six of the twelve landed, all twelve carried a score of 80.
+    await expect(statValue(page, 'SESSIONS')).toHaveText(String(SESSIONS));
+    await expect(statValue(page, 'SUCCESS RATE')).toHaveText('50%');
+    await expect(statValue(page, 'AVG CONFIDENCE')).toHaveText('80/100');
+    await expect(statValue(page, 'REFLECTIONS')).toHaveText('6');
+
+    // One page of ten, with both pages of the log reachable.
+    const rows = page.getByText(/1 stages \/ 320 XP/);
+    await expect(rows).toHaveCount(10);
+    await expect(page.getByText('Page 1 of 2 · 12 sessions')).toBeVisible();
+
+    await page.locator('button[title="Last page"]').click();
+    await expect(page.getByText('Page 2 of 2 · 12 sessions')).toBeVisible();
+    await expect(rows).toHaveCount(2);
+
+    // Narrowing the search while on the last page clamps back to the first: an
+    // out-of-range page would render an empty log, which reads as data loss.
+    await page.getByPlaceholder('Search sessions by topic, mode, or ID...').fill('Analytics Topic 3');
+    await expect(page.getByText('Page 1 of 1 · 1 sessions')).toBeVisible();
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByText('Analytics Topic 3')).toBeVisible();
+
+    // The header still describes the library, not the filtered page.
+    await expect(statValue(page, 'SESSIONS')).toHaveText(String(SESSIONS));
+  });
+});

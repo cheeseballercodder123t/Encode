@@ -6,9 +6,10 @@ import { mockAiApis, startEncodeFromNotes, confirmReadiness, expectStage } from 
  * The shared sheet behaviour, pinned in the browser.
  *
  * Every overlay in this app hands its close handler to `hooks/useModalA11y`,
- * which then owes the person using it three things a sheet is easy to get
- * wrong: Escape closes it, the page behind stops scrolling, and focus is
- * inside the sheet rather than left behind on the button that opened it.
+ * which then owes the person using it four things a sheet is easy to get
+ * wrong: Escape closes it, the page behind stops scrolling, focus is inside
+ * the sheet rather than left behind on the button that opened it, and Tab
+ * keeps that focus there instead of walking onto the page underneath.
  *
  * The source scan (`tests/unit/modal-a11y.test.ts`) proves every overlay asks
  * for the hook. This proves the hook actually does it once a real sheet is
@@ -41,6 +42,20 @@ test.describe('sheets are escapable and do not trap the page', () => {
 
     await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
+  });
+
+  test('Tab stays inside the sheet instead of walking onto the page behind it', async ({ page }) => {
+    const sheet = await openExportSheet(page);
+    await expect(sheet).toBeVisible();
+
+    // More stops than the sheet owns: without a trap the ring leaves the
+    // dialog and lands on the page beneath it, or nowhere at all.
+    for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
+    expect(await page.evaluate(activeIsInsideSheet)).toBe(true);
+
+    // And backwards off the first stop wraps to the last, not out of the sheet.
+    for (let i = 0; i < 40; i++) await page.keyboard.press('Shift+Tab');
+    expect(await page.evaluate(activeIsInsideSheet)).toBe(true);
   });
 
   test('the page behind stops scrolling while a sheet is open', async ({ page }) => {
