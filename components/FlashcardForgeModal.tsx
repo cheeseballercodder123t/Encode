@@ -226,6 +226,14 @@ export function FlashcardForgeModal({
   );
 
   // Auto-seed source draft from initialNotes (e.g. from Companion Extension or Launchpad)
+  //
+  // The sheet stays mounted between openings (the sources list is meant to
+  // survive a close — "close, reopen, the source you added is still there" is
+  // covered by e2e/flashcard-forge.spec.ts), so this is a prop→state mirror
+  // that has no render-time equivalent: the draft is seeded only for the
+  // opening that had an empty list. Same documented exception as
+  // AnkiExportModal's read-on-open effect.
+  /* eslint-disable react-hooks/set-state-in-effect -- seeding an editable draft from the notes the sheet opened with */
   React.useEffect(() => {
     if (isOpen && initialNotes && initialNotes.trim() && sources.length === 0) {
       const parsed = parseSlideDeck(initialNotes);
@@ -253,6 +261,7 @@ export function FlashcardForgeModal({
       }
     }
   }, [isOpen, initialNotes]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   /**
    * What the Wozniak pass does to this deck, computed HERE rather than only at
@@ -358,9 +367,14 @@ export function FlashcardForgeModal({
   // Esc closes, the page behind stops scrolling, focus moves in and back out.
   const sheetRef = useModalA11y(isOpen, handleClose);
 
-  if (!isOpen) return null;
-
+  // Every hook must run on every render: this sheet is mounted from the first
+  // paint and only hides itself, so a hook placed after the early return below
+  // would make the component render MORE hooks the moment it opens (React
+  // #310, "Rendered more hooks than during the previous render"). Everything
+  // hook-shaped stays above the guard.
   const draftSlideDeck = useMemo(() => parseSlideDeck(draftText), [draftText]);
+
+  if (!isOpen) return null;
 
   const addText = () => {
     const text = draftText.trim();
