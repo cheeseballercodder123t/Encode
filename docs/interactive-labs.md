@@ -77,7 +77,9 @@ The coexistence equilibrium is `(X*, Y*) = (γ/δ, α/β)`, where both nullcline
 
 The operating point is a real input: dragging the puck writes both coordinates through the same step-gridded write path as the sliders, and the question's reveal verifies the engine's exact two-coordinate target configuration. The teaching example's constants are illustrative; no damping, carrying capacity, seasonality, harvesting or discrete populations are modelled. The validator requires both nullclines to fall strictly inside the drawing ranges, since orbits cannot close otherwise.
 
-### 5b. Devil's Advocate duel (all engines)
+### Devil's Advocate duel (all engines)
+
+This cross-cutting layer is not a seventh engine: it can sit on any of the six.
 
 Any engine's config may carry an optional `devilsAdvocate` block: a named fictional speaker, a confident claim, the intuitive fallacy (p-prim) it rests on, the refutation configuration, what the model actually shows there, and the source quotation that grounds the contradiction.
 
@@ -97,7 +99,7 @@ The sign-change variant accommodates ΔG=ΔH−TΔS without pretending an affine
 
 Every activity may carry optional `toyModel` and `toyModelIssues`. The model has:
 
-- `version: 1` and one of the five literal type identifiers;
+- `version: 1` and one of the six literal type identifiers;
 - source-specific title, labels, symbols and physical units;
 - `primaryVar` and archetype-specific secondary variable with safe key, min/max/initial/step and evidence quotation;
 - output label/symbol/unit;
@@ -132,7 +134,7 @@ Checks include:
 7. Directional monotonicity checks where applicable; exact collapse peak/zero checks and equilibrium ΔG=0 checks.
 8. Unsupported counter-model combinations rejected; no arbitrary code evaluated.
 
-This protects runtime and verifies the five declared laws. It cannot prove that an AI-selected law is the scientifically right law for arbitrary prose. Exact quote membership is evidence provenance, not semantic entailment. Unit strings are retained and inspected, not a full symbolic dimensional-analysis engine.
+This protects runtime and verifies the six declared laws. It cannot prove that an AI-selected law is the scientifically right law for arbitrary prose. Exact quote membership is evidence provenance, not semantic entailment. Unit strings are retained and inspected, not a full symbolic dimensional-analysis engine.
 
 ## Tactile craft and accessibility
 

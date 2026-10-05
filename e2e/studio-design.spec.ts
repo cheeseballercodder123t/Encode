@@ -62,6 +62,43 @@ for (const width of [1440, 768, 390, 320]) {
 }
 
 /**
+ * The shell's two decorative layers are independent.
+ *
+ * Both came from separate polish passes and both first claimed
+ * `.studio-shell::after` — the fixed film grain and a 1px viewport light line.
+ * One pseudo-element cannot carry both: the later `height: 1px` collapsed the
+ * grain to a strip that inherited its 4.5% opacity, silently cancelling both
+ * effects. The grain keeps `::after`; the line rides `::before`'s atmosphere
+ * stack, and this pins that split at the computed-style level.
+ */
+test('the shell keeps both the film grain and the viewport light line', async ({ page }) => {
+  await mockAiApis(page);
+  await page.goto('/');
+
+  const layers = await page.evaluate(() => {
+    const shell = document.querySelector('.studio-shell');
+    if (!shell) return null;
+    const grain = getComputedStyle(shell, '::after');
+    const atmosphere = getComputedStyle(shell, '::before');
+    return {
+      grainPosition: grain.position,
+      grainImage: grain.backgroundImage,
+      grainOpacity: Number(grain.opacity),
+      atmosphereImage: atmosphere.backgroundImage,
+    };
+  });
+
+  expect(layers).not.toBeNull();
+  // The grain owns ::after at viewport scale, with its own low opacity.
+  expect(layers!.grainPosition).toBe('fixed');
+  expect(layers!.grainImage).toContain('url(');
+  expect(layers!.grainOpacity).toBeLessThan(0.1);
+  // The light line and the vignette share ::before as two background layers.
+  expect(layers!.atmosphereImage).toContain('linear-gradient');
+  expect(layers!.atmosphereImage).toContain('radial-gradient');
+});
+
+/**
  * The 3-zone studio, once a stage is open.
  *
  * A stage is routinely 1500–2500px tall while the window is ~800px, and the

@@ -98,7 +98,7 @@ export function PathwayBuilder({ config = GLYCOLYSIS_PAYOFF }: { config?: Pathwa
           <span className="pathway-kicker">INTERACTIVE PATHWAY BUILDER / GLYCOLYSIS PAYOFF</span>
           <h3>{config.title}</h3>
         </div>
-        <span className="pathway-status-badge" data-testid="pathway-status" data-formed={output.productFormed}>
+        <span className="pathway-status-badge" role="status" data-testid="pathway-status" data-formed={output.productFormed}>
           {output.status}
         </span>
       </header>
@@ -134,8 +134,7 @@ export function PathwayBuilder({ config = GLYCOLYSIS_PAYOFF }: { config?: Pathwa
                         data-socket-kind={kind}
                         data-filled={Boolean(piece)}
                         data-testid="pathway-socket"
-                        aria-label={socketLabel(config, index, kind, placed)}
-                        aria-pressed={Boolean(selected) && !piece}
+                        aria-label={`${socketLabel(config, index, kind, placed)}${selected && !piece ? ', press to place the selected chip' : ''}`}
                         onClick={() => (selected && !piece ? place(step.id, kind, selected) : undefined)}
                       >
                         <span className="pathway-socket-kind">{kind}</span>
@@ -169,7 +168,7 @@ export function PathwayBuilder({ config = GLYCOLYSIS_PAYOFF }: { config?: Pathwa
       </div>
 
       {output.blockers.length > 0 && (
-        <ul className="pathway-blockers" data-testid="pathway-blockers">
+        <ul className="pathway-blockers" data-testid="pathway-blockers" aria-live="polite">
           {output.blockers.map((blocker, index) => (
             <li key={index}>{blocker}</li>
           ))}

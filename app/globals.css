@@ -208,20 +208,6 @@
   .orbit-reticle-a { animation: orbit-revolve 90s linear infinite; }
   .orbit-reticle-b { animation: orbit-revolve 130s linear infinite reverse; }
   .orbit-star { animation: orbit-twinkle 6s ease-in-out infinite; }
-  /* Machined corner brackets on the console — the same joint the diagram's
-     etched corners make, carried into the furniture. */
-  .studio-console { position: relative; }
-  .studio-console::before, .studio-console::after {
-    content: '';
-    position: absolute;
-    width: 14px;
-    height: 14px;
-    pointer-events: none;
-    border: 0 solid rgba(210, 164, 85, 0.5);
-    z-index: 1;
-  }
-  .studio-console::before { top: 8px; left: 8px; border-top-width: 1px; border-left-width: 1px; }
-  .studio-console::after { bottom: 8px; right: 8px; border-bottom-width: 1px; border-right-width: 1px; }
   /* Preset cards catch a single pass of light as the eye reaches them. */
   .studio-preset { position: relative; overflow: hidden; }
   .studio-preset::after {
@@ -376,133 +362,132 @@
 /* Second pass: page atmosphere, instrument chrome, editorial detail.
    Kept outside @keyframes (a keyframes block silently drops any nested
    rule) and outside the components layer so the decorative overrides
-   land after Tailwind's utilities in the compiled sheet. */
+   land after Tailwind's utilities in the compiled sheet.
+
+   The film grain and the viewport light line cannot share one pseudo-element:
+   when both claimed `.studio-shell::after`, the later `height: 1px` collapsed
+   the grain to a 1px strip that inherited its 4.5% opacity, so both effects
+   vanished with no visible error. The grain keeps `::after`; the light line
+   rides the top of the `::before` atmosphere stack. */
 .studio-shell::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background: radial-gradient(150% 95% at 50% -5%, transparent 58%, rgba(0, 0, 0, 0.45) 100%);
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(210, 164, 85, 0.55) 35%, rgba(243, 238, 227, 0.4) 50%, rgba(210, 164, 85, 0.55) 65%, transparent) top / 100% 1px no-repeat,
+    radial-gradient(150% 95% at 50% -5%, transparent 58%, rgba(0, 0, 0, 0.45) 100%);
+}
+@supports (-webkit-background-clip: text) or (background-clip: text) {
+  .studio-intro h2 em {
+    color: transparent;
+    background-image: linear-gradient(105deg, #E3C285 0%, #FBF7EE 30%, #D2A455 52%, #E3C285 100%);
+    background-size: 240% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: gilt-sweep 11s ease-in-out infinite;
   }
-  .studio-shell::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    z-index: 30;
-    pointer-events: none;
-    background: linear-gradient(90deg, transparent, rgba(210, 164, 85, 0.55) 35%, rgba(243, 238, 227, 0.4) 50%, rgba(210, 164, 85, 0.55) 65%, transparent);
-  }
-  @supports (-webkit-background-clip: text) or (background-clip: text) {
-    .studio-intro h2 em {
-      color: transparent;
-      background-image: linear-gradient(105deg, #E3C285 0%, #FBF7EE 30%, #D2A455 52%, #E3C285 100%);
-      background-size: 240% 100%;
-      -webkit-background-clip: text;
-      background-clip: text;
-      animation: gilt-sweep 11s ease-in-out infinite;
-    }
-  }
+}
+/* Machined corner brackets on the console — the same joint the diagram's
+   etched corners make, carried into the furniture. */
+.studio-console::before,
+.studio-console::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(210, 164, 85, 0.5);
+  pointer-events: none;
+  z-index: 3;
+}
+.studio-console::before { top: 7px; left: 7px; border-right: none; border-bottom: none; }
+.studio-console::after { bottom: 7px; right: 7px; border-left: none; border-top: none; }
+.studio-heading-leader {
+  flex: 1;
+  min-width: 40px;
+  border-top: 1px dotted rgba(210, 164, 85, 0.4);
+  transform: translateY(2px);
+}
+.studio-audit-card {
+  position: relative;
+  /* Colour too, not just the lift: this rule lands after the button's
+     `transition-colors` utility in the compiled sheet, so the shorthand
+     replaces it — keeping colour here preserves the fade as well. */
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out,
+    color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.studio-audit-card:not(:disabled):hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.95);
+}
+.studio-audit-index {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font: 9px 'IBM Plex Mono', monospace;
+  letter-spacing: 1.2px;
+  color: rgba(210, 164, 85, 0.45);
+  transition: color 150ms ease-out;
+}
+.studio-audit-card:hover .studio-audit-index { color: #E3C285; }
+.studio-bench > div { position: relative; overflow: hidden; }
+.studio-bench > div::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(210, 164, 85, 0.4), transparent);
+}
+.studio-loading {
+  position: relative;
+  background: radial-gradient(640px 320px at 50% 28%, rgba(210, 164, 85, 0.07), transparent 72%);
+}
+.studio-loading h2 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -0.5px; }
+.studio-processing-pill { position: relative; }
+.studio-processing-pill::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border: 1px dashed rgba(210, 164, 85, 0.45);
+  border-radius: 999px;
+  animation: slow-spin 18s linear infinite;
+}
+.gen-track {
+  background-image: repeating-linear-gradient(90deg, rgba(210, 164, 85, 0.3) 0 1px, transparent 1px 10%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.gen-track > div { position: relative; overflow: hidden; }
+.gen-track > div::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -50%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(251, 247, 238, 0.5), transparent);
+  animation: sheen 2.2s ease-in-out infinite;
+}
+[data-testid="gen-outlines"] > div {
+  position: relative;
+  background-image: linear-gradient(90deg, rgba(210, 164, 85, 0.16), transparent 42%);
+}
+[data-testid="gen-outlines"] > div::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 22%;
+  bottom: 22%;
+  width: 2px;
+  background: linear-gradient(#E3C285, rgba(210, 164, 85, 0.2));
+}
+@media (max-width: 640px) {
   .studio-console::before,
-  .studio-console::after {
-    content: '';
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    border: 1px solid rgba(210, 164, 85, 0.5);
-    pointer-events: none;
-    z-index: 3;
-  }
-  .studio-console::before { top: 7px; left: 7px; border-right: none; border-bottom: none; }
-  .studio-console::after { bottom: 7px; right: 7px; border-left: none; border-top: none; }
-  .studio-heading-leader {
-    flex: 1;
-    min-width: 40px;
-    border-top: 1px dotted rgba(210, 164, 85, 0.4);
-    transform: translateY(2px);
-  }
-  .studio-audit-card {
-    position: relative;
-    /* Colour too, not just the lift: this rule lands after the button's
-       `transition-colors` utility in the compiled sheet, so the shorthand
-       replaces it — keeping colour here preserves the fade as well. */
-    transition: transform 150ms ease-out, box-shadow 150ms ease-out,
-      color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
-  }
-  .studio-audit-card:not(:disabled):hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.95);
-  }
-  .studio-audit-index {
-    position: absolute;
-    top: 10px;
-    right: 12px;
-    font: 9px 'IBM Plex Mono', monospace;
-    letter-spacing: 1.2px;
-    color: rgba(210, 164, 85, 0.45);
-    transition: color 150ms ease-out;
-  }
-  .studio-audit-card:hover .studio-audit-index { color: #E3C285; }
-  .studio-bench > div { position: relative; overflow: hidden; }
-  .studio-bench > div::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 20px;
-    right: 20px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(210, 164, 85, 0.4), transparent);
-  }
-  .studio-loading {
-    position: relative;
-    background: radial-gradient(640px 320px at 50% 28%, rgba(210, 164, 85, 0.07), transparent 72%);
-  }
-  .studio-loading h2 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -0.5px; }
-  .studio-processing-pill { position: relative; }
-  .studio-processing-pill::after {
-    content: '';
-    position: absolute;
-    inset: -7px;
-    border: 1px dashed rgba(210, 164, 85, 0.45);
-    border-radius: 999px;
-    animation: slow-spin 18s linear infinite;
-  }
-  .gen-track {
-    background-image: repeating-linear-gradient(90deg, rgba(210, 164, 85, 0.3) 0 1px, transparent 1px 10%);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
-  }
-  .gen-track > div { position: relative; overflow: hidden; }
-  .gen-track > div::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -50%;
-    width: 45%;
-    background: linear-gradient(100deg, transparent, rgba(251, 247, 238, 0.5), transparent);
-    animation: sheen 2.2s ease-in-out infinite;
-  }
-  [data-testid="gen-outlines"] > div {
-    position: relative;
-    background-image: linear-gradient(90deg, rgba(210, 164, 85, 0.16), transparent 42%);
-  }
-  [data-testid="gen-outlines"] > div::before {
-    content: '';
-    position: absolute;
-    left: 4px;
-    top: 22%;
-    bottom: 22%;
-    width: 2px;
-    background: linear-gradient(#E3C285, rgba(210, 164, 85, 0.2));
-  }
-  @media (max-width: 640px) {
-    .studio-console::before,
-    .studio-console::after { display: none; }
-    .studio-heading-leader { min-width: 16px; }
-  }
+  .studio-console::after { display: none; }
+  .studio-heading-leader { min-width: 16px; }
+}
 @keyframes gilt-sweep {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
