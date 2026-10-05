@@ -205,6 +205,8 @@ timeline
   * Assert that generated markdown contains **0 occurrences** of `\n  - Why >>` or `\n  - Traps >>` or `\n  - Confusable With >>`.
   * Verify that `#[[Extra Card Detail]]` is used strictly with colons `:`.
 
+> **Status: shipped.** The colon-only rule is the renderer's Extra Card Detail path (`pushExtra` → `  - Label: value #[[Extra Card Detail]]`): a "why" that is high-yield enough to test still ships as its own card (source-authored deletions are never buried), so no `Why >>` fragment can occur.
+
 ---
 
 ### Phase 2: Socratic Inline Hints & Bidirectional Concept Portals
@@ -213,6 +215,8 @@ timeline
 * **Concept Linker**:
   * Detect lookalike pairs and wrap paired names in `[[Lookalike Concept]]` wikilinks.
   * Format discrimination tables under an `#[[Extra Card Detail]]` block.
+
+> **Status: shipped.** Socratic hints ride as `{{deletion}}{({hint})}` via `attachClozeHint`. Concept portals are live: every confusable pair's names wrap in `[[wikilinks]]` (boundary question, feature rows, vignette), and the payload counts them as `conceptPortals`.
 
 ---
 
@@ -223,9 +227,13 @@ timeline
 * **Embed Export Button**:
   * Add a **`[ 📋 Copy RemNote Outliner + Widget ]`** button in the Export modal and Workbench.
 
+> **Status: shipped** at `app/embed/toy-models/[id]`. The route resolves a teaching example, a saved-schema id, or a stage activity id — the id the lab's **Copy RemNote embed** button emits — and renders the real `ToyModelLab` with zero chrome; an id that matches nothing says so instead of inventing a lab. URL query-parameter overrides are deliberately not implemented: a lab is validated config, not URL state.
+
 ---
 
 ### Phase 4: RemNote 1-Click Push API Hardening
 * **Update `/api/remnote/route.ts` & `components/RemNoteSyncModal.tsx`**:
   * Support updating existing documents or creating dedicated course folders.
   * Surface clear status messages (e.g. `Pushed 4 sections with 18 cards and 2 concept portals to RemNote`).
+
+> **Status: shipped** for the per-document push: `pushToRemnoteApi` pushes one document per card section in order, stops at the first refusal, and the success message names the deck size and portals (`Pushed 4 RemNote documents — one per card section with 2 concept portals.`).

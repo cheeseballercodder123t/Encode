@@ -5,6 +5,7 @@ import {
   generateSegregationRemnote,
   generateRemnoteHierarchy,
   pushToRemnoteApi,
+  remnoteToyEmbedLine,
 } from '@/lib/remnote';
 import { SegregationReport } from '@/lib/types';
 
@@ -396,6 +397,62 @@ describe('generateSegregationRemnote (RemNote flashcards)', () => {
     expect(schemaPayload.documents?.map((d) => d.id)).toEqual(['prerequisites', 'stages']);
   });
 
+  it('wraps confusable pairs in [[concept portals]] and counts them', () => {
+    // The plan's Pillar 3: reviewing either card previews the other concept,
+    // so a lookalike pair is studied as one boundary, not two unrelated cards.
+    const payload = generateSegregationRemnote({
+      ...REPORT,
+      confusablePairs: [
+        {
+          id: 'c1',
+          conceptA: 'SN1 Reaction',
+          conceptB: 'SN2 Reaction',
+          distinguishingAxis: 'Rate law',
+          boundaryCondition: 'Tertiary substrate in polar protic solvent',
+          conceptAFeature: 'Unimolecular, racemization',
+          conceptBFeature: 'Bimolecular, Walden inversion',
+          diagnosticVignette: 'Cyanide in DMSO inverts the stereochemistry',
+          diagnosticAnswer: 'SN2 — polar aprotic solvent, strong nucleophile',
+        },
+      ],
+      workedExamples: [],
+    });
+
+    expect(payload.markdown).toContain('When does the system switch from [[SN1 Reaction]] to [[SN2 Reaction]]?');
+    // Feature rows carry the portal too, and the vignette keeps its links.
+    expect(payload.markdown).toContain('  - [[SN1 Reaction]] Feature: Unimolecular, racemization');
+    expect(payload.markdown).toContain('Vignette: Cyanide in DMSO inverts the stereochemistry ([[SN1 Reaction]] vs [[SN2 Reaction]])');
+    // Never the naive sub-descriptor trap the plan names.
+    expect(payload.markdown).not.toContain('Confusable With >>');
+    // Each distinct pair name is one portal.
+    expect(payload.conceptPortals).toBe(2);
+
+    // The anti-fragment guarantee the plan demands holds underneath.
+    for (const line of payload.markdown.split('\n').filter((l) => l.includes('#[[Extra Card Detail]]'))) {
+      expect(line.startsWith('  - ')).toBe(true);
+    }
+
+    // A pair with missing names still counts only what it actually links.
+    const partial = generateSegregationRemnote({
+      ...REPORT,
+      confusablePairs: [{
+        id: 'c2',
+        conceptA: 'Depolarization',
+        conceptB: '',
+        distinguishingAxis: 'Ion gate',
+        boundaryCondition: 'Na+ gate closes at the peak',
+        conceptAFeature: 'Na+ in',
+        conceptBFeature: 'K+ out',
+        diagnosticVignette: '',
+        diagnosticAnswer: '',
+      }],
+      workedExamples: [],
+    });
+    expect(partial.conceptPortals).toBe(1);
+    // A deck with no pairs reports zero, not undefined.
+    expect(generateSegregationRemnote(REPORT).conceptPortals).toBe(0);
+  });
+
   it('pushes through the app server with RemNote\'s documented v0 auth', () => {
     const attempts = buildRemnotePushAttempts('key-123', 'user-9', generateSegregationRemnote(REPORT));
     expect(attempts.length).toBeGreaterThan(0);
@@ -409,6 +466,20 @@ describe('generateSegregationRemnote (RemNote flashcards)', () => {
     }
     // The browser must never call api.remnote.io itself: no CORS headers there.
     expect(attempts[0].url).toContain('api.remnote.io');
+  });
+});
+
+describe('remnoteToyEmbedLine (plan Pillar 4)', () => {
+  it('emits the labelled detail bullet with a bare URL RemNote unfurls', () => {
+    expect(remnoteToyEmbedLine('https://deepencode.app/embed/toy-models/ohm', 'Ohm\u2019s law'))
+      .toBe('- Interactive Lab: Ohm\u2019s law #[[Extra Card Detail]]\n    - https://deepencode.app/embed/toy-models/ohm');
+  });
+
+  it('keeps the shape honest when pieces are missing', () => {
+    expect(remnoteToyEmbedLine('https://x.example/embed', '')).toBe('- Interactive Lab: #[[Extra Card Detail]]\n    - https://x.example/embed');
+    expect(remnoteToyEmbedLine('  padded  ', ' L ')).toBe('- Interactive Lab: L #[[Extra Card Detail]]\n    - padded');
+    // No URL, no bullet at all — an embed line without a link is clutter.
+    expect(remnoteToyEmbedLine('', 'Ohm\u2019s law')).toBe('- Interactive Lab: Ohm\u2019s law #[[Extra Card Detail]]');
   });
 });
 
@@ -439,6 +510,43 @@ describe('pushToRemnoteApi (server proxy)', () => {
     const sent = JSON.parse(String(init?.body));
     expect(sent.apiKey).toBe('key');
     expect(sent.markdown).toBe(payload.markdown);
+  });
+
+  it('says what it pushed, including the concept portals', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, message: 'Pushed.', docId: 'doc_1' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const withPortals = generateSegregationRemnote({
+      ...REPORT,
+      confusablePairs: [
+        {
+          id: 'c1',
+          conceptA: 'Depolarization',
+          conceptB: 'Repolarization',
+          distinguishingAxis: 'Ion gate',
+          boundaryCondition: 'Na+ gate closes at the peak',
+          conceptAFeature: 'Na+ in',
+          conceptBFeature: 'K+ out',
+          diagnosticVignette: '',
+          diagnosticAnswer: '',
+        },
+      ],
+      workedExamples: [],
+    });
+    const result = await pushToRemnoteApi('key', 'user', withPortals);
+    expect(result.success).toBe(true);
+    // facts + mechanisms + drills + the confusable section.
+    expect(result.message).toContain('4 RemNote documents');
+    expect(result.message).toContain('2 concept portals');
+
+    // A deck without portals says so by omission, exactly as before.
+    const plain = await pushToRemnoteApi('key', 'user', generateSegregationRemnote(REPORT));
+    expect(plain.message).toContain('4 RemNote documents — one per card section.');
+    expect(plain.message).not.toContain('portal');
   });
 
   it('creates one document per card section, titled like the copy list', async () => {

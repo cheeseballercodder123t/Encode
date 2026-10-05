@@ -124,7 +124,8 @@ describe('Confusable Pairs & Discrimination Matrix', () => {
 
     const remnote = generateSegregationRemnote(report);
     expect(remnote.markdown).toContain('Confusable Pairs & Discrimination Matrix');
-    expect(remnote.markdown).toContain('When does the system switch from SN1 Reaction to SN2 Reaction?');
+    // The pair's names ride as [[wikilink]] concept portals (plan Pillar 3).
+    expect(remnote.markdown).toContain('When does the system switch from [[SN1 Reaction]] to [[SN2 Reaction]]?');
     expect(remnote.markdown).toContain(samplePair.boundaryCondition);
     expect(remnote.markdown).toContain(samplePair.distinguishingAxis);
   });

@@ -134,6 +134,8 @@ Rules (`firestore.rules`) scope every read/write to the authenticated owner: `/u
 ```
 app/
   page.tsx                 # Composition root: state views + modal cluster
+  embed/toy-models/[id]/   # Zero-chrome interactive-lab embed page — the URL
+                           # a RemNote bullet unfurls into a live widget
   api/                     # AI proxy routes: encode, encode/stream, youtube,
                            # evaluate, prerequisites, pretest, roast, segregate,
                            # forge (many sources -> one flashcards-only deck;
@@ -243,7 +245,9 @@ lib/
                            # per line with per-card overrides, quadrants as
                            # #[[Extra Card Detail]], cloze hints, `>>>` and
                            # `>>1.` multi-part cards, front-quality report,
-                           # per-document push request
+                           # [[wikilink]] concept portals between confusable
+                           # pairs, the toy-model embed line, per-document
+                           # push request
   discrimination.ts        # Gate scoring (clock + misses), trap-card construction
   priming.ts               # Four warming archetypes: probe sequences + shape sketch
   interference-traps.ts    # Hypercorrection trap cards captured at prediction-error time
