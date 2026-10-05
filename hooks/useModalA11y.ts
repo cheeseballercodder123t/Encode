@@ -20,7 +20,8 @@ const openSheets: symbol[] = [];
  *   2. The page behind stops scrolling, so a wheel over the scrim does nothing.
  *   3. Focus moves INTO the sheet on open — at the first `[data-autofocus]`
  *      element when one is marked, otherwise the sheet itself.
- *   4. Focus goes back to whatever had it before, on close.
+ *   4. Tab stays inside the sheet, wrapping at both ends.
+ *   5. Focus goes back to whatever had it before, on close.
  *
  * It returns the ref the sheet element must carry (`tabIndex={-1}` so the
  * fallback target is focusable at all).
@@ -100,6 +101,63 @@ export function useModalA11y(isOpen: boolean, onClose?: () => void) {
       restoreFocusRef.current = null;
       if (previous && document.contains(previous)) previous.focus({ preventScroll: true });
     };
+  }, [isOpen]);
+
+  /**
+   * Tab stays inside the top sheet, wrapping at both ends.
+   *
+   * Focus that walks out of an open sheet lands on the page behind it: the
+   * person tabbing cannot see where the ring went, and a screen reader has
+   * silently left the dialog without closing it. Wrapping is what a dialog is
+   * expected to do, so the trap belongs with the rest of the contract — owned
+   * once, here, rather than re-invented by whichever sheet remembers.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+    const token = tokenRef.current!;
+
+    const tabbable = (sheet: HTMLElement): HTMLElement[] =>
+      Array.from(
+        sheet.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      // Only the sheet on top traps: a forge with an export sheet over it must
+      // let the export sheet own the keyboard, not both at once.
+      if (openSheets[openSheets.length - 1] !== token) return;
+      const sheet = sheetRef.current;
+      if (!sheet) return;
+
+      const items = tabbable(sheet);
+      if (items.length === 0) {
+        event.preventDefault();
+        sheet.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+
+      if (!active || !sheet.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus({ preventScroll: true });
+        return;
+      }
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus({ preventScroll: true });
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
   return sheetRef;

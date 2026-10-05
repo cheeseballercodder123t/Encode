@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  computeLibraryStats,
   computeSessionStats,
   invalidateSessionCache,
   exportToCSV,
   exportToJSON,
+  paginateSessions,
 } from '@/lib/services/sessionAnalytics';
 import { makeSchema, makeActivity } from './fixtures';
 
@@ -50,6 +52,96 @@ describe('computeSessionStats', () => {
     const second = computeSessionStats(schema);
     expect(second).not.toBe(first);
     expect(second).toEqual(first);
+  });
+});
+
+describe('computeLibraryStats', () => {
+  beforeEach(() => invalidateSessionCache());
+
+  it('adds up every session in the same vocabulary as a single one', () => {
+    const first = makeSchema({
+      id: 's1',
+      timestamp: 1,
+      activities: [
+        makeActivity({ id: 'a1', templateType: 'first_principles' }),
+        makeActivity({ id: 'a2', templateType: 'memory_palace' }),
+      ],
+      userResponses: {
+        a1: { field1: 'yes', field2: 'x', confidenceScore: 60, checkCount: 2, reflection: 'r1', feynmanReview: { secured: true, feedback: '' } },
+        a2: { field1: 'yes', field2: 'y', confidenceScore: 80, checkCount: 4 },
+      },
+    });
+    const second = makeSchema({
+      id: 's2',
+      timestamp: 2,
+      activities: [makeActivity({ id: 'b1', templateType: 'first_principles' })],
+      userResponses: {
+        b1: { field1: '', field2: '', confidenceScore: 100, checkCount: 6, feynmanReview: { secured: false, feedback: '' } },
+      },
+    });
+
+    const stats = computeLibraryStats([first, second]);
+    expect(stats.totalStages).toBe(3);
+    expect(stats.answeredStages).toBe(2);
+    // Averaged over the three responses that carried a score, not the sessions.
+    expect(stats.avgConfidence).toBe(80);
+    expect(stats.avgCheckCount).toBe(4);
+    // One landed of the two checked: a fraction, not a percentage.
+    expect(stats.successRate).toBeCloseTo(0.5);
+    expect(stats.reflectionsWritten).toBe(1);
+    expect(stats.templateBreakdown).toEqual({ first_principles: 2, memory_palace: 1 });
+  });
+
+  it('returns zeroes for an empty library instead of NaN', () => {
+    const stats = computeLibraryStats([]);
+    expect(stats.totalStages).toBe(0);
+    expect(stats.avgConfidence).toBe(0);
+    expect(stats.avgCheckCount).toBe(0);
+    expect(stats.successRate).toBe(0);
+    expect(stats.templateBreakdown).toEqual({});
+  });
+
+  it('memoizes on the library array and drops the cache on invalidation', () => {
+    const schemas = [makeSchema()];
+    const first = computeLibraryStats(schemas);
+    expect(computeLibraryStats(schemas)).toBe(first);
+
+    invalidateSessionCache();
+    const second = computeLibraryStats(schemas);
+    expect(second).not.toBe(first);
+    expect(second).toEqual(first);
+  });
+
+  it('recomputes when the library is replaced by a different history', () => {
+    const one = computeLibraryStats([makeSchema({ id: 'x', timestamp: 1 })]);
+    const two = computeLibraryStats([makeSchema({ id: 'x', timestamp: 1 }), makeSchema({ id: 'y', timestamp: 2 })]);
+    expect(one).not.toBe(two);
+    expect(two.totalStages).toBe(one.totalStages * 2);
+  });
+});
+
+describe('paginateSessions', () => {
+  const items = Array.from({ length: 25 }, (_, i) => i + 1);
+
+  it('slices one page and reports the page count', () => {
+    expect(paginateSessions(items, 1, 10)).toEqual({ items: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], page: 1, totalPages: 3 });
+    expect(paginateSessions(items, 3, 10).items).toEqual([21, 22, 23, 24, 25]);
+  });
+
+  it('clamps a page past the end instead of rendering an empty log', () => {
+    const page = paginateSessions(items, 99, 10);
+    expect(page.page).toBe(3);
+    expect(page.items).toEqual([21, 22, 23, 24, 25]);
+  });
+
+  it('always reports at least one page', () => {
+    expect(paginateSessions([], 1, 10)).toEqual({ items: [], page: 1, totalPages: 1 });
+  });
+
+  it('never divides by a nonsense page size', () => {
+    const page = paginateSessions(items, 1, 0);
+    expect(page.totalPages).toBe(25);
+    expect(page.items).toEqual([1]);
   });
 });
 

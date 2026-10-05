@@ -1,50 +1,24 @@
 'use client';
 
-import React, { Suspense, lazy, useMemo } from 'react';
+import React, { Suspense, useMemo } from 'react';
 import { validateToyModelConfig } from '@/lib/toy-models/validation';
 import { modelFingerprint } from '@/lib/toy-models/engine';
 import type { ToyModelProgress } from '@/lib/toy-models/types';
-const ToyModelLab = lazy(() => import('@/components/toy-models/ToyModelLab').then((module) => ({ default: module.ToyModelLab })));
+const ToyModelLab = React.lazy(() => import('@/components/toy-models/ToyModelLab').then((module) => ({ default: module.ToyModelLab })));
 import { Activity } from '@/lib/types';
 import { TemplateErrorBoundary } from './TemplateErrorBoundary';
-import { TEMPLATE_REGISTRY } from '@/lib/templates/registry';
+import { TEMPLATE_COMPONENTS, type TemplateComponentProps } from '@/lib/templates/registry';
 
-// Common props interface for all visual components
-interface VisualComponentProps {
-  activity: Activity;
-  field1: string;
-  field2: string;
-  field3?: string;
-  selectedPreset?: string;
+// The props bundle and the id → renderer table both live in the registry, which
+// owns the mapping; this component only decides which id to resolve.
+interface VisualComponentProps extends TemplateComponentProps {
   /**
    * Optional write-back hook. Templates that can blank one of their own cells
    * (first principles, analogy matrix, state transition) use it to put the
    * completed link into the stage answer; without it they render statically.
    */
   onAdopt?: (text: string) => void;
-  toyProgress?: ToyModelProgress;
-  onToyProgress?: (progress: ToyModelProgress) => void;
 }
-
-// All visual components still lazy-loaded for code-splitting
-const COMPONENT_MAP: Record<string, React.LazyExoticComponent<React.ComponentType<VisualComponentProps>>> = {
-  first_principles: lazy(() => import('./FirstPrinciplesVisual').then(m => ({ default: m.FirstPrinciplesVisual }))),
-  cause_effect: lazy(() => import('./CauseEffectVisual').then(m => ({ default: m.CauseEffectVisual }))),
-  visual_blueprint: lazy(() => import('./VisualBlueprintVisual').then(m => ({ default: m.VisualBlueprintVisual }))),
-  analogy_matrix: lazy(() => import('./AnalogyMatrixVisual').then(m => ({ default: m.AnalogyMatrixVisual }))),
-  concept_hierarchy: lazy(() => import('./ConceptHierarchyVisual').then(m => ({ default: m.ConceptHierarchyVisual }))),
-  state_transition: lazy(() => import('./StateTransitionVisual').then(m => ({ default: m.StateTransitionVisual }))),
-  boundary_stress_test: lazy(() => import('./BoundaryStressTestVisual').then(m => ({ default: m.BoundaryStressTestVisual }))),
-  taxonomic_chunking: lazy(() => import('./TaxonomicChunkingVisual').then(m => ({ default: m.TaxonomicChunkingVisual }))),
-  mnemonic_peg: lazy(() => import('./MnemonicPegVisual').then(m => ({ default: m.MnemonicPegVisual }))),
-  memory_palace: lazy(() => import('./MemoryPalaceVisual').then(m => ({ default: m.MemoryPalaceVisual }))),
-  contrast_grid: lazy(() => import('./ContrastGridVisual').then(m => ({ default: m.ContrastGridVisual }))),
-  formula_spatial_grid: lazy(() => import('./FormulaSpatialVisual').then(m => ({ default: m.FormulaSpatialVisual }))),
-  personal_schema: lazy(() => import('./PersonalSchemaVisual').then(m => ({ default: m.PersonalSchemaVisual }))),
-  interleaved_srs: lazy(() => import('./PersonalSchemaVisual').then(m => ({ default: m.PersonalSchemaVisual }))),
-  mnemonic_storyboard: lazy(() => import('./MnemonicStoryboardVisual').then(m => ({ default: m.MnemonicStoryboardVisual }))),
-  broken_model_debug: lazy(() => import('./BrokenModelVisual').then(m => ({ default: m.BrokenModelVisual }))),
-};
 
 interface Props extends VisualComponentProps {}
 
@@ -73,7 +47,10 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
   const type = activity.templateType || '';
   const visualData = activity.visualData;
 
-  // Determine which component key to use
+  // Determine which component key to use. The registry owns the id → renderer
+  // mapping (including the ids that borrow another template's component), so
+  // this only has to answer "which id is this stage?" — never "how do I draw
+  // it?".
   let resolvedKey = type;
 
   // Legacy fallback: detect payload shape if templateType not set
@@ -93,9 +70,8 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
     else resolvedKey = 'first_principles';
   }
 
-  const Component = COMPONENT_MAP[resolvedKey] ?? COMPONENT_MAP['first_principles'];
-  // meta available for future use (e.g. rendering template badge)
-  const _meta = TEMPLATE_REGISTRY[resolvedKey];
+  const Component = TEMPLATE_COMPONENTS[resolvedKey] ?? TEMPLATE_COMPONENTS['first_principles'];
+  if (!Component) return null;
 
   return (
     <TemplateErrorBoundary templateType={type}>
