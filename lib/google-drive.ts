@@ -119,6 +119,60 @@ export async function fetchDriveFiles(accessToken: string, searchQuery: string =
   return data.files || [];
 }
 
+/** Docs-editor files have no bytes of their own; they live under this prefix. */
+const GOOGLE_NATIVE_PREFIX = 'application/vnd.google-apps.';
+
+/** The format each Docs-editor type is exported as (the export must name one). */
+const GOOGLE_EXPORT_MIME: Record<string, string> = {
+  'application/vnd.google-apps.document': 'application/pdf',
+  'application/vnd.google-apps.presentation': 'application/pdf',
+  'application/vnd.google-apps.spreadsheet': 'application/pdf',
+  'application/vnd.google-apps.drawing': 'image/png',
+};
+
+export interface DriveDownloadTarget {
+  /** The URL to GET for this file's bytes. */
+  url: string;
+  /** The type those bytes will actually be (so the asset is labelled truthfully). */
+  mimeType: string;
+  /** True when the bytes come from Drive's export endpoint, not `alt=media`. */
+  exported: boolean;
+}
+
+/**
+ * Where the bytes of a Drive file actually come from.
+ *
+ * A Docs-editor file (Google Slides / Docs / Sheets / Drawings) has no binary
+ * content to fetch: `files.get?alt=media` answers HTTP 403
+ * `fileNotDownloadable` for it ("Use Export with Docs Editors files"). Since
+ * `fetchDriveFiles` lists `mimeType contains 'presentation' or 'document'`, a
+ * student's own lecture deck was offered in the picker and then failed on every
+ * click. Those files only come out through the export endpoint, which has to
+ * name a target format. Everything else is an ordinary binary file — including
+ * the PDFs and images this modal is mostly for.
+ */
+export function driveDownloadTarget(file: Pick<DriveFileItem, 'id' | 'mimeType'>): DriveDownloadTarget {
+  const base = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}`;
+  const native = (file.mimeType || '').toLowerCase();
+
+  if (native.startsWith(GOOGLE_NATIVE_PREFIX)) {
+    const exportMime = GOOGLE_EXPORT_MIME[native] || 'application/pdf';
+    return {
+      url: `${base}/export?mimeType=${encodeURIComponent(exportMime)}`,
+      mimeType: exportMime,
+      exported: true,
+    };
+  }
+
+  // A real file: fetch the bytes directly. Images keep their own type so the
+  // caller can build a preview data URL; everything else is treated as a PDF.
+  return {
+    url: `${base}?alt=media`,
+    mimeType: native.startsWith('image/') ? native : 'application/pdf',
+    exported: false,
+  };
+}
+
 /**
  * Downloads a file from Google Drive and returns an UploadedFileAsset ready for Gemini
  */
@@ -126,16 +180,21 @@ export async function downloadDriveFileToAsset(
   fileItem: DriveFileItem,
   accessToken: string
 ): Promise<UploadedFileAsset> {
-  const url = `https://www.googleapis.com/drive/v3/files/${fileItem.id}?alt=media`;
+  const target = driveDownloadTarget(fileItem);
 
-  const response = await fetch(url, {
+  const response = await fetch(target.url, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to download ${fileItem.name} from Google Drive.`);
+    // The API's own message names the fix (a Docs-editor file that cannot be
+    // exported, a permissions problem, a revoked scope); a bare "failed" hides
+    // which of those it was.
+    const errData = await response.json().catch(() => ({}));
+    const detail = errData?.error?.message || `HTTP ${response.status}`;
+    throw new Error(`Failed to download ${fileItem.name} from Google Drive (${detail}).`);
   }
 
   const arrayBuffer = await response.arrayBuffer();
@@ -146,13 +205,7 @@ export async function downloadDriveFileToAsset(
   }
   const base64Data = btoa(binary);
 
-  // Determine standard mime type
-  let mimeType = fileItem.mimeType;
-  if (mimeType.includes('pdf')) {
-    mimeType = 'application/pdf';
-  } else if (!mimeType.startsWith('image/')) {
-    mimeType = 'application/pdf'; // fallback default
-  }
+  const mimeType = target.mimeType;
 
   const previewUrl = mimeType.startsWith('image/')
     ? `data:${mimeType};base64,${base64Data}`

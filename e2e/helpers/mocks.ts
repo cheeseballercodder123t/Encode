@@ -276,15 +276,21 @@ export async function confirmReadiness(_page: Page) {
 }
 
 /** Fill notes on the launchpad and start generation (no pre-session gate). */
-export async function startEncodeFromNotes(page: Page, notes: string) {
-  await page.goto('/');
+/**
+ * Types source material into the launchpad and waits until React has actually
+ * seen it.
+ *
+ * On a cold dev server the input event can land before React has hydrated, so
+ * onChange never fires and everything gated on "has source material" — Build
+ * cognitive schema, Teach me first, G1 Express Forge — stays disabled forever.
+ * The status line mirrors React state, so give it a moment to reflect the fill
+ * and re-fill once if the event was lost to that race. Every spec that types
+ * notes should come through here rather than calling `fill` directly, or it
+ * flakes under `--workers=2` (two contexts racing a cold server).
+ */
+export async function enterNotes(page: Page, notes: string) {
   const notesBox = page.getByPlaceholder(/Paste study material/);
-  const build = page.getByRole('button', { name: 'Build Cognitive Schema' });
   await notesBox.fill(notes);
-  // On a cold dev server the input event can land before React has hydrated,
-  // so onChange never sees it and the button stays disabled forever. The
-  // status line mirrors React state, so give it a moment to reflect the fill,
-  // and re-fill once if the event was lost to that race.
   const ready = page.getByText(/words · ready to encode/);
   try {
     await expect(ready).toBeVisible({ timeout: 3000 });
@@ -292,7 +298,12 @@ export async function startEncodeFromNotes(page: Page, notes: string) {
     await notesBox.fill(notes);
     await expect(ready).toBeVisible({ timeout: 5000 });
   }
-  await build.click();
+}
+
+export async function startEncodeFromNotes(page: Page, notes: string) {
+  await page.goto('/');
+  await enterNotes(page, notes);
+  await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
 }
 
 export async function expectStage(page: Page, stage: number) {

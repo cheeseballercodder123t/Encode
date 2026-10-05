@@ -83,8 +83,11 @@ export function buildCompletion(activity: Activity | undefined): CompletionSlot 
   const visual: any = activity.visualData || {};
   const template = activity.templateType || '';
 
-  if (template === 'analogy_matrix' || visual.analogyMappings) {
-    const mappings: any[] = Array.isArray(visual.analogyMappings) ? visual.analogyMappings : [];
+  // `.length > 0`, not a bare truthy check: an empty `analogyMappings: []` the
+  // encoder left on a first-principles stage is still truthy, and entering this
+  // branch would return null instead of blanking the stage's real node.
+  const mappings: any[] = Array.isArray(visual.analogyMappings) ? visual.analogyMappings : [];
+  if (template === 'analogy_matrix' || mappings.length > 0) {
     const flagged = mappings.findIndex((m) => m?.isPartialTarget);
     const withTarget = mappings.map((m, i) => ({ m, i })).filter(({ m }) => asText(m?.targetElement));
     const pick = flagged >= 0 ? flagged : withTarget.length > 0 ? withTarget[withTarget.length - 1].i : -1;
@@ -100,8 +103,8 @@ export function buildCompletion(activity: Activity | undefined): CompletionSlot 
     };
   }
 
-  if (template === 'state_transition' || visual.flowSteps) {
-    const steps: any[] = Array.isArray(visual.flowSteps) ? visual.flowSteps : [];
+  const steps: any[] = Array.isArray(visual.flowSteps) ? visual.flowSteps : [];
+  if (template === 'state_transition' || steps.length > 0) {
     if (steps.length === 0) return null;
     const flagged = steps.findIndex((s) => s?.isTriggerState);
     const pick = flagged >= 0 ? flagged : Math.floor(steps.length / 2);

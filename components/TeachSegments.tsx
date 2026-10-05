@@ -36,7 +36,12 @@ export type BodyProps = { seg: LessonSegment } & SegmentCallbacks;
 export function ConceptBody({ seg, onNext }: BodyProps) {
   return (
     <div className="space-y-3">
-      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap">{seg.body}</p>}
+      {/* `break-words` matters on every lesson body: the text is model-written
+          and routinely carries an unbreakable token (a URL, a `[[wikilink]]`, a
+          run of formula characters). Without it the token widens the paragraph
+          past the lesson body, which then hides the text behind a horizontal
+          scrollbar instead of wrapping it. */}
+      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap break-words">{seg.body}</p>}
       <WhyBlock seg={seg} />
       <MisconceptionList seg={seg} />
       {seg.visual && seg.visual.callout && (
@@ -107,7 +112,7 @@ export function MemoryHookBody({ seg, onNext }: BodyProps) {
 export function StoryBody({ seg, onNext }: BodyProps) {
   return (
     <div className="space-y-3">
-      {seg.narrative && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap">{seg.narrative}</p>}
+      {seg.narrative && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap break-words">{seg.narrative}</p>}
       {seg.continuation && (
         <div className="px-3 py-2 bg-chassis border border-amber/30 text-[11px] text-amber font-mono italic">
           {seg.continuation}
@@ -167,7 +172,7 @@ export function MisconceptionList({ seg }: { seg: LessonSegment }) {
 export function DeepDiveBody({ seg, onNext }: BodyProps) {
   return (
     <div className="space-y-3">
-      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap">{seg.body}</p>}
+      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap break-words">{seg.body}</p>}
       <WhyBlock seg={seg} />
       <MisconceptionList seg={seg} />
       {seg.visual && <VisualBlock seg={seg} />}
@@ -190,7 +195,7 @@ export function MisconceptionBody({ seg, onNext }: BodyProps) {
   return (
     <div className="space-y-3">
       <MisconceptionList seg={seg} />
-      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap">{seg.body}</p>}
+      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap break-words">{seg.body}</p>}
       {seg.trapNote && (
         <div className="px-3 py-2 bg-hazard/10 border border-hazard/30 text-[11px] text-hazard font-mono">{seg.trapNote}</div>
       )}
@@ -317,7 +322,7 @@ export function RecapBody({ seg, onNext }: BodyProps) {
           ))}
         </ol>
       )}
-      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap">{seg.body}</p>}
+      {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap break-words">{seg.body}</p>}
       <ContinueButton onNext={onNext} />
     </div>
   );

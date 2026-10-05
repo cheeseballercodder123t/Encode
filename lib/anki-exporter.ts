@@ -173,6 +173,35 @@ export function clozeOrdinals(text: string): number[] {
 }
 
 /**
+ * True when this card must ship as an Anki Cloze note.
+ *
+ * The deletion has to be on the FRONT: Anki derives each cloze card's `ord`
+ * from the `{{cN::}}` marker it finds in the note's first field, so a card whose
+ * only marker sits on the answer side cannot be a Cloze note at all (it would
+ * render as an empty card). Such a card ships as Basic instead — which is what
+ * `unwrapClozeDeletions` exists for.
+ */
+export function shipsAsClozeNote(card: AnkiCardItem): boolean {
+  return Boolean(card.isCloze) && clozeOrdinals(card.front).length > 0;
+}
+
+/**
+ * Turns `{{c1::term}}` (and a bare `{{term}}`) into the plain text `term`.
+ *
+ * Several card families deliberately carry a marker in their ANSWER — the
+ * confusable-pair diagnostic drill and the slide-deck occlusion cards put
+ * `{{c1::answer}}` on the back so the RemNote handoff can hint it. RemNote
+ * unwraps it (`stripClozeDeletions`), but a Basic Anki note renders its fields
+ * verbatim, so without this the learner reads `{{c1::Oxaloacetate}}` instead of
+ * the answer. Only ever applied to cards that ship as Basic.
+ */
+export function unwrapClozeDeletions(text: string): string {
+  return (text || '')
+    .replace(/\{\{c\d+::([^{}]*)\}\}/g, '$1')
+    .replace(/\{\{([^{}]*)\}\}/g, '$1');
+}
+
+/**
  * Rewrites cloze numbers so they are dense from `c1` in order of first
  * appearance (`{{c2::A}}` → `{{c1::A}}`, `{{c1::A}}{{c3::B}}` → c1, c2).
  * Deterministic and idempotent; keeps the deletion order the author wrote.
@@ -943,14 +972,18 @@ export async function generateAnkiApkgPackage(cards: AnkiCardItem[], deckName: s
     const nid = modMs + i;
     // Only a real, numbered deletion belongs on the Cloze note type; anything
     // else would ship a card Anki cannot render.
-    const isCloze = card.isCloze && clozeOrdinals(card.front).length > 0;
+    const isCloze = shipsAsClozeNote(card);
     return {
       // Deterministic per (deck, card id): re-exports UPDATE the Anki note
       // instead of duplicating it, while distinct cards can never collide.
       guid: deterministicAnkiGuid(`${deckName}::${card.id}`),
       mid: isCloze ? clozeModelId : basicModelId,
       tags: card.tags.join(' '),
-      flds: isCloze ? [card.front, card.back] : [card.front, card.back, ''],
+      // A Basic note renders its fields verbatim, so any marker the answer side
+      // still carries is unwrapped rather than shown as literal braces.
+      flds: isCloze
+        ? [card.front, card.back]
+        : [unwrapClozeDeletions(card.front), unwrapClozeDeletions(card.back), ''],
       sfld: stripHtml(card.front).slice(0, 120) || card.id,
       _nid: nid,
     };

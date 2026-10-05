@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { MOCK_NOTES, TEACH_SHORT_RESPONSE } from './helpers/fixtures';
 import {
   mockAiApis,
+  enterNotes,
   startEncodeFromNotes,
   confirmReadiness,
   expectStage,
@@ -23,7 +24,7 @@ async function mockShortLesson(page: Page) {
 /** Launchpad -> Teach Me pre-roll -> generated lesson, ready to play. */
 async function playShortLesson(page: Page) {
   await page.goto('/');
-  await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
+  await enterNotes(page, MOCK_NOTES);
   await page.getByRole('button', { name: /teach me/i }).first().click();
   await expect(page.getByText('Lesson Pre-Roll')).toBeVisible();
   await page.getByRole('button', { name: /generate lesson/i }).click();
@@ -34,7 +35,7 @@ test.describe('Teach Me interactive lesson', () => {
   test('launchpad TEACH ME opens the pre-roll, plays a concept and a checkpoint, XP increases', async ({ page }) => {
     await mockAiApis(page);
     await page.goto('/');
-    await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
+    await enterNotes(page, MOCK_NOTES);
 
     // Pre-roll opens: style chips + sliders + generate button
     await page.getByRole('button', { name: /teach me/i }).first().click();
@@ -149,7 +150,7 @@ test.describe('Teach Me interactive lesson', () => {
     // field itself is not persisted, so the returned learner pastes their
     // material again — the lesson is still waiting.)
     await page.reload();
-    await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
+    await enterNotes(page, MOCK_NOTES);
     await page.getByRole('button', { name: /teach me/i }).first().click();
     await expect(page.getByTestId('teach-resume-banner')).toContainText('Threshold: The Two-Minute Version');
   });
@@ -166,5 +167,40 @@ test.describe('Teach Me interactive lesson', () => {
     // Teach Me closes and the encode pipeline runs from the same notes.
     await expect(page.getByTestId('teach-start-encoding')).toHaveCount(0);
     await expectStage(page, 1);
+  });
+
+  test('a lesson body with an unbreakable token wraps instead of scrolling sideways', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+
+    // A model-written body routinely carries a token with no break opportunity
+    // in it. The lesson body used to widen the card past the viewport, which
+    // reads as clipped text behind a horizontal scrollbar rather than a wrap.
+    const lesson = JSON.parse(JSON.stringify(TEACH_SHORT_RESPONSE));
+    lesson.lesson.segments[0].body = `At -55 mV the voltage-gated Na+ channels open.\nSource: https://university.example.edu/${'C'.repeat(120)}/notes`;
+    await mockAiApis(page);
+    await page.route('**/api/teach', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(lesson),
+      })
+    );
+    await playShortLesson(page);
+
+    // The lesson body is the sheet's scroll container (overflow-y-auto, which
+    // forces overflow-x to auto), so an over-wide line shows up here.
+    const panes = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[role="dialog"] .overflow-y-auto, [role="dialog"] .overflow-auto'),
+      ).map((el) => ({ cls: el.className.slice(0, 46), scrollW: el.scrollWidth, clientW: el.clientWidth })),
+    );
+    expect(panes.length).toBeGreaterThan(0);
+    for (const pane of panes) {
+      expect(pane.scrollW, `${pane.cls} overflows sideways`).toBeLessThanOrEqual(pane.clientW + 1);
+    }
+
+    // And the long token really is on screen (the assertion above is not
+    // passing because the segment failed to render).
+    await expect(page.getByText(/-55 mV the voltage-gated Na\+ channels open\./)).toBeVisible();
   });
 });

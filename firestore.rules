@@ -27,7 +27,9 @@ service cloud.firestore {
       // Deck memory: the fingerprints of card fronts this user has already
       // exported, per topic. Fronts only (no backs, no answers, no source
       // material), private to the owner, so a re-forge on another device still
-      // knows what is already in their deck.
+      // knows what is already in their deck. The same collection also holds the
+      // lab snapshot history (`memory/toylab`), so the bounded device cache can
+      // evict without losing a semester of interactive-lab states.
       match /memory/{docId} {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId);

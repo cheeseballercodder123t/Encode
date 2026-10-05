@@ -136,6 +136,20 @@ export interface RemnoteExportPayload {
   twoWayCount?: number;
   /** Total forward-only cards across the deck. */
   forwardCount?: number;
+  /** `[[Wikilink]]` portals between confusable concepts — reviewing either card previews the other. */
+  conceptPortals?: number;
+}
+
+/**
+ * The RemNote-native embed line (plan Pillar 4): a labelled Extra Card Detail
+ * bullet carrying a bare URL, which RemNote unfurls into a live widget inside
+ * the learner's notes. Pure markdown so the copy surface and tests pin it.
+ */
+export function remnoteToyEmbedLine(embedUrl: string, label?: string): string {
+  const name = (label || '').trim();
+  const head = name ? `- Interactive Lab: ${name} ${REMNOTE_DETAIL}` : `- Interactive Lab: ${REMNOTE_DETAIL}`;
+  const url = (embedUrl || '').trim();
+  return url ? `${head}\n    - ${url}` : head;
 }
 
 /**
@@ -744,17 +758,28 @@ export function generateSegregationRemnote(
     }
   }
 
-  // Practice drills: short questions, forward-only by construction. "Why" and
-  // "Traps" are exactly what Extra Card Detail exists for — a misconception
-  // worth seeing after the answer, not a card of its own.
+  // Practice drills: short questions, forward-only by construction. The reason
+  // a drill is right rides IN the answer — `- Why >> ${whyCorrect}` was a card
+  // whose front is the bare word "Why", which RemNote can only ask as
+  // `Question > Why >> _____` (a fragment nobody can answer, and the exact trap
+  // the RemNote-native plan forbids). Inlining it is the plan's promotion of the
+  // mechanism into the answer the drill already tests, so no second card exists
+  // in either mode. Traps are context on the drill's back, never a card: Extra
+  // Card Detail when the deck uses it, and part of the answer when it does not.
   const drills = newSection('drills', '⚡ Practice Drills', 'Practice Drills');
   for (const d of report.practiceQuestions || []) {
     drills.activeSource = sourceIdOfItem(d.id);
-    pushCard(ctx, drills, d.question, d.answer, 'forward', { reason: 'question front' });
-    pushExtra(ctx, drills, 'Why', d.whyCorrect || '', 'labelled prompt');
-    if (d.distractors && d.distractors.length > 0) {
-      pushExtra(ctx, drills, 'Traps', d.distractors.join(' / '), 'labelled prompt');
-    }
+    const traps = d.distractors && d.distractors.length > 0 ? d.distractors.join(' / ') : '';
+    const trapsAsDetail = Boolean(traps) && ctx.explanationsAsDetail;
+    const answer = [
+      d.answer,
+      d.whyCorrect ? `(${d.whyCorrect})` : '',
+      traps && !trapsAsDetail ? `— Traps: ${traps}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    pushCard(ctx, drills, d.question, answer, 'forward', { reason: 'question front' });
+    if (trapsAsDetail) pushDetail(ctx, drills, 'Traps', traps);
   }
 
   // Worked examples: one multi-line card per example. The chain of steps is one
@@ -771,26 +796,36 @@ export function generateSegregationRemnote(
     });
   }
 
-  // Confusable Pairs / Discrimination Matrix
+  // Confusable Pairs / Discrimination Matrix. The two lookalike names are
+  // wrapped in [[wikilinks]] — the plan's "concept portals": reviewing either
+  // card, RemNote previews the other concept, so a discrimination pair is
+  // studied as one boundary instead of two unrelated cards. Each distinct pair
+  // name is one portal, and the count rides on the payload so the push can
+  // say what it actually shipped.
   const confusableSection = newSection('confusable', '⚖️ Confusable Pairs & Discrimination Matrix', 'Discrimination Matrix');
+  let conceptPortals = 0;
   for (const pair of report.confusablePairs || []) {
     confusableSection.activeSource = sourceIdOfItem(pair.id);
+    const a = (pair.conceptA || '').trim();
+    const b = (pair.conceptB || '').trim();
+    conceptPortals += (a ? 1 : 0) + (b ? 1 : 0);
+    const link = (name: string) => (name ? `[[${name}]]` : '');
     pushCard(
       ctx,
       confusableSection,
-      `When does the system switch from ${pair.conceptA} to ${pair.conceptB}?`,
+      `When does the system switch from ${link(a)} to ${link(b)}?`,
       pair.boundaryCondition,
       'forward',
       { reason: 'boundary condition question' }
     );
     pushExtra(ctx, confusableSection, 'Distinguishing Axis', pair.distinguishingAxis, 'contrast row');
-    pushExtra(ctx, confusableSection, `${pair.conceptA} Feature`, pair.conceptAFeature, 'contrast row');
-    pushExtra(ctx, confusableSection, `${pair.conceptB} Feature`, pair.conceptBFeature, 'contrast row');
+    pushExtra(ctx, confusableSection, `${link(a)} Feature`, pair.conceptAFeature, 'contrast row');
+    pushExtra(ctx, confusableSection, `${link(b)} Feature`, pair.conceptBFeature, 'contrast row');
     if (pair.diagnosticVignette && pair.diagnosticAnswer) {
       pushCard(
         ctx,
         confusableSection,
-        `Vignette: ${pair.diagnosticVignette} (${pair.conceptA} vs ${pair.conceptB})`,
+        `Vignette: ${pair.diagnosticVignette} (${link(a)} vs ${link(b)})`,
         pair.diagnosticAnswer,
         'forward',
         { indent: '  ', reason: 'diagnostic drill' }
@@ -808,6 +843,7 @@ export function generateSegregationRemnote(
     ...assembled,
     factsCount,
     conceptsCount,
+    conceptPortals,
     hierarchicalDeck: assembled.markdown,
     parentAnchor,
   };
@@ -1228,7 +1264,9 @@ export async function pushToRemnoteApi(
     success: true,
     message:
       documents.length > 1
-        ? `Pushed ${documents.length} RemNote documents — one per card section.`
+        ? `Pushed ${documents.length} RemNote documents — one per card section${
+            payload.conceptPortals ? ` with ${payload.conceptPortals} concept portal${payload.conceptPortals === 1 ? '' : 's'}` : ''
+          }.`
         : lastMessage,
     docId,
     pushed,

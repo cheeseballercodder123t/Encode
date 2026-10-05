@@ -187,6 +187,13 @@ function reportItemFronts(report: SegregationReport): Record<string, string[]> {
     const prefix = example.id ? `${example.id}-` : `example-${idx}-`;
     for (const front of byIdPrefix(prefix)) add(example.id, front);
   });
+  (report.confusablePairs || []).forEach((pair, idx) => {
+    // A pair ships a matrix card whose id IS the pair id, plus a vignette whose
+    // id appends `-vignette`. Both have to be fingerprinted, or a re-forge
+    // counts the pair as new every time and re-ships cards already in the deck.
+    for (const front of byId(pair.id || `cp-${idx}-matrix`)) add(pair.id, front);
+    for (const front of byIdPrefix(pair.id ? `${pair.id}-` : `cp-${idx}-`)) add(pair.id, front);
+  });
 
   return grouped;
 }
@@ -502,5 +509,6 @@ export function keepOnlyFreshCards(report: SegregationReport, freshIds: string[]
     conceptualMechanisms: report.conceptualMechanisms.filter((card) => fresh.has(card.id)),
     practiceQuestions: (report.practiceQuestions || []).filter((card) => fresh.has(card.id)),
     workedExamples: (report.workedExamples || []).filter((card) => fresh.has(card.id)),
+    confusablePairs: (report.confusablePairs || []).filter((card) => fresh.has(card.id)),
   };
 }

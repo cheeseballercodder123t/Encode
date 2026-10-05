@@ -81,6 +81,30 @@ describe('buildCompletion', () => {
     expect(slot.prompt).toBe('Fill the blanked node: Threshold is crossed → ? → The pore opens');
   });
 
+  it('ignores an empty sibling array instead of skipping the stage’s real node', () => {
+    // The encoder sometimes emits `analogyMappings: []` / `flowSteps: []` on a
+    // first-principles stage. A bare truthy check treated the empty array as
+    // "this is an analogy/cycle stage" and returned null, silently disabling
+    // the completion exercise for a stage that had a blankable node.
+    const slot = buildCompletion(
+      makeActivity({
+        templateType: 'first_principles',
+        visualData: {
+          analogyMappings: [],
+          flowSteps: [],
+          nodes: [
+            { id: 'n1', label: 'Input', type: 'input' },
+            { id: 'n2', label: 'The pump opens', type: 'mechanism' },
+            { id: 'n3', label: 'Outcome', type: 'outcome' },
+          ],
+        },
+      } as any)
+    );
+    expect(slot).not.toBeNull();
+    expect(slot!.kind).toBe('causal_node');
+    expect(slot!.answer).toBe('The pump opens');
+  });
+
   it('returns null when there is nothing to blank', () => {
     expect(buildCompletion(undefined)).toBeNull();
     expect(buildCompletion(makeActivity({ templateType: 'first_principles', visualData: {} } as any))).toBeNull();

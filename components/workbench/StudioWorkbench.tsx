@@ -1552,8 +1552,15 @@ export function StudioWorkbench({
                 </ToolToggle>
               </div>
 
-              {/* Live Preview Box with Cloze Masking Support */}
-              <div className="flex-1 overflow-y-auto bg-inset p-3 border border-edge rounded-md font-mono text-[11px] text-bone leading-relaxed whitespace-pre-wrap break-words select-all">
+              {/* Live Preview Box with Cloze Masking Support.
+                  `break-words` + `whitespace-pre-wrap` + vertical-only
+                  scrolling is the contract here: this panel sits in the narrow
+                  examiner column, and a single unbreakable markdown token used
+                  to widen it past the column and hide the text behind a
+                  horizontal scrollbar. `overflow-y-auto` forces `overflow-x:
+                  auto`, so an over-wide line becomes a scrollbar rather than a
+                  clip — e2e/studio-design.spec.ts pins this box by name. */}
+              <div data-testid="remnote-staging" className="flex-1 overflow-y-auto bg-inset p-3 border border-edge rounded-md font-mono text-[11px] text-bone leading-relaxed whitespace-pre-wrap break-words select-all">
                 {smokeTestActive && liveRemNote.markdown ? (
                   liveRemNote.markdown.split(/(\{\{.*?\}\})/).map((part, i) => {
                     if (part.startsWith('{{') && part.endsWith('}}')) {

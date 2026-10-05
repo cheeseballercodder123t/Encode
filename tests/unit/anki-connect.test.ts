@@ -97,6 +97,24 @@ describe('mapCardToNote', () => {
     expect(note.fields).toEqual({ Front: 'No deletion here', Back: 'plain' });
   });
 
+  it('resolves an answer-side marker instead of pushing literal braces', () => {
+    // The diagram-occlusion and diagnostic-vignette cards put `{{c1::answer}}`
+    // on the BACK on purpose (the RemNote handoff hints it). Anki has no cloze
+    // field on a Basic note, so the braces used to show up as literal text on
+    // the answer side of the card in Anki.
+    const note = mapCardToNote(
+      makeCard({
+        isCloze: true,
+        front: '<b>Visual Diagram Occlusion:</b><br>[ Slot #1: ? ]',
+        back: '<b>Slot #1 = {{c1::Oxaloacetate}}</b>',
+      }),
+      'Deck'
+    );
+    expect(note.modelName).toBe('Basic');
+    expect(note.fields.Back).toBe('<b>Slot #1 = Oxaloacetate</b>');
+    expect(note.fields.Back).not.toContain('{{');
+  });
+
   it('maps a plain card to Basic and sanitizes illegal tag characters', () => {
     const note = mapCardToNote(
       makeCard({ isCloze: false, front: 'Q', back: 'A', tags: ['Topic:Action Potentials', '"quoted"'] }),

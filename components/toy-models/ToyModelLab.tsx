@@ -3,8 +3,11 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { sound } from '@/lib/audio';
+import { remnoteToyEmbedLine } from '@/lib/remnote';
+import { useAuth } from '@/lib/auth-context';
 import { buildToyChallenge, clamp, computeArchetypeOutput, cyclePosition, equationFor, formatToyNumber, initialInputs, restoreToyProgress, variablesFor } from '@/lib/toy-models/engine';
 import { loadToyProgress, saveToyProgress, stampToyProgress } from '@/lib/toy-models/progress';
+import { describeToyProgressSync, syncToyProgressWithCloud } from '@/lib/toy-models/progress-cloud';
 import type { ToyInputs, ToyModelConfig, ToyModelProgress, ToyVariable } from '@/lib/toy-models/types';
 import { ToyModelVisual } from './ToyModelVisual';
 
@@ -26,6 +29,7 @@ function VariableSlider({ variable, value, disabled, onChange }: { variable: Toy
 }
 export function ToyModelLab({ activityId, config, progress: savedProgress, onProgress, onAdopt }: Props) {
   const reduced = useReducedMotion();
+  const { user } = useAuth();
   const [progress, setProgress] = useState(() => restoreToyProgress(config, savedProgress));
   const [hydrated, setHydrated] = useState(false);
   const [storageError, setStorageError] = useState(false);
@@ -33,9 +37,11 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
   const [settling, setSettling] = useState(false);
   const [showCounter, setShowCounter] = useState(false);
   const [adopted, setAdopted] = useState(false);
+  const [cloudNote, setCloudNote] = useState('');
   const progressCallback = useRef(onProgress);
   const latestProgress = useRef(progress);
   const lastRegime = useRef({ critical: false, equilibrium: false });
+  const lastCloudSync = useRef(0);
   const challenge = useMemo(() => buildToyChallenge(config), [config]);
   const variables = useMemo(() => variablesFor(config), [config]);
   const output = computeArchetypeOutput(config, progress.inputs);
@@ -67,6 +73,24 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
     }, delay);
     return () => clearTimeout(timer);
   }, [activityId, config, hydrated, progress]);
+  // Lab snapshots live on the account too (progress-cloud.ts). Reconcile a quiet
+  // moment after this lab changes: the device cache is bounded, and the per-key
+  // merge both restores what it evicted and pushes what only this device knows.
+  // Slider drags reset the timer, so a drag is never a Firestore write per tick.
+  useEffect(() => {
+    if (!user) return;
+    const updatedAt = progress.updatedAt || 0;
+    if (updatedAt === 0 || updatedAt <= lastCloudSync.current) return;
+    const timer = setTimeout(() => {
+      lastCloudSync.current = updatedAt;
+      void syncToyProgressWithCloud(user.uid).then((result) => {
+        // Silence means "already in the account": only a merge that brought
+        // snapshots back, or a failure worth acting on, earns a line of text.
+        setCloudNote(result.ok && !result.changed ? '' : describeToyProgressSync(result));
+      });
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [user, progress]);
 
   const duelHolds = (inputs: ToyInputs) => !!config.devilsAdvocate && Object.entries(config.devilsAdvocate.refutationInputs).every(([key, target]) => Math.abs(inputs[key] - target) <= (variables.find((item) => item.key === key)?.step ?? 0) / 2 + 1e-9);
   // One write path for every manipulation (slider, puck drag, stepper): the
@@ -186,6 +210,26 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
     if (duelRefuted) sound.playLabUnlock();
     setProgress(stampToyProgress({ ...progress, duelHeard: true, duelRefuted }));
   };
+  // RemNote-native embed (plan Pillar 4): copy a markdown bullet whose bare URL
+  // RemNote unfurls into this lab, live inside the learner's own notes. The URL
+  // carries the activity id itself — the embed route resolves teaching examples
+  // (and their `lab-` ids) plus saved-schema stages, so the link round-trips.
+  const [embedCopied, setEmbedCopied] = useState(false);
+  const copyRemnoteEmbed = () => {
+    const url = typeof window === 'undefined' ? '' : `${window.location.origin}/embed/toy-models/${activityId}`;
+    if (!url) return;
+    void navigator.clipboard
+      ?.writeText(remnoteToyEmbedLine(url, config.title))
+      .then(() => {
+        setEmbedCopied(true);
+        sound.playBeep(520, 'sine', 0.1);
+        window.setTimeout(() => setEmbedCopied(false), 2400);
+      })
+      .catch(() => {
+        // Clipboard permission refused: the button stays as it is; the copy
+        // buttons on the export surfaces remain the always-available fallback.
+      });
+  };
   return <section className={`toy-lab ${output.critical ? 'toy-lab-critical' : ''}`} aria-label={`${config.title} interactive laboratory`} data-testid="toy-model-lab" data-archetype={config.type}>
     <header className="toy-header"><div><span className="toy-kicker">INTERACTIVE INTUITION LAB / {config.type.replaceAll('_', ' ')}</span><h3>{config.title}</h3></div><span className="toy-mode-badge">{!unlocked ? '01 / PREDICT' : !progress.revealed ? '02 / MANIPULATE' : '03 / REVEAL'}</span></header>
     <div className="toy-equation">{equationFor(config)}</div>
@@ -234,6 +278,7 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
         else setSettling(true);
       }}>{settling ? 'Relaxing toward Q=K…' : 'Release to equilibrium'}</button>}
       {config.counterModel && <button type="button" disabled={!unlocked} aria-pressed={showCounter} onClick={() => setShowCounter(!showCounter)}>{showCounter ? 'Hide counter-model' : 'Flaw hunter: compare models'}</button>}
+      <button type="button" data-testid="toy-embed-copy" aria-pressed={embedCopied} title="Copy a RemNote bullet that unfurls this lab inside your notes" onClick={copyRemnoteEmbed}>{embedCopied ? 'RemNote embed copied' : 'Copy RemNote embed'}</button>
       <button type="button" onClick={reset}>Reset hypothesis</button>
     </div>
     {duel && progress.duelHeard && !duelDebunked && <p className="toy-hint">The claim stands until the instrument itself says otherwise.</p>}
@@ -244,6 +289,7 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
       <div><span>Interference trap ready for Anki / RemNote</span>{onAdopt && <button type="button" disabled={adopted} onClick={() => { onAdopt(config.takeaway); setAdopted(true); sound.playLabUnlock(); }}>{adopted ? 'Added to your mechanism' : 'Use this boundary rule'}</button>}</div>
     </motion.div>}
     {storageError && <p className="toy-hazard" role="status">This browser could not save lab progress. Keep the session open; exports still use your current work.</p>}
+    {cloudNote && <p className="toy-hint" role="status" data-testid="toy-cloud-status">{cloudNote}</p>}
     <details className="toy-evidence"><summary>Source grounding & model assumptions <span>{config.evidence.length} quotations</span></summary><ul>{config.evidence.map((entry, index) => <li key={index}><q>{entry.quote}</q><span>{entry.supports}</span></li>)}</ul><h4>What this toy model does—and does not—claim</h4><ul>{config.assumptions.map((item, index) => <li key={index}>{item}</li>)}</ul></details>
   </section>;
 }
