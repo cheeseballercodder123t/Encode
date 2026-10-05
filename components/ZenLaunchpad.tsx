@@ -276,6 +276,7 @@ export function ZenLaunchpad({
     <div className="studio-launchpad w-full mx-auto" inert={!ready} aria-busy={!ready}>
       <div className="studio-section-heading">
         <div><span className="studio-section-index">01 /</span><h3>Your encoding workbench</h3></div>
+        <span className="studio-heading-leader" aria-hidden />
         <span className="studio-section-note">YOUR MATERIAL. YOUR PACE. YOUR AHA.</span>
       </div>
       <div className="studio-console grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] border border-edge/70 bg-deck overflow-hidden shadow-panel">

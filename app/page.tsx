@@ -1872,7 +1872,7 @@ export default function DeepEncodeApp() {
                   <span className="font-mono text-[10px] text-solder whitespace-nowrap">optional</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="studio-audit-grid grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {([
                     {
                       key: 'prereq',
@@ -1918,19 +1918,20 @@ export default function DeepEncodeApp() {
                       onClick: handleSegregateNotes,
                       disabled: (!rawNotes.trim() && !uploadedFile) || isSegregating,
                     },
-                  ]).map((a) => (
+                  ]).map((a, index) => (
                     <button
                       key={a.key}
                       type="button"
                       onClick={a.onClick}
                       disabled={a.disabled}
                       title={a.title}
-                      className={`text-left p-4 bg-chassis/60 border rounded-xl transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                      className={`studio-audit-card text-left p-4 bg-chassis/60 border rounded-xl transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                         a.tone === 'hazard'
                           ? 'border-edge/70 hover:border-hazard-500/50'
                           : 'border-edge/70 hover:border-gilt/40'
                       }`}
                     >
+                      <span className="studio-audit-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                       <span
                         className={`block text-xs font-semibold ${
                           a.tone === 'hazard' ? 'text-hazard-300' : 'text-bone'
@@ -1944,7 +1945,7 @@ export default function DeepEncodeApp() {
                 </div>
               </div>
 
-              <div className="p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
+              <div className="studio-exports p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="label-caps whitespace-nowrap">
                     Export targets
@@ -2050,9 +2051,9 @@ export default function DeepEncodeApp() {
             key="loading"
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full py-24 flex flex-col items-center justify-center text-center"
+            className="studio-loading w-full py-24 flex flex-col items-center justify-center text-center"
           >
-            <div className="mb-7 flex items-center gap-2.5 px-3.5 py-1.5 bg-deck border border-gilt/30 rounded-full">
+            <div className="studio-processing-pill mb-7 flex items-center gap-2.5 px-3.5 py-1.5 bg-deck border border-gilt/30 rounded-full">
               <span className="h-1.5 w-1.5 rotate-45 bg-gradient-to-br from-amber-300 to-amber-600" aria-hidden />
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-200">
                 Processing
@@ -2087,7 +2088,7 @@ export default function DeepEncodeApp() {
 
             {/* Live pipeline progress : asymptotic bar + elapsed clock + phase ticker */}
             <div className="mt-8 w-full max-w-md">
-              <div className="h-1.5 w-full bg-inset border border-edge/60 rounded-full overflow-hidden">
+              <div className="gen-track h-1.5 w-full bg-inset border border-edge/60 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300 shadow-gilt transition-all duration-1000 ease-linear"
                   style={{ width: `${pct}%` }}
