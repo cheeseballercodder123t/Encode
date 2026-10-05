@@ -571,3 +571,33 @@ test.describe('Flashcards Only (the Forge)', () => {
     await expect(page.getByText('2 facts · 1 mechanisms · 1 drills · 1 examples')).toBeVisible();
   });
 });
+
+/**
+ * The forge sheet is mounted on the first paint and only hides itself while
+ * `isOpen` is false, so EVERY hook it owns has to run on every render. A hook
+ * that sat below its early `return null` made the component render one more
+ * hook the instant it opened: React #310, "Rendered more hooks than during the
+ * previous render", thrown the moment "Flashcards only" was pressed — the
+ * sheet never appeared at all.
+ *
+ * Nothing else in this file can catch that, because a render that throws is
+ * invisible to assertions that only look for text; and a single open passes,
+ * since the mismatch only exists on the render that changes the branch. So this
+ * spec opens, closes and reopens the sheet with a page-error listener attached.
+ */
+test('opening and reopening the forge never changes its hook count', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await mockForge(page);
+  await openForge(page);
+
+  const opener = page.getByRole('button', { name: /flashcards only/i });
+
+  await page.getByRole('button', { name: /close forge/i }).click();
+  await expect(page.getByText('Flashcard Forge · no encoding')).toBeHidden();
+
+  await opener.click();
+  await expect(page.getByText('Flashcard Forge · no encoding')).toBeVisible();
+
+  expect(errors).toEqual([]);
+});
