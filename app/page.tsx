@@ -26,6 +26,8 @@ import RoastNotesModal from '@/components/RoastNotesModal';
 import StatelessShareModal from '@/components/StatelessShareModal';
 import { PWAInstallHeader } from '@/components/PWAInstallHeader';
 import { ConceptPrerequisitesModal } from '@/components/ConceptPrerequisitesModal';
+import { SkillTreeModal } from '@/components/SkillTreeModal';
+import { PathwayBuilderModal } from '@/components/pathway/PathwayBuilder';
 import { PretestModal } from '@/components/PretestModal';
 import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
@@ -38,6 +40,7 @@ import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioIntro } from '@/components/StudioIntro';
 import { TOY_EXAMPLES, activityForToyExample } from '@/lib/toy-models/examples';
 import { toySessionId } from '@/lib/toy-models/progress';
+import { buildSkillTree, conceptMatches } from '@/lib/course-tree';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
@@ -161,9 +164,15 @@ export default function DeepEncodeApp() {
     clearAll: clearAllSchemaLibrary,
   } = useSchemaLibrary(saveSchemaToCloud, deleteSchemaFromCloud);
 
+  // Locked foundations across the whole library — the same pure builder the
+  // skill tree renders from, so the badge can never disagree with the modal.
+  const skillTreeGaps = useMemo(() => buildSkillTree(savedSchemas).gaps.length, [savedSchemas]);
+
   // Modal & transient UI state (kept local to the shell)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSkillTreeOpen, setIsSkillTreeOpen] = useState(false);
+  const [isPathwayOpen, setIsPathwayOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   // Drill modals were removed : review lives in Anki/RemNote, not here.
 
@@ -1108,7 +1117,10 @@ export default function DeepEncodeApp() {
           isGuidedPath: isGuidedPathMode,
           guidedModules: isGuidedPathMode ? guidedModules : undefined,
           youtubeData: youtubeData || undefined,
-          researchContexts: researchContexts.length > 0 ? researchContexts : undefined
+          researchContexts: researchContexts.length > 0 ? researchContexts : undefined,
+          // Only ever attach the audit that belongs to THIS topic: a stale
+          // report from another topic would invent a skill-tree edge.
+          prerequisites: prerequisitesReport && conceptMatches(topicSummary, prerequisitesReport.topicTitle) ? prerequisitesReport : undefined
         };
 
         await saveSchemaToLibrary(newSavedSchema);
@@ -1160,7 +1172,8 @@ export default function DeepEncodeApp() {
         isGuidedPath: isGuidedPathMode,
         guidedModules: isGuidedPathMode ? guidedModules : undefined,
         youtubeData: youtubeData || undefined,
-        researchContexts: researchContexts.length > 0 ? researchContexts : undefined
+        researchContexts: researchContexts.length > 0 ? researchContexts : undefined,
+        prerequisites: prerequisitesReport && conceptMatches(topicSummary, prerequisitesReport.topicTitle) ? prerequisitesReport : undefined
       };
       await saveSchemaToLibrary(newSavedSchema);
     }
@@ -1445,7 +1458,7 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="studio-shell min-h-screen min-h-dvh text-bone flex flex-col items-center px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
+    <main className="studio-shell min-h-screen min-h-dvh text-bone flex flex-col items-center px-4 sm:px-6 relative overflow-x-clip selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
 
       <div className="w-full max-w-6xl relative z-10 flex-1 flex flex-col">
 
@@ -1555,6 +1568,16 @@ export default function DeepEncodeApp() {
               title="Metacognitive Analytics & Model Quota Dashboard"
             >
               Analytics
+            </button>
+
+            {/* Course-level Prerequisite Skill Tree */}
+            <button
+              type="button"
+              onClick={() => setIsSkillTreeOpen(true)}
+              className="shrink-0 min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
+              title="Course-level prerequisite skill tree: what is encoded, in progress, and still locked"
+            >
+              Skill tree{skillTreeGaps > 0 ? ` · ${skillTreeGaps} locked` : ''}
             </button>
 
             {/* Saved Schemas History Button */}
@@ -1832,6 +1855,7 @@ export default function DeepEncodeApp() {
                 loadStageInputs(0, [activity], {});
                 setAppState('encoding');
               }}
+              onTryPathwayBuilder={() => setIsPathwayOpen(true)}
             />
 
                         {/* Bench: audits and export targets share one panel, in two
@@ -2236,6 +2260,16 @@ export default function DeepEncodeApp() {
         onClose={() => setIsSettingsOpen(false)}
         onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
         backupSettingsToCloud={backupSettingsToCloud}
+      />
+
+      {/* Hands-on pathway / circuit builder */}
+      <PathwayBuilderModal isOpen={isPathwayOpen} onClose={() => setIsPathwayOpen(false)} />
+
+      {/* Course-level Prerequisite Skill Tree */}
+      <SkillTreeModal
+        isOpen={isSkillTreeOpen}
+        onClose={() => setIsSkillTreeOpen(false)}
+        schemas={savedSchemas}
       />
 
       {/* Saved Schemas History Drawer */}

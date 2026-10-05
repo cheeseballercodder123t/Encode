@@ -18,6 +18,7 @@ The simulation is an intuition scaffold—not a numerical solver, a replacement 
 | Versioned progress storage and schema-scoped boundary cards | `lib/toy-models/progress.ts` |
 | Predict → manipulate → reveal controller | `components/toy-models/ToyModelLab.tsx` |
 | SVG mathematical instruments | `components/toy-models/ToyModelVisual.tsx` |
+| Phase-plane instrument (draggable operating point, nullclines, orbit) | `components/toy-models/PhasePlaneVisual.tsx` |
 | Scoped deep-space instrumentation styling | `app/toy-models.css` |
 | Lazy routing and safe old-template fallback | `components/stage-templates/StageVisualRenderer.tsx` |
 | AI generation integrations | `/api/encode`, `/api/encode/stream` (delegates to encode), `/api/youtube`, `/api/regenerate-stage` |
@@ -26,7 +27,7 @@ The simulation is an intuition scaffold—not a numerical solver, a replacement 
 
 No dependencies, second backend, new credentials, generated executable formulas, or user-authored simulation code are introduced. The app remains Next.js 15, React 19, TypeScript, Tailwind, motion, Gemini/multi-provider AI, local storage/IndexedDB and optional Firebase.
 
-## Five fixed engines
+## Six fixed engines
 
 ### 1. Ratio and scaling
 
@@ -68,7 +69,21 @@ Each energy segment comprises two cubic Bézier half-curves meeting smoothly at 
 
 A cycle such as an action potential has **illustrative** energy heights—not alleged measured Gibbs energy. The chart and assumption panel say so. Electrical voltage waveforms, mass-action rates and stochastic kinetics are not simulated.
 
-### 5. Critical threshold
+### 5. Coupled phase plane (Lotka–Volterra)
+
+`dX/dt = αX − βXY`, `dY/dt = δXY − γY`
+
+The coexistence equilibrium is `(X*, Y*) = (γ/δ, α/β)`, where both nullclines cross. The conserved quantity `V = δX − γlnX + βY − αlnY` is drawn as a live orbit from the operating point: RK4 integration (dt=0.05) holds V to within ~1e-7 over a full revolution, so the orbit closes instead of spiraling from integrator error. An 8×8 velocity field, both dashed nullclines with labels, and a quadrant status readout (`PREDATORS RISING`, `BOTH FALLING`, `BOTH RISING`, `PREDATORS STARVING`) make the direction of flow readable at a glance.
+
+The operating point is a real input: dragging the puck writes both coordinates through the same step-gridded write path as the sliders, and the question's reveal verifies the engine's exact two-coordinate target configuration. The teaching example's constants are illustrative; no damping, carrying capacity, seasonality, harvesting or discrete populations are modelled. The validator requires both nullclines to fall strictly inside the drawing ranges, since orbits cannot close otherwise.
+
+### 5b. Devil's Advocate duel (all engines)
+
+Any engine's config may carry an optional `devilsAdvocate` block: a named fictional speaker, a confident claim, the intuitive fallacy (p-prim) it rests on, the refutation configuration, what the model actually shows there, and the source quotation that grounds the contradiction.
+
+Hearing the claim is a prerequisite for refuting it — the argument has to be heard to be lost. The verdict is stamped only at input-write time when the live inputs reach the validator-checked refutation configuration, and `restoreToyProgress` re-verifies it against the stored inputs on every load (and now also requires `duelHeard`), so a stale or hand-edited save can never carry an unearned verdict. In the phase-plane lab the duel marker parks at the refutation configuration itself, so the claim is refuted by dragging the operating point into it. A verified refutation exports as its own trap card (`DevilsAdvocate` tag) through Anki and RemNote, and only a verified one does.
+
+### 6. Critical threshold
 
 A real, source-specified threshold supports three fixed responses:
 
@@ -135,7 +150,7 @@ Only explored, revealed, fingerprint-matching progress generates a boundary card
 
 ## Verification and operating instructions
 
-Open `/` → **Hands-on laboratories** to try five explicit teaching examples without a key. Paste notes/files or a video with captions → **Build cognitive schema** for source-derived generation when a provider is configured. For Gemini, the existing app reads an in-app Settings key or `GEMINI_API_KEY` from Settings → Environment; no new key name is introduced.
+Open `/` → **Hands-on laboratories** to try six explicit teaching examples without a key, or **Energy-payoff pathway** for the pathway builder. Paste notes/files or a video with captions → **Build cognitive schema** for source-derived generation when a provider is configured. For Gemini, the existing app reads an in-app Settings key or `GEMINI_API_KEY` from Settings → Environment; no new key name is introduced.
 
 Commands:
 
@@ -145,7 +160,7 @@ bun run test
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:<managed-preview-port> bun run test:e2e e2e/toy-models.spec.ts --workers=2
 ```
 
-Tests cover laws, boundaries, source rejection, malformed payloads, 2D extreme samples, exact reaction peaks, persistence/identity/quota/cap, standard/guided/regenerated API handlers, pre-manipulation export exclusion, Anki/RemNote consistency, actual downloaded Anki text, all five browser workflows, wrong predictions, secondary-variable control, mobile geometry, reduced motion, and retained original-stage fallback.
+Tests cover laws, boundaries, source rejection, malformed payloads, 2D extreme samples, exact reaction peaks, the conserved phase-plane invariant, duel-state restoration (earned, unheard, unearned and legacy saves), persistence/identity/quota/cap, standard/guided/regenerated API handlers, pre-manipulation export exclusion, Anki/RemNote consistency, actual downloaded Anki text, all six browser workflows, the duel lifecycle and its export, wrong predictions, secondary-variable control, mobile geometry, reduced motion, and retained original-stage fallback.
 
 Live provider generation, real Anki desktop handoff, and authenticated Firestore sync require credentials/services and are not implied by mocked tests. Screenshots are captured as artifacts; image-based manual review requires a visual inspection interface.
 
@@ -154,5 +169,5 @@ Live provider generation, real Anki desktop handoff, and authenticated Firestore
 - Photoelectric frequency/intensity comparison needs a fixed two-input quantum threshold law; the current flaw hunter supports linear saturation and no-threshold thermal/activation counter-models, not arbitrary counterfactual physics.
 - Unit consistency is enforced for equilibrium and source documentation elsewhere; general unit algebra is future work.
 - File quote verification needs a source-text extraction pipeline before it can be claimed independent of the multimodal model.
-- Models requiring more than two independent sliders or laws beyond the declared forms remain the original encoding stage. Adding a sixth engine requires a new discriminant, validator, invariant tests, schema, instrument and prediction builder—not executable AI code.
+- Models requiring more than two independent sliders or laws beyond the declared forms remain the original encoding stage. Adding a seventh engine requires a new discriminant, validator, invariant tests, schema, instrument and prediction builder—not executable AI code.
 - No guarantee of 60fps or clinical/engineering accuracy is made; the models are bounded learning instruments and were verified on representative browser layouts.

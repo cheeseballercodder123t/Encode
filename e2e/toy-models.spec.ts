@@ -36,6 +36,12 @@ for (let index = 0; index < TOY_EXAMPLES.length; index++) {
     const variable = example.config.prediction.variableKey === example.config.primaryVar.key ? example.config.primaryVar : example.config.type === 'ratio_scaling' ? example.config.denominator : undefined;
     if (!variable) throw Error('Fixture target variable');
     await setRange(page, variable.label, example.config.prediction.target);
+    if (example.config.type === 'phase_plane' && example.config.prediction.targetY !== undefined) {
+      // The phase-plane question moves BOTH coordinates, and the reveal
+      // verifies the engine's exact target configuration, so the second
+      // slider has to land on targetY too.
+      await setRange(page, example.config.secondVar.label, example.config.prediction.targetY);
+    }
     await expect(page.getByTestId('toy-reveal')).toContainText('Prediction confirmed.');
     await expect(page.getByTestId('toy-reveal')).toContainText(example.config.takeaway);
     await expect(lab).not.toContainText('NaN');
@@ -160,4 +166,90 @@ test('valid streamed AI configs render in the existing encode flow, malformed co
   await expect(page.getByText(/Interactive model unavailable/)).toBeVisible();
   await expect(page.getByTestId('toy-model-lab')).toHaveCount(0);
   await expect(page.getByPlaceholder('What physically changed?')).toBeVisible();
+});
+
+const predpreyIndex = TOY_EXAMPLES.findIndex((example) => example.id === 'predprey');
+
+/**
+ * The Devil's Advocate duel.
+ *
+ * The claim is rhetoric; the refutation has to be earned on the instrument.
+ * These specs pin the rules the engine enforces: dragging the phase-plane puck
+ * writes real state, silence cannot refute anything, only the refutation
+ * configuration flips the verdict, the verdict survives a reload, and moving
+ * away un-earns it live.
+ */
+test('devil’s advocate duel: the claim stands until the instrument refutes it', async ({ page }) => {
+  await openExample(page, predpreyIndex);
+  const lab = page.getByTestId('toy-model-lab');
+  const challenge = buildToyChallenge(TOY_EXAMPLES[predpreyIndex].config);
+  const correct = challenge.choices.find((item) => item.id === challenge.correctId)!;
+  await lab.getByRole('button', { name: correct.label, exact: true }).click();
+
+  const duel = page.getByTestId('toy-duel');
+  await expect(duel).toBeVisible();
+  await expect(duel).toContainText('wiped out and never come back');
+
+  // Dragging the puck manipulates the same state the sliders write. The
+  // instrument has to be in the viewport first — mouse coordinates are viewport
+  // coordinates, and a box measured below the fold drags nothing.
+  const plane = page.getByTestId('phase-plane-svg');
+  await plane.scrollIntoViewIfNeeded();
+  const bounds = await plane.boundingBox();
+  if (!bounds) throw Error('Visible phase plane');
+  const predator = page.getByRole('slider', { name: /Predator population/ });
+  const before = await predator.inputValue();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height * 0.2, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(() => predator.inputValue()).not.toBe(before);
+
+  // The claim has not been heard yet: the instrument cannot refute silence.
+  await expect(page.getByTestId('toy-duel-verdict')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Take the claim seriously' }).click();
+  await expect(duel).toContainText('predator population to 7.5 tens');
+  await expect(page.getByTestId('phase-duel-marker')).toBeVisible();
+
+  // A configuration that is not the refutation point leaves the claim standing.
+  await setRange(page, 'Predator population', 5);
+  await expect(page.getByTestId('toy-duel-verdict')).toHaveCount(0);
+  await setRange(page, 'Predator population', 7.5);
+  await expect(page.getByTestId('toy-duel-verdict')).toContainText('orbits');
+  await expect(page.getByTestId('phase-duel-marker')).toHaveCount(0);
+
+  // The refutation survives a reload, and moving off it un-earns it live.
+  await page.reload();
+  await page.getByRole('group', { name: 'Try an interactive laboratory' }).getByRole('button', { name: TOY_EXAMPLES[predpreyIndex].label }).click();
+  await expect(page.getByTestId('toy-duel-verdict')).toContainText('orbits');
+  await setRange(page, 'Predator population', 2);
+  await expect(page.getByTestId('toy-duel-verdict')).toHaveCount(0);
+  await expect(page.getByTestId('toy-model-lab')).not.toContainText('NaN');
+});
+
+test('a refuted duel ships its Devil’s Advocate card in the Anki export', async ({ page }) => {
+  await openExample(page, predpreyIndex);
+  const challenge = buildToyChallenge(TOY_EXAMPLES[predpreyIndex].config);
+  const correct = challenge.choices.find((item) => item.id === challenge.correctId)!;
+  await page.getByTestId('toy-model-lab').getByRole('button', { name: correct.label, exact: true }).click();
+  await page.getByRole('button', { name: 'Take the claim seriously' }).click();
+  // Reveal first (both coordinates on the question's target), then refute.
+  await setRange(page, 'Prey population', 1.2);
+  await setRange(page, 'Predator population', 4.5);
+  await expect(page.getByTestId('toy-reveal')).toContainText('Prediction confirmed.');
+  await setRange(page, 'Predator population', 7.5);
+  await expect(page.getByTestId('toy-duel-verdict')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('deepencode_saved_schemas_v2') || '[]').some((schema: { userResponses?: Record<string, { toyModelProgress?: { duelRefuted?: boolean } }> }) => Object.values(schema.userResponses || {}).some((response) => response.toyModelProgress?.duelRefuted)))).toBe(true);
+  await page.locator('button[title^="Export .apkg Anki package"]').first().click();
+  await expect(page.getByText('Anki & SM-2 Spaced Repetition Exporter')).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: /Download.*\.txt/i }).click();
+  const artifact = await download;
+  const stream = await artifact.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const text = Buffer.concat(chunks).toString('utf8');
+  expect(text).toContain('DevilsAdvocate');
+  expect(text).toContain('Maya claims');
+  expect(text).toContain('Refuted by setting predator');
 });

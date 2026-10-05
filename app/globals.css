@@ -201,6 +201,52 @@
   .orbit-footnote { display: flex; align-items: center; justify-content: center; gap: 8px; font: 7px 'IBM Plex Mono', monospace; letter-spacing: 1.8px; color: #B5B1A6; }
   .orbit-pulse { width: 4px; height: 4px; border-radius: 50%; background: #D2A455; animation: orbit-breathe 5s ease-in-out infinite; }
   .orbit-core { transform-origin: 240px 164px; animation: orbit-arrive 1.2s ease-out both; }
+  /* Instrument motion: one brass sweep over the plate, two reticles turning
+     against each other, a star field that never pulses in unison. */
+  .orbit-sweep { transform-box: view-box; transform-origin: 240px 164px; animation: orbit-revolve 38s linear infinite; }
+  .orbit-reticle { transform-box: view-box; transform-origin: 240px 164px; }
+  .orbit-reticle-a { animation: orbit-revolve 90s linear infinite; }
+  .orbit-reticle-b { animation: orbit-revolve 130s linear infinite reverse; }
+  .orbit-star { animation: orbit-twinkle 6s ease-in-out infinite; }
+  /* Machined corner brackets on the console — the same joint the diagram's
+     etched corners make, carried into the furniture. */
+  .studio-console { position: relative; }
+  .studio-console::before, .studio-console::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    border: 0 solid rgba(210, 164, 85, 0.5);
+    z-index: 1;
+  }
+  .studio-console::before { top: 8px; left: 8px; border-top-width: 1px; border-left-width: 1px; }
+  .studio-console::after { bottom: 8px; right: 8px; border-bottom-width: 1px; border-right-width: 1px; }
+  /* Preset cards catch a single pass of light as the eye reaches them. */
+  .studio-preset { position: relative; overflow: hidden; }
+  .studio-preset::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 42%, rgba(227, 194, 133, 0.09) 50%, transparent 58%);
+    transform: translateX(-130%);
+    transition: transform 700ms ease-out;
+  }
+  .studio-preset:hover::after, .studio-preset:focus-visible::after { transform: translateX(130%); }
+  /* A breath of film grain over the hall: the print texture that makes the
+     brass read as matter instead of CSS. Fixed so it textures the viewport
+     as it scrolls, and it sits beneath the z-10 content wrapper and every
+     modal, so only the empty dark between surfaces carries the noise. */
+  .studio-shell::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.045;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23grain)'/%3E%3C/svg%3E");
+  }
   .studio-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0 15px; }
   .studio-section-heading > div { display: flex; align-items: center; gap: 12px; }
   .studio-section-index { font: 10px 'IBM Plex Mono', monospace; color: #D2A455; }
@@ -311,10 +357,15 @@
 }
 
 /* Freeze the illustrative satellites in a composed position, rather than
-   leaving a tiny-duration infinite rotation for reduced-motion users. */
+   leaving a tiny-duration infinite rotation for reduced-motion users. The
+   sweep fades out entirely (a frozen wedge would read as a defect); the
+   reticles and stars end where they start, so a hard stop leaves them
+   looking etched rather than caught mid-flight. */
 @media (prefers-reduced-motion: reduce) {
   .orbit-traveler { animation: none !important; transform: rotate(145deg); }
   .orbit-traveler-memory { transform: rotate(32deg); }
+  .orbit-sweep { animation: none !important; opacity: 0 !important; }
+  .orbit-reticle, .orbit-star { animation: none !important; }
 }
 
 @keyframes orbit-revolve {
@@ -328,4 +379,8 @@
 @keyframes orbit-arrive {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
+}
+@keyframes orbit-twinkle {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.5; }
 }

@@ -1,10 +1,11 @@
 import type { Activity } from '../types';
 import { buildToyChallenge } from './engine';
-import type { ToyModelConfig, ToyVariable } from './types';
+import type { PhasePlaneConfig, ToyModelConfig, ToyVariable } from './types';
 
 export interface ToyExample { id: string; label: string; notes: string; config: ToyModelConfig }
 const variable = (key: string, label: string, symbol: string, unit: string, min: number, max: number, initial: number, step: number, evidence: string): ToyVariable => ({ key, label, symbol, unit, min, max, initial, step, evidence });
 const assumptions = ['Slider ranges and starting values are illustrative teaching choices, not measurements from the source.'];
+
 export const TOY_EXAMPLES: ToyExample[] = [
   {
     id: 'ohm', label: 'Ohm’s law',
@@ -85,9 +86,44 @@ export const TOY_EXAMPLES: ToyExample[] = [
     },
   },
 ];
+
+const preyPreyConfig: PhasePlaneConfig = {
+  version: 1, type: 'phase_plane', title: 'Predator–prey · why neither side wins',
+  primaryVar: variable('prey', 'Prey population', 'X', 'hundreds', 0.4, 8, 2, 0.05, 'Prey population X (in hundreds)'),
+  secondVar: variable('predator', 'Predator population', 'Y', 'tens', 0.4, 8, 2, 0.05, 'Predator population Y (in tens)'),
+  alpha: 1.1, beta: 0.4, gamma: 0.9, delta: 0.3,
+  output: { label: 'Conserved orbit quantity', symbol: 'V', unit: 'relative' },
+  evidence: [
+    { quote: 'predator–prey dynamics', supports: 'Coupled two-species system' },
+  ],
+  assumptions: [
+    ...assumptions,
+    'Fixed Lotka–Volterra coupling constants α=1.1, β=0.4, γ=0.9, δ=0.3 are illustrative teaching values, not fitted from the source; the notes name the interaction shape, not the constants.',
+    'Closed orbits around coexistence (X*=γ/δ=3.0, Y*=α/β=2.75): no damping, no carrying capacity, no seasonality, no harvesting. Populations are continuous, not discrete animals.',
+    'The conserved quantity V = δX − γ ln X + βY − α ln Y is exact for this law; orbits are its level sets.',
+  ],
+  prediction: { variableKey: 'prey', targetY: 4.5, target: 1.2, explanation: 'At low prey and high predators, dY/dt = δXY − γY < 0: predators starve faster than encounters feed them, while dX/dt < 0 only weakly — the orbit turns upward as predation pressure collapses.' },
+  takeaway: 'Neither population can eliminate the other: the coexistence point is a center, and every perturbation becomes an orbit around it.',
+  devilsAdvocate: {
+    speaker: 'Maya',
+    claim: 'More predators always means fewer prey, so if I crank predators to the top the prey are wiped out and never come back.',
+    fallacy: 'One-way coupling: predators consume prey but nothing feeds back.',
+    refutationInputs: { predator: 7.5 },
+    refutationOutcome: 'Predation crashes the prey briefly, but starving predators (dY/dt = δXY − γY < 0 at low X) collapse first, releasing predation pressure — the prey recover and the state orbits instead of exterminating.',
+    evidence: 'predator–prey dynamics',
+  },
+};
+
+TOY_EXAMPLES.push({
+  id: 'predprey', label: 'Predator–prey orbits',
+    notes: 'Ecology seminar: predator–prey dynamics. Prey population X (in hundreds) grows logistically in the absence of predators and is consumed at a rate proportional to the number of predator–prey encounters. Predator population Y (in tens) starves without prey and grows on the same encounters. The coupled feedback means neither species can eliminate the other: the system cycles. Crashing predator numbers release predation pressure and prey rebound; booming prey then feed a predator boom, and the cycle repeats. Coupled feedback means one-way reasoning always fails here.',
+  config: preyPreyConfig,
+});
+
 export function activityForToyExample(example: ToyExample): Activity {
-  return { id: `lab-${example.id}`, stageNumber: 1, title: example.config.title, framework: 'Predict → Manipulate → Reveal', cognitiveGoal: example.config.takeaway, contextSnippet: example.notes, keywords: [example.config.primaryVar.label, example.config.output.label], templateType: example.config.type === 'cyclic_state_machine' ? 'state_transition' : example.config.type === 'critical_threshold' ? 'boundary_stress_test' : 'formula_spatial_grid', prompt: 'Commit to a prediction, manipulate the model, and explain the boundary you discovered.', paradox: buildToyChallenge(example.config).question, toyModel: example.config, scaffold: { field1Label: 'Observed change', field1Placeholder: 'What physically changed?', field2Label: 'Boundary rule', field2Placeholder: 'Which assumption stops holding?', exampleAnswer: example.config.takeaway } };
+  return { id: `lab-${example.id}`, stageNumber: 1, title: example.config.title, framework: 'Predict → Manipulate → Reveal', cognitiveGoal: example.config.takeaway, contextSnippet: example.notes, keywords: [example.config.primaryVar.label, example.config.output.label], templateType: example.config.type === 'cyclic_state_machine' ? 'state_transition' : example.config.type === 'critical_threshold' ? 'boundary_stress_test' : example.config.type === 'phase_plane' ? 'formula_spatial_grid' : 'formula_spatial_grid', prompt: 'Commit to a prediction, manipulate the model, and explain the boundary you discovered.', paradox: buildToyChallenge(example.config).question, toyModel: example.config, scaffold: { field1Label: 'Observed change', field1Placeholder: 'What physically changed?', field2Label: 'Boundary rule', field2Placeholder: 'Which assumption stops holding?', exampleAnswer: example.config.takeaway } };
 }
+
 /** Offline source matching is deliberately conservative: no keyword-only numeric invention. */
 export function findGroundedToyExample(source: string): ToyExample | undefined {
   const normalized = source.replace(/\s+/g, ' ').trim().toLowerCase();

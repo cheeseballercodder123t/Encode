@@ -3,9 +3,10 @@
 import React, { useId } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { clamp, computeArchetypeOutput, computeCounterModelOutput, cyclePosition, formatToyNumber, initialInputs, lerp, reactionEnergy } from '@/lib/toy-models/engine';
-import type { ToyInputs, ToyModelConfig, ToyModelOutput } from '@/lib/toy-models/types';
+import type { PhasePlaneConfig, ToyInputs, ToyModelConfig, ToyModelOutput } from '@/lib/toy-models/types';
+import { PhasePlaneVisual } from './PhasePlaneVisual';
 
-interface Props { config: ToyModelConfig; inputs: ToyInputs; output: ToyModelOutput; showCounter: boolean }
+interface Props { config: ToyModelConfig; inputs: ToyInputs; output: ToyModelOutput; showCounter: boolean; refuting?: boolean; onPuckMove?: (x: number, y: number) => void; duelTarget?: { x?: number; y?: number } }
 const color = { cyan: '#00F2FE', amber: '#F59E0B', green: '#10B981', red: '#F43F5E', ink: '#B5C4D9' };
 
 function CurveInstrument({ config, inputs, output, showCounter }: Props) {
@@ -144,5 +145,6 @@ export function ToyModelVisual(props: Props) {
     case 'two_state_equilibrium': return <EquilibriumInstrument {...props} />;
     case 'cyclic_state_machine': return <CycleInstrument {...props} />;
     case 'critical_threshold': return <ThresholdInstrument {...props} />;
+    case 'phase_plane': return <PhasePlaneVisual config={props.config as PhasePlaneConfig} inputs={props.inputs} output={props.output} refuting={props.refuting} onPuckMove={props.onPuckMove} duelTarget={props.duelTarget} />;
   }
 }

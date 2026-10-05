@@ -1,4 +1,4 @@
-export const TOY_MODEL_TYPES = ['ratio_scaling', 'saturation_sigmoid', 'two_state_equilibrium', 'cyclic_state_machine', 'critical_threshold'] as const;
+export const TOY_MODEL_TYPES = ['ratio_scaling', 'saturation_sigmoid', 'two_state_equilibrium', 'cyclic_state_machine', 'critical_threshold', 'phase_plane'] as const;
 export type ToyModelType = typeof TOY_MODEL_TYPES[number];
 
 export interface ToyVariable {
@@ -18,6 +18,8 @@ export interface ToyPrediction {
   /** One controlled perturbation; all other inputs remain at their initial values. */
   variableKey: string;
   target: number;
+  /** Phase-plane second coordinate of the perturbation (required for that archetype only). */
+  targetY?: number;
   explanation: string;
 }
 export interface ToyCounterModel {
@@ -38,6 +40,13 @@ interface ToyBase {
   prediction: ToyPrediction;
   takeaway: string;
   counterModel?: ToyCounterModel;
+  /**
+   * Optional Devil's Advocate duel: the examiner voices a fictional student's
+   * confident fallacy, and the learner must reconfigure the SAME lab to the
+   * refuting configuration. Correctness is verified locally — refutationInputs
+   * are evaluated by the engine, never trusted as text.
+   */
+  devilsAdvocate?: ToyDevilsAdvocate;
 }
 export interface RatioScalingConfig extends ToyBase {
   type: 'ratio_scaling';
@@ -94,7 +103,36 @@ export interface ThresholdConfig extends ToyBase {
   /** Grounded mechanism nodes used by the feedback-collapse visualization. */
   chain: string[];
 }
-export type ToyModelConfig = RatioScalingConfig | SaturationConfig | EquilibriumConfig | CycleConfig | ThresholdConfig;
+/**
+ * The Devil's Advocate duel: a confident fictional claim carrying a named
+ * intuitive fallacy. The learner debunks it by reconfiguring the SAME lab —
+ * correctness is verified locally against refutationInputs, never by a model.
+ */
+export interface ToyDevilsAdvocate {
+  /** The fictional student's name, e.g. 'Alex'. */
+  speaker: string;
+  /** The confident wrong claim, in the speaker's voice. */
+  claim: string;
+  /** The named intuitive fallacy (p-prim) the claim rests on. */
+  fallacy: string;
+  /** The lab configuration that visibly debunks the claim. */
+  refutationInputs: ToyInputs;
+  /** What the model actually shows at that configuration. */
+  refutationOutcome: string;
+  /** Exact source quotation identifying where the model contradicts the claim. */
+  evidence: string;
+}
+export interface PhasePlaneConfig extends ToyBase {
+  type: 'phase_plane';
+  /** Second coupled state variable (the vertical axis). */
+  secondVar: ToyVariable;
+  /** Lotka–Volterra coupling constants, all strictly positive (1/time family). */
+  alpha: number;
+  beta: number;
+  gamma: number;
+  delta: number;
+}
+export type ToyModelConfig = RatioScalingConfig | SaturationConfig | EquilibriumConfig | CycleConfig | ThresholdConfig | PhasePlaneConfig;
 export type ToyInputs = Record<string, number>;
 export interface ToyModelValidationResult {
   valid: boolean;
@@ -128,5 +166,8 @@ export interface ToyModelProgress {
   inputs: ToyInputs;
   explored: boolean;
   revealed: boolean;
+  /** Devil's advocate duel state: the claim heard, and whether the refuting configuration has been set. */
+  duelHeard?: boolean;
+  duelRefuted?: boolean;
   updatedAt: number;
 }

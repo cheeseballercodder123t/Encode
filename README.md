@@ -6,7 +6,11 @@ Instead of re-reading, you reconstruct: every AI-generated stage opens with a ph
 
 ## Features
 
-- **Interactive intuition laboratories** — five fixed, validated mathematical engines turn suitable source material into prediction-gated toy models: ratio/scaling, saturation/Hill curves, ideal two-state equilibrium, weighted state cycles, and critical activation/collapse/sign-change thresholds. Sliders, brass/cyan SVG instruments, counter-model comparisons, restrained audio and source/assumption disclosure keep the science inspectable. Revealed boundary rules persist and export as schema-scoped interference-trap cards to Anki/RemNote. Five explicit no-key teaching examples are on the launchpad. See [the detailed architecture and limitations](docs/interactive-labs.md).
+- **Interactive intuition laboratories** — six fixed, validated mathematical engines turn suitable source material into prediction-gated toy models: ratio/scaling, saturation/Hill curves, ideal two-state equilibrium, weighted state cycles, critical activation/collapse/sign-change thresholds, and coupled two-species phase planes (Lotka–Volterra orbits with a conserved quantity, nullclines and a draggable operating point). Sliders, brass/cyan SVG instruments, counter-model comparisons, restrained audio and source/assumption disclosure keep the science inspectable. A **Devil's Advocate duel** lets a fictional student voice a confident fallacy that can only be refuted by reconfiguring the same lab — an engine-verified verdict, exported as its own trap card. Revealed boundary rules persist and export as schema-scoped interference-trap cards to Anki/RemNote. Six explicit no-key teaching examples are on the launchpad. See [the detailed architecture and limitations](docs/interactive-labs.md).
+
+- **Interactive pathway builder** — the energy-payoff phase of glycolysis as a causal chain: drop the enzyme and cofactor each step requires, with real decoys (an investment-phase enzyme, a product cofactor) in the palette. Grading is declared chemistry, never a heuristic — a wrong piece is named with what it actually does, flow is causal and sequential so yields unlock in order, and the product only forms when every step is catalytically complete. Every step quotes the sentence it was derived from, and the validator refuses a quote that is not literally in the source.
+
+- **Course-level prerequisite skill tree** — every prerequisite audit you have run is persisted with its topic and resolved across the whole library: green for fully encoded courses, amber for work in flight, and locked leaves for foundations nothing in the library covers yet (with the audit's own 30-second primer attached). Coverage is decided locally and conservatively — a one-word concept can never claim a course — so the tree cannot pad itself with false links.
 
 - **Encoding sessions** — text, file (PDF/image), or YouTube input; `conceptual` and `memorization` modes with smart mnemonic auto-detection
 - **Teach Me (deep mode)** — Brilliant-style interactive lessons, authored at whatever depth you ask for. Three passes per idea: `concept` (intuit it) → `deepDive` (the causal **why**, the limits, the failure modes) → `misconception` (the plausible wrong belief, killed), with every teaching segment carrying its own `why` block. The lesson then makes you *produce*: `checkpoint` → `guidedProblem` (one move at a time) → `youTry` → `selfExplain` (Feynman it back, against a reference answer) → `transfer` (same mechanism, unfamiliar surface) → `recap`. You pick the level of detail (`standard` / `deep` / `exhaustive`, up to 40 segments), the lessons carry objectives and a glossary, and only one idea lives on a card at a time. **Encoding is not part of the lesson**: it ends with `[ START ENCODING ]` or `[ SAVE IT FOR LATER ]`
@@ -91,11 +95,11 @@ The illuminated theme (`tailwind.config.ts` + `app/globals.css`) treats the app 
 - **Motion** — 150ms color transitions on interactive elements; a single `animate-dawn` bloom on the masthead; springs for modal enter/exit via `motion/react`
 - **Keyboard** — visible gold `:focus-visible` rings; generous radii (`rounded-lg`→`rounded-2xl`, pills for controls and chips) enforced through the theme scale
 
-Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip) are in `components/ui/`.
+Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip) are in `components/ui/`. Every sheet — primitive or hand-rolled — takes Escape, scroll-lock, focus-in/restore and the Tab trap from `hooks/useModalA11y`, so no modal re-invents its own keyboard contract.
 
 ## Testing
 
-- **Unit** — `lib/` logic (storage, analytics, adaptive difficulty, template selection, Anki export, Wozniak sanitization, the RemNote renderer (one document per card section, `::` only where the front is a name, `>>` for questions/labels/steps, cloze lines left delimiter-free, quadrants attached as Extra Card Detail while a source-authored deletion stays a card, memory hooks as cloze hints, worked-example chains as one `>>>` card, per-card direction overrides, the front-quality report, the per-source split and the section split's fallback when a deck has no provenance, and the per-section push that names a half-pushed deck), cognitive telemetry, interference traps, priming drills, URL share, knowledge graph, the streaming parser and both NDJSON stream readers (the encode outline and the forge's per-source events), the saved-lesson library, the forge's cross-source merge/dedupe and the "more"/"condense" deck math (front lists, repeat dropping, appending without reordering, near-duplicate detection with the numeric and polarity guards that veto it, per-source yield verdicts, and the coverage/gap report with its per-gap source attribution and the labels it carries onto the merged deck), cross-source contradiction detection (numeric and polarity, with the conflict card it builds), deck memory (front-accurate fingerprints, diffing, new-cards-only shipping, Anki-derived fingerprint adoption, and the source ledger — source fingerprinting by URL/file name/opening words, re-forge updating in place rather than stacking, cross-topic lookup, union on merge, and forgetting with the topic), the AnkiConnect read-back (`findNotes`/`notesInfo`, note-front extraction, batching and caps, offline degradation), forge recipes, and the caption/transcription ladder (both timedtext dialects, track preference, format retries, and "only transcribe when there are no captions")) is covered by Vitest in `tests/unit/`.
+- **Unit** — `lib/` logic (storage, analytics (per-session and library-wide aggregation, memoization and pagination), the template registry (every id resolves to a renderer, runtime registration), adaptive difficulty, template selection, Anki export, Wozniak sanitization, the RemNote renderer (one document per card section, `::` only where the front is a name, `>>` for questions/labels/steps, cloze lines left delimiter-free, quadrants attached as Extra Card Detail while a source-authored deletion stays a card, memory hooks as cloze hints, worked-example chains as one `>>>` card, per-card direction overrides, the front-quality report, the per-source split and the section split's fallback when a deck has no provenance, and the per-section push that names a half-pushed deck), cognitive telemetry, interference traps, priming drills, URL share, knowledge graph, the streaming parser and both NDJSON stream readers (the encode outline and the forge's per-source events), the saved-lesson library, the forge's cross-source merge/dedupe and the "more"/"condense" deck math (front lists, repeat dropping, appending without reordering, near-duplicate detection with the numeric and polarity guards that veto it, per-source yield verdicts, and the coverage/gap report with its per-gap source attribution and the labels it carries onto the merged deck), cross-source contradiction detection (numeric and polarity, with the conflict card it builds), deck memory (front-accurate fingerprints, diffing, new-cards-only shipping, Anki-derived fingerprint adoption, and the source ledger — source fingerprinting by URL/file name/opening words, re-forge updating in place rather than stacking, cross-topic lookup, union on merge, and forgetting with the topic), the AnkiConnect read-back (`findNotes`/`notesInfo`, note-front extraction, batching and caps, offline degradation), forge recipes, and the caption/transcription ladder (both timedtext dialects, track preference, format retries, and "only transcribe when there are no captions")) is covered by Vitest in `tests/unit/`.
 - **E2E** — Playwright specs in `e2e/` drive the real UI: the full encode flow (notes → stages → examiner check → completion → history), Teach Me lessons (deep rendering plus both end-of-lesson exits: saving a lesson and resuming it after a reload, and starting encoding straight from the exit panel), YouTube flow, offline fallback generator, stateless share-link import, Wozniak-sanitized FSRS audit, procedural MCQ export, AnkiConnect push (mocked at `127.0.0.1:8765`, including the refusal path), the Parsons ordering drill, the Mad-Libs sentence scaffold with interactive diagram blanks, video chapter progress/resume, formula input, the four priming archetypes (archetype selection, the 2-probe source→sink check, the 3-probe extremal sweep, and the shape drill that draws the curve before naming it), the pre-export discrimination gate (pass, miss, timeout, and the webhook handoff it now also fronts), the Flashcards Only forge (many sources in / one deduped deck out, an uploaded recording marked `[ AUDIO ]` and transcribed, two sources that disagree becoming one conflict card, a re-forge reporting `0 new · 5 already in your deck` and holding the export until the learner overrides it, a deck that only exists in Anki being read back and counted as already yours, the memory stating honestly that AnkiConnect is unreachable instead of guessing, a saved recipe re-run and surviving a reload, a caption-less source reported instead of invented around, the Anki handoff, a RemNote deck split into one copyable document per section with its labelled prompts kept forward-only, its quadrants riding as `#[[Extra Card Detail]]`, its memory hook attached as a cloze hint, its card list showing every front with a per-card `::` / `>>` control that updates the counts, its two-way cards reducible to zero by either control, `BOTH` stacking RemNote behind Anki, a deck grown with "generate more" then folded down with "condense" before it exports, the post-Wozniak count and the front-quality report in the summary, a coverage gap being named with the next "generate more" aimed at exactly that section, a source already cut into a deck being offered as a skip before it costs a model call and taken back out again, one failed source re-forged on its own, the grow loop running to its target and then reporting the sources exhausted instead of padding the deck, and a condense undone in a single step), streamed generation (that the launchpad posts to the NDJSON route and not the plain one, that a buffering proxy answering with JSON is still read, and that a stream reporting an error surfaces instead of hanging), and quick diagnostics. All AI routes (`/api/*`) are mocked at the network level in `e2e/helpers/mocks.ts`, so **no API key or network is needed**.
   - Run: `bun run test:e2e` (boots `next dev` on port 4310 automatically)
   - On this filesystem, run with `--workers=3`: full parallelism races Playwright's trace-file writes and produces bogus ENOENT failures. On a small box (2 CPUs / 4 GB) three browser processes can also be OOM-killed mid-run, which surfaces as `page.goto: Page crashed` or `ERR_CONNECTION_REFUSED` on whichever tests are still starting — `--workers=2` is the safe ceiling there, and a test that fails that way passes in isolation.
@@ -142,7 +146,11 @@ app/
                            # (server-side RemNote push proxy)
 components/
   ZenLaunchpad.tsx         # Input command center: sources, modes, presets,
-                           # TEACH ME FIRST / FLASHCARDS ONLY entries
+                           # TEACH ME FIRST / FLASHCARDS ONLY entries,
+                           # hands-on laboratory + pathway-builder entries
+  SkillTreeModal.tsx       # Course-level prerequisite skill tree (library-wide)
+  pathway/
+    PathwayBuilder.tsx     # Drag/click pathway builder + its modal wrapper
   FlashcardForgeModal.tsx  # The forge: many sources in (incl. recordings),
                            # live per-source progress, coverage/gap report
                            # (with the source that owns each gap), the
@@ -157,6 +165,8 @@ components/
                            # toggles, section-vs-source split, API push
   workbench/               # 3-zone studio workbench (mic, sketch canvas)
   stage-templates/         # 15+ visual template renderers + error boundary
+                           # (StageVisualRenderer resolves its renderer from the
+                           # registry, id only)
   ui/                      # Shared primitives (Button, Modal, Badge, ...)
   Teach*.tsx               # Teach Me lesson segments (concept/deepDive/misconception/
                            # selfExplain/transfer/recap bodies + MCQ, order, blanks)
@@ -178,8 +188,13 @@ lib/
   encode-stream.ts         # Client reader for streamed generation (NDJSON
                            # outline events, JSON-body fallback)
   auth-context.tsx         # Firebase auth provider
-  storage.ts + storage/    # localStorage + IndexedDB persistence
-  services/                # Analytics, adaptive difficulty, template selector,
+  storage.ts + storage/    # Sync facade (in-memory cache + debounced autosave +
+                           # localStorage mirror) over the idb-backed engine in
+                           # lib/db.ts (schemas, settings, ai cache, session
+                           # state, one-time localStorage migration)
+  services/                # Analytics (per-session + library-wide stats, both
+                           # memoized, plus paging and CSV/JSON export),
+                           # adaptive difficulty, template selector,
                            # knowledge graph, offline generator,
                            # segregation.ts (the shared card contract both the
                            # segregate flow and the forge emit), forge.ts
@@ -199,7 +214,10 @@ lib/
                            # (findNotes/notesInfo) and adopts its fingerprints
   forge-recipes.ts         # Saved forge setups (sources + sections + target)
   media-types.ts           # audio/video detection shared by picker and route
-  templates/               # Declarative template registry + types
+  templates/               # Declarative template registry: per-template metadata
+                           # + the lazy renderer table the stage renderer
+                           # dispatches through, and registerTemplate() so a new
+                           # template needs no edit to the renderer
   anki-exporter.ts         # .apkg/.txt decks, SM-2 state, webhook sync,
                            # extraction + Wozniak-enforced deck funnel,
                            # one card row per cloze deletion (dense c1..cN)
@@ -210,6 +228,10 @@ lib/
                            # (declines when a sentence does not reverse),
                            # 20-word ceiling
   cognitive-telemetry.ts   # Compression / atomicity / jargon deflation + taboo engine
+  course-tree.ts           # Library-wide prerequisite graph: conservative
+                           # concept matching, progress from learner responses
+  pathway.ts               # Declared-chemistry pathway model, evaluator,
+                           # verbatim-evidence validator, glycolysis example
   causal-frame.ts          # Mad-Libs sentence templates (parse / derive / render)
   parsons.ts               # Deterministic scramble, positional grading, pivot rule
   visual-completion.ts     # Which cell of a diagram to blank + loose answer grading

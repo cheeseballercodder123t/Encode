@@ -126,6 +126,8 @@ interface ZenLaunchpadProps {
   onForge: () => void;
   isLoading: boolean;
   onTryToyExample: (id: string) => void;
+  /** Optional hands-on pathway/circuit builder entry beside the toy labs. */
+  onTryPathwayBuilder?: () => void;
   /** Don't accept server-rendered control clicks before state hydration. */
   ready: boolean;
 }
@@ -231,6 +233,7 @@ export function ZenLaunchpad({
   onTeach,
   onForge,
   onTryToyExample,
+  onTryPathwayBuilder,
   ready,
   isLoading
 }: ZenLaunchpadProps) {
@@ -617,8 +620,11 @@ export function ZenLaunchpad({
       </div>
 
       <div className="toy-launch-strip">
-        <div><span className="label-caps">Hands-on laboratories</span><p>Don’t memorize the law. Discover it.</p><span>Five explicit teaching examples · no API key needed</span></div>
-        <div role="group" aria-label="Try an interactive laboratory">{TOY_EXAMPLES.map((example, index) => <button type="button" key={example.id} onClick={() => onTryToyExample(example.id)}><span>0{index + 1}</span>{example.label}<span aria-hidden="true">↗</span></button>)}</div>
+        <div><span className="label-caps">Hands-on laboratories</span><p>Don’t memorize the law. Discover it.</p><span>{TOY_EXAMPLES.length} explicit teaching examples · no API key needed</span></div>
+        <div role="group" aria-label="Try an interactive laboratory">
+          {TOY_EXAMPLES.map((example, index) => <button type="button" key={example.id} onClick={() => onTryToyExample(example.id)}><span>0{index + 1}</span>{example.label}<span aria-hidden="true">↗</span></button>)}
+          {onTryPathwayBuilder && <button type="button" data-testid="open-pathway-builder" onClick={onTryPathwayBuilder}><span>0{TOY_EXAMPLES.length + 1}</span>Energy-payoff pathway<span aria-hidden="true">↗</span></button>}
+        </div>
       </div>
 
       {/* Fluff Guillotine: heatmap the source, then strip the noise in one tap. */}

@@ -1,4 +1,4 @@
-import { buildToyChallenge, computeArchetypeOutput, initialInputs, variablesFor } from './engine';
+import { buildToyChallenge, computeArchetypeOutput, initialInputs, phasePlaneDerivative, phasePlaneEquilibrium, variablesFor } from './engine';
 import { TOY_MODEL_TYPES, type ToyModelConfig, type ToyModelValidationResult, type ToyVariable } from './types';
 
 type ObjectValue = Record<string, unknown>;
@@ -64,11 +64,11 @@ export function validateToyModelConfig(raw: unknown, source?: string): ToyModelV
   const base = {
     version: 1 as const,
     title: text(data.title, 'title', 120),
-    primaryVar: variable(data.primaryVar, 'primaryVar', type === 'saturation_sigmoid' || (type === 'ratio_scaling' && data.requiresPositiveOnly === true) ? 'nonnegative' : type === 'two_state_equilibrium' ? 'fraction' : undefined),
+    primaryVar: variable(data.primaryVar, 'primaryVar', type === 'saturation_sigmoid' || (type === 'ratio_scaling' && data.requiresPositiveOnly === true) || type === 'phase_plane' ? 'nonnegative' : type === 'two_state_equilibrium' ? 'fraction' : undefined),
     output: { label: text(output.label, 'output.label', 90), symbol: text(output.symbol, 'output.symbol', 20), unit: text(output.unit, 'output.unit', 40) },
     evidence,
     assumptions,
-    prediction: { variableKey: text(prediction.variableKey, 'prediction.variableKey', 30), target: number(prediction.target, 'prediction.target'), explanation: text(prediction.explanation, 'prediction.explanation', 900) },
+    prediction: { variableKey: text(prediction.variableKey, 'prediction.variableKey', 30), target: number(prediction.target, 'prediction.target'), explanation: text(prediction.explanation, 'prediction.explanation', 900), ...(prediction.targetY !== undefined ? { targetY: number(prediction.targetY, 'prediction.targetY') } : {}) },
     takeaway: text(data.takeaway, 'takeaway', 900),
   };
   let config: ToyModelConfig;
@@ -113,12 +113,43 @@ export function validateToyModelConfig(raw: unknown, source?: string): ToyModelV
       if (config.chain.length < 2) failures.push('Threshold needs 2–6 grounded mechanism nodes');
       break;
     }
+    case 'phase_plane': {
+      config = { ...base, type, secondVar: variable(data.secondVar, 'secondVar', 'positive'), alpha: number(data.alpha, 'alpha', 0, 100), beta: number(data.beta, 'beta', 0, 100), gamma: number(data.gamma, 'gamma', 0, 100), delta: number(data.delta, 'delta', 0, 100) };
+      const eq = phasePlaneEquilibrium(config);
+      // Both nullclines (X = γ/δ, Y = α/β) must sit strictly inside the drawing
+      // range, or the coexistence equilibrium — the whole point of the lab — is
+      // unreachable and no orbit can close on screen.
+      if (eq.x <= config.primaryVar.min || eq.x >= config.primaryVar.max) failures.push('Prey nullcline γ/δ must lie strictly inside the primary range');
+      if (eq.y <= config.secondVar.min || eq.y >= config.secondVar.max) failures.push('Predator nullcline α/β must lie strictly inside the second range');
+      if (config.alpha <= 0 || config.beta <= 0 || config.gamma <= 0 || config.delta <= 0) failures.push('Lotka–Volterra constants must be strictly positive');
+      break;
+    }
   }
   if (data.counterModel !== undefined) {
     const counter = object(data.counterModel);
     const expectedLaw = type === 'saturation_sigmoid' ? 'linear' : type === 'critical_threshold' ? 'no_threshold' : undefined;
     if (!expectedLaw || counter.law !== expectedLaw || (type === 'critical_threshold' && config.type === type && config.response === 'sign_change')) failures.push('Unsupported counter-model comparison');
     else config.counterModel = { law: expectedLaw, assumption: text(counter.assumption, 'counterModel.assumption'), explanation: text(counter.explanation, 'counterModel.explanation', 900), evidence: quote(counter.evidence, 'counterModel.evidence') };
+  }
+  // The Devil's Advocate duel: the refutation must be a REAL reachable lab
+  // configuration that differs from baseline, so "debunking" means actually
+  // reconfiguring the instrument — and its evidence must quote the source.
+  if (data.devilsAdvocate !== undefined) {
+    const duel = object(data.devilsAdvocate);
+    const refutation = object(duel.refutationInputs);
+    const refutationInputs: Record<string, number> = {};
+    for (const [key, value] of Object.entries(refutation)) {
+      if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(key) || ['constructor', 'prototype', '__proto__'].includes(key)) { failures.push(`devilsAdvocate.refutationInputs.${key} is an unsafe key`); continue; }
+      refutationInputs[key] = number(value, `devilsAdvocate.refutationInputs.${key}`);
+    }
+    config.devilsAdvocate = {
+      speaker: text(duel.speaker, 'devilsAdvocate.speaker', 60),
+      claim: text(duel.claim, 'devilsAdvocate.claim', 600),
+      fallacy: text(duel.fallacy, 'devilsAdvocate.fallacy', 200),
+      refutationInputs,
+      refutationOutcome: text(duel.refutationOutcome, 'devilsAdvocate.refutationOutcome', 900),
+      evidence: quote(duel.evidence, 'devilsAdvocate.evidence'),
+    };
   }
   const variables = variablesFor(config);
   if (new Set(variables.map((item) => item.key)).size !== variables.length) failures.push('Independent variable keys must be unique');
@@ -127,6 +158,18 @@ export function validateToyModelConfig(raw: unknown, source?: string): ToyModelV
   if (predictionVariable) {
     const tick = (config.prediction.target - predictionVariable.min) / predictionVariable.step;
     if (Math.abs(tick - Math.round(tick)) > 1e-6) failures.push('Prediction target must be reachable on the slider step grid');
+  }
+  // Phase-plane predictions move BOTH coordinates, so the second one needs the
+  // same reachability proof as the first.
+  if (config.type === 'phase_plane') {
+    if (config.prediction.variableKey !== config.primaryVar.key) failures.push('Phase-plane prediction must move the primary (prey) coordinate');
+    const yVar = config.secondVar;
+    const yTarget = config.prediction.targetY;
+    if (yTarget === undefined || yTarget < yVar.min || yTarget > yVar.max) failures.push('Phase-plane prediction needs targetY inside the second slider range');
+    else {
+      const tickY = (yTarget - yVar.min) / yVar.step;
+      if (Math.abs(tickY - Math.round(tickY)) > 1e-6) failures.push('Prediction targetY must be reachable on the slider step grid');
+    }
   }
   if (failures.length) return { valid: false, issues: [...issues, ...failures] };
 
@@ -153,6 +196,9 @@ export function validateToyModelConfig(raw: unknown, source?: string): ToyModelV
   const ordered = (points: number[], direction: number) => points.every((point, index) => index === 0 || direction * (point - points[index - 1]) >= -Math.max(1e-8, Math.abs(point) * 1e-10));
   for (const axis of variables) {
     if (config.type === 'cyclic_state_machine' || (config.type === 'critical_threshold' && config.response === 'collapse')) continue;
+    // The conserved orbit quantity is non-monotonic in each axis by design:
+    // V has a minimum on the nullcline, which is why orbits close.
+    if (config.type === 'phase_plane') continue;
     if (config.type === 'saturation_sigmoid' && axis.key !== first.key) continue; // n steepens, not uniformly raises, a Hill curve.
     const outputs = Array.from({ length: 51 }, (_, index) => computeArchetypeOutput(config, { ...baseline, [axis.key]: axis.min + (axis.max - axis.min) * index / 50 }).value);
     if (config.type === 'ratio_scaling' && config.primaryVar.min < 0) continue; // even powers cross their extremum at zero.
@@ -167,6 +213,35 @@ export function validateToyModelConfig(raw: unknown, source?: string): ToyModelV
   if (config.type === 'two_state_equilibrium') {
     const zero = computeArchetypeOutput(config, config.equilibriumConstant / (1 + config.equilibriumConstant)).value;
     if (Math.abs(zero) > 1e-6) return { valid: false, issues: [...issues, 'Equilibrium sign boundary failed'] };
+  }
+  // Phase-plane invariant: the coexistence equilibrium must actually be one —
+  // both velocity components vanish there to integrator precision. The exact
+  // point (γ/δ, α/δ) rarely sits on the slider step grid, so the velocity is
+  // evaluated at the analytically exact point, not a snapped one.
+  if (config.type === 'phase_plane') {
+    const eq = phasePlaneEquilibrium(config);
+    const velocity = phasePlaneDerivative(config, eq.x, eq.y);
+    if (Math.abs(velocity.dx) > 1e-9 || Math.abs(velocity.dy) > 1e-9) return { valid: false, issues: [...issues, 'Phase-plane equilibrium invariant failed'] };
+    // The duel's target must also produce a decisive direction (no null point
+    // where the multiple-choice question would be ambiguous).
+    const duelVelocity = phasePlaneDerivative(config, challenge.targetInputs[first.key], challenge.targetInputs[second?.key ?? first.key]);
+    if (duelVelocity.dx === 0 || duelVelocity.dy === 0) return { valid: false, issues: [...issues, 'Phase-plane prediction target sits on a nullcline with ambiguous flow'] };
+  }
+  // The duel's refutation configuration must be reachable (each named input
+  // exists as a slider and the value lands on its step grid, inside its range)
+  // and must actually differ from the starting configuration — otherwise the
+  // "debunk" would be a no-op the learner could pass without touching anything.
+  if (config.devilsAdvocate) {
+    const duel = config.devilsAdvocate;
+    if (Object.keys(duel.refutationInputs).length === 0) return { valid: false, issues: [...issues, 'Devil’s advocate duel needs at least one refutation input'] };
+    for (const [key, value] of Object.entries(duel.refutationInputs)) {
+      const slider = variables.find((item) => item.key === key);
+      if (!slider) return { valid: false, issues: [...issues, `Duel refutation names unknown variable ${key}`] };
+      if (value < slider.min || value > slider.max) return { valid: false, issues: [...issues, `Duel refutation for ${key} is outside its slider range`] };
+      const tick = (value - slider.min) / slider.step;
+      if (Math.abs(tick - Math.round(tick)) > 1e-6) return { valid: false, issues: [...issues, `Duel refutation for ${key} is not on the slider step grid`] };
+      if (Math.abs(value - slider.initial) <= slider.step / 2) return { valid: false, issues: [...issues, `Duel refutation for ${key} equals the initial value`] };
+    }
   }
   return { valid: true, sanitizedConfig: config, issues };
 }
