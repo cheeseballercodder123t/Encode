@@ -29,7 +29,9 @@ export function TeachInteractiveSegment({ seg, isLast, onCorrect, onWrong, onNex
   if (!q) {
     return (
       <div className="space-y-3">
-        {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap">{seg.body}</p>}
+        {/* `break-words` keeps a model-written URL or `[[wikilink]]` from
+            widening the lesson body past its container (see TeachSegments). */}
+        {seg.body && <p className="text-xs text-bone font-mono leading-relaxed whitespace-pre-wrap break-words">{seg.body}</p>}
         {seg.trapNote && <div className="px-3 py-2 bg-hazard/10 border border-hazard/30 text-[11px] text-hazard font-mono">{seg.trapNote}</div>}
         {isLast ? null : <ContinueButton onNext={onNext} />}
       </div>

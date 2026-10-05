@@ -21,6 +21,7 @@
 // (Text, Extra) models rather than the custom apkg models, because those two
 // exist in every collection and need no import step to be declared.
 
+import { shipsAsClozeNote, unwrapClozeDeletions } from './anki-exporter';
 import type { AnkiCardItem } from './anki-exporter';
 
 export const DEFAULT_ANKI_CONNECT_URL = 'http://127.0.0.1:8765';
@@ -287,13 +288,16 @@ export function sanitizeAnkiTags(tags: string[]): string[] {
  * batch, so anything else is sent as a plain Basic front/back.
  */
 export function mapCardToNote(card: AnkiCardItem, deckName: string): AnkiConnectNote {
-  const isRealCloze = Boolean(card.isCloze) && /\{\{c\d+::/.test(card.front);
+  const isRealCloze = shipsAsClozeNote(card);
   const note: AnkiConnectNote = {
     deckName,
     modelName: isRealCloze ? CLOZE_MODEL : BASIC_MODEL,
+    // A Basic note has no cloze fields, so an answer-side `{{c1::...}}` (the
+    // diagnostic vignette and diagram-occlusion cards carry one on purpose for
+    // the RemNote handoff) would be displayed as literal braces. Unwrap it.
     fields: isRealCloze
       ? { Text: card.front, Extra: card.back }
-      : { Front: card.front, Back: card.back },
+      : { Front: unwrapClozeDeletions(card.front), Back: unwrapClozeDeletions(card.back) },
     tags: sanitizeAnkiTags(card.tags || []),
     // Never silently duplicate: the push reports what already exists instead.
     options: { allowDuplicate: false, duplicateScope: 'deck' },

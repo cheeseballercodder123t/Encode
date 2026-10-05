@@ -758,17 +758,28 @@ export function generateSegregationRemnote(
     }
   }
 
-  // Practice drills: short questions, forward-only by construction. "Why" and
-  // "Traps" are exactly what Extra Card Detail exists for — a misconception
-  // worth seeing after the answer, not a card of its own.
+  // Practice drills: short questions, forward-only by construction. The reason
+  // a drill is right rides IN the answer — `- Why >> ${whyCorrect}` was a card
+  // whose front is the bare word "Why", which RemNote can only ask as
+  // `Question > Why >> _____` (a fragment nobody can answer, and the exact trap
+  // the RemNote-native plan forbids). Inlining it is the plan's promotion of the
+  // mechanism into the answer the drill already tests, so no second card exists
+  // in either mode. Traps are context on the drill's back, never a card: Extra
+  // Card Detail when the deck uses it, and part of the answer when it does not.
   const drills = newSection('drills', '⚡ Practice Drills', 'Practice Drills');
   for (const d of report.practiceQuestions || []) {
     drills.activeSource = sourceIdOfItem(d.id);
-    pushCard(ctx, drills, d.question, d.answer, 'forward', { reason: 'question front' });
-    pushExtra(ctx, drills, 'Why', d.whyCorrect || '', 'labelled prompt');
-    if (d.distractors && d.distractors.length > 0) {
-      pushExtra(ctx, drills, 'Traps', d.distractors.join(' / '), 'labelled prompt');
-    }
+    const traps = d.distractors && d.distractors.length > 0 ? d.distractors.join(' / ') : '';
+    const trapsAsDetail = Boolean(traps) && ctx.explanationsAsDetail;
+    const answer = [
+      d.answer,
+      d.whyCorrect ? `(${d.whyCorrect})` : '',
+      traps && !trapsAsDetail ? `— Traps: ${traps}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    pushCard(ctx, drills, d.question, answer, 'forward', { reason: 'question front' });
+    if (trapsAsDetail) pushDetail(ctx, drills, 'Traps', traps);
   }
 
   // Worked examples: one multi-line card per example. The chain of steps is one

@@ -212,6 +212,52 @@ describe('shipping only the new cards', () => {
     const original = report();
     expect(keepOnlyFreshCards(original, [])).toBe(original);
   });
+
+  it('fingerprints confusable pairs so only-new can drop them too', () => {
+    // The pair ships a matrix card (id = the pair id) plus a vignette (id +
+    // "-vignette"). Both were invisible to the memory before, so a re-forge
+    // re-shipped them and the counts under-reported the deck.
+    const withPair = report({
+      confusablePairs: [
+        {
+          id: 'cp1',
+          conceptA: 'SN1',
+          conceptB: 'SN2',
+          distinguishingAxis: 'Rate law',
+          boundaryCondition: 'Tertiary substrate in a polar protic solvent',
+          conceptAFeature: 'Unimolecular, racemization',
+          conceptBFeature: 'Bimolecular, Walden inversion',
+          diagnosticVignette: 'Cyanide in DMSO inverts the stereochemistry',
+          diagnosticAnswer: 'SN2, polar aprotic solvent',
+        },
+      ],
+    });
+
+    // The memory keys exactly what the exporter writes for the pair.
+    const exported = extractAnkiCardsFromSchema(null, withPair);
+    expect(new Set(reportCardKeys(withPair))).toEqual(new Set(ankiCardKeys(exported)));
+
+    // Both of the pair's cards count as one item, so it diffs like any other.
+    const diff = diffReportAgainstMemory(withPair, knownKeysForTopic('Nobody'));
+    expect(diff.freshIds).toContain('cp1');
+
+    // Once the pair is known, only-new drops it — while a genuinely new fact
+    // from the same forge survives.
+    const known = new Set(reportCardKeys(withPair));
+    const next = report({
+      ...withPair,
+      declarativeFacts: [
+        ...withPair.declarativeFacts,
+        { id: 'f3', factStatement: 'Fresh fact.', clozeSuggestion: '{{Fresh}} fact.' },
+      ],
+    });
+    const settled = diffReportAgainstMemory(next, known);
+    expect(settled.knownIds).toContain('cp1');
+    expect(settled.freshIds).toEqual(['f3']);
+    const trimmed = keepOnlyFreshCards(next, settled.freshIds);
+    expect(trimmed.confusablePairs).toHaveLength(0);
+    expect(trimmed.declarativeFacts.map((f) => f.id)).toEqual(['f3']);
+  });
 });
 
 describe('merging the account\'s memory with this device\'s', () => {

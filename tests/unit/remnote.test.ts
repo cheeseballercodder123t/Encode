@@ -71,8 +71,39 @@ describe('generateSegregationRemnote (RemNote flashcards)', () => {
     expect(flat.markdown).not.toContain('#[[Extra Card Detail]]');
     expect(flat.markdown).toContain('  - Why it matters >> Triggers AP');
     expect(flat.markdown).toContain('  - vs Repolarization >> Na+ vs K+ gate');
-    expect(flat.markdown).toContain('  - Why >> K+ leak sets it');
+    // The drill's reason is IN the answer, not a second card: `Why >> K+ leak
+    // sets it` was a card RemNote could only ask as `Resting potential? > Why
+    // >> _____`. Inlining it is the plan's promotion of the mechanism.
+    expect(flat.markdown).toContain('- Resting potential? >> -70mV (K+ leak sets it)');
     expect(flat.cardCount).toBeGreaterThan(generateSegregationRemnote(REPORT).cardCount);
+  });
+
+  it('never emits a fragment card, in either explanation mode', () => {
+    // The plan's hard guarantee: no drill, trap, or confusable row may become a
+    // `>>` card whose front is a label. This is the exact bug that shipped a
+    // `Why >> _____` sub-card under every answered drill.
+    const withDistractors: SegregationReport = {
+      ...REPORT,
+      practiceQuestions: [
+        { id: 'q1', question: 'Resting potential?', answer: '-70mV', whyCorrect: 'K+ leak sets it', distractors: ['-55mV', '0mV'] },
+      ],
+    };
+    for (const flat of [true, false]) {
+      const payload = generateSegregationRemnote(withDistractors, { explanationsAsDetail: !flat });
+      for (const fragment of ['\n  - Why >>', '\n  - Traps >>', '\n  - Confusable With >>']) {
+        expect(payload.markdown).not.toContain(fragment);
+      }
+      // Traps always land on the card above them, never on a front of their own.
+      expect(payload.markdown).not.toContain('Traps >>');
+    }
+
+    // Detail mode reveals the traps on the drill's back…
+    const detail = generateSegregationRemnote(withDistractors);
+    expect(detail.markdown).toContain('  - Traps: -55mV / 0mV #[[Extra Card Detail]]');
+    // …and flat mode (no Extra Card Detail) keeps them on the answer instead.
+    const flat = generateSegregationRemnote(withDistractors, { explanationsAsDetail: false });
+    expect(flat.markdown).not.toContain('#[[Extra Card Detail]]');
+    expect(flat.markdown).toContain('- Resting potential? >> -70mV (K+ leak sets it) — Traps: -55mV / 0mV');
   });
 
   it('picks a direction per card instead of making everything two-way', () => {
@@ -88,7 +119,8 @@ describe('generateSegregationRemnote (RemNote flashcards)', () => {
     expect(payload.markdown).toContain(
       '  - Na+/K+ pump net movement? >> The Na+/K+ pump moves 3 Na+ out and 2 K+ in per ATP.'
     );
-    expect(payload.markdown).toContain('  - Why >> K+ leak sets it');
+    expect(payload.markdown).toContain('- Resting potential? >> -70mV (K+ leak sets it)');
+    expect(payload.markdown).not.toContain('Why >>');
 
     for (const nonsense of ['Step 1 ::', 'Why it matters ::', 'Resting potential? ::', 'vs Repolarization ::']) {
       expect(payload.markdown).not.toContain(nonsense);

@@ -17,6 +17,8 @@ import {
   normalizeClozeTermToAnki,
   clozeOrdinals,
   renumberClozeOrdinals,
+  shipsAsClozeNote,
+  unwrapClozeDeletions,
   computeActivityExportTags,
   sanitizeExtracted,
   withHeldBackCards,
@@ -423,6 +425,52 @@ describe('cloze ordinals (one Anki card per deletion)', () => {
     });
     expect(cards[0].front).toContain('{{c1::Sodium}}');
     expect(clozeOrdinals(cards[0].front)).toEqual([1]);
+  });
+});
+
+describe('a cloze marker on the answer side never ships as literal braces', () => {
+  // The diagnostic-vignette and diagram-occlusion cards deliberately carry
+  // `{{c1::answer}}` on the BACK so the RemNote handoff can hint it. Anki has no
+  // cloze fields on a Basic note and renders its fields verbatim, so before the
+  // unwrap the learner read `{{c1::Oxaloacetate}}` where the answer belongs.
+  const slideNotes = `
+# Slide 3: Citric Acid Cycle
+--- Diagram & Spatial Labels ---
+[Slot 1]: "Oxaloacetate" (Top Left)
+[Slot 2]: "Citrate Synthase" (Top Center)
+
+Enzyme pathway steps for ATP generation.
+`.trim();
+
+  it('unwraps a numbered deletion, a bare term, and leaves plain text alone', () => {
+    expect(unwrapClozeDeletions('<b>Slot #1 = {{c1::Oxaloacetate}}</b>')).toBe('<b>Slot #1 = Oxaloacetate</b>');
+    expect(unwrapClozeDeletions('{{Ideal}} ratio')).toBe('Ideal ratio');
+    expect(unwrapClozeDeletions('no markers here')).toBe('no markers here');
+    expect(unwrapClozeDeletions('')).toBe('');
+  });
+
+  it('only calls a card a Cloze note when the deletion sits on its front', () => {
+    const card = (over: Partial<AnkiCardItem>): AnkiCardItem => ({
+      id: 'c', front: 'Q', back: 'A', isCloze: false, tags: [], sm2: calculateSM2(4), ...over,
+    });
+    expect(shipsAsClozeNote(card({ isCloze: true, front: 'Na+ {{c1::rushes}} in' }))).toBe(true);
+    expect(shipsAsClozeNote(card({ isCloze: true, front: 'Question?', back: '{{c1::answer}}' }))).toBe(false);
+    expect(shipsAsClozeNote(card({ isCloze: false, front: 'Q', back: 'A' }))).toBe(false);
+  });
+
+  it('ships an occlusion card as a Basic note with the marker resolved', async () => {
+    const cards = extractAnkiCardsFromSchema(null, null, slideNotes);
+    expect(cards).toHaveLength(2);
+    // Extraction keeps the hint marker: it is meaningful to the RemNote handoff.
+    expect(cards[0].back).toContain('{{c1::Oxaloacetate}}');
+
+    const blob = await generateAnkiApkgPackage(cards, 'DeepEncode::Slides');
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const bytes = await zip.file('collection.anki2')!.async('uint8array');
+    const text = Buffer.from(bytes).toString('latin1');
+
+    expect(text).toContain('Slot #1 = Oxaloacetate');
+    expect(text).not.toContain('{{c1::Oxaloacetate}}');
   });
 });
 

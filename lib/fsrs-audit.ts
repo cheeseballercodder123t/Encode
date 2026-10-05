@@ -194,40 +194,59 @@ export function splitDenseCloze(card: AnkiCardItem): [AnkiCardItem, AnkiCardItem
   if (countWords(text) <= TOO_LONG_WORD_LIMIT) return null;
 
   const stripped = stripHtml(text);
-  const midpoint = Math.ceil(countWords(stripped) / 2);
-
   const tokens = stripped.split(' ').filter(Boolean);
   if (tokens.length < 2) return null;
 
+  // A `{{c1::thick ascending limb}}` is SEVERAL whitespace tokens, so a naive
+  // split can land inside the deletion and leave a dangling `{{c1::` on one
+  // half — a card neither Anki nor RemNote can read. These are the token
+  // boundaries where no deletion is open.
+  const safe = new Set<number>();
+  let open = 0;
+  for (let i = 0; i < tokens.length - 1; i++) {
+    open += (tokens[i].match(/\{\{c\d+::/g) || []).length;
+    open -= (tokens[i].match(/\}\}/g) || []).length;
+    if (open === 0) safe.add(i + 1);
+  }
+  const maxSplit = tokens.length - 1;
+  // `countWords` counts a deletion's inner words while `tokens` keeps the
+  // deletion whole, so the word-based midpoint can land past the end of the
+  // token list. Clamp it: both halves must keep at least one token, or the
+  // "split" manufactures an empty card.
+  const target = Math.min(Math.max(1, Math.ceil(countWords(stripped) / 2)), maxSplit);
+  const accept = (candidate: number) => (candidate >= 1 && candidate <= maxSplit && safe.has(candidate) ? candidate : -1);
+
   let splitAt = -1;
 
-  // 1. Sentence boundary in the second half.
-  for (let i = midpoint; i < tokens.length; i++) {
-    if (/[.!?]$/.test(tokens[i])) {
-      splitAt = i + 1;
-      break;
-    }
+  // 1. Sentence boundary in the second half (never the final token, or the
+  //    right half would be empty).
+  for (let i = target; i < maxSplit && splitAt === -1; i++) {
+    if (/[.!?]$/.test(tokens[i])) splitAt = accept(i + 1);
   }
 
   // 2. Clause connector near the midpoint (±2 words).
   if (splitAt === -1) {
     const clauseRe = /^(,|and|but|because|which|that|;)$/i;
-    for (let delta = 0; delta <= 2; delta++) {
-      const lo = midpoint - delta;
-      const hi = midpoint + delta;
-      if (hi < tokens.length && clauseRe.test(tokens[hi])) {
-        splitAt = hi;
-        break;
-      }
-      if (lo >= 0 && clauseRe.test(tokens[lo])) {
-        splitAt = lo;
-        break;
-      }
+    for (let delta = 0; delta <= 2 && splitAt === -1; delta++) {
+      const hi = target + delta;
+      const lo = target - delta;
+      if (hi <= maxSplit && clauseRe.test(tokens[hi])) splitAt = accept(hi);
+      if (splitAt === -1 && lo >= 1 && clauseRe.test(tokens[lo])) splitAt = accept(lo);
     }
   }
 
-  // 3. Hard midpoint fallback.
-  if (splitAt === -1 || splitAt >= tokens.length) splitAt = midpoint;
+  // 3. Nearest safe split to the midpoint: keeps both halves non-empty and
+  //    every deletion whole even when a single one carries most of the words.
+  if (splitAt === -1) {
+    if (safe.has(target)) splitAt = target;
+    else {
+      for (let delta = 1; delta <= tokens.length && splitAt === -1; delta++) {
+        if (safe.has(target - delta)) splitAt = target - delta;
+        else if (safe.has(target + delta)) splitAt = target + delta;
+      }
+    }
+  }
+  if (splitAt <= 0 || splitAt >= tokens.length) splitAt = target;
 
   const leftText = tokens.slice(0, splitAt).join(' ');
   const rightText = tokens.slice(splitAt).join(' ');

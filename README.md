@@ -243,11 +243,12 @@ lib/
   remnote.ts               # RemNote markdown: one document per card section
                            # (or per source), `::` two-way vs `>>` forward-only
                            # per line with per-card overrides, quadrants as
-                           # #[[Extra Card Detail]], cloze hints, `>>>` and
-                           # `>>1.` multi-part cards, front-quality report,
-                           # [[wikilink]] concept portals between confusable
-                           # pairs, the toy-model embed line, per-document
-                           # push request
+                           # #[[Extra Card Detail]], drill reasons inlined into
+                           # the answer (never a `Why >>` fragment card), cloze
+                           # hints, `>>>` and `>>1.` multi-part cards,
+                           # front-quality report, [[wikilink]] concept portals
+                           # between confusable pairs, the toy-model embed
+                           # line, per-document push request
   discrimination.ts        # Gate scoring (clock + misses), trap-card construction
   priming.ts               # Four warming archetypes: probe sequences + shape sketch
   interference-traps.ts    # Hypercorrection trap cards captured at prediction-error time
@@ -256,6 +257,9 @@ lib/
   stream-schema.ts         # Incremental JSON schema extractor for streamed generation
   forge-stream.ts          # Client reader for streamed forge source events
   deck-memory-cloud.ts     # Firestore mirror of the deck memory (merge/sync)
+  toy-models/progress-cloud.ts  # Firestore mirror of the lab snapshot cache:
+                           # per-key newest-wins merge with the device cache,
+                           # so snapshots it evicts return on the next sign-in
 ```
 
 ## Tech

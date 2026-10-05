@@ -137,11 +137,12 @@ test.describe('AnkiConnect handoff', () => {
   test('the export modal pushes the sanitized deck through the same client', async ({ page }) => {
     const calls = await mockAnkiConnect(page);
     await mockAiApis(page);
-    await page.goto('/');
 
-    // Seed a session so the export modal has cards to push.
-    await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
-    await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
+    // Seed a session so the export modal has cards to push. The shared starter
+    // re-fills once if the first input event lands before React has hydrated —
+    // on a cold dev server that lost event leaves the build button disabled
+    // forever, which is what made this spec flaky under `--workers=2`.
+    await startEncodeFromNotes(page, MOCK_NOTES);
     await confirmReadiness(page);
     await expectStage(page, 1);
     await page.getByPlaceholder('STAGE1_FIELD1').fill('Sodium rushes in through voltage-gated channels.');

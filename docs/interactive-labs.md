@@ -16,6 +16,7 @@ The simulation is an intuition scaffold—not a numerical solver, a replacement 
 | Shared Gemini schema and extraction instructions | `lib/toy-models/synthesis.ts` |
 | Explicit offline teaching examples | `lib/toy-models/examples.ts` |
 | Versioned progress storage and schema-scoped boundary cards | `lib/toy-models/progress.ts` |
+| Account mirror of the lab snapshot cache (Firestore, newest-wins merge) | `lib/toy-models/progress-cloud.ts` |
 | Predict → manipulate → reveal controller | `components/toy-models/ToyModelLab.tsx` |
 | SVG mathematical instruments | `components/toy-models/ToyModelVisual.tsx` |
 | Phase-plane instrument (draggable operating point, nullclines, orbit) | `components/toy-models/PhasePlaneVisual.tsx` |
@@ -146,7 +147,9 @@ motion springs animate balance, gauge, menisci and state collapse. Native slider
 
 `StageResponse.toyModelProgress` stores model fingerprint, committed choice, current inputs, explored/revealed booleans and update timestamp. Fingerprints use sorted canonical JSON, so server validation's object property order cannot relock or incorrectly mismatch a solved model. An altered config does relock it.
 
-A browser cache holds at most 100 lab snapshots. Slider-only writes debounce; prediction/reveal writes are immediate. Pagehide/unmount saves flush the cache. Quota failure is surfaced. Progress writes back into session responses. Next/Skip preserves it, full saved schemas carry it, and a debounced content-stable checkpoint ID routes lab sessions through the existing localStorage/IndexedDB/Firestore library. The SSR library hydration was repaired to avoid local saved-count mismatches on reload.
+A browser cache holds at most 500 lab snapshots. Slider-only writes debounce; prediction/reveal writes are immediate. Pagehide/unmount saves flush the cache. Quota failure is surfaced. Progress writes back into session responses. Next/Skip preserves it, full saved schemas carry it, and a debounced content-stable checkpoint ID routes lab sessions through the existing localStorage/IndexedDB/Firestore library. The SSR library hydration was repaired to avoid local saved-count mismatches on reload.
+
+The device cache is deliberately bounded, so it is not the only copy: the account mirror (`lib/toy-models/progress-cloud.ts`) keeps up to 2,000 keyed snapshots in `users/{uid}/memory/toylab` and reconciles with the device on a quiet moment after each lab changes. The merge is per key by newest `updatedAt`, so a semester of pasted decks no longer evicts a snapshot for good — it comes back on the next sign-in on any device — and a device that was offline cannot erase a newer answer from one that was not. Sync failures degrade to the local cache, exactly like the deck memory.
 
 Only explored, revealed, fingerprint-matching progress generates a boundary card. It includes the committed prediction, observed answer, causal explanation and takeaway, tagged `InterferenceTrap`, `ToyModel`, archetype and confirmed/corrected status. It is scoped to its activity/schema, not appended indiscriminately to unrelated decks. Stage AnkiConnect push, full deck extraction, .txt/.apkg, and existing sanitized export paths share the builder; protected trap tags preserve the discriminative pair through Wozniak enforcement. RemNote renders the same trap as forward-only. Export text is HTML-escaped before Anki rendering.
 

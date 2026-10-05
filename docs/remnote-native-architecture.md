@@ -205,7 +205,7 @@ timeline
   * Assert that generated markdown contains **0 occurrences** of `\n  - Why >>` or `\n  - Traps >>` or `\n  - Confusable With >>`.
   * Verify that `#[[Extra Card Detail]]` is used strictly with colons `:`.
 
-> **Status: shipped.** The colon-only rule is the renderer's Extra Card Detail path (`pushExtra` → `  - Label: value #[[Extra Card Detail]]`): a "why" that is high-yield enough to test still ships as its own card (source-authored deletions are never buried), so no `Why >>` fragment can occur.
+> **Status: shipped (both modes).** Drills inline `whyCorrect` into the answer (`${d.answer} (${d.whyCorrect})`) and never call `pushExtra(..., 'Why' | 'Traps', ...)`, so the flat mode that used to emit `- Why >> …` / `- Traps >> …` fragments is gone: the traps ride as `  - Traps: … #[[Extra Card Detail]]` when the deck uses detail, and as part of the answer when it does not. For every other section the colon-only rule is the renderer's Extra Card Detail path (`pushExtra` → `  - Label: value #[[Extra Card Detail]]`): a "why" that is high-yield enough to test still ships as its own card (source-authored deletions are never buried). `tests/unit/remnote.test.ts` asserts 0 occurrences of `\n  - Why >>`, `\n  - Traps >>` and `\n  - Confusable With >>` in both modes.
 
 ---
 

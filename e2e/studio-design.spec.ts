@@ -165,6 +165,28 @@ test('the workbench columns stay inside the viewport and beside the reader', asy
     expect(pane.scrollW, `${pane.cls} overflows sideways`).toBeLessThanOrEqual(pane.clientW + 1);
   }
 
+  // The RemNote staging preview is the panel this contract was written for: it
+  // lives in the narrow examiner column and used to widen past it (text hidden
+  // behind a horizontal scrollbar) as soon as a markdown line carried a long
+  // unbreakable token. Pin it by name, not only through the generic sweep
+  // above, so a regression here fails with the panel's own name in the output.
+  const staging = await page.getByTestId('remnote-staging').evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      scrollW: el.scrollWidth,
+      clientW: el.clientWidth,
+      whiteSpace: style.whiteSpace,
+      overflowWrap: style.overflowWrap,
+    };
+  });
+  expect(staging.scrollW, 'RemNote staging overflows sideways').toBeLessThanOrEqual(
+    staging.clientW + 1,
+  );
+  // The two declarations that make the wrap possible: without pre-wrap the
+  // markdown's newlines collapse, and without break-word one long token wins.
+  expect(staging.whiteSpace).toBe('pre-wrap');
+  expect(staging.overflowWrap).toBe('break-word');
+
   // No sticky/fixed layer may sit on top of a field the learner is writing in.
   const covered = await page.evaluate(() => {
     const fields = Array.from(document.querySelectorAll<HTMLElement>('[data-dg-field]'));

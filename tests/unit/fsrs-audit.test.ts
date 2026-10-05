@@ -187,4 +187,38 @@ describe('splitDenseCloze', () => {
     expect(a.id).toBe('fact-1-split-a');
     expect(b.id).toBe('fact-1-split-b');
   });
+  it('never splits inside a multi-word deletion or leaves an empty half', () => {
+    // The deletion's body is several whitespace tokens, so a word-based
+    // midpoint lands inside it: the old splitter left a dangling `{{c1::` on
+    // one half and no text at all on the other.
+    const front =
+      'The {{c1::thick ascending limb}} actively reabsorbs sodium and chloride while remaining water-impermeable, which dilutes the tubular fluid further';
+    const split = splitDenseCloze(clozeCard(front));
+    expect(split).not.toBeNull();
+    const [a, b] = split!;
+    // Both halves carry text…
+    expect(a.front.trim().length).toBeGreaterThan(0);
+    expect(b.front.trim().length).toBeGreaterThan(0);
+    // …and every deletion they contain is closed.
+    for (const half of [a.front, b.front]) {
+      expect((half.match(/\{\{/g) || []).length).toBe((half.match(/\}\}/g) || []).length);
+    }
+    // Together they still cover the whole sentence.
+    expect(`${a.front} ${b.front}`).toContain('thick');
+    expect(`${a.front} ${b.front}`).toContain('further');
+  });
+  it('keeps a deletion whose body carries most of the words on one half', () => {
+    const front =
+      'During hypovolemic shock the baroreceptors trigger {{c1::a compensatory sympathetic surge that raises heart rate contractility and systemic vascular resistance}} reducing perfusion pressure downstream';
+    const card = clozeCard(front);
+    if (countWords(front) <= TOO_LONG_WORD_LIMIT) {
+      expect(splitDenseCloze(card)).toBeNull();
+      return;
+    }
+    const split = splitDenseCloze(card);
+    expect(split).not.toBeNull();
+    const [a, b] = split!;
+    expect((a.front.match(/\{\{/g) || []).length).toBe((a.front.match(/\}\}/g) || []).length);
+    expect((b.front.match(/\{\{/g) || []).length).toBe((b.front.match(/\}\}/g) || []).length);
+  });
 });
