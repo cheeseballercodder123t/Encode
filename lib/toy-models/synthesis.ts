@@ -14,7 +14,7 @@ export const toyModelSchema = {
   description: 'Optional note-grounded configuration for one of five precompiled interactive engines. Omit if no engine fits; never invent a physical law.',
   properties: {
     version: { type: Type.INTEGER, description: 'Always 1' },
-    type: { type: Type.STRING, enum: ['ratio_scaling', 'saturation_sigmoid', 'two_state_equilibrium', 'cyclic_state_machine', 'critical_threshold'] },
+    type: { type: Type.STRING, enum: ['ratio_scaling', 'saturation_sigmoid', 'two_state_equilibrium', 'cyclic_state_machine', 'critical_threshold', 'phase_plane'] },
     title: string,
     primaryVar: variable,
     output: { type: Type.OBJECT, properties: { label: string, symbol: string, unit: string }, required: ['label', 'symbol', 'unit'] },
@@ -49,6 +49,16 @@ export const toyModelSchema = {
     criticalLabel: string,
     chain: { type: Type.ARRAY, items: string },
     counterModel: { type: Type.OBJECT, properties: { assumption: string, law: { type: Type.STRING, enum: ['linear', 'no_threshold'] }, explanation: string, evidence: string }, required: ['assumption', 'law', 'explanation', 'evidence'] },
+    secondVar: variable,
+    alpha: number,
+    beta: number,
+    gamma: number,
+    delta: number,
+    devilsAdvocate: {
+      type: Type.OBJECT,
+      properties: { speaker: string, claim: string, fallacy: string, refutationInputs: { type: Type.OBJECT, properties: {}, required: [] as string[] }, refutationOutcome: string, evidence: string },
+      required: ['speaker', 'claim', 'fallacy', 'refutationInputs', 'refutationOutcome', 'evidence'],
+    },
   },
   required: ['version', 'type', 'title', 'primaryVar', 'output', 'evidence', 'assumptions', 'prediction', 'takeaway'],
 };
@@ -67,4 +77,8 @@ Distinguish SOURCE constants/thresholds from ILLUSTRATIVE slider ranges, initial
 3. two_state_equilibrium: ideal A⇌B at constant supplied equilibriumConstant K. primaryVar is FRACTION B, min>0/max<1, unit='fraction'. temperature in K, total>0 in amountUnit, stateA/stateB real names, output ΔG in kJ/mol. Q=B/A; ΔG=RT ln(Q/K), ΔG°=-RT ln K. Temperature changes energy scale with K held fixed; DO NOT claim shifting K with T (no enthalpy model). The slider must reach K/(1+K). Q>K drives B→A, Q<K drives A→B; amount is conserved.
 4. cyclic_state_machine: primaryVar reaction progress min=0/max=100/unit='%'. 3–8 states in SOURCE ORDER {id,label,mechanism,duration,energy,activationBarrier,evidence}, cyclic boolean (false for a linear process), energyUnit, energyIsIllustrative boolean. Each duration is positive relative dwell time (0.1–100); highest dwell is bottleneck. Energy/barrier heights are illustrative unless source supplies them. Do not imply real measured Gibbs energies for electrical/process cycles. State evidence is an exact quote identifying that state. No stochastic kinetics or time-calibrated reaction rate is simulated.
 5. critical_threshold: threshold INSIDE range; response='activate' for a source threshold, 'collapse' for rise/peak/failure, 'sign_change' ONLY for an affine thermodynamic law. maximum>0, peak, slope, intercept, safeLabel, criticalLabel, chain [2–6 real mechanistic nodes]. activate: 0 below threshold, maximum above. collapse: piecewise linear envelope rising from min to peak then declining to zero at threshold; explicitly call the envelope illustrative, not measured protein-folding kinetics. sign_change: output=intercept+slope*X and threshold=-intercept/slope (e.g. X=T in K, intercept=ΔH, slope=-ΔS in matching energy units). peak/maximum are unused drawing fields for sign_change; explain that. Never claim all enzymes denature at a universal 45°C. Optional counterModel law='no_threshold' only for activate/collapse, never sign_change.
+6. phase_plane: ONLY for a source-supplied coupled two-variable dynamical system (predator–prey/Lotka–Volterra, epidemic S-I host–pathogen, or any X,Y pair the notes give coupling constants or interaction terms for). primaryVar=prey/host/resource X (min>0), secondVar=predator/pathogen/consumer Y (min>0), output is the conserved quantity description. Fixed law dX/dt=αX−βXY, dY/dt=δXY−γY with STRICTLY POSITIVE α,β,γ,δ from the source or clearly-illustrative-and-stated-in-assumptions. Both nullclines X*=γ/δ and Y*=α/β must lie strictly inside the slider ranges, or the orbit cannot close: check this arithmetic before emitting. prediction moves BOTH coordinates: variableKey=X key, target=X value, targetY=Y value, and the target must be off both nullclines so the flow direction is decisive. State in assumptions that the engine models closed orbits around coexistence (γ/δ, α/δ) — no damping, no carrying capacity, no external forcing. Do NOT shoehorn a single-variable relationship into two sliders.
+
+DEVIL'S ADVOCATE DUEL (optional 'devilsAdvocate' on any lab, only when the source contradicts a famous intuitive fallacy):
+speaker: a fictional student name ('Alex', 'Maya'); claim: one confident sentence in their voice asserting the fallacy about THIS system (e.g. 'adding a competitive inhibitor lowers Vmax'); fallacy: the named intuitive rule the claim rests on ('more of X always means more of Y', 'resistance consumes current'); refutationInputs: an object of variableKey→value pairs naming REAL sliders of this same lab, each value a reachable slider step that differs from its initial value, whose configuration makes the model visibly contradict the claim (for competitive inhibition at saturating [S] the rate still approaches Vmax); refutationOutcome: what the lab shows at that configuration, in one sentence; evidence: an EXACT verbatim quotation from the source that grounds the refutation. Never fake a refutation the fixed engine cannot show; omit the duel entirely when the lab cannot demonstrate it.
 `;

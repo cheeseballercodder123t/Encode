@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { TOY_EXAMPLES, activityForToyExample } from '@/lib/toy-models/examples';
+import { TOY_MODEL_TYPES } from '@/lib/toy-models/types';
 
 const generate = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/ai-client', () => ({ generateJSONWithProvider: generate }));
@@ -18,7 +19,9 @@ describe('grounded simulation generation integration', () => {
     expect((await response.json()).activities[0].toyModel).toEqual(example.config);
     const options = generate.mock.calls[0][0];
     expect(options.systemPrompt).toContain('never executable code');
-    expect(options.responseSchema.properties.activities.items.properties.toyModel.properties.type.enum).toHaveLength(5);
+    // The schema enum is what the model may emit, so it must name every
+    // engine archetype — pinned to the shared list, not to a count.
+    expect(options.responseSchema.properties.activities.items.properties.toyModel.properties.type.enum).toEqual([...TOY_MODEL_TYPES]);
     expect(generate).toHaveBeenCalledTimes(1); // no additional synthesis calls
   });
   it('invented source quotes drop only the lab, never the stage', async () => {

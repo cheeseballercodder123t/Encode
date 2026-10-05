@@ -4,7 +4,7 @@ import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from '.
 import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
 import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
 import { loadInterferenceTraps } from './interference-traps';
-import { toyBoundaryCard } from './toy-models/progress';
+import { toyBoundaryCard, toyDuelCard } from './toy-models/progress';
 import { CONTRADICTION_TAG } from './services/contradiction';
 import { parseSlideDeck, parseDiagramLabels } from './services/slide-deck-parser';
 
@@ -338,10 +338,16 @@ function buildUserWordingCards(
  *   2. SegregationReport quadrant cards when present.
  */
 function buildToyBoundaryAnkiCard(activity: Activity, response: StageResponse | undefined, sm2: AnkiCardItem['sm2']): AnkiCardItem[] {
-  const card = toyBoundaryCard(activity, response);
-  if (!card) return [];
   const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  return [{ id: card.id, front: escape(card.front), back: escape(card.back), isCloze: false, tags: ['DeepEncode', 'InterferenceTrap', 'ToyModel', card.type, card.correctPrediction ? 'PredictionConfirmed' : 'PredictionCorrected'], sm2: { ...sm2 } }];
+  const cards: AnkiCardItem[] = [];
+  const card = toyBoundaryCard(activity, response);
+  if (card) cards.push({ id: card.id, front: escape(card.front), back: escape(card.back), isCloze: false, tags: ['DeepEncode', 'InterferenceTrap', 'ToyModel', card.type, card.correctPrediction ? 'PredictionConfirmed' : 'PredictionCorrected'], sm2: { ...sm2 } });
+  // The Devil's Advocate duel ships as its own trap card: the front is the
+  // confident claim, the back is the configuration that refuted it and what
+  // the model showed there. Only an engine-verified refutation produces one.
+  const duel = toyDuelCard(activity, response);
+  if (duel) cards.push({ id: duel.id, front: escape(duel.front), back: escape(duel.back), isCloze: false, tags: ['DeepEncode', 'InterferenceTrap', 'ToyModel', 'DevilsAdvocate', duel.type], sm2: { ...sm2 } });
+  return cards;
 }
 
 export function extractAnkiCardsFromSchema(

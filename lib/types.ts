@@ -225,6 +225,12 @@ export interface SavedSchema {
   currentModuleIndex?: number;
   youtubeData?: YouTubeMetadata;
   researchContexts?: ResearchContextItem[];
+  /**
+   * The prerequisite audit this topic ran before encoding, if the learner ran
+   * one. Persisted so the course-level skill tree can place the topic above the
+   * foundations it named; it is the learner's own audit, not a re-invention.
+   */
+  prerequisites?: PrerequisitesReport;
 }
 
 /** One blind vignette in the 10-second discrimination gate. */

@@ -26,6 +26,8 @@ import RoastNotesModal from '@/components/RoastNotesModal';
 import StatelessShareModal from '@/components/StatelessShareModal';
 import { PWAInstallHeader } from '@/components/PWAInstallHeader';
 import { ConceptPrerequisitesModal } from '@/components/ConceptPrerequisitesModal';
+import { SkillTreeModal } from '@/components/SkillTreeModal';
+import { PathwayBuilderModal } from '@/components/pathway/PathwayBuilder';
 import { PretestModal } from '@/components/PretestModal';
 import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
@@ -38,6 +40,7 @@ import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioIntro } from '@/components/StudioIntro';
 import { TOY_EXAMPLES, activityForToyExample } from '@/lib/toy-models/examples';
 import { toySessionId } from '@/lib/toy-models/progress';
+import { buildSkillTree, conceptMatches } from '@/lib/course-tree';
 import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
@@ -161,9 +164,15 @@ export default function DeepEncodeApp() {
     clearAll: clearAllSchemaLibrary,
   } = useSchemaLibrary(saveSchemaToCloud, deleteSchemaFromCloud);
 
+  // Locked foundations across the whole library — the same pure builder the
+  // skill tree renders from, so the badge can never disagree with the modal.
+  const skillTreeGaps = useMemo(() => buildSkillTree(savedSchemas).gaps.length, [savedSchemas]);
+
   // Modal & transient UI state (kept local to the shell)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSkillTreeOpen, setIsSkillTreeOpen] = useState(false);
+  const [isPathwayOpen, setIsPathwayOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   // Drill modals were removed : review lives in Anki/RemNote, not here.
 
@@ -1108,7 +1117,10 @@ export default function DeepEncodeApp() {
           isGuidedPath: isGuidedPathMode,
           guidedModules: isGuidedPathMode ? guidedModules : undefined,
           youtubeData: youtubeData || undefined,
-          researchContexts: researchContexts.length > 0 ? researchContexts : undefined
+          researchContexts: researchContexts.length > 0 ? researchContexts : undefined,
+          // Only ever attach the audit that belongs to THIS topic: a stale
+          // report from another topic would invent a skill-tree edge.
+          prerequisites: prerequisitesReport && conceptMatches(topicSummary, prerequisitesReport.topicTitle) ? prerequisitesReport : undefined
         };
 
         await saveSchemaToLibrary(newSavedSchema);
@@ -1160,7 +1172,8 @@ export default function DeepEncodeApp() {
         isGuidedPath: isGuidedPathMode,
         guidedModules: isGuidedPathMode ? guidedModules : undefined,
         youtubeData: youtubeData || undefined,
-        researchContexts: researchContexts.length > 0 ? researchContexts : undefined
+        researchContexts: researchContexts.length > 0 ? researchContexts : undefined,
+        prerequisites: prerequisitesReport && conceptMatches(topicSummary, prerequisitesReport.topicTitle) ? prerequisitesReport : undefined
       };
       await saveSchemaToLibrary(newSavedSchema);
     }
@@ -1445,7 +1458,7 @@ export default function DeepEncodeApp() {
   };
 
   return (
-    <main className="studio-shell min-h-screen min-h-dvh text-bone flex flex-col items-center px-4 sm:px-6 relative overflow-x-hidden selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
+    <main className="studio-shell min-h-screen min-h-dvh text-bone flex flex-col items-center px-4 sm:px-6 relative overflow-x-clip selection:bg-amber-500/25 selection:text-bone font-sans mobile-safe-bottom">
 
       <div className="w-full max-w-6xl relative z-10 flex-1 flex flex-col">
 
@@ -1555,6 +1568,16 @@ export default function DeepEncodeApp() {
               title="Metacognitive Analytics & Model Quota Dashboard"
             >
               Analytics
+            </button>
+
+            {/* Course-level Prerequisite Skill Tree */}
+            <button
+              type="button"
+              onClick={() => setIsSkillTreeOpen(true)}
+              className="shrink-0 min-h-[36px] flex items-center rounded-full px-3 text-[11px] tracking-wide text-slate-ink hover:text-bone hover:bg-white/[0.05] transition-colors duration-150 cursor-pointer whitespace-nowrap"
+              title="Course-level prerequisite skill tree: what is encoded, in progress, and still locked"
+            >
+              Skill tree{skillTreeGaps > 0 ? ` · ${skillTreeGaps} locked` : ''}
             </button>
 
             {/* Saved Schemas History Button */}
@@ -1832,6 +1855,7 @@ export default function DeepEncodeApp() {
                 loadStageInputs(0, [activity], {});
                 setAppState('encoding');
               }}
+              onTryPathwayBuilder={() => setIsPathwayOpen(true)}
             />
 
                         {/* Bench: audits and export targets share one panel, in two
@@ -1848,7 +1872,7 @@ export default function DeepEncodeApp() {
                   <span className="font-mono text-[10px] text-solder whitespace-nowrap">optional</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="studio-audit-grid grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {([
                     {
                       key: 'prereq',
@@ -1894,19 +1918,20 @@ export default function DeepEncodeApp() {
                       onClick: handleSegregateNotes,
                       disabled: (!rawNotes.trim() && !uploadedFile) || isSegregating,
                     },
-                  ]).map((a) => (
+                  ]).map((a, index) => (
                     <button
                       key={a.key}
                       type="button"
                       onClick={a.onClick}
                       disabled={a.disabled}
                       title={a.title}
-                      className={`text-left p-4 bg-chassis/60 border rounded-xl transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                      className={`studio-audit-card text-left p-4 bg-chassis/60 border rounded-xl transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                         a.tone === 'hazard'
                           ? 'border-edge/70 hover:border-hazard-500/50'
                           : 'border-edge/70 hover:border-gilt/40'
                       }`}
                     >
+                      <span className="studio-audit-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                       <span
                         className={`block text-xs font-semibold ${
                           a.tone === 'hazard' ? 'text-hazard-300' : 'text-bone'
@@ -1920,7 +1945,7 @@ export default function DeepEncodeApp() {
                 </div>
               </div>
 
-              <div className="p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
+              <div className="studio-exports p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="label-caps whitespace-nowrap">
                     Export targets
@@ -2026,9 +2051,9 @@ export default function DeepEncodeApp() {
             key="loading"
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full py-24 flex flex-col items-center justify-center text-center"
+            className="studio-loading w-full py-24 flex flex-col items-center justify-center text-center"
           >
-            <div className="mb-7 flex items-center gap-2.5 px-3.5 py-1.5 bg-deck border border-gilt/30 rounded-full">
+            <div className="studio-processing-pill mb-7 flex items-center gap-2.5 px-3.5 py-1.5 bg-deck border border-gilt/30 rounded-full">
               <span className="h-1.5 w-1.5 rotate-45 bg-gradient-to-br from-amber-300 to-amber-600" aria-hidden />
               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-200">
                 Processing
@@ -2063,7 +2088,7 @@ export default function DeepEncodeApp() {
 
             {/* Live pipeline progress : asymptotic bar + elapsed clock + phase ticker */}
             <div className="mt-8 w-full max-w-md">
-              <div className="h-1.5 w-full bg-inset border border-edge/60 rounded-full overflow-hidden">
+              <div className="gen-track h-1.5 w-full bg-inset border border-edge/60 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300 shadow-gilt transition-all duration-1000 ease-linear"
                   style={{ width: `${pct}%` }}
@@ -2236,6 +2261,16 @@ export default function DeepEncodeApp() {
         onClose={() => setIsSettingsOpen(false)}
         onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
         backupSettingsToCloud={backupSettingsToCloud}
+      />
+
+      {/* Hands-on pathway / circuit builder */}
+      <PathwayBuilderModal isOpen={isPathwayOpen} onClose={() => setIsPathwayOpen(false)} />
+
+      {/* Course-level Prerequisite Skill Tree */}
+      <SkillTreeModal
+        isOpen={isSkillTreeOpen}
+        onClose={() => setIsSkillTreeOpen(false)}
+        schemas={savedSchemas}
       />
 
       {/* Saved Schemas History Drawer */}

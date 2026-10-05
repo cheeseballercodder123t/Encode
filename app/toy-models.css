@@ -84,6 +84,18 @@
 .toy-launch-strip button span { color: #67C9D7; font: 9px 'IBM Plex Mono', monospace; }
 @keyframes toy-flow { to { offset-distance: 100%; } }
 @keyframes toy-reaction-flow { to { stroke-dashoffset: -18; } }
+/* Devil's Advocate duel: an amber counsel panel, deliberately distinct from
+   the cyan instrument — the claim is rhetoric, the lab is physics. */
+.toy-duel { margin: 0 20px 16px; padding: 13px 16px; border: 1px dashed #51402A; border-radius: 8px; background: rgba(245,158,11,.045); }
+.toy-duel-kicker { display: block; font: 8px 'IBM Plex Mono', monospace; color: #F59E0B; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 8px; }
+.toy-duel-claim { font-size: 12.5px; line-height: 1.65; }
+.toy-duel-claim strong { color: #F7BB56; font-weight: 500; }
+.toy-duel-fallacy { margin-top: 8px; font-size: 11px; color: #FB718F; line-height: 1.6; }
+.toy-duel-task { margin-top: 6px; font-size: 11px; line-height: 1.7; color: #93A5BB; }
+.toy-duel-button { margin-top: 11px; }
+.toy-duel-verdict { margin-top: 11px; padding: 10px 12px; border-left: 2px solid #10B981; background: rgba(16,185,129,.06); font-size: 11px; line-height: 1.7; }
+.toy-phase-duel-ring { animation: toy-duel-ring 1.5s ease-in-out infinite; }
+@keyframes toy-duel-ring { 0%, 100% { stroke-opacity: .9; stroke-width: 1.5; } 50% { stroke-opacity: .4; stroke-width: 3; } }
 @media (max-width: 640px) {
   .toy-header { padding: 16px; flex-wrap: wrap; gap: 9px; }
   .toy-header h3 { font-size: 19px; }
@@ -97,8 +109,10 @@
   .toy-domino-chain > div { padding: 7px; font-size: 8px; }
   .toy-launch-strip { grid-template-columns: 1fr; }
   .toy-launch-strip button { flex: 1 0 45%; }
+  .toy-duel { margin-left: 15px; margin-right: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .toy-flow-particle { animation: none !important; offset-path: none !important; }
   .toy-reaction-flow { animation: none !important; }
+  .toy-phase-duel-ring { animation: none !important; }
 }

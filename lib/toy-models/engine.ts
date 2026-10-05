@@ -1,4 +1,18 @@
-import type { ToyChallenge, ToyInputs, ToyModelConfig, ToyModelOutput, ToyModelProgress, ToyVariable } from './types';
+import type { PhasePlaneConfig, ToyChallenge, ToyInputs, ToyModelConfig, ToyModelOutput, ToyModelProgress, ToyVariable } from './types';
+
+/**
+ * Deterministic RK4 for the predator–prey (Lotka–Volterra) phase plane.
+ * dX/dt = alpha·X − beta·X·Y (prey grows alone, is eaten proportionally to
+ * encounters), dY/dt = delta·X·Y − gamma·Y (predators starve alone, grow on
+ * encounters). Same ODE at every call site, so the field, the trajectory and
+ * the challenge all agree to integrator error.
+ */
+export function phasePlaneDerivative(config: PhasePlaneConfig, x: number, y: number): { dx: number; dy: number } {
+  return {
+    dx: config.alpha * x - config.beta * x * y,
+    dy: config.delta * x * y - config.gamma * y,
+  };
+}
 
 export const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 export const lerp = (min: number, max: number, fraction: number) => min + (max - min) * fraction;
@@ -7,6 +21,7 @@ export function variablesFor(config: ToyModelConfig): ToyVariable[] {
     case 'ratio_scaling': return [config.primaryVar, config.denominator];
     case 'saturation_sigmoid': return [config.primaryVar, config.hillCoefficient];
     case 'two_state_equilibrium': return [config.primaryVar, config.temperature];
+    case 'phase_plane': return [config.primaryVar, config.secondVar];
     default: return [config.primaryVar];
   }
 }
@@ -21,6 +36,63 @@ export function sanitizeInputs(config: ToyModelConfig, raw: ToyInputs): ToyInput
 }
 function logistic(value: number): number {
   return value >= 0 ? 1 / (1 + Math.exp(-value)) : Math.exp(value) / (1 + Math.exp(value));
+}
+/** One fixed-step RK4 advance (dt=0.05 default) for trajectories and the duel. */
+export function phasePlaneStep(config: Extract<ToyModelConfig, { type: 'phase_plane' }>, x: number, y: number, dt = 0.05): { x: number; y: number } {
+  const k1 = phasePlaneDerivative(config, x, y);
+  const k2 = phasePlaneDerivative(config, x + k1.dx * dt / 2, y + k1.dy * dt / 2);
+  const k3 = phasePlaneDerivative(config, x + k2.dx * dt / 2, y + k2.dy * dt / 2);
+  const k4 = phasePlaneDerivative(config, x + k3.dx * dt, y + k3.dy * dt);
+  return {
+    x: x + dt * (k1.dx + 2 * k2.dx + 2 * k3.dx + k4.dx) / 6,
+    y: y + dt * (k1.dy + 2 * k2.dy + 2 * k3.dy + k4.dy) / 6,
+  };
+}
+/** Forward trajectory of at most `steps` RK4 steps, clamped away from the axes. */
+export function phasePlaneTrajectory(config: Extract<ToyModelConfig, { type: 'phase_plane' }>, x0: number, y0: number, steps: number, dt = 0.05): { x: number; y: number }[] {
+  const points = [{ x: x0, y: y0 }];
+  let current = { x: Math.max(x0, 1e-6), y: Math.max(y0, 1e-6) };
+  for (let index = 0; index < steps; index++) {
+    current = phasePlaneStep(config, current.x, current.y, dt);
+    current = { x: Math.max(current.x, 1e-6), y: Math.max(current.y, 1e-6) };
+    if (!Number.isFinite(current.x) || !Number.isFinite(current.y)) break;
+    points.push({ ...current });
+  }
+  return points;
+}
+/** The coexistence equilibrium (γ/δ, α/β) — the center every orbit encircles.
+ * X-nullcline Y=α/β, Y-nullcline X=γ/δ; they cross at coexistence. */
+export function phasePlaneEquilibrium(config: Extract<ToyModelConfig, { type: 'phase_plane' }>): { x: number; y: number } {
+  return { x: config.gamma / config.delta, y: config.alpha / config.beta };
+}
+/**
+ * Exact phase-plane quantities. `value` is the conserved Lotka–Volterra
+ * integral V = δX − γ ln X + βY − α ln Y: closed orbits are its level sets,
+ * so two states on the same orbit share the same reading. `normalized` is
+ * drawing-only (position between the plateau's outermost sampled levels).
+ */
+export function computePhasePlaneOutput(config: PhasePlaneConfig, x: number, y: number): ToyModelOutput {
+  const eq = phasePlaneEquilibrium(config);
+  const level = (px: number, py: number) =>
+    config.delta * px - config.gamma * Math.log(Math.max(px, 1e-9)) + config.beta * py - config.alpha * Math.log(Math.max(py, 1e-9));
+  const value = level(x, y);
+  const corners = [level(config.primaryVar.min, config.secondVar.min), level(config.primaryVar.max, config.secondVar.min), level(config.primaryVar.min, config.secondVar.max), level(config.primaryVar.max, config.secondVar.max), value];
+  const low = Math.min(...corners);
+  const high = Math.max(...corners);
+  const atEquilibrium = Math.abs(x - eq.x) <= config.primaryVar.step / 2 + 1e-9 && Math.abs(y - eq.y) <= config.secondVar.step / 2 + 1e-9;
+  const velocity = phasePlaneDerivative(config, x, y);
+  // Quadrant of the flow, named by the sign of each velocity component:
+  // above the X-nullcline (Y > α/β) prey decline; right of the Y-nullcline
+  // (X > γ/δ) predators rise. Names track dX/dt and dY/dt exactly.
+  const predatorZone = y > config.alpha / config.beta;
+  const preyZone = x > config.gamma / config.delta;
+  const status = atEquilibrium
+    ? 'COEXISTENCE'
+    : predatorZone && preyZone ? 'PREDATORS RISING'
+    : predatorZone ? 'BOTH FALLING'
+    : preyZone ? 'BOTH RISING'
+    : 'PREDATORS STARVING';
+  return { value, normalized: high > low ? clamp((value - low) / (high - low), 0, 1) : 0, status, critical: false, equilibrium: atEquilibrium };
 }
 export function cyclePosition(config: Extract<ToyModelConfig, { type: 'cyclic_state_machine' }>, progress: number) {
   const total = config.states.reduce((sum, state) => sum + state.duration, 0);
@@ -85,6 +157,9 @@ export function computeArchetypeOutput(config: ToyModelConfig, primaryOrInputs: 
       }
       return { value, normalized: config.response === 'sign_change' ? clamp((x - config.primaryVar.min) / (config.primaryVar.max - config.primaryVar.min), 0, 1) : clamp(value / config.maximum, 0, 1), status: critical ? config.criticalLabel : config.safeLabel, critical, equilibrium: config.response === 'sign_change' && Math.abs(value) <= Math.abs(config.slope) * config.primaryVar.step / 2 };
     }
+    case 'phase_plane': {
+      return computePhasePlaneOutput(config, x, inputs[config.secondVar.key]);
+    }
   }
 }
 export function computeCounterModelOutput(config: ToyModelConfig, inputs: ToyInputs): number | undefined {
@@ -100,11 +175,37 @@ export function computeCounterModelOutput(config: ToyModelConfig, inputs: ToyInp
 }
 export function buildToyChallenge(config: ToyModelConfig): ToyChallenge {
   const baseline = initialInputs(config);
-  const targetInputs = { ...baseline, [config.prediction.variableKey]: config.prediction.target };
+  const targetInputs = { ...baseline, [config.prediction.variableKey]: config.prediction.target, ...(config.type === 'phase_plane' && config.prediction.targetY !== undefined ? { [config.secondVar.key]: config.prediction.targetY } : {}) };
   const variable = variablesFor(config).find((item) => item.key === config.prediction.variableKey)!;
   if (config.type === 'cyclic_state_machine') {
     const index = cyclePosition(config, config.prediction.target).index;
     return { question: `At ${config.prediction.target}% ${variable.label.toLowerCase()}, which state is active?`, choices: config.states.map((state) => ({ id: state.id, label: state.label })), correctId: config.states[index].id, targetInputs };
+  }
+  if (config.type === 'phase_plane') {
+    // The duel question for the phase plane is the flow direction at the
+    // perturbed point: both sliders move, so the answer must come from the
+    // sign of each velocity component under the same law the field draws.
+    const velocity = phasePlaneDerivative(config, targetInputs[config.primaryVar.key], targetInputs[config.secondVar.key]);
+    const prey = velocity.dx > 0 ? 'increase' : velocity.dx < 0 ? 'decrease' : 'same';
+    const predator = velocity.dy > 0 ? 'increase' : velocity.dy < 0 ? 'decrease' : 'same';
+    // The wrong options name the intuitive mistakes: the fallacy the duel
+    // targets ("more predators eat more, so prey only fall"), and the
+    // catastrophe reading. Labels stay generic so the same engine serves any
+    // coupled system the source describes.
+    const preyArrow = prey === 'increase' ? 'rises' : prey === 'decrease' ? 'falls' : 'holds';
+    const predatorArrow = predator === 'increase' ? 'rise' : predator === 'decrease' ? 'fall' : 'hold';
+    const wrongA = predator === 'decrease' && prey === 'increase' ? 'Prey falls · Predators rise' : prey === 'increase' ? 'Both crash together' : 'Prey rises · Predators hold';
+    const wrongB = prey === 'decrease' ? 'Both rise together' : 'Prey falls · Predators rise';
+    return {
+      question: `Set ${config.primaryVar.label.toLowerCase()} to ${config.prediction.target} ${config.primaryVar.unit} and ${config.secondVar.label.toLowerCase()} to ${config.prediction.targetY} ${config.secondVar.unit}. What does the flow do next?`,
+      choices: [
+        { id: 'flow-true', label: `Prey ${preyArrow} · Predators ${predatorArrow}` },
+        { id: 'flow-wrong-a', label: wrongA },
+        { id: 'flow-wrong-b', label: wrongB },
+      ],
+      correctId: 'flow-true',
+      targetInputs,
+    };
   }
   const current = computeArchetypeOutput(config, baseline);
   const target = computeArchetypeOutput(config, targetInputs);
@@ -133,7 +234,18 @@ export function restoreToyProgress(config: ToyModelConfig, raw?: ToyModelProgres
   if (!raw || raw.modelKey !== modelKey || raw.version !== 1) return { version: 1, modelKey, inputs: initialInputs(config), explored: false, revealed: false, updatedAt: 0 };
   const challenge = buildToyChallenge(config);
   const predictionId = challenge.choices.some((choice) => choice.id === raw.predictionId) ? raw.predictionId : undefined;
-  return { version: 1, modelKey, inputs: predictionId ? sanitizeInputs(config, raw.inputs || {}) : initialInputs(config), predictionId, explored: !!predictionId && raw.explored === true, revealed: !!predictionId && raw.explored === true && raw.revealed === true, updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0 };
+  const base: ToyModelProgress = { version: 1, modelKey, inputs: predictionId ? sanitizeInputs(config, raw.inputs || {}) : initialInputs(config), predictionId, explored: !!predictionId && raw.explored === true, revealed: !!predictionId && raw.explored === true && raw.revealed === true, updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0 };
+  if (config.devilsAdvocate) {
+    // Duel state only survives when the refutation actually verifies against
+    // the engine — a stored flag without the configuration that earns it is
+    // discarded, so a stale save can never carry an unearned "refuted".
+    const holds = Object.entries(config.devilsAdvocate.refutationInputs).every(([key, value]) => Math.abs((base.inputs[key] ?? NaN) - value) <= (variablesFor(config).find((item) => item.key === key)?.step ?? 0) / 2 + 1e-9);
+    base.duelHeard = raw.duelHeard === true;
+    // And the argument has to have been heard to be lost: a refuted flag
+    // without duelHeard is the same unearned state from the other side.
+    base.duelRefuted = raw.duelRefuted === true && base.duelHeard && holds;
+  }
+  return base;
 }
 export function formatToyNumber(value: number): string {
   if (!Number.isFinite(value)) return 'Unavailable';
@@ -148,5 +260,9 @@ export function equationFor(config: ToyModelConfig): string {
     case 'two_state_equilibrium': return 'ΔG = RT ln(Q/K) · Q = B/A';
     case 'cyclic_state_machine': return config.states.map((state) => state.label).join(' → ') + (config.cyclic ? ' ↻' : '');
     case 'critical_threshold': return config.response === 'sign_change' ? `${config.output.symbol} = ${config.intercept} + (${config.slope}) · ${x}` : `${x} < ${config.threshold} ↔ ${x} ≥ ${config.threshold} ${config.primaryVar.unit}`;
+    case 'phase_plane': {
+      const y = config.secondVar.symbol;
+      return `d${x}/dt = ${config.alpha}${x} − ${config.beta}${x}${y} · d${y}/dt = ${config.delta}${x}${y} − ${config.gamma}${y}`;
+    }
   }
 }

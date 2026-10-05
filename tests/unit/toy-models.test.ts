@@ -214,4 +214,27 @@ describe('prediction, grounding, persisted progress and export', () => {
     expect(card.back).not.toContain('<script>');
     expect(card.back).toContain('&lt;script&gt;');
   });
+  it('a refuted devil’s advocate duel exports through Anki and RemNote as its own card', () => {
+    const predExample = TOY_EXAMPLES.find((example) => example.id === 'predprey')!;
+    const predConfig = predExample.config;
+    if (!predConfig.devilsAdvocate) throw Error('fixture duel');
+    const activity = activityForToyExample(predExample);
+    const challenge = buildToyChallenge(predConfig);
+    // Revealed at the challenge target, then refuted: the refutation overrides
+    // the second coordinate exactly the way the live sliders would.
+    const progress: ToyModelProgress = { version: 1, modelKey: modelFingerprint(predConfig), predictionId: challenge.correctId, inputs: { ...challenge.targetInputs, ...predConfig.devilsAdvocate.refutationInputs }, explored: true, revealed: true, duelHeard: true, duelRefuted: true, updatedAt: 7 };
+    const response = { field1: '', field2: '', toyModelProgress: progress };
+    const schema = { activities: [activity], userResponses: { [activity.id]: response }, topicSummary: 'Predator–prey' };
+    const duelCards = extractAnkiCardsFromSchema(schema).filter((item) => item.tags.includes('DevilsAdvocate'));
+    expect(duelCards).toHaveLength(1);
+    expect(duelCards[0].front).toContain('Maya claims');
+    expect(duelCards[0].back).toContain('Refuted by setting predator');
+    expect(sanitizeExtracted(duelCards).cards).toHaveLength(1);
+    const remnote = generateRemnoteHierarchy(schema);
+    expect(remnote.markdown).toContain('Maya claims');
+    expect(remnote.markdown).toContain('Refuted by setting predator');
+    // A flag the learner has not earned (claim unheard) never exports.
+    const silent = { ...response, toyModelProgress: { ...progress, duelHeard: false, duelRefuted: false } };
+    expect(extractAnkiCardsFromSchema({ ...schema, userResponses: { [activity.id]: silent } }).filter((item) => item.tags.includes('DevilsAdvocate'))).toHaveLength(0);
+  });
 });

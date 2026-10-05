@@ -614,7 +614,10 @@ export function StudioWorkbench({
         {/* ========================================================= */}
         {/* ZONE 1: THE SOURCE DOCK (LEFT 3 COLS)                     */}
         {/* ========================================================= */}
-        <div className={`lg:col-span-3 flex-col gap-3 ${mobileTab === 'source' ? 'flex' : 'hidden lg:flex'}`}>
+        <div
+          data-testid="workbench-zone-source"
+          className={`lg:col-span-3 lg:sticky lg:top-4 flex-col gap-3 ${mobileTab === 'source' ? 'flex' : 'hidden lg:flex'}`}
+        >
           <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden">
             {/* Zone 1 Header */}
             <div className="flex items-center justify-between gap-3 pb-3 mb-3">
@@ -670,7 +673,12 @@ export function StudioWorkbench({
               )}
 
               {rawNotes ? (
-                <div className="font-sans whitespace-pre-wrap select-text text-slate-ink">
+                /* break-words: this dock is ~240px wide and holds arbitrary
+                   source text. One unbreakable token (a share URL, a hash, a
+                   long compound) used to push the text to its own scrollWidth
+                   inside a 240px box, so the panel clipped it at the right
+                   edge behind a horizontal scrollbar. */
+                <div className="font-sans whitespace-pre-wrap break-words select-text text-slate-ink">
                   {fluffStripperActive ? (
                     processedSourceText.split('~~').map((segment, idx) => (
                       idx % 2 === 1 ? (
@@ -695,7 +703,10 @@ export function StudioWorkbench({
         {/* ========================================================= */}
         {/* ZONE 2: THE FORGE (CENTER 6 COLS)                         */}
         {/* ========================================================= */}
-        <div className={`lg:col-span-6 flex-col gap-3 ${mobileTab === 'forge' ? 'flex' : 'hidden lg:flex'}`}>
+        <div
+          data-testid="workbench-zone-forge"
+          className={`lg:col-span-6 flex-col gap-3 ${mobileTab === 'forge' ? 'flex' : 'hidden lg:flex'}`}
+        >
           <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-5 sm:p-6 space-y-5">
 
             {/* Stage Progression header */}
@@ -1146,8 +1157,13 @@ export function StudioWorkbench({
               </div>
             )}
 
-            {/* Forge Navigation Footer */}
-            <div className="sticky bottom-0 bg-deck/95 flex items-center justify-between pt-4 pb-1 border-t border-edge/50 gap-2 flex-wrap">
+            {/* Forge Navigation Footer.
+                Deliberately NOT sticky: this card is far taller than the
+                viewport, so a bottom-pinned bar floats over whatever the
+                learner is reading or typing (measured: it covered field1 /
+                field2 at ordinary scroll offsets). The actions live at the end
+                of the deduction, where checking the answer belongs. */}
+            <div className="bg-deck/95 flex items-center justify-between pt-4 pb-1 border-t border-edge/50 gap-2 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
@@ -1241,7 +1257,10 @@ export function StudioWorkbench({
         {/* ========================================================= */}
         {/* ZONE 3: EXAMINER CONSOLE & REMNOTE STAGING (RIGHT 3 COLS) */}
         {/* ========================================================= */}
-        <div className={`lg:col-span-3 flex-col gap-3 ${mobileTab === 'remnote' ? 'flex' : 'hidden lg:flex'}`}>
+        <div
+          data-testid="workbench-zone-examiner"
+          className={`lg:col-span-3 lg:sticky lg:top-4 flex-col gap-3 ${mobileTab === 'remnote' ? 'flex' : 'hidden lg:flex'}`}
+        >
           <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden space-y-3.5">
 
             {/* Zone 3 Header & Strictness Rocker */}
@@ -1534,7 +1553,7 @@ export function StudioWorkbench({
               </div>
 
               {/* Live Preview Box with Cloze Masking Support */}
-              <div className="flex-1 overflow-y-auto bg-inset p-3 border border-edge rounded-md font-mono text-[11px] text-bone leading-relaxed whitespace-pre-wrap select-all">
+              <div className="flex-1 overflow-y-auto bg-inset p-3 border border-edge rounded-md font-mono text-[11px] text-bone leading-relaxed whitespace-pre-wrap break-words select-all">
                 {smokeTestActive && liveRemNote.markdown ? (
                   liveRemNote.markdown.split(/(\{\{.*?\}\})/).map((part, i) => {
                     if (part.startsWith('{{') && part.endsWith('}}')) {

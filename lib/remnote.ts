@@ -1,5 +1,5 @@
 import { SavedSchema, SegregationReport } from './types';
-import { toyBoundaryCard } from './toy-models/progress';
+import { toyBoundaryCard, toyDuelCard } from './toy-models/progress';
 
 export interface FactItem {
   id: string;
@@ -970,6 +970,10 @@ export function generateRemnoteHierarchy(
     const boundaryCard = toyBoundaryCard(act, resp);
     if (boundaryCard) {
       pushCard(ctx, stages, boundaryCard.front, boundaryCard.back, 'forward', { reason: 'prediction-boundary interference trap' });
+    }
+    const duelCard = toyDuelCard(act, resp);
+    if (duelCard) {
+      pushCard(ctx, stages, duelCard.front, duelCard.back, 'forward', { reason: 'devil’s advocate claim, refuted' });
     }
     const userWhat = resp?.field1?.trim() || '';
     const userWhy = resp?.field2?.trim() || '';
