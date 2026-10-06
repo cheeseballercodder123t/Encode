@@ -1,6 +1,8 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody } from "@/lib/api-validation";
+import { z } from "zod";
 
 // TEACH ME route : Brilliant-style interactive lesson generator.
 // The AI is the AUTHOR. Options from the UI are soft preferences (directives),
@@ -116,7 +118,24 @@ const teachResponseSchema = {
 };
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    // The teach contract is wide by design (the AI author chooses segment
+    // shape), so the schema pins the typed boundaries and passes the rest.
+    const parsed = await parseRouteBody(
+      req,
+      z
+        .object({
+          notes: z.string().max(200_000).optional(),
+          file: z.any().optional(),
+          settings: z.any().optional(),
+        })
+        .passthrough()
+    );
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    // passthrough keeps unknown keys; re-type the destructured bags the route
+    // reads loosely (it already guards every field with typeof checks).
+    const body = parsed.data as Record<string, any>;
 
     const {
       topicSummary,

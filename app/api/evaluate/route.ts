@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEvaluationResult, validateBatchEvaluation } from "@/lib/ai-output-validation";
 import { FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
+import { evaluateSchema, parseRouteBody } from "@/lib/api-validation";
 
 /**
  * The examiner is a lab partner, not a grader.
@@ -122,7 +123,11 @@ BOUNDARY: this immunity never authorizes endorsing harmful instructions or pseud
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const parsed = await parseRouteBody(req, evaluateSchema);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const body = parsed.data;
     const { batchMode, stages, settings, topicSummary } = body;
 
     // Batch mode for the end-of-session read.

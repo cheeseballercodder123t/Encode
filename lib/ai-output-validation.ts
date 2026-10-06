@@ -19,6 +19,7 @@ import {
 
 import { validateToyModelConfig } from './toy-models/validation';
 import { repairJson } from './json-repair';
+import { aiMetrics } from './ai-hardening';
 
 // ─── JSON sanitizing ─────────────────────────────────────────────────────────
 
@@ -44,10 +45,13 @@ export function safeParseJson<T = unknown>(raw: string): T | null {
   const text = typeof raw === 'string' ? raw : '';
   if (!text.trim()) return null;
   try {
-    return JSON.parse(text) as T;
+    const value = JSON.parse(text) as T;
+    aiMetrics.recordCleanParse();
+    return value;
   } catch {
     // Not valid as-is. Hand the text to the repair ladder before giving up.
     const repaired = repairJson(text);
+    if (repaired) aiMetrics.recordRepair(repaired.via);
     return repaired ? (repaired.value as T) : null;
   }
 }

@@ -2,6 +2,16 @@ import { GoogleGenAI } from "@google/genai";
 import { AISettings, UploadedFileAsset } from "./types";
 import { safeParseJson } from "./ai-output-validation";
 import { loadAICacheFromIDB, putAICacheEntryIDB, clearAICacheIDB } from "./db";
+import {
+  AI_TIMEOUT_MS,
+  AiTimeoutError,
+  aiMetrics,
+  extractUsage,
+  fetchJsonWithRetry,
+  recordUsage,
+  withTimeout,
+} from "./ai-hardening";
+import { captureAiError } from "./monitoring";
 
 interface GenerateJSONOptions {
   systemPrompt: string;
@@ -179,27 +189,34 @@ export async function generateJSONWithProvider({
     let lastError: any = null;
     for (const mName of modelsToTry) {
       try {
-        const response = await ai.models.generateContent({
-          model: mName,
-          contents: [
-            {
-              role: "user",
-              parts
-            }
-          ],
-          config,
-        });
+        const response = await withTimeout(
+          ai.models.generateContent({
+            model: mName,
+            contents: [
+              {
+                role: "user",
+                parts
+              }
+            ],
+            config,
+          }),
+          isChecker ? AI_TIMEOUT_MS.checker : AI_TIMEOUT_MS.generate,
+          `Gemini ${mName}`
+        );
 
         const text = response.text;
         if (!text) {
           throw new Error("Empty response returned from Gemini.");
         }
+        recordUsage(mName, extractUsage(response));
         const parsed = safeParseJson(text);
         if (parsed === null) {
           // Malformed JSON is a model failure like any other: fall through to
           // the next model in the chain instead of failing the request. The
           // repair ladder (lib/json-repair.ts) has already had its pass — a
           // null here means truncation salvage found nothing parseable.
+          aiMetrics.recordModelFallback();
+          captureAiError(lastError, { provider: 'gemini', model: mName, reason: 'unparseable-json' });
           console.warn(`Gemini model ${mName} returned unparseable JSON, falling back to next model...`);
           lastError = new Error(`Gemini returned invalid JSON for model ${mName}.`);
           continue;
@@ -208,6 +225,14 @@ export async function generateJSONWithProvider({
         return parsed;
       } catch (err: any) {
         lastError = err;
+        // A deadline miss is a provider failure like a 429: try the next
+        // model in the chain rather than hanging the route.
+        if (err instanceof AiTimeoutError) {
+          aiMetrics.recordTimeout();
+          captureAiError(err, { provider: 'gemini', model: mName, reason: 'timeout' });
+          console.warn(`Gemini model ${mName} timed out, falling back to next model...`);
+          continue;
+        }
         const errStr = String(err?.message || err).toLowerCase();
         // If it's a quota / rate limit / 429 error, try fallback model in loop
         if (errStr.includes('quota') || errStr.includes('429') || errStr.includes('resource_exhausted') || errStr.includes('limit')) {
@@ -244,31 +269,30 @@ export async function generateJSONWithProvider({
       ];
     }
 
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://ai.studio/build",
-        "X-Title": "DeepEncode",
+    const { data } = await fetchJsonWithRetry(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://ai.studio/build",
+          "X-Title": "DeepEncode",
+        },
+        body: JSON.stringify({
+          model: modelName,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON matching the requested structure.` },
+            { role: "user", content: userContent }
+          ],
+          temperature: isChecker ? 0.3 : 0.6,
+        }),
       },
-      body: JSON.stringify({
-        model: modelName,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON matching the requested structure.` },
-          { role: "user", content: userContent }
-        ],
-        temperature: isChecker ? 0.3 : 0.6,
-      })
-    });
+      { timeoutMs: isChecker ? AI_TIMEOUT_MS.checker : AI_TIMEOUT_MS.generate, label: 'OpenRouter' }
+    );
 
-    if (!res.ok) {
-      const errBody = await res.text();
-      throw new Error(`OpenRouter error (${res.status}): ${errBody}`);
-    }
-
-    const data = await res.json();
+    recordUsage(modelName, extractUsage(data));
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty response from OpenRouter");
     const parsedOr = safeParseJson(content);
@@ -299,29 +323,28 @@ export async function generateJSONWithProvider({
       ];
     }
 
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+    const { data } = await fetchJsonWithRetry(
+      `${baseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modelName,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: `${systemPrompt}\n\nIMPORTANT: Respond strictly with valid JSON conforming to the requested schema.` },
+            { role: "user", content: userContent }
+          ],
+          temperature: isChecker ? 0.3 : 0.6,
+        }),
       },
-      body: JSON.stringify({
-        model: modelName,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: `${systemPrompt}\n\nIMPORTANT: Respond strictly with valid JSON conforming to the requested schema.` },
-          { role: "user", content: userContent }
-        ],
-        temperature: isChecker ? 0.3 : 0.6,
-      })
-    });
+      { timeoutMs: isChecker ? AI_TIMEOUT_MS.checker : AI_TIMEOUT_MS.generate, label: 'OpenAI-compatible' }
+    );
 
-    if (!res.ok) {
-      const errBody = await res.text();
-      throw new Error(`OpenAI-compatible error (${res.status}): ${errBody}`);
-    }
-
-    const data = await res.json();
+    recordUsage(modelName, extractUsage(data));
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error("Empty response from OpenAI-compatible provider");
     const parsedOa = safeParseJson(content);
