@@ -99,6 +99,41 @@ test.describe('Mr M mode', () => {
     );
   });
 
+  test('the autopsy can become a real trap card, with the learner declaring the confidence', async ({ page }) => {
+    await openMrMStage(page);
+    await checkWithWrongAnswer(page);
+
+    // The offer is explicit — the card is never automatic, because only the
+    // learner knows how confident they were when they committed.
+    await expect(page.getByTestId('mr-m-autopsy-card-flow')).toBeVisible();
+    const save = page.getByTestId('mr-m-autopsy-card-save');
+    await expect(save).toBeDisabled();
+
+    // Declaring a tier is what unlocks the save — that is the honest input
+    // the panel cannot supply for them.
+    await page.getByTestId('mr-m-autopsy-card-tier-bet').click();
+    await expect(page.getByTestId('mr-m-autopsy-card-tier-bet')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(save).toBeEnabled();
+    await save.click();
+
+    await expect(page.getByTestId('mr-m-autopsy-card-saved')).toContainText('front of your deck');
+
+    // And it landed in the same store the Anki funnel reads: the check-time
+    // answer on the front, the deterministic arithmetic on the back.
+    const stored = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('deepencode_interference_traps_v1');
+      return raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : [];
+    });
+    expect(stored).toHaveLength(1);
+    expect(stored[0].confidenceTier).toBe('bet');
+    expect(String(stored[0].cardFront)).toContain('0.0168 kJ');
+    expect(String(stored[0].cardBack)).toContain('0.0336 ÷ 0.0168 = 2.00');
+    expect(String(stored[0].cardBack)).toContain('{{c1::');
+  });
+
   test('the two-way check sits beside the examiner read', async ({ page }) => {
     await openMrMStage(page);
     await checkWithWrongAnswer(page);

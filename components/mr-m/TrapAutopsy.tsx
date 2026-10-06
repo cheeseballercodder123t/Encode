@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { InterventionProps } from '@/lib/mr-m/registry';
+import type { ConfidenceTier } from '@/lib/interference-traps';
 import { TRAP_LABELS, type TrapId } from '@/lib/mr-m/types';
 
 // ─── Mr M mode: the post-mortem ─────────────────────────────────────────────
@@ -20,15 +21,48 @@ import { TRAP_LABELS, type TrapId } from '@/lib/mr-m/types';
 //
 // A secured stage gets no autopsy at all: there is nothing to dissect, and
 // inspecting a correct answer teaches the learner to distrust it.
+//
+// ─── The card ───────────────────────────────────────────────────────────────
+//
+// The autopsy also never writes a card on its own: an InterferenceTrap demands
+// a confidenceTier, and no panel can know how confident the learner WAS — only
+// they can say that honestly. So the offer is explicit, the tier is theirs to
+// declare, and the flaw line defaults to the structural reason but keeps
+// whatever they actually type. Saved cards ship at the FRONT of the Anki deck
+// (the hypercorrection funnel), tagged with the tier they declared.
+
+const TIERS: { value: ConfidenceTier; label: string }[] = [
+  { value: 'guess', label: 'I was guessing' },
+  { value: 'half', label: 'Half sure' },
+  { value: 'bet', label: "I'd have bet on it" },
+];
 
 /**
- * Memoised: all three of its inputs are stable while the learner types (the
- * diagnosis is computed once by the workbench and handed down), so a keystroke
- * cannot redraw the autopsy.
+ * Memoised: its inputs are stable while the learner types — the diagnosis and
+ * the committed-answer snapshot are computed once per check by the workbench
+ * and handed down — so a keystroke cannot redraw the autopsy.
  */
 export const TrapAutopsy = React.memo(TrapAutopsyInner);
 
-function TrapAutopsyInner({ feynmanResult, trapDiagnosis, autopsy }: InterventionProps) {
+function TrapAutopsyInner({
+  feynmanResult,
+  trapDiagnosis,
+  autopsy,
+  committedAnswer,
+  onSaveTrapCard,
+  trapCardSaved,
+}: InterventionProps) {
+  // The two learner inputs. Reset when the check result is replaced — a new
+  // post-mortem deserves a fresh declaration, not last time's confidence.
+  const [tier, setTier] = useState<ConfidenceTier | null>(null);
+  const [flawDraft, setFlawDraft] = useState('');
+  /* eslint-disable react-hooks/set-state-in-effect -- panel-local draft reset when the check result is replaced; the rule does not model the new-record-replaces-old exception */
+  useEffect(() => {
+    setTier(null);
+    setFlawDraft('');
+  }, [feynmanResult]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   if (feynmanResult?.secured !== false) return null;
   // Nothing to say ⇒ nothing on screen. A block that only restates "that was
   // wrong" is the verdict this panel exists to replace.
@@ -40,6 +74,11 @@ function TrapAutopsyInner({ feynmanResult, trapDiagnosis, autopsy }: Interventio
   const whereItBreaks = trapDiagnosis?.whereItBreaks || autopsy?.whereItBreaks || '';
   const arithmeticReveal = trapDiagnosis?.arithmeticReveal || '';
   const correction = autopsy?.correctedConstruction || '';
+
+  // The card is offered only when there is honest material to carry: the
+  // answer they committed, and a structural read worth naming.
+  const canMakeCard = !!onSaveTrapCard && !!committedAnswer?.trim() && !!reason;
+  const effectiveFlaw = flawDraft.trim() || reason;
 
   return (
     <section
@@ -109,6 +148,80 @@ function TrapAutopsyInner({ feynmanResult, trapDiagnosis, autopsy }: Interventio
           <p data-testid="mr-m-autopsy-correction" className="text-xs text-bone leading-relaxed">
             {correction}
           </p>
+        </div>
+      ) : null}
+
+      {canMakeCard ? (
+        <div
+          data-testid="mr-m-autopsy-card-flow"
+          className="rounded-xl border border-edge/60 bg-inset/60 p-3 space-y-2.5"
+        >
+          {trapCardSaved ? (
+            <p
+              data-testid="mr-m-autopsy-card-saved"
+              className="text-[11px] text-signal-300 leading-snug"
+              role="status"
+            >
+              Saved. It ships at the front of your deck, tagged with the confidence you declared.
+            </p>
+          ) : (
+            <>
+              <p className="text-[11px] text-solder leading-snug">
+                Name this trap and it becomes a card at the front of your deck — a confident
+                mistake corrected is the memory that sticks hardest.
+              </p>
+
+              <div role="group" aria-label="How confident were you when you committed?">
+                <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-solder mb-1.5">
+                  At the moment you answered, you were…
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {TIERS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={tier === option.value}
+                      data-testid={`mr-m-autopsy-card-tier-${option.value}`}
+                      onClick={() => setTier(option.value)}
+                      className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors duration-150 cursor-pointer ${
+                        tier === option.value
+                          ? 'bg-hazard-500/20 border-hazard-500/50 text-hazard-200'
+                          : 'bg-inset border-edge/70 text-solder hover:text-bone hover:border-gilt/40'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label
+                htmlFor="mr-m-autopsy-card-flaw"
+                className="block font-mono text-[10px] uppercase tracking-[0.2em] text-solder"
+              >
+                The flaw, in your words
+              </label>
+              <textarea
+                id="mr-m-autopsy-card-flaw"
+                data-testid="mr-m-autopsy-card-flaw"
+                value={flawDraft}
+                onChange={(event) => setFlawDraft(event.target.value)}
+                rows={2}
+                placeholder={reason}
+                className="w-full text-xs text-bone bg-chassis border border-edge/70 rounded-lg px-2.5 py-2 leading-relaxed placeholder:text-slate-ink focus:outline-none focus:border-gilt/50"
+              />
+
+              <button
+                type="button"
+                data-testid="mr-m-autopsy-card-save"
+                disabled={!tier || !effectiveFlaw}
+                onClick={() => tier && onSaveTrapCard?.({ tier, flawLine: effectiveFlaw })}
+                className="px-3.5 py-1.5 text-[11px] font-mono uppercase tracking-wider rounded-full border border-hazard-500/50 text-hazard-200 bg-hazard-500/10 hover:bg-hazard-500/20 transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                [ Make this a trap card ]
+              </button>
+            </>
+          )}
         </div>
       ) : null}
     </section>

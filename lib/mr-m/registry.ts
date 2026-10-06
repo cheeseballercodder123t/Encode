@@ -1,5 +1,6 @@
 import React, { lazy } from 'react';
 import type { Activity, StageResponse } from '@/lib/types';
+import type { ConfidenceTier } from '@/lib/interference-traps';
 import type { MrMPayload, ParadoxEntry, TrapAutopsy, TrapDiagnosis } from './types';
 import { mrMOf } from './payloads';
 
@@ -46,6 +47,26 @@ export interface InterventionProps {
   onRaiseParadox?: (statement: string) => void;
   /** Closes one, with the sentence that resolved it. */
   onResolveParadox?: (id: string, resolution: string) => void;
+  /** Topic the stage belongs to — the tag a saved trap card carries. */
+  topic?: string;
+  /**
+   * The answer text as it stood when the last check ran. A snapshot taken by
+   * the workbench at check time, NOT the live fields — what the card records
+   * is what was actually autopsied, and the snapshot identity only changes
+   * when a check does, which is what keeps this panel memoised.
+   */
+  committedAnswer?: string;
+  /** The stage's exemplar / expert completion, when one exists. */
+  correctAnswer?: string;
+  /**
+   * Saves the autopsy as a real interference-trap card. The payload is built
+   * in the workbench from the check-time snapshot; the panel supplies only
+   * the two things only the learner knows — the tier they held and the flaw
+   * in their words.
+   */
+  onSaveTrapCard?: (input: { tier: ConfidenceTier; flawLine: string }) => void;
+  /** True when the card for THIS check result has already been saved. */
+  trapCardSaved?: boolean;
 }
 
 export type InterventionPillar =

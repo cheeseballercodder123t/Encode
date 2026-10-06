@@ -28,6 +28,8 @@ import { MisterMSurface } from '@/components/mr-m/MisterMSurface';
 import { classifyTrap } from '@/lib/mr-m/diagnostics';
 import { openParadoxesFor, raiseParadox, resolveParadox } from '@/lib/mr-m/ledger';
 import type { ParadoxEntry } from '@/lib/mr-m/types';
+import { buildAutopsyTrapCard } from '@/lib/mr-m/trap-card';
+import { saveInterferenceTrap, type ConfidenceTier } from '@/lib/interference-traps';
 
 const FLUFF_PATTERNS = [
   /\b(it is important to note that|as we can clearly see|in other words|basically|essentially|it should be remembered that|in this regard|furthermore, we notice that|it is worth mentioning that|needless to say)\b/gi,
@@ -410,23 +412,76 @@ export function StudioWorkbench({
   );
 
   /**
+   * The answer as it stood when the last check ran. Everything the post-mortem
+   * remembers — the autopsy's diagnosis, the trap card it can become — is
+   * taken from this snapshot, not from the live fields: what gets recorded is
+   * what was actually examined, and because the identity only changes when a
+   * check runs, a keystroke can never redraw any of it.
+   */
+  const [checkedAnswer, setCheckedAnswer] = useState<{ text: string; at: number }>(() => ({
+    text: '',
+    at: 0,
+  }));
+
+  const handleCheckAnswer = useCallback(() => {
+    setCheckedAnswer((prev) => ({
+      text: [field1, field2, field3].filter(Boolean).join('\n').trim(),
+      at: prev.at + 1,
+    }));
+    onCheckAnswer();
+  }, [field1, field2, field3, onCheckAnswer]);
+
+  /**
    * The deterministic half of the trap-aware autopsy. Computed only when a
    * check actually failed and the mode is on — the label and the arithmetic
    * come from code, never from the model, so a displayed figure cannot be
-   * wrong. Everything it needs is already on screen: the learner's own words,
-   * the stage's exemplar, and the stage's source.
+   * wrong. It reads the CHECK-TIME snapshot of the learner's words, so the
+   * diagnosis describes the answer that was examined, not whichever edit is
+   * in the fields right now.
    */
+  const expectedAnswerText = useMemo(
+    () =>
+      currentActivity?.visualData?.generationChallenge?.expertCompletion ||
+      currentActivity?.scaffold?.exampleAnswer ||
+      '',
+    [currentActivity]
+  );
   const trapDiagnosis = useMemo(() => {
     if (!mrMMode || feynmanResult?.secured !== false) return null;
     return classifyTrap({
-      learnerText: [field1, field2, field3].filter(Boolean).join('\n'),
-      expectedText:
-        currentActivity?.visualData?.generationChallenge?.expertCompletion ||
-        currentActivity?.scaffold?.exampleAnswer ||
-        '',
+      learnerText: checkedAnswer.text,
+      expectedText: expectedAnswerText,
       sourceText: `${currentActivity?.prompt || ''}\n${currentActivity?.contextSnippet || ''}`,
     });
-  }, [mrMMode, feynmanResult, field1, field2, field3, currentActivity]);
+  }, [mrMMode, feynmanResult, checkedAnswer, expectedAnswerText, currentActivity]);
+
+  // The autopsy's trap card. Saved against the check result that produced it:
+  // a re-check replaces the result, so the flow reopens instead of a stale
+  // "saved" claim covering a mistake it never recorded.
+  const [trapCardForCheck, setTrapCardForCheck] = useState<
+    StageResponse['feynmanReview'] | null | undefined
+  >(undefined);
+  const trapCardSaved = feynmanResult != null && trapCardForCheck === feynmanResult;
+
+  const handleSaveTrapCard = useCallback(
+    (input: { tier: ConfidenceTier; flawLine: string }) => {
+      if (!currentActivity) return;
+      const card = buildAutopsyTrapCard({
+        topic: topicSummary,
+        question: currentActivity.prompt || '',
+        committedAnswer: checkedAnswer.text,
+        correctAnswer: expectedAnswerText,
+        diagnosis: trapDiagnosis,
+        autopsy: feynmanResult?.autopsy ?? null,
+        ...input,
+      });
+      if (!card) return;
+      saveInterferenceTrap(card);
+      setTrapCardForCheck(feynmanResult);
+      playSound('success');
+    },
+    [topicSummary, currentActivity, checkedAnswer, expectedAnswerText, trapDiagnosis, feynmanResult]
+  );
 
   // "Insert missing link" : the examiner's one missing causal step is appended
   // to the mechanism field instead of making the learner rewrite the paragraph.
@@ -457,13 +512,13 @@ export function StudioWorkbench({
         if (feynmanResult) {
           onNextActivity();
         } else {
-          onCheckAnswer();
+          handleCheckAnswer();
         }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [field1, field2, feynmanResult, isEvaluating, onCheckAnswer, onNextActivity, pushStageToAnki]);
+  }, [field1, field2, feynmanResult, isEvaluating, handleCheckAnswer, onNextActivity, pushStageToAnki]);
 
   // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z : undo / redo the stage's scaffold fields.
   // Runs even when focus is inside a textarea (prevents double-nesting the
@@ -925,6 +980,11 @@ export function StudioWorkbench({
               openParadoxes={paradoxes}
               onRaiseParadox={handleRaiseParadox}
               onResolveParadox={handleResolveParadox}
+              topic={topicSummary}
+              committedAnswer={checkedAnswer.text}
+              correctAnswer={expectedAnswerText}
+              onSaveTrapCard={handleSaveTrapCard}
+              trapCardSaved={trapCardSaved}
             />
 
             {/* Optional Dual-Coding Sketchpad Toggle + why-ladder */}
@@ -1272,7 +1332,7 @@ export function StudioWorkbench({
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={onCheckAnswer}
+                  onClick={handleCheckAnswer}
                   disabled={isEvaluating || (!field1.trim() && !field2.trim())}
                   title="I'm done thinking. Check my answer with the examiner (Cmd/Ctrl+Enter)"
                   className={`px-5 py-2.5 text-xs font-semibold rounded-full transition-colors duration-150 disabled:opacity-40 cursor-pointer border ${
@@ -1456,6 +1516,11 @@ export function StudioWorkbench({
               openParadoxes={paradoxes}
               onRaiseParadox={handleRaiseParadox}
               onResolveParadox={handleResolveParadox}
+              topic={topicSummary}
+              committedAnswer={checkedAnswer.text}
+              correctAnswer={expectedAnswerText}
+              onSaveTrapCard={handleSaveTrapCard}
+              trapCardSaved={trapCardSaved}
             />
 
             {/* Insert-missing-link loop: one sentence, Enter, done. */}

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { spawnSync } from 'child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -22,9 +22,18 @@ import {
   computeActivityExportTags,
   sanitizeExtracted,
   withHeldBackCards,
+  withDurableMrMCards,
+  withInterferenceTraps,
+  buildResolvedParadoxCards,
+  buildOntologyAnkiCards,
+  extractSanitizedCardsFromSchema,
+  PROTECTED_CARD_TAGS,
+  MR_M_PARADOX_TAG,
   AnkiCardItem,
 } from '@/lib/anki-exporter';
-import { SavedSchema, SegregationReport } from '@/lib/types';
+import { SavedSchema, SegregationReport, Activity } from '@/lib/types';
+import { raiseParadox, resolveParadox } from '@/lib/mr-m/ledger';
+import { saveInterferenceTrap } from '@/lib/interference-traps';
 import { classifyCardQuality, classifyDeckQuality } from '@/lib/fsrs-audit';
 
 describe('calculateSM2', () => {
@@ -688,5 +697,177 @@ describe('sanitizeExtracted (Wozniak-enforced export deck)', () => {
     const overflow = forced.find((c) => c.tags.includes('WozniakOverflow'));
     expect(overflow).toBeTruthy();
     expect(overflow!.id).toContain('overflow');
+  });
+});
+
+// ─── Mr M durable cards ─────────────────────────────────────────────────────
+//
+// Two of the mode's records were stranded at session end: a trap the autopsy
+// named and a paradox the learner closed. Both are curated `wrong intuition vs
+// truth` pairs, so they ship at the front of the deck under protected tags.
+
+const paradoxStore = new Map<string, string>();
+
+function stubLedgerStorage() {
+  const localStorage = {
+    getItem: (k: string) => paradoxStore.get(k) ?? null,
+    setItem: (k: string, v: string) => void paradoxStore.set(k, v),
+    removeItem: (k: string) => void paradoxStore.delete(k),
+  };
+  vi.stubGlobal('localStorage', localStorage);
+  vi.stubGlobal('window', { localStorage });
+}
+
+describe('buildResolvedParadoxCards (Mr M ledger → deck)', () => {
+  beforeEach(() => {
+    paradoxStore.clear();
+    stubLedgerStorage();
+  });
+
+  it('fronts the paradox, backs the resolution, and tags topic + protection', () => {
+    const entry = raiseParadox('Calorimetry', 'Why does breaking bonds release energy?');
+    resolveParadox(entry!.id, 'Breaking bonds costs energy; forming the new ones pays it back.', 5000);
+
+    const cards = buildResolvedParadoxCards();
+    expect(cards).toHaveLength(1);
+    expect(cards[0].front).toContain('Why does breaking bonds release energy?');
+    expect(cards[0].back).toBe('Breaking bonds costs energy; forming the new ones pays it back.');
+    expect(cards[0].tags).toContain(MR_M_PARADOX_TAG);
+    expect(cards[0].tags.join(' ')).toContain('Topic:Calorimetry');
+    expect(cards[0].isCloze).toBe(false);
+    // The Wozniak ceiling must never split the resolution off the paradox.
+    expect(PROTECTED_CARD_TAGS).toContain(MR_M_PARADOX_TAG);
+  });
+
+  it('skips entries closed without a sentence — nothing honest to review', () => {
+    const entry = raiseParadox('Calorimetry', 'shrug');
+    resolveParadox(entry!.id, '   ', 5000);
+    expect(buildResolvedParadoxCards()).toEqual([]);
+  });
+
+  it('never ships an open paradox', () => {
+    raiseParadox('Calorimetry', 'still live');
+    expect(buildResolvedParadoxCards()).toEqual([]);
+  });
+
+  it('withDurableMrMCards puts traps and paradoxes ahead of the deck', () => {
+    saveInterferenceTrap({
+      topic: 'Flow',
+      question: 'Radius doubles?',
+      committedAnswer: 'Doubles',
+      correctAnswer: '16x',
+      confidenceTier: 'bet',
+      flawExplanation: 'Fourth power.',
+      cardFront: 'Why 16x?',
+      cardBack: 'Poiseuille.',
+    });
+    const entry = raiseParadox('Calorimetry', 'zero point?');
+    resolveParadox(entry!.id, 'standard states.', 5000);
+    const deck: AnkiCardItem[] = [{ id: 'plain-1', front: 'f', back: 'b', isCloze: false, tags: [], sm2: calculateSM2(4) }];
+
+    const composed = withDurableMrMCards(deck);
+    expect(composed[0].tags).toContain('InterferenceTrap');
+    expect(composed[1].tags).toContain(MR_M_PARADOX_TAG);
+    expect(composed[2].id).toBe('plain-1');
+    // withInterferenceTraps alone stays a trap-only prepend.
+    expect(withInterferenceTraps(deck)).toHaveLength(2);
+  });
+
+  it('extractSanitizedCardsFromSchema includeInterferenceTraps now carries paradox cards too', () => {
+    const entry = raiseParadox('Calorimetry', 'Why -ide?');
+    resolveParadox(entry!.id, 'hydroxide is a polyatomic ion with its own name.', 5000);
+    const deck = extractSanitizedCardsFromSchema(
+      {
+        activities: [
+          {
+            id: 'act_plain',
+            stageNumber: 1,
+            title: 'T',
+            framework: 'F',
+            cognitiveGoal: 'G',
+            contextSnippet: '',
+            keywords: [],
+            templateType: 'first_principles',
+            prompt: 'P',
+            scaffold: { field1Label: 'a', field1Placeholder: 'b', field2Label: 'c', field2Placeholder: 'd', exampleAnswer: 'e' },
+          } as unknown as Activity,
+        ],
+        userResponses: {
+          act_plain: { field1: 'written', field2: 'up', confidenceScore: 70, feynmanReview: { secured: true, feedback: 'ok' } },
+        },
+      },
+      null,
+      { includeInterferenceTraps: true }
+    );
+    expect(deck.cards.some((c) => c.tags.includes(MR_M_PARADOX_TAG))).toBe(true);
+  });
+});
+
+describe('buildOntologyAnkiCards (letter identities travel with the deck)', () => {
+  beforeEach(() => {
+    paradoxStore.clear();
+    stubLedgerStorage();
+  });
+
+  const ontologyActivity = (withOntology: boolean) =>
+    ({
+      id: 'act_ont',
+      stageNumber: 1,
+      title: 'Depolarization',
+      framework: 'F',
+      cognitiveGoal: 'G',
+      contextSnippet: 'Voltage-gated Na+ opens at threshold.',
+      keywords: ['sodium'],
+      templateType: 'first_principles',
+      prompt: 'What opens at threshold?',
+      scaffold: {
+        field1Label: 'a',
+        field1Placeholder: 'b',
+        field2Label: 'c',
+        field2Placeholder: 'd',
+        exampleAnswer: 'The voltage-gated Na+ channel.',
+      },
+      visualData: withOntology
+        ? {
+            mrM: {
+              ontology: [
+                { symbol: 'm', physicalIdentity: 'the mass of the water', unit: 'kg', whatItIsNot: 'the solid', doublesTo: 'q doubles' },
+                { symbol: 'c', physicalIdentity: 'the specific heat of liquid water' },
+              ],
+            },
+          }
+        : undefined,
+    }) as unknown as Activity;
+
+  it('asks what the letter IS, and carries the misreading and the doubling', () => {
+    const cards = buildOntologyAnkiCards(ontologyActivity(true), calculateSM2(4));
+    expect(cards).toHaveLength(2);
+    expect(cards[0].id).toBe('ont-act_ont-m');
+    expect(cards[0].front).toContain('<b>m</b>');
+    expect(cards[0].back).toContain('the mass of the water');
+    expect(cards[0].back).toContain('<i>Not:</i> the solid');
+    expect(cards[0].back).toContain('If it doubles:');
+    expect(cards[0].tags).toContain('Ontology');
+  });
+
+  it('returns [] for a stage without a payload', () => {
+    expect(buildOntologyAnkiCards(ontologyActivity(false), calculateSM2(4))).toEqual([]);
+  });
+
+  it('ships on the user-wording path without displacing it', () => {
+    const deck = extractAnkiCardsFromSchema({
+      activities: [ontologyActivity(true)],
+      userResponses: {
+        act_ont: { field1: 'written', field2: 'up', confidenceScore: 70, feynmanReview: { secured: true, feedback: 'ok' } },
+      },
+    });
+    const wording = deck.filter((c) => !c.id.startsWith('ont-'));
+    expect(deck.some((c) => c.id === 'ont-act_ont-m')).toBe(true);
+    expect(wording.length).toBeGreaterThan(0);
+  });
+
+  it('ships on the report path too, when nothing was written yet', () => {
+    const deck = extractAnkiCardsFromSchema({ activities: [ontologyActivity(true)] }, null);
+    expect(deck.some((c) => c.id === 'ont-act_ont-c')).toBe(true);
   });
 });

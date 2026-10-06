@@ -238,3 +238,67 @@ describe('prediction, grounding, persisted progress and export', () => {
     expect(extractAnkiCardsFromSchema({ ...schema, userResponses: { [activity.id]: silent } }).filter((item) => item.tags.includes('DevilsAdvocate'))).toHaveLength(0);
   });
 });
+
+/**
+ * The quotation check guards against invented evidence, but a PDF, an OCR pass
+ * or a slide paste rewrites the same sentence: soft hyphens, ligatures, words
+ * broken across a line, curly quotes, en dashes. Rejecting a lab because the
+ * source rendered "deﬁnite" is not a quality gate — it is a silent drop.
+ */
+describe('quotation matching survives extraction typography', () => {
+  const example = TOY_EXAMPLES[0];
+  const QUOTE = "Don't confuse the definite flow with a flat line — it saturates";
+
+  /** Every quote-bearing field set to one string, so each case has one subject. */
+  const configWithQuote = (render: (quote: string) => string): ToyModelConfig => {
+    const clone = JSON.parse(JSON.stringify(example.config)) as ToyModelConfig;
+    const walk = (node: unknown): void => {
+      if (Array.isArray(node)) return node.forEach(walk);
+      if (!node || typeof node !== 'object') return;
+      for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+        if (typeof value === 'string' && (key === 'quote' || key === 'evidence')) {
+          (node as Record<string, unknown>)[key] = render(QUOTE);
+        } else {
+          walk(value);
+        }
+      }
+    };
+    walk(clone);
+    return clone;
+  };
+
+  // `validateToyModelConfig` merges hard failures into `issues` and returns
+  // early, so a quotation rejection is read from there.
+  const quoteFailures = (source: string, render: (quote: string) => string = (q) => q): string[] =>
+    validateToyModelConfig(configWithQuote(render), source).issues.filter((issue: string) =>
+      issue.includes('exact quotation')
+    );
+
+  it('baseline: a source that literally contains the quote passes', () => {
+    expect(quoteFailures(QUOTE)).toEqual([]);
+  });
+
+  it('ignores a soft hyphen the extractor left inside a word', () => {
+    expect(quoteFailures(QUOTE.replace('definite', 'defi\u00adnite'))).toEqual([]);
+  });
+
+  it('reads a ligature as the letters it stands for', () => {
+    expect(quoteFailures(QUOTE.replace('definite', 'de\ufb01nite'))).toEqual([]);
+    expect(quoteFailures(QUOTE.replace('flat', '\ufb02at'))).toEqual([]);
+  });
+
+  it('joins a word broken across a line', () => {
+    expect(quoteFailures(QUOTE.replace('saturates', 'satura-\ntes'))).toEqual([]);
+  });
+
+  it('treats curly quotes and dashes as their plain forms', () => {
+    expect(quoteFailures(QUOTE.replace("Don't", 'Don\u2019t'))).toEqual([]);
+    expect(quoteFailures(QUOTE.replace('\u2014', '\u2013'))).toEqual([]);
+    expect(quoteFailures(QUOTE.replace(' \u2014 ', ' - '))).toEqual([]);
+  });
+
+  it('still rejects a quotation the source does not contain', () => {
+    expect(quoteFailures('Nothing about electricity at all.')).not.toEqual([]);
+    expect(quoteFailures(QUOTE.replace('saturates', 'accelerates without limit'))).not.toEqual([]);
+  });
+});

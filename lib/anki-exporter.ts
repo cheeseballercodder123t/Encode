@@ -7,6 +7,8 @@ import { loadInterferenceTraps } from './interference-traps';
 import { toyBoundaryCard, toyDuelCard } from './toy-models/progress';
 import { CONTRADICTION_TAG } from './services/contradiction';
 import { parseSlideDeck, parseDiagramLabels } from './services/slide-deck-parser';
+import { resolvedParadoxes } from './mr-m/ledger';
+import { mrMOf } from './mr-m/payloads';
 
 export { classifyDeckQuality };
 
@@ -394,10 +396,18 @@ export function extractAnkiCardsFromSchema(
     if (!act) return;
     userCards.push(...buildToyBoundaryAnkiCard(act, schema?.userResponses?.[act.id], initialSM2));
     userCards.push(...buildUserWordingCards(act, schema?.userResponses?.[act.id], idx, initialSM2));
+    userCards.push(...buildOntologyAnkiCards(act, initialSM2));
   });
   if (userCards.length > 0) return applyContextTags(userCards, contextTags);
 
   const cards: AnkiCardItem[] = [];
+
+  // 1b. Ontology cards still ship on the report path: a stage can carry letter
+  // identities without the learner having written anything yet.
+  activities.forEach((act) => {
+    if (!act) return;
+    cards.push(...buildOntologyAnkiCards(act, initialSM2));
+  });
 
   // 2a. Declarative Facts (segregation report path): short Q/A front when
   // the model supplies one, so fronts never repeat the whole fact. Cloze
@@ -718,12 +728,18 @@ export interface SanitizedDeck {
 /** Marks a curated card the Wozniak pass must not split or chunk. */
 export const INTERFERENCE_TRAP_TAG = 'InterferenceTrap';
 
+/** Marks a resolved-paradox card from the Mr M ledger. */
+export const MR_M_PARADOX_TAG = 'Paradox';
+
 /**
  * Curated tags the ceiling must not touch. A trap and a conflict card are both
  * discrimination pairs (`wrong intuition vs truth`, `source A vs source B`), so
- * chunking them would delete the very distinction they teach.
+ * chunking them would delete the very distinction they teach. A paradox card
+ * is the same shape in time — `what I could not resolve vs the sentence that
+ * resolved it` — and splitting the resolution off the contradiction would
+ * strand the learner with the question and none of the answer.
  */
-export const PROTECTED_CARD_TAGS = [INTERFERENCE_TRAP_TAG, CONTRADICTION_TAG];
+export const PROTECTED_CARD_TAGS = [INTERFERENCE_TRAP_TAG, CONTRADICTION_TAG, MR_M_PARADOX_TAG];
 
 /**
  * Interference-trap cards from the Predict–Observe–Explain gate.
@@ -757,6 +773,68 @@ export function withInterferenceTraps(cards: AnkiCardItem[]): AnkiCardItem[] {
   return traps.length > 0 ? [...traps, ...cards] : cards;
 }
 
+/**
+ * Resolved-paradox cards from the Mr M ledger.
+ *
+ * A paradox the learner closed is a contradiction they personally refused to
+ * shrug off, plus the sentence that closed it — the ledger keeps that sentence
+ * because it is worth more on review than the answer was. Entries closed
+ * without a sentence have nothing honest to review and do not ship. Returns
+ * [] outside the browser, like the trap builder above.
+ */
+export function buildResolvedParadoxCards(): AnkiCardItem[] {
+  const initialSM2 = calculateSM2(4);
+  return resolvedParadoxes().map((entry) => ({
+    id: `paradox-${entry.id}`,
+    front: `You held this as a paradox: “${entry.statement}” — what resolved it?`,
+    back: entry.resolution || '',
+    isCloze: false,
+    tags: ['DeepEncode', MR_M_PARADOX_TAG, `Topic:${entry.topic}`.slice(0, 60)],
+    sm2: { ...initialSM2 },
+  }));
+}
+
+/** Prepends the resolved-paradox cards to a deck. */
+export function withResolvedParadoxes(cards: AnkiCardItem[]): AnkiCardItem[] {
+  const paradoxes = buildResolvedParadoxCards();
+  return paradoxes.length > 0 ? [...paradoxes, ...cards] : cards;
+}
+
+/**
+ * Everything Mr M mode made durable, at the front of the deck: the paradoxes
+ * the learner closed, then the traps they named — traps lead, because they are
+ * the highest-retention cards the learner owns. Both are curated records —
+ * `wrong intuition vs truth` — so they ride the same protected passage through
+ * the Wozniak ceiling.
+ */
+export function withDurableMrMCards(cards: AnkiCardItem[]): AnkiCardItem[] {
+  return withInterferenceTraps(withResolvedParadoxes(cards));
+}
+
+/**
+ * Ontology cards from a stage's Mr M payload: one per letter, asking what the
+ * symbol physically IS. The identity is the fact the whole stage's arithmetic
+ * rests on — `m` is the water, not the solid — and it is exactly the kind of
+ * fine distinction review is for. §5.3 of the mode's doc promised these travel
+ * with the deck; this is that promise kept. Returns [] for stages without a
+ * payload, so the funnel stays safe to unit-test.
+ */
+export function buildOntologyAnkiCards(activity: Activity, initialSM2: SM2State): AnkiCardItem[] {
+  const ontology = mrMOf(activity)?.ontology || [];
+  return ontology
+    .filter((card) => card.symbol && card.physicalIdentity)
+    .map((card) => ({
+      id: `ont-${activity.id}-${card.symbol}`,
+      front: `In this stage's equation, what physically is <b>${card.symbol}</b>?`,
+      back: `${card.physicalIdentity}${
+        card.whatItIsNot ? `<br><i>Not:</i> ${card.whatItIsNot}` : ''
+      }${card.doublesTo ? `<br><b>If it doubles:</b> ${card.doublesTo}` : ''}`,
+      isCloze: false,
+      tags: ['DeepEncode', 'Ontology'],
+      sm2: { ...initialSM2 },
+    }));
+}
+
 export function sanitizeExtracted(
   cards: AnkiCardItem[],
   opts?: { addSymmetric?: boolean }
@@ -778,7 +856,9 @@ export function extractSanitizedCardsFromSchema(
   opts?: { addSymmetric?: boolean; includeInterferenceTraps?: boolean }
 ): SanitizedDeck {
   const raw = extractAnkiCardsFromSchema(schema, report);
-  const deck = opts?.includeInterferenceTraps ? withInterferenceTraps(raw) : raw;
+  // The opt-in now carries everything Mr M mode made durable: the traps the
+  // learner named and the paradoxes they closed, both protected curated cards.
+  const deck = opts?.includeInterferenceTraps ? withDurableMrMCards(raw) : raw;
   return sanitizeExtracted(deck, opts);
 }
 

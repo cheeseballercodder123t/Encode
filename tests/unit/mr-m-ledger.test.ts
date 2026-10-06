@@ -6,6 +6,7 @@ import {
   openParadoxesFor,
   raiseParadox,
   resolveParadox,
+  resolvedParadoxes,
 } from '../../lib/mr-m/ledger';
 
 /**
@@ -126,5 +127,41 @@ describe('Mr M paradox ledger', () => {
     raiseParadox('Calorimetry', 'b');
     clearParadoxes();
     expect(loadParadoxes()).toEqual([]);
+  });
+
+  describe('resolvedParadoxes (what the export funnel reads)', () => {
+    it('ships only closed entries that carry the sentence that closed them', () => {
+      const kept = raiseParadox('Calorimetry', 'Where is the zero point?');
+      const silent = raiseParadox('Calorimetry', 'Why is water the reference?');
+      resolveParadox(kept!.id, 'Products minus reactants, standard states.');
+      // Closed with no sentence: nothing honest to review, so it does not ship.
+      resolveParadox(silent!.id, '   ');
+
+      const resolved = resolvedParadoxes();
+      expect(resolved.length).toBe(1);
+      expect(resolved[0].statement).toBe('Where is the zero point?');
+      expect(resolved[0].resolution).toBe('Products minus reactants, standard states.');
+    });
+
+    it('orders by resolution, newest first — the review order the funnel promises', () => {
+      const older = raiseParadox('Calorimetry', 'first');
+      const newer = raiseParadox('Calorimetry', 'second');
+      resolveParadox(older!.id, 'one', 1000);
+      resolveParadox(newer!.id, 'two', 2000);
+
+      const resolved = resolvedParadoxes();
+      expect(resolved.map((entry) => entry.resolution)).toEqual(['two', 'one']);
+    });
+
+    it('never hands an open paradox to the funnel', () => {
+      raiseParadox('Calorimetry', 'still live');
+      expect(resolvedParadoxes()).toEqual([]);
+    });
+
+    it('is safe outside the browser', () => {
+      vi.stubGlobal('window', undefined as unknown as Window);
+      vi.stubGlobal('localStorage', undefined as unknown as Storage);
+      expect(resolvedParadoxes()).toEqual([]);
+    });
   });
 });
