@@ -196,7 +196,13 @@ export async function generateJSONWithProvider({
         }
         const parsed = safeParseJson(text);
         if (parsed === null) {
-          throw new Error(`Gemini returned invalid JSON for model ${mName}.`);
+          // Malformed JSON is a model failure like any other: fall through to
+          // the next model in the chain instead of failing the request. The
+          // repair ladder (lib/json-repair.ts) has already had its pass — a
+          // null here means truncation salvage found nothing parseable.
+          console.warn(`Gemini model ${mName} returned unparseable JSON, falling back to next model...`);
+          lastError = new Error(`Gemini returned invalid JSON for model ${mName}.`);
+          continue;
         }
         if (useCache) cacheSet(cacheKey, parsed);
         return parsed;
