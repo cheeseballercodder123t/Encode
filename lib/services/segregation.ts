@@ -107,7 +107,7 @@ export const segregationSchema = {
           boundaryCondition: { type: Type.STRING, description: "Exact trigger or condition under which the system switches from A to B" },
           conceptAFeature: { type: Type.STRING, description: "Distinctive characteristic of Concept A" },
           conceptBFeature: { type: Type.STRING, description: "Distinctive characteristic of Concept B" },
-          diagnosticVignette: { type: Type.STRING, description: "Exam-style edge-case vignette testing which of the two applies" },
+          diagnosticVignette: { type: Type.STRING, description: "Exam-style edge-case vignette testing which of the two applies. ONE sentence, at most 25 words — this is a drill front, not a case report" },
           diagnosticAnswer: { type: Type.STRING, description: "Which concept applies and why" }
         },
         required: ["id", "conceptA", "conceptB", "distinguishingAxis", "boundaryCondition", "conceptAFeature", "conceptBFeature", "diagnosticVignette", "diagnosticAnswer"]
@@ -151,7 +151,8 @@ const CARD_BREVITY_RULES = `CARD BREVITY RULES (a long card is a failed card):
 - clozeSuggestion: context sentence with ONLY the key term in {{}}. The front must be guessable without seeing the answer.
 - Every quadrant field (whatIsIt / whyItMatters / howItWorks / whatIfEdgeCase): 1-2 SHORT sentences, never a paragraph.
 - practiceQuestions: answerable in under ~10 seconds. If it needs an essay, split it into smaller questions.
-- No card front may exceed 25 words. No back may exceed 40 words.`;
+- No card front may exceed 25 words. No back may exceed 40 words.
+- memoryHook (it ships as the cloze HINT, attached to the deletion): at most 12 words, and it must scaffold the MECHANISM rather than leak the answer. Bad, because it counts letters: "starts with M". Bad, because it restates the answer: "the powerhouse of the cell". Good, because it makes the answer derivable: "double membrane whose proton gradient drives ATP synthase". Never a giveaway, never a riddle about spelling.`;
 
 /**
  * The card-authoring contract. `sourceLabel` names which upload produced this
@@ -168,18 +169,18 @@ export function buildSegregationSystemPrompt(
     : '';
 
   return `You are a Knowledge Graph and RemNote Taxonomy Specialist.
-Your mission is HIGH-VOLUME FLASHCARD GENERATION with CONCEPT VS. FACT SEGREGATION, SEMANTIC COMPRESSION, 4-QUADRANT MATRIX EXTRACTION, and BOUNDARY EDGE-CASE GENERATION:
+Your mission is SOURCE-BOUNDED, ATOMIC FLASHCARD GENERATION with CONCEPT VS. FACT SEGREGATION, SEMANTIC COMPRESSION, 4-QUADRANT MATRIX EXTRACTION, and BOUNDARY EDGE-CASE GENERATION:
 ${sourceLine}
 SECTIONS TO GENERATE (generate ONLY these; set every other array to empty []):
 - ${wantedLabels || '(none selected - return empty arrays)'}
 
-VOLUME TARGETS (hit every minimum — under-producing is a failure):
-- declarativeFacts: 16-32 atomic facts. Cover EVERY testable item in the source: each date, number, constant, formula, name, term, and definition gets its own card. If the source is small, split compound facts into separate atomic cards rather than returning fewer.
-- conceptualMechanisms: 4-8 mechanisms, one per distinct process/law/framework.
-- practiceQuestions: 12-24 rapid-fire Q/A drills covering different facts, numbers, steps, and discriminations.
-- workedExamples: 2-4 step-by-step worked examples.
-- confusablePairs: 2-4 pairs of concepts students confuse on exams (e.g. SN1 vs SN2, Mitosis vs Meiosis, Type I vs Type II error). Test the boundary condition: under what exact condition does the system switch from A to B?
-If at least facts+mechs selected, hit 30-64 total cards; otherwise fill the selected sections generously. A lecture that yields fewer than 50 cards was under-mined: work through the reverse of every card, the second-order consequences, the neighbouring-term distinctions and each named step before you stop.
+COVERAGE CONTRACT (the deck is exactly as long as the source earns — not one card longer, not one card shorter):
+- Cover every testable item the source actually states: each date, number, constant, formula, name, term and definition a question could be asked about gets exactly one card.
+- Then STOP. There is no card target to reach. A ten-slide deck containing nine real facts is nine cards, and that is a COMPLETE pass, not a short one. Padding toward a count is the one failure mode this contract exists to prevent.
+- Forbidden filler, without exception: slide or section titles, agenda and logistics, page numbers, colours or layout choices, course administration, and anything the source does not state — never invent a date, number, name or mechanism to fill space.
+- If two candidate cards test the same knowledge, keep the sharper one and delete the other. A candidate that survives only as a rephrasing of a card you already wrote is a duplicate, not coverage.
+- Section sizes are CEILINGS, not quotas: declarativeFacts up to 32, conceptualMechanisms 4-8, practiceQuestions 12-24, workedExamples 2-4, confusablePairs 2-4. Returning fewer than the range — or an empty array for a section this source cannot honestly support — is a correct answer.
+- Do not manufacture a fact, a mechanism, a worked example or a confusable pair that the source does not contain. Under-produce rather than invent.
 
 ${CARD_BREVITY_RULES}
 

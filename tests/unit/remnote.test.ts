@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   REMNOTE_API_BASE,
+  attachClozeHint,
   buildRemnotePushAttempts,
   generateSegregationRemnote,
   generateRemnoteHierarchy,
   pushToRemnoteApi,
   remnoteToyEmbedLine,
+  sanitizeClozeHint,
 } from '@/lib/remnote';
 import { SegregationReport } from '@/lib/types';
 
@@ -655,5 +657,46 @@ describe('pushToRemnoteApi (server proxy)', () => {
     });
     expect(result.success).toBe(false);
     expect(result.message).toContain('HTTP 401');
+  });
+});
+
+/**
+ * Cloze hints are MODEL-authored text pasted into `{({…})}`, and RemNote reads
+ * that delimiter up to its first inner `)`. A hint like `near E_K (-90 mV)` or
+ * `q = mcΔT (per kg)` therefore used to be cut off mid-clause and mangle the
+ * prompt — the hint has to be sanitised, not trusted, the same way the rest of
+ * this renderer treats model output.
+ */
+describe('cloze hint sanitisation', () => {
+  it('strips parentheses that would close the hint delimiter early', () => {
+    expect(sanitizeClozeHint('near E_K (-90 mV)')).toBe('near E_K -90 mV');
+    expect(sanitizeClozeHint('q = mcΔT (per kg)')).toBe('q = mcΔT per kg');
+  });
+
+  it('keeps the words apart instead of gluing them together', () => {
+    expect(sanitizeClozeHint('ATP(adenosine)')).toBe('ATP adenosine');
+  });
+
+  it('drops braces so a hint can never nest inside the deletion', () => {
+    expect(sanitizeClozeHint('{{not a cloze}}')).toBe('not a cloze');
+  });
+
+  it('caps the hint length and collapses whitespace', () => {
+    expect(sanitizeClozeHint('  a   b  ')).toBe('a b');
+    expect(sanitizeClozeHint('x'.repeat(200)).length).toBe(120);
+  });
+
+  it('attaches a balanced delimiter even for a previously delimiter-breaking hint', () => {
+    const line = attachClozeHint('The pump moves {{3 Na+ out}} per ATP.', 'near E_K (-90 mV)');
+    expect(line).toBe('The pump moves {{3 Na+ out}}{({near E_K -90 mV})} per ATP.');
+    // Exactly one opening and one closing hint delimiter: nothing to mis-parse.
+    expect(line.match(/\{\(\{/g)).toHaveLength(1);
+    expect(line.match(/\}\)\}/g)).toHaveLength(1);
+  });
+
+  it('leaves a hint-free line untouched and hints only the first deletion', () => {
+    expect(attachClozeHint('No deletion here.', 'anything')).toBe('No deletion here.');
+    const two = attachClozeHint('{{a}} then {{b}}', 'hint');
+    expect(two).toBe('{{a}}{({hint})} then {{b}}');
   });
 });

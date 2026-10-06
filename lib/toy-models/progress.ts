@@ -120,16 +120,38 @@ export function toySessionId(activities: Activity[], topic: string): string | un
   return `lab-session-${(hash >>> 0).toString(16)}`;
 }
 
+type ToyChoice = ReturnType<typeof buildToyChallenge>['choices'][number];
+
+/**
+ * The challenge's correct choice, or undefined when the id resolves to nothing.
+ *
+ * Exported because the guard is the point: the old code ended this lookup with
+ * a non-null assertion, so a challenge whose `correctId` no longer matched a
+ * choice (an engine change, or progress stored by an older build) threw a
+ * `TypeError` inside the export funnel and took the entire deck down with it.
+ */
+export function resolveCorrectChoice(choices: ToyChoice[], correctId: string): ToyChoice | undefined {
+  return choices.find((choice) => choice.id === correctId);
+}
+
 export interface ToyBoundaryCard { id: string; front: string; back: string; correctPrediction: boolean; type: ToyModelConfig['type'] }
 export function toyBoundaryCard(activity: Activity, response?: StageResponse): ToyBoundaryCard | undefined {
   const validated = validateToyModelConfig(activity.toyModel);
   const config = validated.sanitizedConfig;
   if (!config || !response?.toyModelProgress) return undefined;
+  // A prediction on a variable the model no longer exposes cannot be turned
+  // into a challenge at all — `buildToyChallenge` would throw on it. Nothing
+  // ships that the engine cannot currently verify, the same principle the duel
+  // card below is built on.
+  if (!variablesFor(config).some((item) => item.key === config.prediction.variableKey)) return undefined;
   const progress = restoreToyProgress(config, response.toyModelProgress);
   if (!progress.revealed) return undefined;
   const challenge = buildToyChallenge(config);
   const selected = challenge.choices.find((choice) => choice.id === progress.predictionId);
-  const answer = challenge.choices.find((choice) => choice.id === challenge.correctId)!;
+  const answer = resolveCorrectChoice(challenge.choices, challenge.correctId);
+  // No resolvable correct choice ⇒ no card. A back asserting "Observed:
+  // undefined" would be worse than no card at all.
+  if (!answer) return undefined;
   return {
     id: `act-${activity.id}-toy-boundary`,
     front: challenge.question,

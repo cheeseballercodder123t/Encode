@@ -13,6 +13,8 @@ import {
   toyProgressStoresEqual,
   toySessionId,
   trimToyProgressStore,
+  toyBoundaryCard,
+  resolveCorrectChoice,
 } from '@/lib/toy-models/progress';
 import type { ToyModelProgress } from '@/lib/toy-models/types';
 const config = TOY_EXAMPLES[0].config;
@@ -91,5 +93,60 @@ describe('lab progress store helpers (cloud mirror)', () => {
     expect(toyProgressStoresEqual(a, { k: { ...progress } })).toBe(true);
     expect(toyProgressStoresEqual(a, { k: { ...progress, updatedAt: 101 } })).toBe(false);
     expect(toyProgressStoresEqual(a, {})).toBe(false);
+  });
+});
+
+/**
+ * The boundary card is built by the export funnel, so a throw here does not
+ * fail one card — it aborts the whole deck. The lookup for the challenge's
+ * correct choice used a non-null assertion and would throw
+ * `TypeError: Cannot read properties of undefined (reading 'label')` the moment
+ * a stored challenge no longer resolved, which is exactly the case a restored,
+ * version-stale progress entry can produce.
+ */
+describe('boundary card resolution never throws', () => {
+  it('resolves the correct choice when the ids line up', () => {
+    expect(resolveCorrectChoice(challenge.choices, challenge.correctId)?.id).toBe(
+      challenge.correctId
+    );
+  });
+
+  it('returns undefined instead of throwing when no choice matches the id', () => {
+    expect(resolveCorrectChoice(challenge.choices, 'no-such-choice')).toBeUndefined();
+    expect(resolveCorrectChoice([], challenge.correctId)).toBeUndefined();
+  });
+
+  it('builds the boundary card for a revealed prediction', () => {
+    const activity = activityForToyExample(TOY_EXAMPLES[0]);
+    expect(
+      toyBoundaryCard(activity, { feynmanReview: undefined, toyModelProgress: progress } as never)
+    ).toBeDefined();
+  });
+
+  it('ships no card at all when the prediction was never revealed', () => {
+    const activity = activityForToyExample(TOY_EXAMPLES[0]);
+    const unrevealed = { ...progress, revealed: false };
+    expect(
+      toyBoundaryCard(activity, { toyModelProgress: unrevealed } as never)
+    ).toBeUndefined();
+  });
+
+  it('skips a prediction whose variable the model no longer exposes', () => {
+    const example = TOY_EXAMPLES[0];
+    const activity = {
+      ...activityForToyExample(example),
+      toyModel: {
+        ...example.config,
+        prediction: { ...example.config.prediction, variableKey: 'a-variable-that-does-not-exist' },
+      },
+    };
+    // `buildToyChallenge` would throw on the missing variable; the funnel asks
+    // first and simply ships nothing.
+    expect(() =>
+      toyBoundaryCard(activity as never, { toyModelProgress: progress } as never)
+    ).not.toThrow();
+    expect(
+      toyBoundaryCard(activity as never, { toyModelProgress: progress } as never)
+    ).toBeUndefined();
   });
 });

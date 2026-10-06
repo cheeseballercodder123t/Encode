@@ -3,7 +3,33 @@ import { TOY_MODEL_TYPES, type ToyModelConfig, type ToyModelValidationResult, ty
 
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as ObjectValue : {};
-const normalize = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
+/**
+ * Folds what extraction does to a word — a soft hyphen, a ligature, a word
+ * broken across a line, a curly quote, an en dash — before a quote is compared
+ * with its source.
+ *
+ * The quotation check exists to stop the model INVENTING evidence, and none of
+ * these are invention: they are what a PDF, an OCR pass or a slide paste does
+ * to text, and the old whitespace-only comparison rejected the entire lab for
+ * one of them. Only `quote()` uses this, so nothing else in validation gets
+ * more permissive.
+ */
+const foldTypography = (value: string): string =>
+  value
+    // Invisible in the source, fatal to a substring test.
+    .replace(/\u00ad/g, '')
+    .replace(/\uFB00/g, 'ff')
+    .replace(/\uFB01/g, 'fi')
+    .replace(/\uFB02/g, 'fl')
+    .replace(/\uFB03/g, 'ffi')
+    .replace(/\uFB04/g, 'ffl')
+    .replace(/[\u2018\u2019\u201B]/g, "'")
+    .replace(/[\u201C\u201D\u201F]/g, '"')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-')
+    // `carbo-\ncation` is one word, not a hyphenated pair.
+    .replace(/(\w)-\s+/g, '$1');
+
+const normalize = (value: string) => foldTypography(value).replace(/\s+/g, ' ').trim().toLowerCase();
 const generic = /^(?:variable\s*[abxy12]|factor\s*[ab12]|parameter\s*\d*|input\s*\d*|output\s*\d*)$/i;
 
 /** No eval, no guessed coefficients, no mutation of model payloads or stored sessions. */

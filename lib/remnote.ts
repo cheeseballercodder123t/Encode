@@ -198,9 +198,27 @@ export function remnoteCard(
  * RemNote cloze hints: `{{deletion}}{({hint})}`. A mnemonic belongs on the
  * deletion it explains, not on a second card whose only content is the
  * mnemonic — that card can never be answered on its own.
+ *
+ * The hint is MODEL-authored (a fact's `memoryHook`), and RemNote reads
+ * `{({…})}` up to the first inner `)`, so a hint that contains a parenthesis —
+ * `near E_K (-90 mV)`, `q = mcΔT (per kg)` — would be cut off mid-clause and
+ * mangle the prompt. Braces would nest inside the deletion. Both are stripped
+ * here rather than trusted, the same way `stripClozeDeletions` never assumes
+ * a model left the delimiters clean.
  */
+export function sanitizeClozeHint(hint: string, maxLength = 120): string {
+  return (hint || '')
+    .replace(/[{}]/g, '')
+    // A space, not nothing: "near E_K (-90 mV)" must not become "E_K-90mV".
+    .replace(/[()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength)
+    .trim();
+}
+
 export function attachClozeHint(text: string, hint: string): string {
-  const clean = (hint || '').trim().replace(/[{}]/g, '');
+  const clean = sanitizeClozeHint(hint);
   if (!clean || !text.includes('{{')) return text;
   // Only the first deletion: a hint repeated on every blank is noise.
   return text.replace(/\{\{[^{}]*\}\}/, (match) => `${match}{({${clean}})}`);
