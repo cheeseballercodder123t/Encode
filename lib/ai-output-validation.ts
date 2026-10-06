@@ -18,38 +18,37 @@ import {
 } from './types';
 
 import { validateToyModelConfig } from './toy-models/validation';
+import { repairJson } from './json-repair';
 
 // ─── JSON sanitizing ─────────────────────────────────────────────────────────
 
-/** Strips ```json fences, BOMs and leading/trailing prose so JSON.parse succeeds. */
-export function extractJson(text: string): string {
-  if (!text) return '';
-  let s = text.replace(/^\uFEFF/, '').trim();
-  // ```json ... ``` or ``` ... ```
-  const fenceMatch = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  if (fenceMatch) return fenceMatch[1].trim();
-  // Sometimes the model wraps the object in a single backtick.
-  const tickMatch = s.match(/^`([\s\S]*)`$/);
-  if (tickMatch) return tickMatch[1].trim();
-  // First { to last } (strip "Here is the JSON:" style prose).
-  const firstBrace = s.indexOf('{');
-  const lastBrace = s.lastIndexOf('}');
-  if (firstBrace >= 0 && lastBrace > firstBrace) {
-    return s.slice(firstBrace, lastBrace + 1);
-  }
-  return s;
-}
+/**
+ * Strips ```json fences, BOMs and leading/trailing prose so JSON.parse
+ * succeeds. Kept as a re-export for the existing call sites and tests; the
+ * implementation lives in `lib/json-repair.ts` alongside the repair ladder
+ * it feeds.
+ */
+export { extractJson } from './json-repair';
 
-/** Parse model JSON with leniency; returns null when nothing salvageable remains. */
+/**
+ * Parse model JSON with leniency; returns null when nothing salvageable
+ * remains.
+ *
+ * Leniency ladder: direct parse → prose/fence strip → full repair
+ * (trailing commas, smart quotes, unquoted keys, single quotes, literal
+ * newlines inside strings, truncation close, prefix salvage). Every path the
+ * models actually break survives here; null means even the truncation
+ * salvage could not produce JSON, and the caller should retry or degrade.
+ */
 export function safeParseJson<T = unknown>(raw: string): T | null {
+  const text = typeof raw === 'string' ? raw : '';
+  if (!text.trim()) return null;
   try {
-    return JSON.parse(raw) as T;
+    return JSON.parse(text) as T;
   } catch {
-    try {
-      return JSON.parse(extractJson(raw)) as T;
-    } catch {
-      return null;
-    }
+    // Not valid as-is. Hand the text to the repair ladder before giving up.
+    const repaired = repairJson(text);
+    return repaired ? (repaired.value as T) : null;
   }
 }
 
