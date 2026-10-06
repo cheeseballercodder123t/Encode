@@ -68,6 +68,19 @@ export function hasOpenParadox(topic: string, all: ParadoxEntry[] = loadParadoxe
 }
 
 /**
+ * Closed paradoxes that carry the sentence that closed them, newest resolution
+ * first. These are what the export funnel turns into cards: the ledger itself
+ * says the resolution is worth more on review than the answer was, and an
+ * entry closed without a sentence has nothing honest to review, so it does not
+ * ship. Never throws; safe outside the browser.
+ */
+export function resolvedParadoxes(all: ParadoxEntry[] = loadParadoxes()): ParadoxEntry[] {
+  return all
+    .filter((entry) => entry.resolvedAt && entry.resolution)
+    .sort((a, b) => (b.resolvedAt ?? 0) - (a.resolvedAt ?? 0));
+}
+
+/**
  * Records one contradiction. Re-raising the same statement on the same topic
  * updates that record instead of stacking a duplicate, so a learner who keeps
  * hitting the same paradox sees "still open", not six copies of it.

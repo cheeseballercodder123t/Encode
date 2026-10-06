@@ -7,7 +7,7 @@ import {
   extractAnkiCardsFromSchema,
   extractWeakAnkiCardsFromSchema,
   sanitizeExtracted,
-  withInterferenceTraps,
+  withDurableMrMCards,
 } from '@/lib/anki-exporter';
 import { ankiCardKeys, recordDeckExport } from '@/lib/deck-memory';
 import {
@@ -78,8 +78,10 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     const weak = extractWeakAnkiCardsFromSchema(schema, report);
     // No weak stages → the toggle is a no-op, never an empty deck. Traps from
     // the prediction gate belong in a weak-only deck too: they are, by
-    // definition, the things the learner already got wrong once.
-    return weak.length > 0 ? sanitizeExtracted(withInterferenceTraps(weak)) : null;
+    // definition, the things the learner already got wrong once. So do the
+    // paradoxes they closed — both are curated `wrong intuition vs truth`
+    // records and both ride the same protected passage.
+    return weak.length > 0 ? sanitizeExtracted(withDurableMrMCards(weak)) : null;
   }, [exportWeakOnly, schema, report]);
 
   const activeDeck = weakDeck ?? deck;
@@ -155,7 +157,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
     setPrevIsOpen(true);
     setPrevReport(report);
     setPrevSchema(schema);
-    setDeck(sanitizeExtracted(withInterferenceTraps(extractAnkiCardsFromSchema(schema, report, notes))));
+    setDeck(sanitizeExtracted(withDurableMrMCards(extractAnkiCardsFromSchema(schema, report, notes))));
     setManualCards(null);
     setIncludeHeldBack(false);
     const title = report?.topic || schema?.topicSummary || 'Cognitive_Schema';

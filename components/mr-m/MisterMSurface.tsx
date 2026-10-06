@@ -2,6 +2,7 @@
 
 import React, { Component, Suspense, useState, type ErrorInfo, type ReactNode } from 'react';
 import type { Activity, StageResponse } from '@/lib/types';
+import type { ConfidenceTier } from '@/lib/interference-traps';
 import { resolveInterventions, type InterventionProps } from '@/lib/mr-m/registry';
 import type { ParadoxEntry, TrapAutopsy, TrapDiagnosis } from '@/lib/mr-m/types';
 
@@ -79,6 +80,12 @@ export interface MisterMSurfaceProps {
   openParadoxes?: ParadoxEntry[];
   onRaiseParadox?: (statement: string) => void;
   onResolveParadox?: (id: string, resolution: string) => void;
+  /** Trap-card material: check-time snapshot + the save callback. */
+  topic?: string;
+  committedAnswer?: string;
+  correctAnswer?: string;
+  onSaveTrapCard?: (input: { tier: ConfidenceTier; flawLine: string }) => void;
+  trapCardSaved?: boolean;
   /** 'pre' renders the preparation surfaces, 'post' the post-mortems. */
   phase: 'pre' | 'post';
 }
@@ -92,6 +99,11 @@ export function MisterMSurface({
   openParadoxes,
   onRaiseParadox,
   onResolveParadox,
+  topic,
+  committedAnswer,
+  correctAnswer,
+  onSaveTrapCard,
+  trapCardSaved,
   phase,
 }: MisterMSurfaceProps) {
   const visible = resolveInterventions({
@@ -122,6 +134,11 @@ export function MisterMSurface({
     openParadoxes,
     onRaiseParadox,
     onResolveParadox,
+    topic,
+    committedAnswer,
+    correctAnswer,
+    onSaveTrapCard,
+    trapCardSaved,
   };
 
   const panels = (

@@ -2,11 +2,12 @@
 
 > Status: **implemented.** All five open decisions in §8 were approved as
 > recommended, and the whole plan is in the working tree. Verified with
-> `bunx tsc --noEmit` and `bun run lint` (0 errors), `bun run test` (822
-> passing) and `e2e/mr-m-mode.spec.ts` (10/10) against the dev server, plus
+> `bunx tsc --noEmit` and `bun run lint` (0 errors), `bun run test` (872
+> passing) and `e2e/mr-m-mode.spec.ts` (11/11) against the dev server, plus
 > `studio-design`, `delta-feedback`, `stage-templates` and `modal-a11y` as
 > regression checks. §9 records the places where what was built departs from
-> this plan; §10 records the improvement pass that followed it.
+> this plan; §10 records the improvement pass that followed it; §11 records
+> the deepening pass that closed the loops the mode left open at session end.
 
 ## 1. What this is
 
@@ -350,10 +351,18 @@ specs against the managed preview.
   in the workbench reads `hasOpenParadox`, so there is no `[ RESOLVE FIRST ]`
   plate in front of the next stage. The helper is exported and unit-tested so
   that plate can be added later.
-- **The autopsy does not auto-save a trap card.** It names the trap and shows
-  its arithmetic; it does not call `saveInterferenceTrap`. The existing
-  hypercorrection and discrimination paths remain the only writers of trap
-  cards.
+- **The autopsy does not save a trap card on its own — the learner does.** It
+  names the trap and shows its arithmetic, and it offers `[ Make this a trap
+  card ]`; what it never does is save one silently. §9's original objection
+  was that `InterferenceTrap` demands a `confidenceTier` the autopsy has no
+  honest value for — the deepening pass resolved that by asking the only
+  honest source: the learner declares the tier they held (guess / half sure /
+  would have bet on it), states the flaw in their own words prefilled with the
+  structural reason, and only then does `saveInterferenceTrap` run. The saved
+  record is taken from the check-time snapshot of their answer, not the live
+  fields, and a re-check reopens the offer rather than leaving a stale
+  "saved" claim over a mistake it never recorded. The existing
+  hypercorrection and discrimination paths remain writers too.
 - **The Socratic spar makes no network call.** The model supplies the spar text
   with the evaluation; confirm/challenge is a committed single line that locks
   the panel. No second checker call is spent, so the ping-pong costs nothing
@@ -453,3 +462,87 @@ Each item below is a defect or a gap that the first pass left, not a preference.
 4. **Does an open paradox hard-gate the next stage?** **Warn with an explicit
    override.**
 5. **A new `/api/mr-m/*` route, or fold into encode/evaluate?** **Fold in.**
+
+## 11. Deepening pass — the loops close at session end
+
+The improvement pass (§10) made every surface honest; this pass made the mode's
+records durable. Three loops were left open at session end — a diagnosed trap,
+a closed paradox, a stage's letter identities all evaporated when the learner
+closed the tab — and each now has exactly one place to land: **the deck**.
+
+### 11.1 The autopsy becomes a card writer
+
+The §9 deviation recorded why the autopsy never wrote a card: an
+`InterferenceTrap` demands a `confidenceTier`, and no panel can know how
+confident the learner WAS — only they can say that, and only they can say it
+honestly. So the card is **never automatic**:
+
+- `lib/mr-m/trap-card.ts` — a pure builder. `buildAutopsyTrapCard` takes the
+  check-time snapshot (topic, prompt, the committed answer, the exemplar), the
+  deterministic diagnosis and the model's narrative, plus the two inputs only
+  the learner supplies — the tier and the flaw in their words — and returns the
+  payload `saveInterferenceTrap` stores, or **null** when the material will not
+  honestly carry one (no committed answer, no structural read, no real tier).
+  The front names what they answered; the back carries the arithmetic, the
+  flaw, where the chain breaks, and the corrected construction as a `{{c1::}}`
+  cloze.
+- `TrapAutopsy` offers `[ Make this a trap card ]` under the post-mortem: three
+  tier buttons (`I was guessing` / `Half sure` / `I'd have bet on it`, each
+  `aria-pressed`), a flaw field prefilled with the structural reason but owned
+  by the learner, and a save that stays disabled until both exist. Saved cards
+  ship at the FRONT of the Anki deck through the existing hypercorrection
+  funnel, tagged `InterferenceTrap` and `Confidence:<tier>`.
+- The workbench now snapshots the learner's answer **when a check runs**
+  (`handleCheckAnswer` wraps both check call sites), and `trapDiagnosis` reads
+  that snapshot instead of the live fields — so the autopsy describes the
+  answer that was examined, and a keystroke can no longer redraw any of it
+  (which is what §10's perf claim always said, and now actually holds).
+  A re-check replaces the result, and the saved-flag is keyed to the check
+  result it was saved against, so the flow reopens instead of a stale
+  confirmation covering a mistake it never recorded.
+- e2e: the failing-check spec gained the full flow — offer visible, save
+  disabled until a tier is declared, tier `aria-pressed` on pick, the saved
+  confirmation, and the store read back: one entry, `bet`, the check-time
+  answer on the front, the deterministic arithmetic and a cloze on the back.
+
+### 11.2 Resolved paradoxes ship into the deck
+
+The ledger keeps the sentence that closed a paradox because it is worth more on
+review than the answer was — and until now that sentence was stranded in
+localStorage, visible only on the analytics tile's count.
+
+- `resolvedParadoxes()` (`lib/mr-m/ledger.ts`) returns closed entries that
+  carry a resolution sentence, newest resolution first. An entry closed
+  without a sentence has nothing honest to review and does not ship.
+- `buildResolvedParadoxCards()` (`lib/anki-exporter.ts`) fronts the paradox
+  statement (`You held this as a paradox: … — what resolved it?`) and backs the
+  resolution sentence, tagged `Paradox` and `Topic:`. The tag joins
+  `PROTECTED_CARD_TAGS`, because splitting the resolution off the contradiction
+  would strand the learner with the question and none of the answer.
+- `withDurableMrMCards()` composes the two curated prepends (traps lead — they
+  are the highest-retention cards the learner owns), and every export path now
+  rides it: the Anki modal's full deck and weak-only deck, and
+  `extractSanitizedCardsFromSchema`'s `includeInterferenceTraps` opt-in.
+
+### 11.3 Ontology cards travel with the deck
+
+§5.3 claimed the ontology cards "are also exported into the deck"; nothing in
+the exporter read them. That divergence is closed:
+
+- `buildOntologyAnkiCards(activity, sm2)` turns each letter into one card —
+  front `In this stage's equation, what physically is <b>m</b>?`, back the
+  physical identity with the named misreading (`Not: …`) and the doubling rule
+  — tagged `Ontology`, deduped per stage and symbol.
+- They ship on BOTH extraction paths: the user-wording path (per activity,
+  alongside the learner's own cards) and the report path, so a stage's
+  identities survive even when nothing was written on it yet.
+
+### 11.4 What this pass deliberately did not do
+
+- **The Socratic spar still makes no network call.** §9's reasoning stands.
+- **The paradox ledger still does not gate.** §8 decision 4 stands; the deep
+  pass only gave the ledger's closed records a place to go.
+- **No new storage, no new env vars, no new service.** Both new card kinds
+  ride stores that already existed (`deepencode_mr_m_paradox_v1`,
+  `deepencode_interference_traps_v1`), and both are already carried by
+  backup/restore.
