@@ -6,9 +6,105 @@ import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesi
 import { FIRST_PRINCIPLES_ENGINE, FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 import { encodeSchema, parseRouteBody } from "@/lib/api-validation";
+import { MR_M_DIRECTIVE } from '@/lib/mr-m/directives';
 
 // Allow up to 60s for multi-stage schema generation on Vercel
 export const maxDuration = 60;
+
+// Structured visual configurations per template type
+/**
+ * Mr M mode payloads. Every block is independent and every one is optional: a
+ * stage that cannot support a block omits it, and the app renders no surface
+ * for an absent block rather than a placeholder. `limitNotes` is an array rather
+ * than a keyed object because the Gemini schema dialect handles homogeneous
+ * arrays far more reliably than open-ended maps.
+ */
+const mrMPayloadSchema = {
+  type: Type.OBJECT,
+  description:
+    "Mr M mode overlay. Populate ONLY when the system prompt carries the MR M MODE ACTIVE directive; otherwise omit this entire block.",
+  properties: {
+    axiomFirst: {
+      type: Type.OBJECT,
+      description:
+        "The coordinate system this stage's procedure sits inside: the governing law, where the zero point lives, and why the definition is ordered the way it is.",
+      properties: {
+        governingLaw: { type: Type.STRING, description: "The invariant stated as physics, not as a rule to memorise." },
+        coordinateOrigin: { type: Type.STRING, description: "Where the zero point lives for this quantity (elements in their standard states; a vacuum; absolute zero)." },
+        zeroPoint: { type: Type.STRING, description: "Why that is the zero and not some other reference." },
+        whyThisDefinition: { type: Type.STRING, description: "Why the definition is ordered this way round (e.g. products - reactants follows from the reference state)." },
+        calculusTranslation: { type: Type.STRING, description: "Optional: the same idea as calculus or an invariant, e.g. displacement vs distance." },
+        counterexample: { type: Type.STRING, description: "The sharpest edge case that appears to break the rule, plus why the rule survives it." }
+      },
+      required: ["governingLaw", "coordinateOrigin", "whyThisDefinition"]
+    },
+    ontology: {
+      type: Type.ARRAY,
+      description: "The physical identity of EVERY symbol appearing in this stage's formula. One entry per letter. Empty when the stage has no formula.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          symbol: { type: Type.STRING, description: "The letter as it appears in the equation, e.g. 'm'." },
+          physicalIdentity: { type: Type.STRING, description: "What this quantity physically IS, unambiguous about what it belongs to (e.g. the mass of the WATER being heated, not the solid)." },
+          unit: { type: Type.STRING, description: "e.g. 'kg', 'J/mol', 'mol/L'" },
+          whatItIsNot: { type: Type.STRING, description: "The most common misreading of this symbol, named so it can be rejected." },
+          doublesTo: { type: Type.STRING, description: "What happens to the readout when this quantity doubles." }
+        },
+        required: ["symbol", "physicalIdentity"]
+      }
+    },
+    stateMachine: {
+      type: Type.ARRAY,
+      description:
+        "ONLY for a stage that makes the learner hold several rules at once (unit conversion + limiting reactant + mole ratio + mass). 3-6 steps. Omit entirely for a single-mechanism stage.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          stepNumber: { type: Type.INTEGER },
+          action: { type: Type.STRING, description: "What the learner does at this step." },
+          holdsInHead: { type: Type.STRING, description: "The ONE rule this step consumes, so no step ever asks for two at once." },
+          output: { type: Type.STRING, description: "What the learner is holding when the step finishes." }
+        },
+        required: ["stepNumber", "action", "holdsInHead"]
+      }
+    },
+    perturbation: {
+      type: Type.OBJECT,
+      description: "ONLY when the stage has a numeric relationship worth stress-testing.",
+      properties: {
+        invariant: { type: Type.STRING, description: "The equation as text, shown to the learner unchanged." },
+        variables: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              symbol: { type: Type.STRING },
+              base: { type: Type.NUMBER, description: "The value the stage's own numbers use - the slider's home position." },
+              min: { type: Type.NUMBER },
+              max: { type: Type.NUMBER },
+              unit: { type: Type.STRING },
+              exponent: { type: Type.NUMBER, description: "How it enters the invariant: +1 when the readout scales with it, -1 when it is a denominator, 2 for an inverse square." }
+            },
+            required: ["symbol", "base", "exponent"]
+          }
+        },
+        limitNotes: {
+          type: Type.ARRAY,
+          description: "One plain-language sentence per variable describing what the system does at that variable's extreme.",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              symbol: { type: Type.STRING },
+              note: { type: Type.STRING }
+            },
+            required: ["symbol", "note"]
+          }
+        }
+      },
+      required: ["invariant", "variables"]
+    }
+  }
+};
 
 // Structured visual configurations per template type
 const visualDataSchema = {
@@ -221,7 +317,8 @@ const visualDataSchema = {
         }
       },
       required: ["questTitle", "narrativeStory", "tiles"]
-    }
+    },
+    mrM: mrMPayloadSchema
   }
 };
 
@@ -472,6 +569,7 @@ export async function POST(req: NextRequest) {
       interleaveMode,
       gear,
       hiddenTemplates,
+      mrMMode,
     } = body.data;
 
     // Templates the learner hid in Settings are excluded from the AI catalog
@@ -622,7 +720,13 @@ Analyze if the notes omit crucial foundational context (e.g. Na+/K+ resting pote
 For every stage specify the chosen 'templateType' and populate 'visualData' with rich structured nodes/mappings/trees/gauges plus 'generationChallenge', clear scaffold labels, domain presets and concrete example answers, and ALWAYS include 'boundaryContrast'.`;
     }
 
-    systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}\n${TOY_MODEL_INSTRUCTION}`;
+    // Mr M mode is a prompt-side overlay. With the flag off, `mrMNote` is the
+    // empty string and the prompt below is byte-for-byte what it was before the
+    // feature existed — which is what makes "off means untouched" true of the
+    // generation itself, not just of the rendering.
+    const mrMNote = mrMMode ? `\n\n${MR_M_DIRECTIVE}` : '';
+
+    systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}${mrMNote}\n${TOY_MODEL_INSTRUCTION}`;
 
     let userPrompt = '';
     if (hasNotes) {

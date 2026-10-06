@@ -89,6 +89,7 @@ export interface ActivityScaffold {
 
 export * from './templates/types';
 import { ActivityVisualData, GenerationChallenge, VisualTemplateType } from './templates/types';
+import type { TrapAutopsy } from './mr-m/types';
 
 
 export interface Activity {
@@ -158,6 +159,13 @@ export interface StageResponse {
     jargonBuzzer?: string;
     /** Oxford Oral Defense counter-question (viva strictness mode). */
     vivaCrossExamination?: string;
+    /**
+     * Mr M mode post-mortem: the model's narrative half of a trap-aware
+     * autopsy. The structural label and the arithmetic are computed
+     * deterministically in `lib/mr-m/diagnostics.ts` and are NOT stored here —
+     * a wrong figure in an autopsy would teach the wrong lesson.
+     */
+    autopsy?: TrapAutopsy;
     /** The causal links the answer got right, quoting your own words. */
     nailedIt?: string;
     /** The single missing causal step, written as the sentence to insert. */

@@ -19,6 +19,7 @@ import {
   restoreBackup,
   type RestoreReport,
 } from '@/lib/backup';
+import { loadParadoxes } from '@/lib/mr-m/ledger';
 
 interface UsageStats {
   date: string;
@@ -114,6 +115,10 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
   const totalCalls = Object.values(usage.callsByModel).reduce((a, b) => a + b, 0);
   const weeklyTotal = Object.values(usage.weeklyCallsByModel).reduce((a, b) => a + b, 0);
   // Lifetime token spend + rough USD estimate (see lib/ai-hardening pricing).
+  // Mr M mode: contradictions still open. Read straight from the ledger on
+  // every render, like the usage stats above — an unresolved paradox is the one
+  // piece of Mr M state that is worth a number on a dashboard.
+  const openParadoxCount = loadParadoxes().filter((entry) => !entry.resolvedAt).length;
   const totalTokens = Object.values(usage.tokensByModel || {}).reduce((a, b) => a + b, 0);
   const totalCostUsd = Object.values(usage.costUsdByModel || {}).reduce((a, b) => a + b, 0);
   const fmtTokens = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : `${n}`);
@@ -186,6 +191,18 @@ export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {
             </Card>
           ))}
         </div>
+
+        {openParadoxCount > 0 && (
+          <Card className="mb-3">
+            <CardContent className="p-3">
+              <p className="text-[10px] text-solder uppercase tracking-wider">MR M · OPEN CONTRADICTIONS</p>
+              <p className="text-lg font-bold text-hazard-300 mt-1">{openParadoxCount}</p>
+              <p className="text-[10px] text-solder mt-1">
+                Held until closed. With Mr M mode on, they stay on screen above every stage in that topic.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {successPct > 0 && (
           <Card className="mb-3">

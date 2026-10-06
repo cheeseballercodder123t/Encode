@@ -64,6 +64,8 @@ export const encodeSchema = z.object({
   interleaveMode: z.boolean().default(false),
   gear: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
   hiddenTemplates: z.array(z.string().max(120)).max(60).default([]),
+  /** Mr M mode: asks the encoder for the first-principles overlay payloads. */
+  mrMMode: z.boolean().optional().default(false),
 });
 
 export const evaluateSchema = z.object({
@@ -100,6 +102,8 @@ export const evaluateSchema = z.object({
   field3Value: z.string().max(20_000).optional(),
   tabooTerms: z.array(z.string().max(120)).max(30).optional(),
   strictnessLevel: z.enum(['sherpa', 'feynman', 'viva']).optional(),
+  /** Mr M mode: asks the examiner for the trap-aware autopsy narrative. */
+  mrMMode: z.boolean().optional().default(false),
 });
 
 export const teachSchema = z.object({

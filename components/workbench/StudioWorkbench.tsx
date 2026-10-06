@@ -24,6 +24,10 @@ import { CausalSentence } from './CausalSentence';
 import { ChapterRail } from './ChapterRail';
 import { StemPreview } from './StemPreview';
 import { buildCausalFrame, frameToSentence, type CausalFieldKey } from '@/lib/causal-frame';
+import { MisterMSurface } from '@/components/mr-m/MisterMSurface';
+import { classifyTrap } from '@/lib/mr-m/diagnostics';
+import { openParadoxesFor, raiseParadox, resolveParadox } from '@/lib/mr-m/ledger';
+import type { ParadoxEntry } from '@/lib/mr-m/types';
 
 const FLUFF_PATTERNS = [
   /\b(it is important to note that|as we can clearly see|in other words|basically|essentially|it should be remembered that|in this regard|furthermore, we notice that|it is worth mentioning that|needless to say)\b/gi,
@@ -47,6 +51,8 @@ interface StudioWorkbenchProps {
   uploadedFile: UploadedFileAsset | null;
   youtubeData: YouTubeMetadata | null;
   topicSummary: string;
+  /** Mr M mode: the first-principles overlay on this stage. */
+  mrMMode?: boolean;
   combo: number;
   strictnessLevel: 'sherpa' | 'feynman' | 'viva';
   setStrictnessLevel: (lvl: 'sherpa' | 'feynman' | 'viva') => void;
@@ -181,6 +187,7 @@ export function StudioWorkbench({
   uploadedFile,
   youtubeData,
   topicSummary,
+  mrMMode = false,
   combo,
   strictnessLevel,
   setStrictnessLevel,
@@ -371,6 +378,55 @@ export function StudioWorkbench({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [pushStageToAnki]);
+
+  // ─── Mr M mode ─────────────────────────────────────────────────────────
+  // Open contradictions, held across sessions. This learner cannot shrug at a
+  // paradox and study around it, so the ledger is the one piece of Mr M state
+  // that has to survive a reload: it is read on mount and whenever the topic
+  // changes, and the two handlers below are its only writers.
+  const [paradoxes, setParadoxes] = useState<ParadoxEntry[]>([]);
+  /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
+  useEffect(() => {
+    setParadoxes(openParadoxesFor(topicSummary));
+  }, [topicSummary]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const handleRaiseParadox = useCallback(
+    (statement: string) => {
+      raiseParadox(topicSummary, statement);
+      setParadoxes(openParadoxesFor(topicSummary));
+    },
+    [topicSummary]
+  );
+
+  const handleResolveParadox = useCallback(
+    (id: string, resolution: string) => {
+      resolveParadox(id, resolution);
+      // Re-read rather than splice: the ledger's own filter decides what is
+      // still open, so this panel can never disagree with what is stored.
+      setParadoxes(openParadoxesFor(topicSummary));
+    },
+    [topicSummary]
+  );
+
+  /**
+   * The deterministic half of the trap-aware autopsy. Computed only when a
+   * check actually failed and the mode is on — the label and the arithmetic
+   * come from code, never from the model, so a displayed figure cannot be
+   * wrong. Everything it needs is already on screen: the learner's own words,
+   * the stage's exemplar, and the stage's source.
+   */
+  const trapDiagnosis = useMemo(() => {
+    if (!mrMMode || feynmanResult?.secured !== false) return null;
+    return classifyTrap({
+      learnerText: [field1, field2, field3].filter(Boolean).join('\n'),
+      expectedText:
+        currentActivity?.visualData?.generationChallenge?.expertCompletion ||
+        currentActivity?.scaffold?.exampleAnswer ||
+        '',
+      sourceText: `${currentActivity?.prompt || ''}\n${currentActivity?.contextSnippet || ''}`,
+    });
+  }, [mrMMode, feynmanResult, field1, field2, field3, currentActivity]);
 
   // "Insert missing link" : the examiner's one missing causal step is appended
   // to the mechanism field instead of making the learner rewrite the paragraph.
@@ -853,6 +909,22 @@ export function StudioWorkbench({
               onAdopt={(text) =>
                 setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${text}` : text))
               }
+            />
+
+            {/* Mr M mode, preparation half: the coordinate system, the physical
+                identity of every letter, the linear decomposition and the
+                what-if sliders all sit ABOVE the answer fields, so the
+                architecture is on screen before the procedure is. */}
+            <MisterMSurface
+              phase="pre"
+              enabled={mrMMode}
+              activity={currentActivity}
+              feynmanResult={feynmanResult}
+              trapDiagnosis={trapDiagnosis}
+              autopsy={feynmanResult?.autopsy ?? null}
+              openParadoxes={paradoxes}
+              onRaiseParadox={handleRaiseParadox}
+              onResolveParadox={handleResolveParadox}
             />
 
             {/* Optional Dual-Coding Sketchpad Toggle + why-ladder */}
@@ -1370,6 +1442,21 @@ export function StudioWorkbench({
                 )}
               </div>
             )}
+
+            {/* Mr M mode, post-mortem half: the structural autopsy and the
+                two-way check belong beside the examiner's read, not up with the
+                preparation — they are answers to something that just happened. */}
+            <MisterMSurface
+              phase="post"
+              enabled={mrMMode}
+              activity={currentActivity}
+              feynmanResult={feynmanResult}
+              trapDiagnosis={trapDiagnosis}
+              autopsy={feynmanResult?.autopsy ?? null}
+              openParadoxes={paradoxes}
+              onRaiseParadox={handleRaiseParadox}
+              onResolveParadox={handleResolveParadox}
+            />
 
             {/* Insert-missing-link loop: one sentence, Enter, done. */}
             {feynmanResult && !feynmanResult.secured && !!feynmanResult.missingLink && (

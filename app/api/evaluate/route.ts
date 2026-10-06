@@ -4,6 +4,7 @@ import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEvaluationResult, validateBatchEvaluation } from "@/lib/ai-output-validation";
 import { FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
 import { evaluateSchema, parseRouteBody } from "@/lib/api-validation";
+import { MR_M_EVALUATE_DIRECTIVE } from '@/lib/mr-m/directives';
 
 /**
  * The examiner is a lab partner, not a grader.
@@ -69,6 +70,33 @@ const evaluationSchema = {
       type: Type.STRING,
       description:
         "Optional harder probe for oral-defense mode: challenge the causal direction or ask why the reverse does not happen.",
+    },
+    autopsy: {
+      type: Type.OBJECT,
+      description:
+        "Mr M mode post-mortem. Populate ONLY when the system prompt carries the MR M MODE ACTIVE directive AND the mechanism did not land. Omit entirely for a secured stage.",
+      properties: {
+        trapId: {
+          type: Type.STRING,
+          description:
+            "The structural failure, from this list only: 'reversed_order' | 'missing_subscript' | 'factor_of_two' | 'molar_mass_denominator' | 'unit_slip' | 'limiting_reactant_ignored' | 'mole_ratio_inverted' | 'zero_point_confusion' | 'path_vs_state_confusion' | 'sign_convention_flip'. Empty string when none fits. Never invent an id.",
+        },
+        structuralReason: {
+          type: Type.STRING,
+          description:
+            "ONE sentence naming WHY this is a structural failure rather than a slip: which step of the chain cannot work. Never restate that the answer was wrong.",
+        },
+        whereItBreaks: {
+          type: Type.STRING,
+          description: "Which step of the chain actually breaks.",
+        },
+        correctedConstruction: {
+          type: Type.STRING,
+          description:
+            "The corrected construction written out, so the fix is a sentence to read rather than an instruction to try again. NEVER output a number of your own: the app computes and displays the arithmetic, and a wrong figure in an autopsy teaches the wrong lesson.",
+        },
+      },
+      required: ["structuralReason"],
     },
   },
   required: ["secured", "nailedIt", "counterProbe"],
@@ -182,7 +210,8 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       expertCompletion,
       premisePrompt,
       tabooTerms = [],
-      strictnessLevel = 'feynman' // 'sherpa' | 'feynman' | 'viva'
+      strictnessLevel = 'feynman', // 'sherpa' | 'feynman' | 'viva'
+      mrMMode = false,
     } = body;
 
     if (!field1Value && !field2Value) {
@@ -218,6 +247,13 @@ ${s.reflection ? `- Reflection: "${s.reflection}"` : ''}
       ? `\nTABOO CONSTRAINT:\n- The learner was told NOT to use these terms: ${tabooList.join(', ')}.\n- Any use of them WITHOUT an accompanying physical/causal description is jargon parroting: populate 'jargonBuzzer' and write the physical wording for them in 'missingLink'.\n- A correct use that also explains the underlying motion is fine — the ban is on the label substituting for the mechanism.`
       : '';
 
+    // Mr M mode's post-mortem half: the model writes WHY the failure is
+    // structural and what the corrected construction is, while the structural
+    // label and the arithmetic are computed deterministically on the client.
+    // With the flag off this is the empty string, so the examiner's prompt is
+    // exactly what it was before the feature existed.
+    const mrMEvaluateNote = mrMMode ? `\n\n${MR_M_EVALUATE_DIRECTIVE}` : '';
+
     const systemPrompt = `You are the Feynman lab partner reading a learner's encoding answer. Their goal was to own the mechanism well enough that the flashcard writes itself at the end — so your job is to find the leak in their mental model and hand them the sentence that seals it.
 
 A name is not an explanation. This is the line you are reading for:
@@ -226,6 +262,7 @@ ${FIRST_PRINCIPLES_FEW_SHOT}
 
 ${strictnessDirective}
 ${tabooDirective}
+${mrMEvaluateNote}
 
 Read for the physical motion: does A force B, or are the two just named next to each other? Recognising a term without knowing its inner moving parts is the Illusion of Explanatory Depth, and that is the leak. Messy shorthand, spoken transcripts, slang and cartoons are all fine — judge the mechanism, never the prose.
 

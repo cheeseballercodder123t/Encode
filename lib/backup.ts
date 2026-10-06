@@ -52,6 +52,7 @@ const EXTRA_KEYS = [
   'deepencode_session_meta_v1',
   'deepencode_interference_traps_v1',
   'deepencode_sm2_manifest',
+  'deepencode_mr_m_paradox_v1',
 ] as const;
 
 function isBrowser(): boolean {

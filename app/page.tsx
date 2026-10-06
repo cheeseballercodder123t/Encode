@@ -80,6 +80,7 @@ export default function DeepEncodeApp() {
     interleaveMode, setInterleaveMode,
     gear, setGear,
     strictnessLevel, setStrictnessLevel,
+    mrMMode, setMrMMode,
     wordCount,
   } = useInputSource();
 
@@ -768,7 +769,11 @@ export default function DeepEncodeApp() {
           successRate: sRate,
           interleaveMode,
           gear,
-          hiddenTemplates: loadStudyPrefs().hiddenTemplates
+          hiddenTemplates: loadStudyPrefs().hiddenTemplates,
+          // Mr M mode: the first-principles overlay. It rides this same body
+          // through /api/encode/stream, which calls the /api/encode handler
+          // in-process, so there is only one place the flag has to be set.
+          mrMMode,
         },
       });
 
@@ -878,6 +883,9 @@ export default function DeepEncodeApp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Mr M mode: asks the examiner for the trap-aware autopsy narrative
+          // on a stage that did not land.
+          mrMMode,
           stageTitle: currentActivity.title,
           framework: currentActivity.framework,
           prompt: currentActivity.prompt,
@@ -1570,6 +1578,28 @@ export default function DeepEncodeApp() {
               Analytics
             </button>
 
+            {/* Mr M mode: the first-principles overlay, one click away
+                mid-session. It lights the gold accent when on, like every other
+                active instrument in this masthead. */}
+            <button
+              type="button"
+              onClick={() => setMrMMode(!mrMMode)}
+              aria-pressed={mrMMode}
+              data-testid="mr-m-toggle"
+              className={`shrink-0 min-h-[36px] flex items-center rounded-full border px-3 text-[11px] tracking-wide transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                mrMMode
+                  ? 'border-gilt/50 bg-amber-500/[0.08] text-amber-300'
+                  : 'border-transparent text-slate-ink hover:text-bone hover:bg-white/[0.05]'
+              }`}
+              title={
+                mrMMode
+                  ? 'Mr M mode is on: the coordinate system comes first, errors get a structural autopsy, multi-rule problems are split into linear steps, and every formula gets what-if sliders.'
+                  : 'Turn on Mr M mode: the first-principles overlay on every stage.'
+              }
+            >
+              Mr M{mrMMode ? ' · on' : ''}
+            </button>
+
             {/* Course-level Prerequisite Skill Tree */}
             <button
               type="button"
@@ -2184,6 +2214,7 @@ export default function DeepEncodeApp() {
               uploadedFile={uploadedFile}
               youtubeData={youtubeData}
               topicSummary={topicSummary}
+              mrMMode={mrMMode}
               combo={combo}
               strictnessLevel={strictnessLevel}
               setStrictnessLevel={setStrictnessLevel}
@@ -2261,6 +2292,8 @@ export default function DeepEncodeApp() {
         onClose={() => setIsSettingsOpen(false)}
         onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
         backupSettingsToCloud={backupSettingsToCloud}
+        mrMMode={mrMMode}
+        onMrMModeChange={setMrMMode}
       />
 
       {/* Hands-on pathway / circuit builder */}

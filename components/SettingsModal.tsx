@@ -15,15 +15,23 @@ interface SettingsModalProps {
   onSaved: (settings: AISettings) => void;
   /** Optional cloud backup hook from AuthContext (undefined when unavailable). */
   backupSettingsToCloud?: (settings: any) => Promise<void>;
+  /** Mr M mode, owned by the launchpad hook so the masthead pill and this switch agree. */
+  mrMMode?: boolean;
+  /** Reports a change upward; when absent the switch writes study prefs itself. */
+  onMrMModeChange?: (on: boolean) => void;
 }
 
-export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud, mrMMode: mrMModeProp, onMrMModeChange }: SettingsModalProps) {
   const { settingsRestored: settingsRestoredNotice } = useAuth();
   const [settings, setSettings] = useState<AISettings>(() => loadAISettings());
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [importStatus, setImportStatus] = useState<{ ok: boolean; message: string } | null>(null);
   // Templates the learner hid (not pulling their weight) — persisted subtly.
   const [hiddenTemplates, setHiddenTemplates] = useState<string[]>(() => loadStudyPrefs().hiddenTemplates);
+  // Mr M mode. The launchpad hook owns the source of truth, so this switch
+  // reports upward when a handler was supplied and only writes storage itself
+  // when the modal is used standalone.
+  const [mrMMode, setMrMMode] = useState<boolean>(() => mrMModeProp ?? loadStudyPrefs().mrMMode);
 
   // Re-sync from storage each time the modal opens. Done as a during-render
   // reset (the same pattern AnkiExportModal uses) so opening never needs a
@@ -33,6 +41,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
     setWasOpen(true);
     setSettings(loadAISettings());
     setHiddenTemplates(loadStudyPrefs().hiddenTemplates);
+    setMrMMode(mrMModeProp ?? loadStudyPrefs().mrMMode);
     setSavedSuccess(false);
   } else if (!isOpen && wasOpen) {
     setWasOpen(false);
@@ -42,10 +51,17 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
     setHiddenTemplates(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id]);
   };
 
+  const toggleMrMMode = () => {
+    const next = !mrMMode;
+    setMrMMode(next);
+    if (onMrMModeChange) onMrMModeChange(next);
+    else saveStudyPrefs({ mrMMode: next });
+  };
+
   const handleSave = () => {
     const stamped = { ...settings, savedAt: Date.now() } as any;
     saveAISettings(stamped);
-    saveStudyPrefs({ hiddenTemplates });
+    saveStudyPrefs({ hiddenTemplates, mrMMode });
     onSaved(stamped);
     // Fire-and-forget cloud backup (no-op when signed out; failures surface
     // via the header CLOUD status, never block saving locally).
@@ -398,9 +414,44 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
               <span>Keys are stored locally in your browser storage and never logged or exposed to third parties.</span>
             </div>
 
-            {/* Templates you like / don't: hide any that aren't pulling their weight */}
+            {/* Mr M mode: the first-principles overlay for a deductive learner. */}
             <div>
               <label className="text-solder font-bold uppercase tracking-wider block mb-1">
+                Mr M mode
+              </label>
+              <p className="text-[11px] text-solder mb-2">
+                The overlay for a deductive, first-principles learner. Every part of it is
+                additive — with it off the app behaves exactly as it did before.
+              </p>
+              <div className={`flex items-start gap-2 p-2 border ${mrMMode ? 'border-gilt/50 bg-amber-500/[0.06]' : 'border-edge bg-deck/60'}`}>
+                <button
+                  type="button"
+                  onClick={toggleMrMMode}
+                  aria-pressed={mrMMode}
+                  data-testid="mr-m-settings-toggle"
+                  title={mrMMode ? 'Turn Mr M mode off' : 'Turn Mr M mode on'}
+                  className={`mt-0.5 min-w-[52px] px-2 py-1 text-[10px] font-mono font-bold uppercase border cursor-pointer ${
+                    mrMMode ? 'border-amber bg-amber text-chassis' : 'border-edge text-solder'
+                  }`}
+                >
+                  {mrMMode ? '[ ON ]' : '[ OFF ]'}
+                </button>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-bone leading-tight">First principles first</p>
+                  <ul className="text-[11px] text-solder leading-snug mt-1 space-y-0.5">
+                    <li>[ 01 ] The governing law and the zero point arrive before the procedure.</li>
+                    <li>[ 02 ] A wrong answer gets a structural autopsy, with the arithmetic shown.</li>
+                    <li>[ 03 ] A multi-rule problem is split into Step 1 → 2 → 3, one rule each.</li>
+                    <li>[ 04 ] What-if sliders drive the invariant to its limits.</li>
+                    <li>[ 05 ] Every symbol gets a physical identity, and a contradiction is held until it is closed.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Templates you like / don't: hide any that aren't pulling their weight */}
+            <div>
+              <label className="text-solder font-bold uppercase tracking-wider mb-1 block">
                 Stage templates you use:
               </label>
               <p className="text-[11px] text-solder mb-2">
