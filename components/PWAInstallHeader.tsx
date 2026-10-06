@@ -104,7 +104,7 @@ export const PWAInstallHeader: React.FC = () => {
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-sm bg-deck border border-edge/70 rounded-2xl shadow-raised p-6 mobile-sheet-viewport overflow-y-auto overscroll-contain"
+            className="leaf-edge sheet-plate w-full max-w-sm bg-deck border border-edge/70 rounded-2xl shadow-raised p-6 mobile-sheet-viewport overflow-y-auto overscroll-contain"
             role="dialog"
             aria-modal="true"
             aria-label="Install on iOS"

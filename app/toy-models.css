@@ -1,5 +1,9 @@
 /* Instrument colors are deliberately scoped: the surrounding studio keeps its brass theme. */
-.toy-lab { --toy-cyan: #00F2FE; --toy-amber: #F59E0B; --toy-green: #10B981; --toy-red: #F43F5E; background: #0A0D14; border: 1px solid #223447; border-radius: 12px; overflow: hidden; color: #DDE7F4; box-shadow: 0 20px 50px -30px #000; min-width: 0; }
+.toy-lab { --toy-cyan: #00F2FE; --toy-amber: #F59E0B; --toy-green: #10B981; --toy-red: #F43F5E; position: relative; background: #0A0D14; border: 1px solid #223447; border-radius: 12px; overflow: hidden; color: #DDE7F4; box-shadow: 0 20px 50px -30px #000; min-width: 0; }
+/* The hall's top-light, tinted cool to match the instrument; when the model
+   goes critical the light on the shell turns hazard with it. */
+.toy-lab::before, .pathway-builder::before { content: ''; position: absolute; top: 0; left: 14%; right: 14%; height: 1px; pointer-events: none; z-index: 1; background: linear-gradient(90deg, transparent, rgba(103,201,215,.42), transparent); }
+.toy-lab-critical::before { background: linear-gradient(90deg, transparent, rgba(251,113,133,.55), transparent); }
 .toy-lab-critical { border-color: rgba(244,63,94,.65); box-shadow: 0 0 20px -10px rgba(244,63,94,.2); }
 .toy-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; padding: 20px 20px 13px; background: #0F121D; }
 .toy-kicker { display: block; font: 8px 'IBM Plex Mono', monospace; color: #67C9D7; letter-spacing: 1.4px; text-transform: uppercase; }

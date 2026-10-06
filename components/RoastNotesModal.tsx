@@ -66,7 +66,7 @@ export default function RoastNotesModal({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-3xl bg-deck border border-hazard-500/40 overflow-hidden my-6 flex flex-col max-h-[90vh]"
+        className="leaf-edge sheet-plate relative w-full max-w-3xl rounded-2xl bg-deck border border-hazard-500/40 overflow-hidden my-6 flex flex-col max-h-[90vh]"
       >
         {/* Animated Fire Header */}
         <div className="p-4 sm:p-6 border-b border-hazard-500/30 flex items-start justify-between gap-4">

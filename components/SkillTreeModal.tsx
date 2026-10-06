@@ -73,7 +73,7 @@ export const SkillTreeModal: React.FC<SkillTreeModalProps> = ({ isOpen, onClose,
       <motion.div
         initial={{ opacity: 0, scale: 0.97, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="my-8 w-full max-w-3xl border border-edge/70 bg-deck p-6 text-bone shadow-panel"
+        className="leaf-edge sheet-plate my-8 w-full max-w-3xl rounded-2xl border border-edge/70 bg-deck p-6 text-bone shadow-panel"
       >
         <header className="mb-5 flex items-start justify-between gap-3 border-b border-edge/70 pb-4">
           <div>

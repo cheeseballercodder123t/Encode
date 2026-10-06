@@ -40,13 +40,13 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
           transition={{ duration: 0.18 }}
           ref={sheetRef}
           tabIndex={-1}
-          className={`relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-edge/70 rounded-2xl shadow-raised overflow-hidden mobile-sheet-viewport flex flex-col sm:my-8`}
+          className={`leaf-edge sheet-plate relative z-10 w-full ${maxWidthStyles[maxWidth]} bg-deck border border-edge/70 rounded-2xl shadow-raised overflow-hidden mobile-sheet-viewport flex flex-col sm:my-8`}
           onClick={e => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
         >
           {(title || icon) && (
-            <div className="px-5 py-4 border-b border-edge/50 bg-chassis/40 flex items-center justify-between gap-3">
+            <div className="sheet-head px-5 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 {icon && <div className="shrink-0 text-amber">{icon}</div>}
                 <div className="min-w-0">
@@ -68,7 +68,7 @@ export function Modal({ isOpen, onClose, title, description, icon, children, foo
             </div>
           )}
           <div className="p-5 overflow-y-auto max-h-[calc(88vh-130px)] max-h-[calc(88dvh-130px)] overscroll-contain [-webkit-overflow-scrolling:touch]">{children}</div>
-          {footer && <div className="px-5 py-3 border-t border-edge/50 bg-chassis/40 flex items-center justify-end gap-2 flex-wrap mobile-safe-bottom">{footer}</div>}
+          {footer && <div className="sheet-head px-5 py-3 border-t border-edge/50 flex items-center justify-end gap-2 flex-wrap mobile-safe-bottom">{footer}</div>}
         </motion.div>
       </div>
     </AnimatePresence>

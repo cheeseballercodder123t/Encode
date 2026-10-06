@@ -32,7 +32,7 @@ const ORBIT_STARS: { x: number; y: number; r: number; delay: number; dur: number
 function CognitiveOrbit() {
   return (
     <div className="cognitive-orbit" aria-hidden="true">
-      <div className="orbit-caption"><span>COGNITIVE FIELD</span><span>FIG. 01 / ENCODING</span></div>
+      <div className="orbit-caption"><span>COGNITIVE FIELD</span><span className="studio-ruler" /><span>FIG. 01 / ENCODING</span></div>
       <svg viewBox="0 0 480 340" fill="none" className="orbit-drawing">
         <defs>
           <radialGradient id="orbit-light">
@@ -55,6 +55,11 @@ function CognitiveOrbit() {
           <linearGradient id="orbit-facet-dark" x1="240" y1="164" x2="240" y2="220" gradientUnits="userSpaceOnUse">
             <stop stopColor="#776044" /><stop offset="1" stopColor="#15161A" />
           </linearGradient>
+          <radialGradient id="orbit-halo">
+            <stop stopColor="#E3C285" stopOpacity="0.11" />
+            <stop offset="0.55" stopColor="#D2A455" stopOpacity="0.04" />
+            <stop offset="1" stopColor="#D2A455" stopOpacity="0" />
+          </radialGradient>
         </defs>
 
         {/* Etched calibration plate and minute marks sit behind the armature. */}
@@ -117,6 +122,9 @@ function CognitiveOrbit() {
           <ellipse cx="240" cy="164" rx="163" ry="66" transform="rotate(-28 240 164)" />
           <ellipse cx="240" cy="164" rx="163" ry="66" transform="rotate(28 240 164)" />
         </g>
+
+        {/* The crystal's own pool of light, breathing under the armature. */}
+        <circle className="orbit-halo" cx="240" cy="164" r="104" fill="url(#orbit-halo)" />
 
         {/* A cut-brass crystal: shaded faces, fine edges, and an inset nucleus. */}
         <g className="orbit-core" stroke="url(#orbit-metal)" strokeWidth="1">
@@ -194,16 +202,36 @@ export function StudioIntro() {
   return (
     <section className="studio-intro" aria-labelledby="studio-headline">
       <div className="studio-intro-copy">
-        <p className="studio-eyebrow"><span className="studio-status-dot" />THE COGNITIVE ENCODING STUDIO</p>
-        <h2 id="studio-headline">Less re-reading.<br /><em>More revelation.</em></h2>
-        <p className="studio-intro-description">
-          Turn what you study into something you understand. One paradox,
-          one thought experiment, one mechanism in your own words.
+        {/* The ruler is the instrument's own scale, and PLATE 00 numbers this
+            sheet as the first figure of the set the workbench follows. */}
+        <p className="studio-eyebrow">
+          <span className="studio-status-dot" />
+          <span>THE COGNITIVE ENCODING STUDIO</span>
+          <span className="studio-ruler" aria-hidden />
+          <span>PLATE 00</span>
         </p>
-        <ol className="studio-workflow" aria-label="Your learning workflow">
-          <li><span>01</span> Bring your material</li>
-          <li><span>02</span> Rebuild the idea</li>
-          <li><span>03</span> Make it stick</li>
+        <h2 id="studio-headline">Less re-reading.<br /><em>More revelation.</em></h2>
+        {/* The initial is floated, not pulled out of the sentence: it stays in
+            reading order, so the paragraph still reads "Turn what you study". */}
+        <p className="studio-intro-description"><span className="illuminated-initial">T</span>urn what you study into something you understand. One
+          paradox, one thought experiment, one mechanism in your own words.
+        </p>
+        <ol className="studio-ledger" aria-label="Your learning workflow">
+          <li>
+            <span className="studio-ledger-index">01</span>
+            <span className="studio-ledger-rule" aria-hidden />
+            <span className="studio-ledger-label">Bring your material</span>
+          </li>
+          <li>
+            <span className="studio-ledger-index">02</span>
+            <span className="studio-ledger-rule" aria-hidden />
+            <span className="studio-ledger-label">Rebuild the idea</span>
+          </li>
+          <li>
+            <span className="studio-ledger-index">03</span>
+            <span className="studio-ledger-rule" aria-hidden />
+            <span className="studio-ledger-label">Make it stick</span>
+          </li>
         </ol>
       </div>
       <CognitiveOrbit />

@@ -1862,8 +1862,8 @@ export default function DeepEncodeApp() {
                 columns, instead of two centered rows of pills stacked above a
                 three-column telemetry band. Each audit is its own bordered
                 block so the page reads as a working list. */}
-            <div className="studio-bench grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4">
-              <div className="min-w-0 p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
+            <div className="studio-bench grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-4 lg:items-start">
+              <div className="leaf-edge min-w-0 p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="label-caps whitespace-nowrap">
                     Pre-flight audits
@@ -1945,7 +1945,7 @@ export default function DeepEncodeApp() {
                 </div>
               </div>
 
-              <div className="studio-exports p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
+              <div className="studio-exports leaf-edge p-5 bg-deck border border-edge/70 rounded-2xl shadow-panel">
                 <div className="flex items-center gap-2.5 mb-4">
                   <span className="label-caps whitespace-nowrap">
                     Export targets
