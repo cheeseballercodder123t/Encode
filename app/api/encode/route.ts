@@ -5,6 +5,7 @@ import { validateEncodedSchema } from "@/lib/ai-output-validation";
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 import { FIRST_PRINCIPLES_ENGINE, FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
+import { encodeSchema, parseRouteBody } from "@/lib/api-validation";
 
 // Allow up to 60s for multi-stage schema generation on Vercel
 export const maxDuration = 60;
@@ -455,19 +456,23 @@ const guidedPathResponseSchema = {
 
 export async function POST(req: NextRequest) {
   try {
+    const body = await parseRouteBody(req, encodeSchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
     const {
       notes,
-      mode = 'conceptual',
+      mode,
       settings,
       file,
-      enableDeepResearch = true,
-      enableGuidedPath = false,
+      enableDeepResearch,
+      enableGuidedPath,
       userConfidence,
       successRate,
-      interleaveMode = false,
-      gear = 2,
-      hiddenTemplates = [],
-    } = await req.json();
+      interleaveMode,
+      gear,
+      hiddenTemplates,
+    } = body.data;
 
     // Templates the learner hid in Settings are excluded from the AI catalog
     // so personal taste sticks for online generations too (offline matches).

@@ -4,6 +4,7 @@ import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateEncodedSchema } from "@/lib/ai-output-validation";
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 import { extractYouTubeId, fetchYouTubeMeta, fetchYouTubeTranscript } from "@/lib/services/youtubeTranscript";
+import { parseRouteBody, youtubeSchema } from "@/lib/api-validation";
 
 const youtubeSchemaResponse = {
   type: Type.OBJECT,
@@ -85,7 +86,11 @@ const youtubeSchemaResponse = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { videoUrl, mode = 'conceptual', settings, hiddenTemplates = [] } = await req.json();
+    const parsed = await parseRouteBody(req, youtubeSchema);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { videoUrl, mode, settings, hiddenTemplates } = parsed.data;
     const hiddenList: string[] = Array.isArray(hiddenTemplates)
       ? hiddenTemplates.filter((t: unknown) => typeof t === 'string')
       : [];

@@ -274,6 +274,10 @@ export interface UsageStats {
   date: string;
   callsByModel: Record<string, number>;
   weeklyCallsByModel: Record<string, number>;
+  /** Lifetime per-model token totals (prompt + completion, provider-normalized). */
+  tokensByModel?: Record<string, number>;
+  /** Lifetime estimated USD cost per model (rough, blended in/out pricing). */
+  costUsdByModel?: Record<string, number>;
 }
 
 export function loadUsageStats(): UsageStats {
@@ -297,6 +301,35 @@ export function incrementModelCall(modelName: string): void {
   stats.callsByModel[modelName] = (stats.callsByModel[modelName] || 0) + 1;
   stats.weeklyCallsByModel[modelName] = (stats.weeklyCallsByModel[modelName] || 0) + 1;
   localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(stats));
+}
+
+/**
+ * Adds one call's token usage + estimated cost to the lifetime ledger.
+ * Daily counters reset on date roll; tokens/cost are lifetime by design —
+ * the interesting question is "what has this hobby cost me", not "what did
+ * it cost today". Written by lib/ai-hardening.recordUsage after every call
+ * that reports usage metadata.
+ */
+export function recordTokenUsage(
+  modelName: string,
+  usage: { promptTokens?: number; completionTokens?: number; totalTokens?: number; costUsd?: number }
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const stats = loadUsageStats();
+    const tokens = usage.totalTokens ?? (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
+    if (tokens > 0) {
+      stats.tokensByModel = stats.tokensByModel || {};
+      stats.tokensByModel[modelName] = (stats.tokensByModel[modelName] || 0) + tokens;
+    }
+    if ((usage.costUsd ?? 0) > 0) {
+      stats.costUsdByModel = stats.costUsdByModel || {};
+      stats.costUsdByModel[modelName] = (stats.costUsdByModel[modelName] || 0) + usage.costUsd!;
+    }
+    localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(stats));
+  } catch {
+    // Usage ledger is best-effort; never break a generation over it.
+  }
 }
 
 export function loadSessionMeta(): import('./types').SessionMetacognition | null {

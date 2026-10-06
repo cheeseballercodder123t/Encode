@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { generateJSONWithProvider } from '@/lib/ai-client';
+import { parseRouteBody } from '@/lib/api-validation';
 import {
   buildCondenseSystemPrompt,
   buildCondenseUserPrompt,
@@ -134,12 +136,39 @@ function totalCounts(counts: ForgeSectionCounts): number {
 }
 
 export async function POST(req: NextRequest) {
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  // Shape check first: mode/topic/include are typed, sources are length-bounded
+  // strings, report is a passthrough (it is a full deck the client already owns
+  // and the route re-normalizes it below). Body stays untyped afterwards since
+  // the three modes read different slices of it.
+  const parsed = await parseRouteBody(
+    req,
+    z
+      .object({
+        mode: z.enum(['forge', 'more', 'retry', 'condense']).optional(),
+        topic: z.string().max(300).optional(),
+        include: z.record(z.string(), z.boolean()).optional(),
+        sources: z
+          .array(
+            z.object({
+              id: z.string().max(200).optional(),
+              name: z.string().max(300).optional(),
+              kind: z.string().max(60).optional(),
+              content: z.string().max(200_000).optional(),
+            })
+          )
+          .max(12)
+          .optional(),
+        only: z.array(z.string().max(200)).max(12).optional(),
+        settings: z.any().optional(),
+        report: z.any().optional(),
+        known: z.array(z.string().max(400)).max(5_000).optional(),
+      })
+      .passthrough()
+  );
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   }
+  const body: any = parsed.data;
 
   const settings = body?.settings;
   const mode: ForgeMode =
