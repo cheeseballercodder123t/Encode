@@ -280,6 +280,9 @@ export function ZenLaunchpad({
         <span className="studio-section-note">YOUR MATERIAL. YOUR PACE. YOUR AHA.</span>
       </div>
       <div className="studio-console grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] border border-edge/70 bg-deck overflow-hidden shadow-panel">
+        {/* The console spends both of its pseudo-elements on corner brackets,
+            so the travelling gilt rides a child of its own. Decorative only. */}
+        <span className="leaf-frame" aria-hidden />
 
         {/* ── Writing surface ───────────────────────────────────────────── */}
         <div className="studio-writing-surface flex min-w-0 flex-col">
@@ -611,7 +614,7 @@ export function ZenLaunchpad({
         <div className="studio-presets-heading"><span>NEED A SPARK?</span><p>Start with a little curiosity.</p></div>
         <div className="studio-presets-grid">
           {LAUNCHPAD_PRESETS.map((preset) => (
-            <button key={preset.id} type="button" onClick={() => handleApplyPreset(preset)} className="studio-preset">
+            <button key={preset.id} type="button" onClick={() => handleApplyPreset(preset)} className="studio-preset leaf-edge">
               <span className="studio-preset-code">{preset.icon}<span aria-hidden="true">↗</span></span>
               <span className="studio-preset-title">{preset.title}</span>
               <span className="studio-preset-mode">{preset.mode === 'conceptual' ? 'UNDERSTAND' : 'REMEMBER'}</span>

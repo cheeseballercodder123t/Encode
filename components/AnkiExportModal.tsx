@@ -527,7 +527,7 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
   return (
     <div ref={sheetRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-50 bg-chassis/80 flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl bg-chassis border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
+      <div className="leaf-edge sheet-plate w-full max-w-3xl rounded-2xl bg-chassis border border-edge/30 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Modal Header */}
         <div className="p-4 sm:p-5 border-b border-edge flex items-center justify-between">
           <div className="flex items-center gap-3">

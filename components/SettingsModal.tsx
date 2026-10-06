@@ -123,7 +123,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud 
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="w-full max-w-xl bg-chassis border border-edge overflow-hidden flex flex-col max-h-[90vh]"
+          className="leaf-edge sheet-plate w-full max-w-xl rounded-2xl bg-chassis border border-edge overflow-hidden flex flex-col max-h-[90vh]"
         >
           {/* Header */}
           <div className="p-5 border-b border-edge bg-deck flex items-center justify-between">

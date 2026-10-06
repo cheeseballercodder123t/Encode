@@ -18,11 +18,17 @@
     font-feature-settings: 'kern' 1, 'liga' 1;
   }
 
-  /* The hall: a dark stone floor with one soft light from above. No mesh
-     gradient, no purple, no glass — a single source of illumination, barely
-     there, so surfaces have something to sit in. */
+  /* The hall, relit. Still one source of illumination — but the source is
+     given a room to fall across: a warm key entering high on the right, a
+     cold bounce filling the opposite corner (the chassis already carries a
+     blue-violet undertone, so the gold reads as metal against it instead of
+     grey on black), and a floor gradient that sinks the lower third. All
+     three are fixed, so they texture the viewport rather than the document. */
   body {
-    background-image: radial-gradient(1000px 700px at 75% 0%, rgba(210, 164, 85, 0.055), transparent 70%);
+    background-image:
+      radial-gradient(1200px 820px at 78% -8%, rgba(210, 164, 85, 0.085), transparent 68%),
+      radial-gradient(900px 700px at 4% 106%, rgba(97, 105, 214, 0.075), transparent 64%),
+      linear-gradient(180deg, rgba(11, 12, 17, 0) 52%, rgba(0, 0, 0, 0.34) 100%);
     background-repeat: no-repeat;
     background-attachment: fixed;
   }
@@ -57,14 +63,20 @@
     outline: none;
   }
 
+  /* Focus is a gold ring, but it is also a *sight*: a faint halo behind the
+     ring so the focused control is findable in peripheral vision, which is
+     what a 2px outline alone fails at on a dark, low-contrast page. */
   *:focus-visible {
     outline: 2px solid #D2A455;
     outline-offset: 2px;
     border-radius: 6px;
+    box-shadow: 0 0 0 5px rgba(210, 164, 85, 0.09);
   }
 
+  /* Selected text reads as vellum lifted onto gold leaf, not as a highlight
+     box dropped on top of it. */
   ::selection {
-    background: rgba(210, 164, 85, 0.28);
+    background: linear-gradient(180deg, rgba(210, 164, 85, 0.34), rgba(210, 164, 85, 0.22));
     color: #FBF7EE;
   }
 
@@ -78,12 +90,14 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #2A2E39;
+    background: linear-gradient(180deg, #2A2E39, #21242C);
     border-radius: 999px;
   }
 
+  /* The rail warms toward gold as it takes the pointer, the way a metal
+     scrollbar stem catches the key light. */
   ::-webkit-scrollbar-thumb:hover {
-    background: #4A4436;
+    background: linear-gradient(180deg, #5A4A2C, #3A3A44);
   }
 
   input, textarea, select, button {
@@ -161,6 +175,227 @@
     transform: rotate(45deg) translateY(-1px);
   }
 
+  /* ---- The gold leaf -------------------------------------------------
+     The one idea this page is built around: the accent is real leaf laid on
+     a dark ground, so it does not merely sit lit — it catches. A hairline of
+     gilt travels around a plate the way light crosses a gilded frame as you
+     walk past it, carried on an animated custom property so the conic
+     gradient interpolates rather than snapping between stops.
+
+     Cost, measured rather than assumed (8 plates on the landing page, 4s of
+     rAF deltas, headless software rendering): 26.5ms mean frame with the
+     leaf against 23.9ms without, p95 unchanged at 33.4ms. So it is roughly
+     +2.6ms of mean frame time and no change to the typical frame. Animating
+     a custom property a gradient reads repaints that gradient every frame —
+     it is not a compositor-only transform — and `will-change` does not help,
+     because the gradient's contents genuinely change. That is an accepted
+     price for the effect, bounded by keeping it to the primary plates rather
+     than every card, and by honouring `prefers-reduced-motion` below.
+
+     Two entry points, because some plates already speak for both their
+     pseudo-elements (the console draws its corner brackets on ::before and
+     ::after): `.leaf-edge` for an element whose ::after is free, and
+     `.leaf-frame` as an empty absolutely-filling child for one whose is not. */
+  .leaf-edge {
+    position: relative;
+    isolation: isolate;
+  }
+
+  /* The frame form is a child, so it must not intercept anything. */
+  .leaf-frame {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .leaf-edge::after,
+  .leaf-frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(
+      from var(--leaf-angle),
+      rgba(227, 194, 133, 0) 0deg,
+      rgba(227, 194, 133, 0.5) 40deg,
+      rgba(251, 247, 238, 0.92) 62deg,
+      rgba(210, 164, 85, 0.5) 86deg,
+      rgba(227, 194, 133, 0) 126deg,
+      rgba(227, 194, 133, 0) 360deg
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    animation: leaf-turn 16s linear infinite;
+  }
+
+  /* The manuscript initial: a gold letter set in its own hairline
+     compartment, the way a scriptorium opens a page. The letter stays in the
+     DOM in reading order, so assistive tech reads "Turn what you study",
+     not "urn what you study". */
+  .illuminated-initial {
+    float: left;
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    font-size: 3.05em;
+    line-height: 0.8;
+    margin: 0.1em 0.46rem 0 0;
+    padding: 0.1em 0.16em 0.04em;
+    color: #E3C285;
+    background:
+      linear-gradient(158deg, rgba(227, 194, 133, 0.18), rgba(210, 164, 85, 0.03) 62%),
+      rgba(12, 14, 19, 0.55);
+    border: 1px solid rgba(210, 164, 85, 0.38);
+    border-radius: 3px;
+    box-shadow:
+      0 1px 0 rgba(251, 247, 238, 0.09) inset,
+      0 0 26px -10px rgba(210, 164, 85, 0.55);
+  }
+
+  /* A ruled scale, the way an instrument plate is marked out: fine ticks with
+     every fifth one taller, fading out where the plate runs dark. */
+  .studio-ruler {
+    position: relative;
+    flex: 1 1 40px;
+    min-width: 24px;
+    height: 9px;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(210, 164, 85, 0.4) 0 1px, transparent 1px 9px),
+      repeating-linear-gradient(90deg, rgba(210, 164, 85, 0.72) 0 1px, transparent 1px 45px);
+    background-size: 100% 4px, 100% 8px;
+    background-position: left bottom, left bottom;
+    background-repeat: repeat-x;
+    -webkit-mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, 0.28) 76%, transparent);
+    mask-image: linear-gradient(90deg, #000, rgba(0, 0, 0, 0.28) 76%, transparent);
+  }
+
+  /* ---- The sheet ------------------------------------------------------
+     Modals are the hall's other furniture, so they get the console's machine
+     treatment: four machined corner brackets plus the travelling gilt. The
+     brackets are eight one-pixel gradient segments on ONE pseudo-element,
+     which is what leaves ::after free for the leaf. Pair with `.leaf-edge`. */
+  .sheet-plate::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    z-index: 3;
+    pointer-events: none;
+    --bracket: rgba(210, 164, 85, 0.4);
+    background-image:
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket)),
+      linear-gradient(var(--bracket), var(--bracket));
+    background-size:
+      15px 1px, 1px 15px, 15px 1px, 1px 15px,
+      15px 1px, 1px 15px, 15px 1px, 1px 15px;
+    background-position:
+      0 0, 0 0, 100% 0, 100% 0,
+      100% 100%, 100% 100%, 0 100%, 0 100%;
+    background-repeat: no-repeat;
+  }
+
+  /* The sheet head is a lit ledge: the key light grazes it, and the gold
+     hairline under it is the seam where the plate folds. */
+  .sheet-head {
+    background:
+      linear-gradient(180deg, rgba(227, 194, 133, 0.06), transparent 72%),
+      rgba(11, 12, 17, 0.5);
+    border-bottom: 1px solid rgba(210, 164, 85, 0.16);
+    box-shadow: 0 1px 0 rgba(243, 238, 227, 0.028);
+  }
+
+  /* ---- The tablet ------------------------------------------------------
+     Cards get a hairline of top light and a lift on hover, but deliberately
+     NO leaf: a page can hold a dozen cards and every one animating would
+     multiply the repaint cost the leaf already costs. The leaf stays on the
+     handful of primary plates a page actually has. */
+  .ui-card { position: relative; }
+  .ui-card::before {
+    content: '';
+    position: absolute;
+    left: 14%;
+    right: 14%;
+    top: 0;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(227, 194, 133, 0.3), transparent);
+  }
+  .ui-card-hover {
+    transition: transform 180ms ease-out, border-color 180ms ease-out, box-shadow 180ms ease-out;
+  }
+  .ui-card-hover:hover {
+    transform: translateY(-2px);
+    border-color: rgba(210, 164, 85, 0.35);
+    box-shadow: 0 18px 36px -24px rgba(0, 0, 0, 0.95);
+  }
+
+  /* The ledger: the workflow as engraved ruled rows rather than three floating
+     labels. The dotted leader reaches from the index to the label so the eye
+     tracks the row instead of hunting for it, and the row's edge tick comes
+     up when the pointer arrives. */
+  .studio-ledger {
+    list-style: none;
+    margin-top: 30px;
+    padding: 0;
+    max-width: 460px;
+    border-top: 1px solid rgba(210, 164, 85, 0.14);
+  }
+  .studio-ledger li {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: baseline;
+    gap: 14px;
+    padding: 13px 6px 12px 18px;
+    border-bottom: 1px solid rgba(210, 164, 85, 0.1);
+    font-size: 12px;
+    color: #B5B1A6;
+    transition: color 200ms ease-out, background-color 200ms ease-out;
+  }
+  .studio-ledger li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, #E3C285, rgba(210, 164, 85, 0.15));
+    opacity: 0;
+    transition: opacity 200ms ease-out;
+  }
+  .studio-ledger li:hover {
+    color: #F3EEE3;
+    background: linear-gradient(90deg, rgba(210, 164, 85, 0.07), transparent 62%);
+  }
+  .studio-ledger li:hover::before { opacity: 1; }
+  .studio-ledger-index {
+    font: 9px 'IBM Plex Mono', monospace;
+    letter-spacing: 1.4px;
+    color: #D2A455;
+  }
+  .studio-ledger-rule {
+    align-self: end;
+    margin-bottom: 4px;
+    border-bottom: 1px dotted rgba(210, 164, 85, 0.28);
+  }
+  .studio-ledger-label { white-space: nowrap; }
+
   /* Analog futures: etched diagrams, brass controls, generous editorial type.
      These styles are scoped to the studio rather than overriding every modal. */
   .studio-shell {
@@ -186,10 +421,19 @@
   .studio-idle-dot { border: 1px solid #807D73; }
   .studio-intro h2 { margin-top: 23px; font-size: clamp(40px, 4.4vw, 64px); font-weight: 400; line-height: 1.09; letter-spacing: -2.7px; }
   .studio-intro h2 em { color: #E3C285; font-weight: 400; }
-  .studio-intro-description { max-width: 420px; margin-top: 20px; font-size: 13px; line-height: 1.8; color: #B5B1A6; }
+  .studio-intro-description { max-width: 448px; margin-top: 24px; font-size: 13.5px; line-height: 1.78; color: #B5B1A6; }
   .studio-workflow { display: flex; flex-wrap: wrap; gap: 19px; margin-top: 28px; list-style: none; }
   .studio-workflow li { font-size: 10px; color: #B5B1A6; }
   .studio-workflow li span { font: 9px 'IBM Plex Mono', monospace; color: #D2A455; margin-right: 6px; }
+  /* The console is the one instrument the learner actually holds, so it
+     warms as they reach for it rather than waiting for a click. */
+  .studio-console:focus-within {
+    border-color: rgba(210, 164, 85, 0.34);
+    box-shadow:
+      0 1px 0 rgba(243, 238, 227, 0.05) inset,
+      0 0 0 1px rgba(210, 164, 85, 0.1),
+      0 28px 74px -34px #000;
+  }
   .cognitive-orbit { position: relative; max-width: 460px; width: 100%; justify-self: end; }
   .orbit-caption { display: flex; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid rgba(210,164,85,0.16); font: 7px 'IBM Plex Mono', monospace; letter-spacing: 1.6px; color: #B5B1A6; }
   .orbit-drawing { display: block; width: 100%; height: auto; margin: 10px 0; }
@@ -201,6 +445,7 @@
   .orbit-footnote { display: flex; align-items: center; justify-content: center; gap: 8px; font: 7px 'IBM Plex Mono', monospace; letter-spacing: 1.8px; color: #B5B1A6; }
   .orbit-pulse { width: 4px; height: 4px; border-radius: 50%; background: #D2A455; animation: orbit-breathe 5s ease-in-out infinite; }
   .orbit-core { transform-origin: 240px 164px; animation: orbit-arrive 1.2s ease-out both; }
+  .orbit-halo { transform-origin: 240px 164px; animation: orbit-breathe 7s ease-in-out infinite; }
   /* Instrument motion: one brass sweep over the plate, two reticles turning
      against each other, a star field that never pulses in unison. */
   .orbit-sweep { transform-box: view-box; transform-origin: 240px 164px; animation: orbit-revolve 38s linear infinite; }
@@ -209,17 +454,28 @@
   .orbit-reticle-b { animation: orbit-revolve 130s linear infinite reverse; }
   .orbit-star { animation: orbit-twinkle 6s ease-in-out infinite; }
   /* Preset cards catch a single pass of light as the eye reaches them. */
-  .studio-preset { position: relative; overflow: hidden; }
-  .studio-preset::after {
+  /* Preset cards catch a single pass of light as the eye reaches them, and
+     carry a leafed edge. The light that chases around the row is the same
+     conic as every other plate, offset per card, so one highlight crosses
+     all five presets instead of five blinking at once. The pass-of-light
+     sweep moved to ::before to leave ::after to the leaf. */
+  .studio-preset { position: relative; overflow: hidden; isolation: isolate; }
+  .studio-preset::before {
     content: '';
     position: absolute;
     inset: 0;
+    z-index: 1;
     pointer-events: none;
-    background: linear-gradient(105deg, transparent 42%, rgba(227, 194, 133, 0.09) 50%, transparent 58%);
+    background: linear-gradient(105deg, transparent 42%, rgba(227, 194, 133, 0.11) 50%, transparent 58%);
     transform: translateX(-130%);
     transition: transform 700ms ease-out;
   }
-  .studio-preset:hover::after, .studio-preset:focus-visible::after { transform: translateX(130%); }
+  .studio-preset:hover::before, .studio-preset:focus-visible::before { transform: translateX(130%); }
+  .studio-presets-grid > .studio-preset:nth-child(1)::after { animation-delay: 0s; }
+  .studio-presets-grid > .studio-preset:nth-child(2)::after { animation-delay: -12.8s; }
+  .studio-presets-grid > .studio-preset:nth-child(3)::after { animation-delay: -9.6s; }
+  .studio-presets-grid > .studio-preset:nth-child(4)::after { animation-delay: -6.4s; }
+  .studio-presets-grid > .studio-preset:nth-child(5)::after { animation-delay: -3.2s; }
   /* A breath of film grain over the hall: the print texture that makes the
      brass read as matter instead of CSS. Fixed so it textures the viewport
      as it scrolls, and it sits beneath the z-10 content wrapper and every
@@ -298,6 +554,7 @@
     .studio-intro { gap: 10px; }
     .studio-intro h2 { font-size: 48px; }
     .studio-workflow { gap: 10px; }
+    .studio-ledger { max-width: none; }
     .studio-tuning-rail { display: grid; grid-template-columns: 1.15fr 1fr; }
     .studio-tuning-rail > div:first-child { grid-row: span 2; border-right: 1px solid #2A2E39; border-bottom: none; }
     .studio-rail-note { padding-bottom: 25px; }
@@ -315,7 +572,14 @@
     .studio-eyebrow { font-size: 8px; letter-spacing: 1.5px; }
     .studio-intro-description { font-size: 13px; margin-top: 17px; }
     .studio-workflow { gap: 13px; margin-top: 20px; }
-    .studio-workflow li { font-size: 9px; }
+    .studio-ledger { margin-top: 22px; }
+    .studio-ledger li {
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      padding: 12px 4px 11px 14px;
+      font-size: 11.5px;
+    }
+    .studio-ledger-label { white-space: normal; }
     .cognitive-orbit { max-width: 280px; justify-self: center; }
     .orbit-caption { font-size: 6px; letter-spacing: 0.9px; }
     .orbit-footnote { font-size: 6px; letter-spacing: 0.6px; }
@@ -352,6 +616,15 @@
   .orbit-traveler-memory { transform: rotate(32deg); }
   .orbit-sweep { animation: none !important; opacity: 0 !important; }
   .orbit-reticle, .orbit-star { animation: none !important; }
+  /* The base layer already flattens every duration; this parks the leaf at
+     the angle where it is brightest, so a motionless plate reads as gilded
+     rather than simply unlit. */
+  .leaf-edge::after,
+  .leaf-frame::after {
+    animation: none !important;
+    --leaf-angle: 62deg;
+  }
+  .studio-presets-grid > .studio-preset::after { animation-delay: 0s; }
 }
 
 @keyframes orbit-revolve {
@@ -376,8 +649,14 @@
   z-index: 0;
   pointer-events: none;
   background:
+    /* the light line at the very top of the hall */
     linear-gradient(90deg, transparent, rgba(210, 164, 85, 0.55) 35%, rgba(243, 238, 227, 0.4) 50%, rgba(210, 164, 85, 0.55) 65%, transparent) top / 100% 1px no-repeat,
-    radial-gradient(150% 95% at 50% -5%, transparent 58%, rgba(0, 0, 0, 0.45) 100%);
+    /* the shaft that key light throws down the hall, raked from the right */
+    linear-gradient(104deg, transparent 33%, rgba(227, 194, 133, 0.05) 46%, rgba(227, 194, 133, 0.02) 57%, transparent 69%) top / 100% 100% no-repeat,
+    /* the cold bounce in the opposite corner */
+    radial-gradient(860px 660px at 2% 104%, rgba(97, 105, 214, 0.09), transparent 62%),
+    /* the floor falling away */
+    radial-gradient(150% 95% at 50% -5%, transparent 54%, rgba(0, 0, 0, 0.5) 100%);
 }
 @supports (-webkit-background-clip: text) or (background-clip: text) {
   .studio-intro h2 em {
@@ -411,6 +690,7 @@
 }
 .studio-audit-card {
   position: relative;
+  overflow: hidden;
   /* Colour too, not just the lift: this rule lands after the button's
      `transition-colors` utility in the compiled sheet, so the shorthand
      replaces it — keeping colour here preserves the fade as well. */
@@ -421,6 +701,20 @@
   transform: translateY(-2px);
   box-shadow: 0 16px 32px -20px rgba(0, 0, 0, 0.95);
 }
+/* A gold spine runs down the card's leading edge and is only visible while
+   the card is under the pointer — the ledger's tick, at component scale. */
+.studio-audit-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, rgba(227, 194, 133, 0.9), rgba(210, 164, 85, 0.1));
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+.studio-audit-card:not(:disabled):hover::before { opacity: 1; }
 .studio-audit-index {
   position: absolute;
   top: 10px;
@@ -482,12 +776,28 @@
   bottom: 22%;
   width: 2px;
   background: linear-gradient(#E3C285, rgba(210, 164, 85, 0.2));
+}@media (max-width: 640px) {
+    .studio-console::before,
+    .studio-console::after { display: none; }
+    .studio-heading-leader { min-width: 16px; }
+    /* Brackets crowd a phone-sized sheet; the leaf stays. */
+    .sheet-plate::before { display: none; }
+  }
+/* `--leaf-angle` is registered so the conic gradient can be interpolated.
+   An unregistered custom property is a token, not a number, and the sweep
+   would snap instead of turning. Engines without @property still paint the
+   rule — they just hold it at the initial 0deg, which is a plate with no
+   highlight on its rim rather than a broken one. */
+@property --leaf-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
 }
-@media (max-width: 640px) {
-  .studio-console::before,
-  .studio-console::after { display: none; }
-  .studio-heading-leader { min-width: 16px; }
+
+@keyframes leaf-turn {
+  to { --leaf-angle: 360deg; }
 }
+
 @keyframes gilt-sweep {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }

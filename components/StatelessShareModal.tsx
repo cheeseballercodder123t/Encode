@@ -90,7 +90,7 @@ export default function StatelessShareModal({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-xl bg-deck border border-edge/40 overflow-hidden my-6 flex flex-col"
+        className="leaf-edge sheet-plate relative w-full max-w-xl rounded-2xl bg-deck border border-edge/40 overflow-hidden my-6 flex flex-col"
       >
         {/* Header */}
         <div className="p-4 sm:p-6 border-b border-edge/30 flex items-start justify-between gap-4">

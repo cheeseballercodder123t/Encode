@@ -209,6 +209,194 @@ test('the workbench columns stay inside the viewport and beside the reader', asy
   expect(covered).toEqual([]);
 });
 
+/**
+ * The gold leaf: the one piece of motion on the page that never stops on its
+ * own. Three things have to hold for it to read as gilt rather than as a
+ * border that flickers — the conic gradient must be there, the mask must
+ * punch it down to a 1px rim (an unmasked conic fills the whole element),
+ * and `--leaf-angle` must actually interpolate. That last one is why the
+ * custom property is registered with `@property`: unregistered, it is a
+ * token and the sweep snaps between stops instead of turning.
+ *
+ * The console spends both its pseudo-elements on corner brackets, so its
+ * leaf rides a child; the audit plates have a free ::after and use the
+ * element form. Both entry points are checked here.
+ */
+test('the gold leaf is masked to a rim and actually turns', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await mockAiApis(page);
+  await page.goto('/');
+
+  const plate = page.locator('.leaf-frame').first();
+  await expect(plate).toBeAttached();
+  const leaf = await plate.evaluate((node) => {
+    const style = getComputedStyle(node, '::after');
+    return {
+      background: style.backgroundImage,
+      padding: style.paddingTop,
+      maskComposite: style.maskComposite || style.webkitMaskComposite,
+      animationName: style.animationName,
+      pointerEvents: style.pointerEvents,
+      angle: style.getPropertyValue('--leaf-angle'),
+    };
+  });
+  expect(leaf.background).toContain('conic-gradient');
+  // Unmasked this paints the whole plate in a rotating gradient.
+  expect(leaf.maskComposite).toContain('exclude');
+  // 1px of padding is the rim; a raw fill would have none.
+  expect(parseFloat(leaf.padding)).toBe(1);
+  expect(leaf.animationName).toBe('leaf-turn');
+  // It must never eat a click on the console underneath it.
+  expect(leaf.pointerEvents).toBe('none');
+  expect(leaf.angle).toMatch(/\d/);
+
+  // The angle has to advance between reads — that is the whole claim. Polled
+  // rather than read twice because two round-trips can land inside one
+  // animation frame; the poll only passes when the value genuinely changes.
+  await expect
+    .poll(
+      async () =>
+        plate.evaluate(
+          (node) => getComputedStyle(node, '::after').getPropertyValue('--leaf-angle'),
+        ),
+      { timeout: 5_000 },
+    )
+    .not.toBe(leaf.angle);
+
+  // The element form, on a plate whose ::after is free.
+  const audit = await page.locator('.leaf-edge').first().evaluate((node) => {
+    const style = getComputedStyle(node, '::after');
+    return { background: style.backgroundImage, animationName: style.animationName };
+  });
+  expect(audit.background).toContain('conic-gradient');
+  expect(audit.animationName).toBe('leaf-turn');
+});
+
+/**
+ * The hero is the app's first impression, so its two new devices are pinned
+ * here: the manuscript initial and the engraved ledger.
+ *
+ * The initial is floated for looks, not extracted from the sentence — if the
+ * letter ever left the reading order the paragraph would silently announce
+ * "urn what you study", so the accessible name is asserted directly.
+ */
+test('the hero opens with an illuminated initial and an engraved ledger', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockAiApis(page);
+  await page.goto('/');
+
+  const initial = page.locator('.illuminated-initial');
+  await expect(initial).toBeVisible();
+  await expect(initial).toHaveText('T');
+
+  // Reading order is unchanged: it is still "Turn what you study…".
+  await expect(page.locator('.studio-intro-description')).toHaveText(/^Turn what you study into/);
+
+  const rows = page.locator('.studio-ledger li');
+  await expect(rows).toHaveCount(3);
+  // Each row is ruled: index, leader, label.
+  for (const row of await rows.all()) {
+    await expect(row.locator('.studio-ledger-index')).toHaveText(/0[123]/);
+    await expect(row.locator('.studio-ledger-label')).toBeVisible();
+    await expect
+      .poll(() =>
+        row
+          .locator('.studio-ledger-rule')
+          .evaluate((node) => parseFloat(getComputedStyle(node).borderBottomWidth)),
+      )
+      .toBeGreaterThan(0);
+  }
+
+  // The ruler is decoration, so it stays out of the accessibility tree.
+  const eyebrow = page.locator('.studio-eyebrow');
+  await expect(eyebrow.locator('.studio-ruler')).toHaveAttribute('aria-hidden', 'true');
+  await expect(eyebrow).toContainText('PLATE 00');
+
+  // The floated initial must not push the paragraph past its column.
+  const overflow = await page.locator('.studio-intro-description').evaluate((node) => ({
+    scrollW: node.scrollWidth,
+    clientW: node.clientWidth,
+  }));
+  expect(overflow.scrollW).toBeLessThanOrEqual(overflow.clientW + 1);
+});
+
+/**
+ * Grid items stretch to the tallest sibling by default, so the two bench
+ * plates shared a height: the export list is ~580px of real content, and the
+ * audit panel — four short cards — got dragged out to match it, leaving 402px
+ * of void under its last card that read as a rendering failure rather than as
+ * whitespace. Each plate now sizes to its own content (`lg:items-start`).
+ *
+ * Measured, not eyeballed: 402px of dead space before, 21px after, which is
+ * the panel's own bottom padding.
+ */
+test('no bench plate is stretched far past its own content', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await mockAiApis(page);
+  await page.goto('/');
+
+  const panels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('.studio-bench > div')).map((panel) => {
+      const box = panel.getBoundingClientRect();
+      const last = panel.lastElementChild as HTMLElement | null;
+      const contentBottom = last ? last.getBoundingClientRect().bottom : box.top;
+      return {
+        cls: panel.className.split(' ').slice(0, 2).join(' '),
+        dead: Math.round(box.bottom - contentBottom),
+      };
+    }),
+  );
+  expect(panels.length).toBeGreaterThanOrEqual(2);
+  for (const panel of panels) {
+    // Comfortably clear of the 21px of panel padding, far below the bug.
+    expect(panel.dead, `${panel.cls} has ${panel.dead}px of dead space`).toBeLessThan(64);
+  }
+});
+
+/**
+ * The sheet treatment: a modal is the hall's other furniture, so it carries
+ * the console's instrument language — machined corner brackets and the
+ * travelling gilt.
+ *
+ * The brackets are asserted as a *count*, because that is the whole trick:
+ * four corners drawn as eight 1px gradient segments on ONE pseudo-element is
+ * what leaves ::after free for the leaf. A refactor back to one pseudo per
+ * corner would silently steal the leaf's slot and still look correct here.
+ */
+test('an open sheet carries machined corner brackets and the leaf', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockAiApis(page);
+  await page.goto('/');
+
+  await page.locator('button[title^="Configure Models"]').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  // Hand-rolled sheets keep role="dialog" on the overlay and render the plate
+  // as its child; only the panel carries the treatment.
+  const sheet = page.getByRole('dialog').locator('.sheet-plate');
+  await expect(sheet).toBeVisible();
+
+  const style = await sheet.evaluate((node) => {
+    const brackets = getComputedStyle(node, '::before');
+    const leaf = getComputedStyle(node, '::after');
+    return {
+      bracketLayers: brackets.backgroundImage.split('linear-gradient').length - 1,
+      bracketInset: brackets.top,
+      bracketPointer: brackets.pointerEvents,
+      leafBackground: leaf.backgroundImage,
+      leafAnimation: leaf.animationName,
+    };
+  });
+
+  // Four corners = eight segments, one horizontal plus one vertical each.
+  expect(style.bracketLayers).toBe(8);
+  expect(style.bracketInset).not.toBe('auto');
+  // Purely decorative: it must never eat a click meant for the sheet.
+  expect(style.bracketPointer).toBe('none');
+  expect(style.leafBackground).toContain('conic-gradient');
+  expect(style.leafAnimation).toBe('leaf-turn');
+});
+
 test('reduced-motion preference stops decorative motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
@@ -220,6 +408,17 @@ test('reduced-motion preference stops decorative motion', async ({ page }) => {
     const animation = await satellite.evaluate((node) => getComputedStyle(node).animationName);
     expect(animation).toBe('none');
   }
+  // The gilt stops turning, but it is parked at the angle where it is
+  // brightest — a still plate should read as gilded, not as switched off.
+  const leaf = await page.locator('.leaf-frame').first().evaluate((node) => {
+    const style = getComputedStyle(node, '::after');
+    return {
+      animationName: style.animationName,
+      angle: parseFloat(style.getPropertyValue('--leaf-angle')),
+    };
+  });
+  expect(leaf.animationName).toBe('none');
+  expect(leaf.angle).toBeGreaterThan(0);
 });
 
 for (const width of [1440, 390]) {

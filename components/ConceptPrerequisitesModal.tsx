@@ -46,7 +46,7 @@ export const ConceptPrerequisitesModal: React.FC<ConceptPrerequisitesModalProps>
         initial={{ opacity: 0, scale: 0.95, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-2xl bg-deck border border-amber/30 p-6 text-bone relative my-8"
+        className="leaf-edge sheet-plate w-full max-w-2xl rounded-2xl bg-deck border border-amber/30 p-6 text-bone relative my-8"
       >
         {/* Header Badge */}
         <div className="flex items-center justify-between border-b border-edge pb-4 mb-6">

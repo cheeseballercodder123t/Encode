@@ -618,7 +618,7 @@ export function StudioWorkbench({
           data-testid="workbench-zone-source"
           className={`lg:col-span-3 lg:sticky lg:top-4 flex-col gap-3 ${mobileTab === 'source' ? 'flex' : 'hidden lg:flex'}`}
         >
-          <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden">
+          <div className="ui-card bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden">
             {/* Zone 1 Header */}
             <div className="flex items-center justify-between gap-3 pb-3 mb-3">
               <ZoneLabel>Source</ZoneLabel>
@@ -707,7 +707,7 @@ export function StudioWorkbench({
           data-testid="workbench-zone-forge"
           className={`lg:col-span-6 flex-col gap-3 ${mobileTab === 'forge' ? 'flex' : 'hidden lg:flex'}`}
         >
-          <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-5 sm:p-6 space-y-5">
+          <div className="leaf-edge bg-deck border border-edge/70 rounded-2xl shadow-panel p-5 sm:p-6 space-y-5">
 
             {/* Stage Progression header */}
             <div className="flex items-center justify-between gap-3">
@@ -1261,7 +1261,7 @@ export function StudioWorkbench({
           data-testid="workbench-zone-examiner"
           className={`lg:col-span-3 lg:sticky lg:top-4 flex-col gap-3 ${mobileTab === 'remnote' ? 'flex' : 'hidden lg:flex'}`}
         >
-          <div className="bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden space-y-3.5">
+          <div className="ui-card bg-deck border border-edge/70 rounded-2xl shadow-panel p-4 flex flex-col max-h-[82vh] max-h-[82dvh] overflow-hidden space-y-3.5">
 
             {/* Zone 3 Header & Strictness Rocker */}
             <div className="space-y-3 pb-3 border-b border-edge/50">

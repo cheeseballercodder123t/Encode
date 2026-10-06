@@ -1161,7 +1161,7 @@ export function FlashcardForgeModal({
           initial={{ opacity: 0, scale: 0.96, y: 14 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: 14 }}
-          className="w-full max-w-3xl bg-chassis border border-edge overflow-hidden flex flex-col max-h-[92vh]"
+          className="leaf-edge sheet-plate w-full max-w-3xl rounded-2xl bg-chassis border border-edge overflow-hidden flex flex-col max-h-[92vh]"
         >
           <div className="px-4 py-3 border-b border-edge bg-deck flex items-center justify-between">
             <div className="flex items-center gap-2.5">
