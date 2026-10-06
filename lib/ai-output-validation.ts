@@ -20,6 +20,7 @@ import {
 import { validateToyModelConfig } from './toy-models/validation';
 import { repairJson } from './json-repair';
 import { aiMetrics } from './ai-hardening';
+import { normalizeAutopsy, normalizeMrM } from './mr-m/payloads';
 
 // ─── JSON sanitizing ─────────────────────────────────────────────────────────
 
@@ -77,6 +78,23 @@ function asStringArray(v: unknown): string[] {
  * activities, and synthesizes a single generic stage when the model returned
  * zero usable ones (never stuck on an empty workbench).
  */
+/**
+ * Coerces a stage's `visualData`, normalising the Mr M overlay inside it.
+ *
+ * The Mr M block is normalised ONCE, here, at the boundary where model output
+ * enters the app. Nothing downstream re-normalises it, which is deliberate:
+ * `payloadFor` must return the payload by reference or a panel that compares
+ * payload identity across renders would re-home on every pass.
+ */
+function normalizeVisualData(raw: unknown): Record<string, any> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const visual = { ...(raw as Record<string, any>) };
+  const mrM = normalizeMrM(visual.mrM);
+  if (mrM) visual.mrM = mrM;
+  else delete visual.mrM;
+  return visual;
+}
+
 export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?: string): {
   topicSummary: string;
   activities: Activity[];
@@ -112,7 +130,7 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?:
             paradox: asString(a.paradox) || undefined,
             gedankenexperiment: asString(a.gedankenexperiment) || undefined,
             keywords: asStringArray(a.keywords),
-            visualData: a.visualData && typeof a.visualData === 'object' ? a.visualData : undefined,
+            visualData: normalizeVisualData(a.visualData),
             templateType: asString(
               a.templateType,
               mode === 'memorization' ? 'memory_palace' : 'first_principles'
@@ -222,6 +240,14 @@ export function validateEvaluationResult(raw: unknown): NonNullable<StageRespons
   // The pressure test: one question that pushes the mechanism to its edge.
   if (data.counterProbe) result.counterProbe = asString(data.counterProbe);
   if (data.sentenceFinisher) result.sentenceFinisher = asString(data.sentenceFinisher);
+  // Mr M post-mortem. Absent when the stage landed, when the mode was off, or
+  // when the examiner had nothing structural to name — all three are the same
+  // outcome for the UI, and the deterministic half of the autopsy is computed
+  // on the client rather than stored here.
+  if (data.autopsy) {
+    const autopsy = normalizeAutopsy(data.autopsy);
+    if (autopsy) result.autopsy = autopsy;
+  }
   return result;
 }
 

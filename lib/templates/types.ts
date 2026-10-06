@@ -1,5 +1,7 @@
 // Template-specific TypeScript interfaces and types for DeepEncode Visual Schemas
 
+import type { MrMPayload } from '../mr-m/types';
+
 export type VisualTemplateType =
   | 'first_principles'
   | 'cause_effect'
@@ -307,4 +309,12 @@ export interface ActivityVisualData {
   counterfactualQuestion?: string;
   criticalThreshold?: string;
   failureEnvelopeSummary?: string;
+
+  /**
+   * Mr M mode payloads (coordinate system, per-letter ontology, linear
+   * decomposition, what-if model). Present only when the mode was on at
+   * generation time and the model returned something usable; absent means no
+   * Mr M surfaces render on this stage.
+   */
+  mrM?: MrMPayload;
 }

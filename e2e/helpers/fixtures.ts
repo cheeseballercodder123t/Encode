@@ -133,6 +133,111 @@ export const ENCODE_RESPONSE = {
   researchContexts: [],
 };
 
+// ─── Mr M mode overlay (/api/encode with the mode on) ───────────────────────
+//
+// A calorimetry stage carrying all four Mr M blocks. It is deliberately free of
+// chemical formulae: the trap classifier's subscript rule looks for formulae,
+// and keeping them out lets the numeric rule be asserted in isolation — the
+// exemplar's 0.0336 against a learner's 0.0168 is exactly a factor of two.
+//
+// The placeholders stay the shared P1_* ones, so the fields are addressed the
+// same way every other spec addresses them.
+export const MR_M_ENCODE_RESPONSE = {
+  topicSummary: 'Calorimetry',
+  activities: [
+    makeActivity({
+      id: 'mr-m-1',
+      title: 'Calorimetry: Where the Energy Goes',
+      framework: 'first-principles',
+      templateType: 'first_principles',
+      prompt: 'Trace the heat into the water and account for every joule.',
+      contextSnippet: 'A hot solid is dropped into water; the heat lost equals the heat gained.',
+      scaffold: {
+        field1Label: 'Mechanism',
+        field1Placeholder: P1_FIELD1,
+        field2Label: 'Physical Reasoning',
+        field2Placeholder: P1_FIELD2,
+        exampleAnswer: '0.0336 kJ of heat leaves the water.',
+      },
+      visualData: {
+        generationChallenge: {
+          premisePrompt: 'If the calorimeter is a ledger, what is the closing balance?',
+          missingRoleOrTarget: 'the heat transferred',
+          expertCompletion: '0.0336 kJ of heat leaves the water.',
+        },
+        mrM: {
+          axiomFirst: {
+            governingLaw: 'Energy is conserved: whatever the water loses, the solid gains.',
+            coordinateOrigin: 'Zero is no heat transferred at all — equilibrium at the starting temperature.',
+            zeroPoint: 'Zero is a measurable state here, not a bookkeeping convention.',
+            whyThisDefinition:
+              'Products minus reactants works because the products are the destination and the reactants the origin.',
+            calculusTranslation:
+              'q is the integral of the heat flow over time, so only the total matters, not the path.',
+            counterexample:
+              'A cup that leaks heat to the room still balances — the room is part of the ledger.',
+          },
+          ontology: [
+            {
+              symbol: 'q',
+              physicalIdentity: 'The heat transferred INTO the system',
+              unit: 'kJ',
+              whatItIsNot: 'Not the temperature, and not the energy already inside.',
+              doublesTo: 'Everything else fixed, q doubles.',
+            },
+            {
+              symbol: 'm',
+              physicalIdentity: 'The mass of the WATER being heated, not the solid',
+              unit: 'kg',
+              whatItIsNot: 'Not the mass of the solid you dropped in.',
+              doublesTo: 'q doubles.',
+            },
+            {
+              symbol: 'ΔT',
+              physicalIdentity: 'The temperature RISE of the water',
+              unit: 'K',
+              whatItIsNot: 'Not the final temperature on its own.',
+              doublesTo: 'q doubles.',
+            },
+          ],
+          stateMachine: [
+            {
+              stepNumber: 1,
+              action: 'Convert the measured volume of water to litres, then to kilograms.',
+              holdsInHead: '1 L of water has a mass of 1 kg.',
+              output: 'm in kg',
+            },
+            {
+              stepNumber: 2,
+              action: 'Take the temperature difference, not the final temperature.',
+              holdsInHead: 'ΔT = T_final - T_initial.',
+              output: 'ΔT in K',
+            },
+            {
+              stepNumber: 3,
+              action: 'Multiply m c ΔT with the units carried through.',
+              holdsInHead: 'q = m c ΔT.',
+              output: 'q in kJ',
+            },
+          ],
+          perturbation: {
+            invariant: 'q = m c ΔT',
+            variables: [
+              { symbol: 'm', base: 0.25, min: 0.05, max: 1, unit: 'kg', exponent: 1 },
+              { symbol: 'ΔT', base: 32, min: 1, max: 100, unit: 'K', exponent: 1 },
+            ],
+            limitNotes: [
+              { symbol: 'm', note: 'No water means no heat is stored, so the readout collapses to zero.' },
+              { symbol: 'ΔT', note: 'A vanishing temperature difference carries no heat, however long you wait.' },
+            ],
+          },
+        },
+      },
+    }),
+  ],
+  researchContexts: [],
+};
+
 export const YOUTUBE_RESPONSE = {
   topicSummary: 'Neural Networks Lecture',
   videoTitle: 'Neural Networks Lecture',

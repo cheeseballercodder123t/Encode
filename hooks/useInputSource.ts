@@ -62,6 +62,10 @@ export function useInputSource() {
   // pattern is stable across a semester, and re-picking it every time is its
   // own small friction.
   const [gear, setGear] = useState<EncodingGear>(2);
+  // Mr M mode: the first-principles overlay on every stage. Defaults ON — it is
+  // the learning style this tool was built around, and it is one pill to turn
+  // off. Everything it adds is additive, so `off` means the app as it was.
+  const [mrMMode, setMrMMode] = useState(true);
 
   // Hydrate last-used study prefs once on mount. localStorage cannot be read
   // during render without an SSR hydration mismatch, so syncing from this
@@ -75,6 +79,7 @@ export function useInputSource() {
       setEnableGuidedPath(prefs.enableGuidedPath);
       setStrictnessLevel(prefs.strictnessLevel);
       setGear(prefs.gear);
+      setMrMMode(prefs.mrMMode);
     } catch {
       /* keep defaults */
     } finally {
@@ -91,8 +96,8 @@ export function useInputSource() {
 
   useEffect(() => {
     if (!prefsLoaded) return;
-    saveStudyPrefs({ enableDeepResearch, enableGuidedPath, strictnessLevel, gear });
-  }, [enableDeepResearch, enableGuidedPath, strictnessLevel, gear, prefsLoaded]);
+    saveStudyPrefs({ enableDeepResearch, enableGuidedPath, strictnessLevel, gear, mrMMode });
+  }, [enableDeepResearch, enableGuidedPath, strictnessLevel, gear, mrMMode, prefsLoaded]);
 
   // Auto-detect massive text for Guided Path hint
   const wordCount = useMemo(() => {
@@ -119,6 +124,8 @@ export function useInputSource() {
     setInterleaveMode,
     gear,
     setGear,
+    mrMMode,
+    setMrMMode,
     wordCount,
   };
 }

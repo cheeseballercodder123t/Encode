@@ -65,6 +65,12 @@ export interface StudyPrefs {
   gear: EncodingGear;
   /** Interleave toggle is intentionally NOT remembered: it re-routes the whole generation. */
   hiddenTemplates: string[];
+  /**
+   * Mr M mode: the first-principles overlay (coordinate system before
+   * procedure, trap-aware autopsies, linear decomposition, what-if sliders).
+   * Defaults ON — it is the learning style this tool was built around.
+   */
+  mrMMode: boolean;
 }
 
 export const DEFAULT_STUDY_PREFS: StudyPrefs = {
@@ -75,6 +81,7 @@ export const DEFAULT_STUDY_PREFS: StudyPrefs = {
   enableGuidedPath: false,
   gear: 2,
   hiddenTemplates: [],
+  mrMMode: true,
 };
 
 export function loadStudyPrefs(): StudyPrefs {
@@ -91,6 +98,9 @@ export function loadStudyPrefs(): StudyPrefs {
       enableGuidedPath: typeof parsed.enableGuidedPath === 'boolean' ? parsed.enableGuidedPath : DEFAULT_STUDY_PREFS.enableGuidedPath,
       gear: [1, 2, 3].includes(parsed.gear) ? (parsed.gear as EncodingGear) : DEFAULT_STUDY_PREFS.gear,
       hiddenTemplates: Array.isArray(parsed.hiddenTemplates) ? parsed.hiddenTemplates.filter((t: unknown) => typeof t === 'string') : [],
+      // Defaults ON for anything stored before the mode existed: an absent flag
+      // is not the learner turning it off.
+      mrMMode: typeof parsed.mrMMode === 'boolean' ? parsed.mrMMode : DEFAULT_STUDY_PREFS.mrMMode,
     };
     return prefs;
   } catch (e) {
