@@ -20,6 +20,18 @@
 // so the remaining members of the taxonomy (`limiting_reactant_ignored`,
 // `mole_ratio_inverted`, `zero_point_confusion`, `path_vs_state_confusion`) are
 // left to the model's narrative rather than guessed at from a keyword.
+//
+// The vocabulary is ARITHMETIC rather than chemical, and that is a correction.
+// The first version of this file searched for a factor of two, three orders of
+// magnitude and a sign flip, so an error that was a coefficient of seven, an
+// exponent one step off (r against r²), or the `ln 2` of a half-life resolved to
+// `null` — a wrong answer with no diagnosis at all, which the panel fills with
+// prose. The shapes are the same ones `autopsy.ts` names, they are read in
+// TIERS (a sign inversion outranks every magnitude shape; a whole power whose
+// law is in the material is an exponent problem, while the same number with no
+// law in sight stays a dropped coefficient), and the notation extractor is no
+// longer limited to `H2O`-shaped tokens: `f'(x) = 1 / (2√x)` carries no element
+// token and is read as what it is.
 
 import type { TrapDiagnosis, TrapId, TrapInput } from './types';
 
@@ -159,6 +171,183 @@ function detectSubscript(learner: string, reference: string): TrapDiagnosis | nu
 
 // ─── Rules 3–6: numeric signatures ─────────────────────────────────────────
 
+/**
+ * Every power written ON a symbol, as `{ symbol, power }`.
+ *
+ * A token qualifies only when the exponent is attached to a SYMBOL — `r²`, `x^4`,
+ * `√x`. A bare superscript is a footnote and `10^3` is a conversion rather than
+ * a law, so neither counts. This is the extractor the chemical formula regex
+ * cannot be: a derivative or a rate law carries no element token, and before
+ * this the whole notation was invisible to the classifier.
+ */
+export function poweredSymbols(text: string): { symbol: string; power: string }[] {
+  const out: { symbol: string; power: string }[] = [];
+  const seen = new Set<string>();
+  const re = /([A-Za-z\u0394\u03b8\u03bb\u03c1][A-Za-z0-9_]*)\s*(\^\s*[0-9]{1,2}|[\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079])|\u221a\s*([A-Za-z\u0394\u03b8\u03bb\u03c1][A-Za-z0-9_]*)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text || '')) !== null) {
+    const symbol = match[1] || match[3] || '';
+    const power = match[2] ? match[2].replace(/\s+/g, '') : '\u221a';
+    if (!symbol) continue;
+    const key = `${symbol}${power}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ symbol, power });
+  }
+  return out;
+}
+
+/** True when the material writes an exponent on a symbol, or names one in words. */
+export function powerEvidenceIn(text: string): boolean {
+  if (poweredSymbols(text).length > 0) return true;
+  return /\b(squared|square of|quadratic|cubed|cube of|cubic)\b/i.test(text || '');
+}
+
+/** A whole factor above this is an outlier rather than a coefficient. */
+const MAX_INTEGER_FACTOR = 12;
+
+/** The whole factors spoken as words, so the diagnosis reads like a sentence. */
+const NUMBER_WORDS: Record<number, string> = {
+  2: 'two',
+  3: 'three',
+  4: 'four',
+  5: 'five',
+  6: 'six',
+  7: 'seven',
+  8: 'eight',
+  9: 'nine',
+  10: 'ten',
+  11: 'eleven',
+  12: 'twelve',
+};
+
+/**
+ * The whole powers worth naming, smallest base first.
+ *
+ * 4 = 2\u00b2, 8 = 2\u00b3, 9 = 3\u00b2, 16 = 2\u2074, 25 = 5\u00b2, 27 = 3\u00b3,
+ * 32 = 2\u2075, 64 = 4\u00b3, 81 = 3\u2074, 125 = 5\u00b3, 243 = 3\u2075. Past these
+ * a factor is a coefficient, not an exponent, and the smallest base is tried
+ * first because `16 = 2\u2074` is how a learner reads it.
+ */
+const POWER_SIGNATURES: { base: number; exponent: number }[] = [
+  { base: 2, exponent: 2 },
+  { base: 2, exponent: 3 },
+  { base: 3, exponent: 2 },
+  { base: 2, exponent: 4 },
+  { base: 4, exponent: 2 },
+  { base: 5, exponent: 2 },
+  { base: 3, exponent: 3 },
+  { base: 2, exponent: 5 },
+  { base: 4, exponent: 3 },
+  { base: 8, exponent: 2 },
+  { base: 3, exponent: 4 },
+  { base: 9, exponent: 2 },
+  { base: 5, exponent: 3 },
+  { base: 3, exponent: 5 },
+];
+
+/**
+ * The logarithm constants a wrong answer lands on, folded the way every ratio
+ * here is: `ln 2 = 0.6931` and `1 / ln 2 = 1.4427` are one fracture seen from
+ * two ends, and `ln 10 = 2.3026` is the bridge between a base-10 scale and a
+ * natural-exponential law.
+ */
+const LOG_SIGNATURES: { folded: number; label: string }[] = [
+  { folded: 1.4427, label: '1 / ln 2' },
+  { folded: 2.3026, label: 'ln 10' },
+];
+
+/** A logarithm, or a scale built on one, is in play in the material. */
+const LOG_CONTEXT = /\b(ln|log|log10|half[- ]?life|decay constant|doubling time|pKa?|pH|decibel|dB)\b/i;
+
+/** The whole power a folded ratio sits on, smallest base first. */
+function powerSignatureOf(folded: number): { base: number; exponent: number } | null {
+  for (const signature of POWER_SIGNATURES) {
+    if (near(folded, Math.pow(signature.base, signature.exponent), 0.02)) return signature;
+  }
+  return null;
+}
+
+/** The logarithm constant a folded ratio sits on. */
+function logSignatureOf(folded: number): { folded: number; label: string } | null {
+  for (const signature of LOG_SIGNATURES) {
+    if (near(folded, signature.folded, 0.02)) return signature;
+  }
+  return null;
+}
+
+/**
+ * The whole factor a folded ratio sits on, when it is one worth naming.
+ *
+ * Starts at three, because two has its own name and its own explanation: an atom
+ * count is the commonest cause of exactly two, and calling that a coefficient
+ * would send the learner to the wrong line.
+ */
+function integerFactorOf(folded: number): number | null {
+  const rounded = Math.round(folded);
+  if (rounded < 3 || rounded > MAX_INTEGER_FACTOR) return null;
+  return near(folded, rounded, 0.03) ? rounded : null;
+}
+
+/** A named shape, with the tier that decides precedence between two candidates. */
+interface NumericShape {
+  trapId: TrapId;
+  tier: number;
+  deviation: number;
+}
+
+/**
+ * The one place a crossed pair becomes a named shape.
+ *
+ * The tier IS the precedence, for the same reason `autopsy.ts` tiers it there: a
+ * pure sign inversion (right magnitude, wrong sign) is a tier above every
+ * magnitude shape, because the sign text makes a claim about the magnitude that
+ * has to be true. Below it, a factor that is BOTH a whole number and a whole
+ * power is a coefficient unless the material writes a law the exponent could
+ * have come from — a power claimed with no law in sight is the inference this
+ * module refuses to make — and a whole power above the coefficient ceiling is
+ * named anyway, one tier down, rather than left silent.
+ */
+function shapeOfPair(ratio: number, folded: number, reference: string): NumericShape | null {
+  if (ratio < 0 && near(folded, 1, 0.02)) {
+    return { trapId: 'sign_convention_flip', tier: 0, deviation: Math.abs(folded - 1) };
+  }
+  if (near(folded, 2, 0.03)) {
+    return { trapId: 'factor_of_two', tier: 1, deviation: Math.abs(folded - 2) };
+  }
+  const log = logSignatureOf(folded);
+  if (log) {
+    return { trapId: 'logarithm_dropped', tier: 1, deviation: Math.abs(folded - log.folded) };
+  }
+  if (near(folded, 1000, 0.05)) {
+    return { trapId: 'unit_slip', tier: 1, deviation: Math.abs(folded - 1000) };
+  }
+
+  const power = powerSignatureOf(folded);
+  if (power && powerEvidenceIn(reference)) {
+    return {
+      trapId: 'power_law_dropped',
+      tier: 2,
+      deviation: Math.abs(folded - Math.pow(power.base, power.exponent)),
+    };
+  }
+
+  const integer = integerFactorOf(folded);
+  if (integer !== null) {
+    return { trapId: 'whole_factor_off', tier: 2, deviation: Math.abs(folded - integer) };
+  }
+
+  if (power) {
+    return {
+      trapId: 'power_law_dropped',
+      tier: 3,
+      deviation: Math.abs(folded - Math.pow(power.base, power.exponent)),
+    };
+  }
+
+  return null;
+}
+
 /** A repeated element in the reference whose count explains the ratio. */
 function repeatedElementMatching(
   reference: string,
@@ -212,16 +401,15 @@ function detectNumeric(
   const scored = candidates
     .map((c) => {
       const magnitude = Math.abs(c.ratio);
-      const shape = magnitude >= 1 ? magnitude : 1 / magnitude;
-      if (near(shape, 2, 0.03)) return { c, target: 2, deviation: Math.abs(shape - 2) };
-      if (near(shape, 1000, 0.05)) return { c, target: 1000, deviation: Math.abs(shape - 1000) };
-      if (c.ratio < 0 && near(magnitude, 1, 0.02)) {
-        return { c, target: -1, deviation: Math.abs(magnitude - 1) };
-      }
-      return null;
+      const folded = magnitude >= 1 ? magnitude : 1 / magnitude;
+      const shape = shapeOfPair(c.ratio, folded, reference);
+      return shape ? { c, shape, folded } : null;
     })
-    .filter((s): s is NonNullable<typeof s> => s !== null)
-    .sort((a, b) => a.deviation - b.deviation);
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    // Tier first, deviation second: the tier is the taxonomy's precedence, and
+    // a tie between two exact signatures must not depend on the order the pairs
+    // happened to be crossed in.
+    .sort((a, b) => a.shape.tier - b.shape.tier || a.shape.deviation - b.shape.deviation);
 
   const best = scored[0];
   if (!best) return null;
@@ -236,7 +424,7 @@ function detectNumeric(
   // from exactly the direction the fold was added to serve.
   const factor = Math.abs(ratio) >= 1 ? Math.abs(ratio) : 1 / Math.abs(ratio);
 
-  if (best.target === -1) {
+  if (best.shape.trapId === 'sign_convention_flip') {
     return {
       trapId: 'sign_convention_flip',
       structuralReason:
@@ -246,7 +434,7 @@ function detectNumeric(
     };
   }
 
-  if (best.target === 1000) {
+  if (best.shape.trapId === 'unit_slip') {
     return {
       trapId: 'unit_slip',
       structuralReason:
@@ -256,8 +444,33 @@ function detectNumeric(
     };
   }
 
-  // Ratio of 2 (or ½). The cause is either an atom count in the denominator or
-  // an unaccounted stoichiometric factor — and the reference formula says which.
+  if (best.shape.trapId === 'logarithm_dropped') {
+    const log = logSignatureOf(factor);
+    const inContext = LOG_CONTEXT.test(reference);
+    return {
+      trapId: 'logarithm_dropped',
+      structuralReason: `Your value sits exactly one logarithm-constant away from the expected one: ${fmt(factor)} is ${log?.label || 'a logarithm constant'}. That is the signature of a LOGARITHM dropped or taken in the wrong base rather than of a coefficient or a conversion, so the missing step is not arithmetic and re-reading the numbers cannot find it.${inContext ? ' The material names a log scale, so that constant belongs in this answer.' : ''}`,
+      arithmeticReveal: `${reveal} ≈ ${log?.label || 'ln'}`,
+      whereItBreaks: 'the logarithm, or the base it is taken in',
+    };
+  }
+
+  if (best.shape.trapId === 'power_law_dropped') {
+    const power = powerSignatureOf(factor);
+    if (power) {
+      const law = poweredSymbols(reference).find((entry) => entry.power !== '\u221a') || poweredSymbols(reference)[0];
+      return {
+        trapId: 'power_law_dropped',
+        structuralReason: `Your value is off by exactly ${fmt(factor)}, and ${fmt(factor)} is a WHOLE POWER — ${power.base} raised to the ${power.exponent}. That is the signature of an EXPONENT rather than of a coefficient: a quantity that enters a law squared, cubed or to the fourth power produces exactly this factor when its exponent is written a step off, and no amount of re-adding the numbers reconciles it.${law ? ` The material's own notation carries ${law.power === '\u221a' ? `\u221a${law.symbol}` : `${law.symbol}${law.power}`}, so write the law with its exponent before substituting anything.` : ' Write the law with its exponent before substituting anything.'}`,
+        arithmeticReveal: `${reveal}, and ${fmt(factor)} = ${power.base}^${power.exponent}`,
+        whereItBreaks: 'the exponent on the quantity, not the numbers multiplied together',
+      };
+    }
+  }
+
+  // An atom count in the denominator explains a whole factor, whatever the whole
+  // factor happens to be: the check that used to be asked only about two is asked
+  // about every factor this table can name.
   const repeated = repeatedElementMatching(reference, factor);
   if (repeated) {
     return {
@@ -268,6 +481,17 @@ function detectNumeric(
     };
   }
 
+  if (best.shape.trapId === 'whole_factor_off') {
+    const whole = Math.round(factor);
+    const word = NUMBER_WORDS[whole] || fmt(whole);
+    return {
+      trapId: 'whole_factor_off',
+      structuralReason: `Your value is off by exactly a factor of ${word}, which is a coefficient or a count rather than a slip in the arithmetic. In a reaction that is not all 1:1 every mole-to-mole conversion carries the coefficient in front of its species, and a line written as though the ratio were 1:1 lands on exactly this whole factor. The same shape appears outside chemistry, wherever a whole number belongs in the definition — a valence, a charge, a multiplicity, a count per formula unit — and never made it into the line. Find the ${whole} and it will reconcile.`,
+      arithmeticReveal: reveal,
+      whereItBreaks: 'the whole-number factor that belongs in the line before the arithmetic',
+    };
+  }
+
   return {
     trapId: 'factor_of_two',
     structuralReason:
@@ -275,6 +499,98 @@ function detectNumeric(
     arithmeticReveal: reveal,
     whereItBreaks: 'the stoichiometric factor in front of the species',
   };
+}
+
+// ─── Rule: an exponent dropped from a symbolic line ─────────────────────────
+
+/**
+ * A power the material writes on a symbol that the learner's own line does not carry.
+ *
+ * This is the rule that exists because the extractor is chemistry-shaped. A
+ * calculus answer — `f'(x) = 1 / (2√x)` — carries no element token and no
+ * measured quantity, so every numeric rule above is silent on it and the panel
+ * falls back to prose. The exponent IS the signal, and it is deterministic: a
+ * `√x` or an `r²` in the material against a bare symbol in the answer is a
+ * dropped exponent, and no pair of numbers can conceal it.
+ *
+ * Scoped deliberately: it fires only when the learner's line carries no measured
+ * quantity at all. With numbers on both sides the numeric diff is the stronger
+ * evidence — an arithmetic ratio is not overruled by a symbol match — so this
+ * rule stays out of its way.
+ */
+/**
+ * Every number in the text, subscripts excluded but coefficient-sized values kept.
+ *
+ * `quantityNumbers` deliberately drops a bare small integer, because a `2` in an
+ * equation is a coefficient and crossing it against a `1` would manufacture a
+ * factor out of nothing. The power rule needs the other half of that: a quantity
+ * at 4 and at 16 is exactly the pair that names a dropped exponent, and both are
+ * integral, so the measured-quantity filter hides the one case where the
+ * arithmetic is unambiguous.
+ */
+function rawNumbers(text: string): number[] {
+  const out: number[] = [];
+  const re = /-?\d+(?:\.\d+)?/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const prev = match.index > 0 ? text[match.index - 1] : '';
+    if (/[A-Za-z]/.test(prev)) continue; // subscript, not a quantity
+    const value = Number(match[0]);
+    if (Number.isFinite(value)) out.push(value);
+  }
+  return out;
+}
+
+/** `16 ÷ 4 = 4.00, and 4 = 2^2` — the division and the power it is, or ''. */
+function powerReveal(learner: string, reference: string): string {
+  const expectedNumbers = rawNumbers(reference);
+  const learnerNumbers = rawNumbers(learner);
+  for (const expected of expectedNumbers) {
+    for (const learnerValue of learnerNumbers) {
+      if (expected === 0 || learnerValue === 0) continue;
+      const larger = Math.max(Math.abs(expected), Math.abs(learnerValue));
+      const smaller = Math.min(Math.abs(expected), Math.abs(learnerValue));
+      if (smaller === 0) continue;
+      const folded = larger / smaller;
+      const shape = powerSignatureOf(folded);
+      if (!shape) continue;
+      return `${fmt(larger)} ÷ ${fmt(smaller)} = ${folded.toFixed(2)}, and ${fmt(
+        folded
+      )} = ${shape.base}^${shape.exponent}`;
+    }
+  }
+  return '';
+}
+
+function detectPowerOmission(learner: string, reference: string): TrapDiagnosis | null {
+  if (quantityNumbers(learner).length > 0) return null;
+  const powers = poweredSymbols(reference);
+  if (powers.length === 0) return null;
+
+  const learnerPowers = poweredSymbols(learner);
+  for (const { symbol, power } of powers) {
+    // An ASCII name is required for the word-boundary test: a Greek symbol is
+    // matched against the learner's text directly.
+    const name = symbol.replace(/[^A-Za-z0-9_]/g, '');
+    if (!name) continue;
+    // A preceding DIGIT is a boundary: in `2x` the coefficient sits flush against
+    // the symbol, and a quantity that only ever appears with a coefficient in
+    // front of it would otherwise never read as mentioned. Letters are not a
+    // boundary in either direction, which is what keeps `H2O` from reading as a
+    // mention of `H`.
+    const mentioned = new RegExp(`(^|[^A-Za-z_])${name}([^A-Za-z0-9_]|$)`).test(learner);
+    if (!mentioned) continue;
+    if (learnerPowers.some((entry) => entry.symbol === symbol)) continue;
+
+    const written = power === '\u221a' ? `\u221a${symbol}` : `${symbol}${power}`;
+    return {
+      trapId: 'power_law_dropped',
+      structuralReason: `The material's own line carries ${written} and yours carries ${symbol} bare, so the exponent never made it into the substitution. A quantity that enters a law squared, cubed or under a root changes the answer as a POWER rather than by a coefficient, and re-adding the numbers cannot recover it: the law has to be written with its exponent before anything is substituted.`,
+      arithmeticReveal: powerReveal(learner, reference),
+      whereItBreaks: `the exponent on ${symbol}, not the numbers multiplied together`,
+    };
+  }
+  return null;
 }
 
 // ─── Rule 7: a unit written the wrong way round ─────────────────────────────
@@ -333,6 +649,10 @@ export function classifyTrap(input: TrapInput): TrapDiagnosis | null {
     detectReversedOrder(learner) ??
     detectSubscript(learner, reference) ??
     detectNumeric(learner, expected, reference) ??
+    // The symbolic line the numeric diff cannot read at all: no measured
+    // quantity on the learner's side means there is nothing to cross, and the
+    // exponent the material writes is then the only evidence there is.
+    detectPowerOmission(learner, reference) ??
     detectUnitText(learner, reference)
   );
 }

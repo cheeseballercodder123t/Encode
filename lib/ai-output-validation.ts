@@ -485,7 +485,128 @@ export function validateBatchEvaluation(raw: unknown): SafeBatchEvaluation {
  * answer assembled from nothing, which is worse than saying nothing. So the
  * rules live in `lib/inquisitor/parse.ts` (pure, unit-tested) and the route
  * turns a refusal into a message the learner can act on.
+ *
+ * `submittedClaim` is the learner's own sentence, and it is passed through so the
+ * fidelity gate can run here rather than only in the client: a verdict about a
+ * sentence the learner did not write is refused at the boundary it crossed,
+ * which is the only place that can also catch a restatement arriving from a
+ * proxy in front of the route.
  */
-export function validateInquisitorRead(raw: unknown): InquisitorParseResult {
-  return normalizeInquisitorRead(raw);
+export function validateInquisitorRead(
+  raw: unknown,
+  submittedClaim = ''
+): InquisitorParseResult {
+  return normalizeInquisitorRead(raw, submittedClaim);
+}
+
+// ─── Error autopsy: the narrative half ──────────────────────────────────────
+
+/** The model's prose over a fracture TypeScript has already named. */
+export interface AutopsyNarrative {
+  /** Why this is structural, in one or two sentences. */
+  narrative: string;
+  /** The corrected construction. */
+  correction: string;
+}
+
+export type AutopsyNarrativeRefusal = 'empty' | 'factor-mismatch';
+
+export interface AutopsyNarrativeResult {
+  ok: boolean;
+  narrative: AutopsyNarrative;
+  refused?: AutopsyNarrativeRefusal;
+  message?: string;
+}
+
+/** Number words a model reaches for when it means a factor. */
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  hundred: 100,
+  thousand: 1000,
+  half: 0.5,
+  double: 2,
+  twice: 2,
+  triple: 3,
+};
+
+/**
+ * A claim about the SIZE of the error: `factor of two`, `off by 3`, `×1000`.
+ *
+ * Deliberately narrow. A bare number is not a claim — "the 2 in the balanced
+ * equation" is the model naming where to look, not asserting a magnitude — so
+ * only the magnitude vocabulary counts, which is what keeps the guard from
+ * refusing a correct narrative over an incidental digit.
+ */
+const FACTOR_CLAIM = /(?:factor\s+of|off\s+by|times)\s+([0-9]+(?:\.[0-9]+)?|[a-z]+)/gi;
+
+function claimedFactors(text: string): number[] {
+  const out: number[] = [];
+  let match: RegExpExecArray | null;
+  FACTOR_CLAIM.lastIndex = 0;
+  while ((match = FACTOR_CLAIM.exec(text)) !== null) {
+    const token = match[1].toLowerCase();
+    const word = NUMBER_WORDS[token];
+    const numeric = word ?? Number(token);
+    if (Number.isFinite(numeric) && numeric !== 0) out.push(numeric);
+  }
+  return out;
+}
+
+/**
+ * Validates the autopsy's narrative against the arithmetic that was computed in
+ * code.
+ *
+ * This validator REPAIRS nothing and REFUSES in one specific case: a narrative
+ * that contradicts the number TypeScript already measured. The computed figure
+ * is the evidence and the prose is the reading, so a reading that says "a factor
+ * of three" over a computed factor of two is not a worse reading — it is a
+ * wrong one, and showing it next to the arithmetic would teach the learner to
+ * distrust the one part of the panel that cannot be wrong.
+ *
+ * `allowedFactors` is the set the prose is permitted to claim (the folded ratio
+ * the diff measured). An empty narrative is refused as `empty`.
+ */
+export function validateAutopsyNarrative(
+  raw: unknown,
+  allowedFactors: number[]
+): AutopsyNarrativeResult {
+  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+  const narrative = asString(data.narrative, '');
+  const correction = asString(data.correction, '');
+
+  if (!narrative) {
+    return {
+      ok: false,
+      narrative: { narrative: '', correction: '' },
+      refused: 'empty',
+      message: 'The autopsy came back with no explanation, so it is not shown.',
+    };
+  }
+
+  const allowed = allowedFactors.filter((f) => Number.isFinite(f) && f !== 0);
+  if (allowed.length > 0) {
+    const mismatch = claimedFactors(narrative).find(
+      (claimed) =>
+        !allowed.some((factor) => Math.abs(claimed - factor) / Math.abs(factor) <= 0.02)
+    );
+    if (mismatch !== undefined) {
+      return {
+        ok: false,
+        narrative: { narrative: '', correction: '' },
+        refused: 'factor-mismatch',
+        message: `The explanation claimed a factor of ${mismatch} while the computed discrepancy is ${allowed[0]}. The arithmetic is computed here, so the prose is not shown.`,
+      };
+    }
+  }
+
+  return { ok: true, narrative: { narrative, correction } };
 }

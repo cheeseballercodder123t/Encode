@@ -31,6 +31,36 @@ export interface ClueRung {
  * ladder — which is how the UI knows to render no clue control at all rather
  * than a button that does nothing.
  */
+/**
+ * How many rungs were revealed during the CURRENT attempt.
+ *
+ * The friction governor needs exactly this number and nothing else to tell a
+ * clean win from a scaffolded one: solved-without-a-rung is the one reading that
+ * says the mechanism is held. The ladder is the only place that knows, and no
+ * component can pass it up the tree — the ladder is rendered inside fifteen
+ * different stage templates — so it is counted here, at the source.
+ *
+ * Module scope is correct rather than a compromise: exactly one stage is being
+ * attempted at a time, so "the current attempt" is a property of the page. The
+ * workbench resets it when the stage changes.
+ */
+let revealedThisAttempt = 0;
+
+/** Called by the ladder's own control, once per rung handed over. */
+export function markRungRevealed(): void {
+  revealedThisAttempt += 1;
+}
+
+/** What the governor records. */
+export function rungsRevealed(): number {
+  return revealedThisAttempt;
+}
+
+/** Called when a new stage opens, so the count belongs to one attempt. */
+export function resetRungsRevealed(): void {
+  revealedThisAttempt = 0;
+}
+
 export function clueRungs(clue?: string, clues?: string[]): ClueRung[] {
   const seen = new Set<string>();
   const texts: string[] = [];

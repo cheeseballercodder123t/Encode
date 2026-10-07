@@ -1201,6 +1201,105 @@ export const PRIMING_RESPONSES: Record<string, unknown> = {
   extremum: PRIMING_EXTREMUM_RESPONSE,
 };
 
+// ─── Timed crucible (/api/crucible) ─────────────────────────────────────────
+//
+// Three multi-constraint problems, each decomposed into sequential STATES with
+// a declared weight. The route turns those weights into whole seconds, so this
+// fixture is what the HUD's "target 1.3m" is computed from: 12 minutes across
+// three problems is 240s each, and three states of equal weight is 80s apiece.
+// Every problem carries constraints and an ask, because a problem that states
+// neither is not multi-constraint.
+export const CRUCIBLE_RESPONSE = {
+  minutes: 12,
+  problems: [
+    {
+      title: 'Thermochemical piston',
+      domain: 'Thermochemistry',
+      constraints: [
+        'The cylinder is frictionless and the piston is exposed to 1 atm.',
+        '250 g of water starts at 22 °C and holds the heat released.',
+      ],
+      ask: 'Find the water\u2019s final temperature and the boundary work done by the H2 released.',
+      states: [
+        { label: 'System demand: the heat the water requires', weight: 1 },
+        { label: 'Boundary work: the gas expanding against 1 atm', weight: 1 },
+        { label: 'Energy balance: q + w on one ledger', weight: 1 },
+      ],
+    },
+    {
+      title: 'Unequal titration',
+      domain: 'Solution chemistry',
+      constraints: [
+        'The weak acid is titrated with a strong base of equal concentration.',
+        'The solution density is 1.08 g/mL.',
+      ],
+      ask: 'Find the pH of the buffer that survives the unequal volumes.',
+      states: [
+        { label: 'Moles of each species, from unequal volumes', weight: 2 },
+        { label: 'The excess reagent after neutralization', weight: 1 },
+        { label: 'Henderson-Hasselbalch on the surviving pair', weight: 1 },
+      ],
+    },
+    {
+      title: 'Blocked conductance',
+      domain: 'Electrophysiology',
+      constraints: [
+        'Extracellular K+ is doubled while the Na+ conductance is half-blocked.',
+        'The cell sits at 37 °C.',
+      ],
+      ask: 'Find the shift in the resting membrane potential and the new firing threshold.',
+      states: [
+        { label: 'Nernst equilibrium for the changed K+ gradient', weight: 1 },
+        { label: 'Partial Na+ block inside GHK', weight: 1 },
+      ],
+    },
+  ],
+};
+
+// ─── Emergency triage (/api/crisis) ─────────────────────────────────────────
+//
+// The shape the route returns for a night with two deadlines and three overdue
+// items. The frozen lines and the panic arithmetic are computed server-side by
+// `lib/crisis/buffer.ts` from the weights the dump states, so the fixture is the
+// derived plan rather than the derived plan's inputs.
+export const TRIAGE_DUMP =
+  'Gothic Lit essay — due Oct 14, worth 30%\n' +
+  'Chem makeup quiz — due tomorrow, worth 5%\n' +
+  'Care of Athletes quiz — Friday, 10 points\n' +
+  'Practice set 7 (optional)\n' +
+  'QuestBridge application — due Oct 20';
+
+export const CRISIS_RESPONSE = {
+  tasks: [
+    { id: 'crisis-1', title: 'Gothic Lit essay', dueAt: null, dueLabel: 'due Oct 14', weightPct: 30, ungraded: false },
+    { id: 'crisis-2', title: 'Chem makeup quiz', dueAt: null, dueLabel: 'due tomorrow', weightPct: 5, ungraded: false },
+    { id: 'crisis-3', title: 'Care of Athletes quiz', dueAt: null, dueLabel: 'Friday', weightPct: null, ungraded: false },
+    { id: 'crisis-4', title: 'Practice set 7', dueAt: null, dueLabel: '', weightPct: null, ungraded: true },
+    { id: 'crisis-5', title: 'QuestBridge application', dueAt: null, dueLabel: 'due Oct 20', weightPct: null, ungraded: false },
+  ],
+  frozen: [
+    {
+      task: { id: 'crisis-4', title: 'Practice set 7', dueAt: null, dueLabel: '', weightPct: null, ungraded: true },
+      riskPct: 0,
+      line: 'Freezing Practice set 7 for 48 hours. Marginal grade risk: 0.0%. It carries no grade at all.',
+    },
+  ],
+  focus: { id: 'crisis-3', title: 'Care of Athletes quiz', dueAt: null, dueLabel: 'Friday', weightPct: null, ungraded: false },
+  panicLines: [
+    '4/5 on the Chem makeup quiz is 80%, on an item worth 5% of the final grade: 5 × 80 ÷ 100 = 4.0 points.',
+    'Frozen work carries 0.0% of the remaining grade. The rest is still live.',
+    'State a weight for Care of Athletes and QuestBridge and they become decidable.',
+  ],
+  withheld: [
+    {
+      task: { id: 'crisis-3', title: 'Care of Athletes quiz', dueAt: null, dueLabel: 'Friday', weightPct: null, ungraded: false },
+      reason: 'no weight was stated, so \u201clow-leverage\u201d cannot be shown and nothing was frozen on its behalf',
+    },
+  ],
+  runwayMinutes: 90,
+  assumedScorePct: 80,
+};
+
 // ─── Question-first inquisitor (/api/inquisitor) ─────────────────────────────
 //
 // Three reads, because the three verdicts are three different surfaces: a plain

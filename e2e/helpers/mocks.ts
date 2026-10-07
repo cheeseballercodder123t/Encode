@@ -23,6 +23,8 @@ import {
   DISCRIMINATION_RESPONSE,
   INQUISITOR_TRIPWIRE_RESPONSE,
   INQUISITOR_TRUE_RESPONSE,
+  CRUCIBLE_RESPONSE,
+  CRISIS_RESPONSE,
 } from './fixtures';
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
@@ -169,6 +171,27 @@ export async function mockAiApis(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(PRETEST_RESPONSE),
+    })
+  );
+
+  // Timed crucible: the proctor's sprint, state by state. The route is mocked as
+  // it answers, so the client's own clock allocation (12 minutes over three
+  // problems, split across each problem's declared weights) is what the HUD
+  // paces — that arithmetic never runs in this fixture.
+  await page.route('**/api/crucible', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(CRUCIBLE_RESPONSE),
+    })
+  );
+
+  // Emergency triage: the reader's plan for a panicking dump.
+  await page.route('**/api/crisis', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(CRISIS_RESPONSE),
     })
   );
 

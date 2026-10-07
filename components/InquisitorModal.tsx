@@ -6,7 +6,7 @@ import { loadAISettings } from '@/lib/storage';
 import { playSound } from '@/lib/audio';
 import { loadParadoxes, openParadoxesFor, raiseParadox } from '@/lib/mr-m/ledger';
 import { loadInterferenceTraps, type InterferenceTrap } from '@/lib/interference-traps';
-import { paradoxDraftFor } from '@/lib/inquisitor/parse';
+import { REFUSAL_MESSAGES, claimsMatch, paradoxDraftFor } from '@/lib/inquisitor/parse';
 import { VERDICT_LABELS, type InquisitorRead } from '@/lib/inquisitor/contract';
 import type { ParadoxEntry } from '@/lib/mr-m/types';
 
@@ -62,6 +62,9 @@ export function InquisitorModal({ isOpen, onClose, topic, domain, contextSnippet
 
   const [claim, setClaim] = useState('');
   const [read, setRead] = useState<InquisitorRead | null>(null);
+  /** The learner's own sentence, kept apart from the one that was interrogated. */
+  const [submittedClaim, setSubmittedClaim] = useState('');
+  const [restated, setRestated] = useState(false);
   const [downgraded, setDowngraded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isReading, setIsReading] = useState(false);
@@ -120,13 +123,27 @@ export function InquisitorModal({ isOpen, onClose, topic, domain, contextSnippet
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'The claim could not be interrogated.');
 
+      // The fidelity check is repeated here rather than trusted from the
+      // response: the panel must not render a verdict about a sentence the
+      // learner did not write even if a route (or a proxy in front of it) hands
+      // one over, and the check is a pure string comparison either way.
+      const interrogated = String(data.claim || '');
+      if (!claimsMatch(interrogated, text)) {
+        setError(REFUSAL_MESSAGES.claimDrift);
+        playSound('wrong');
+        return;
+      }
+
+      setSubmittedClaim(text);
       setRead({
         verdict: data.verdict,
-        claim: data.claim,
+        claim: interrogated,
         proof: Array.isArray(data.proof) ? data.proof : [],
         tripwire: data.tripwire || '',
         correction: data.correction || '',
+        contextAxis: data.contextAxis || '',
       });
+      setRestated(Boolean(data.claimRestated) || interrogated.trim() !== text);
       setDowngraded(Boolean(data.downgraded));
       playSound(data.verdict === 'FALSE' ? 'wrong' : 'success');
     } catch (e: any) {
@@ -256,6 +273,7 @@ export function InquisitorModal({ isOpen, onClose, topic, domain, contextSnippet
                   type="button"
                   onClick={() => {
                     setRead(null);
+                    setRestated(false);
                     setDowngraded(false);
                     setSavedStatement(null);
                     playSound('click');
@@ -302,13 +320,32 @@ export function InquisitorModal({ isOpen, onClose, topic, domain, contextSnippet
                 )}
               </div>
 
-              <div className="rounded-md border border-edge bg-inset p-3">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-solder block mb-1">
+              <div className="rounded-md border border-edge bg-inset p-3 space-y-2">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-solder block">
                   what was interrogated
                 </span>
+                {/*
+                  * The learner's own sentence is the anchor, always. A
+                  * restatement is a service for a vague input — but a verdict
+                  * shown only against the model's rewrite is a verdict about a
+                  * sentence they did not write, so the rewrite is labelled as
+                  * one rather than substituted in silently.
+                  */}
                 <p data-testid="inquisitor-claim-echo" className="text-xs leading-relaxed text-bone">
-                  {read.claim}
+                  {submittedClaim || read.claim}
                 </p>
+                {restated && (
+                  <p
+                    data-testid="inquisitor-restatement"
+                    className="text-[11px] leading-relaxed text-solder border-t border-edge/70 pt-2"
+                  >
+                    <span className="font-mono text-[10px] text-flux-300 mr-1.5">
+                      [ RESTATED ]
+                    </span>
+                    your sentence was too vague to be false, so the claim verified above is this
+                    checkable version of it: {read.claim}
+                  </p>
+                )}
               </div>
 
               <div className="rounded-md border border-edge/70 p-3">
@@ -355,6 +392,20 @@ export function InquisitorModal({ isOpen, onClose, topic, domain, contextSnippet
                       )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {read.contextAxis && (
+                <div className="rounded-md border border-flux-500/40 bg-flux-500/[0.06] p-3">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-flux-300 block mb-1">
+                    [ CONDITIONS ] the regime this is true inside
+                  </span>
+                  <p
+                    data-testid="inquisitor-context-axis"
+                    className="text-xs leading-relaxed text-bone"
+                  >
+                    {read.contextAxis}
+                  </p>
                 </div>
               )}
 

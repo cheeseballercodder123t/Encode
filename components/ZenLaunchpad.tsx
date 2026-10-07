@@ -134,6 +134,14 @@ interface ZenLaunchpadProps {
    * sentence the learner already believes.
    */
   onOpenInquisitor?: () => void;
+  /**
+   * Optional timed-crucible entry. Like the inquisitor it needs no source — a
+   * sprint is timed against a topic, and the topic can come from the field
+   * above or be named inside the sheet.
+   */
+  onOpenCrucible?: () => void;
+  /** Optional emergency-triage entry, for the night everything is due at once. */
+  onOpenTriage?: () => void;
   /** Don't accept server-rendered control clicks before state hydration. */
   ready: boolean;
 }
@@ -241,6 +249,8 @@ export function ZenLaunchpad({
   onTryToyExample,
   onTryPathwayBuilder,
   onOpenInquisitor,
+  onOpenCrucible,
+  onOpenTriage,
   ready,
   isLoading
 }: ZenLaunchpadProps) {
@@ -500,6 +510,34 @@ export function ZenLaunchpad({
                   title="Question-first inquisitor: state a claim you suspect is true and get the verdict, the governing law behind it, and the exact case where it stops holding"
                 >
                   Interrogate a claim
+                </button>
+              )}
+              {onOpenCrucible && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    onOpenCrucible();
+                  }}
+                  data-testid="open-crucible"
+                  className="px-3.5 py-2 border border-hazard-500/50 text-hazard-200 hover:bg-hazard-500/10 text-xs rounded-full transition-colors duration-150 cursor-pointer"
+                  title="Timed crucible: multi-constraint problems against a clock that is allocated across each problem's states, with pacing reported per state"
+                >
+                  Timed crucible
+                </button>
+              )}
+              {onOpenTriage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    onOpenTriage();
+                  }}
+                  data-testid="open-triage"
+                  className="px-3.5 py-2 border border-edge/70 text-solder hover:text-bone hover:border-signal-500/50 text-xs rounded-full transition-colors duration-150 cursor-pointer"
+                  title="Emergency triage: dump the whole backlog, freeze what can prove it is low-leverage, and run one 90-minute single-task runway"
+                >
+                  Emergency triage
                 </button>
               )}
               <button

@@ -8,8 +8,10 @@ import {
   type InquisitorRead,
 } from '../../lib/inquisitor/contract';
 import {
+  claimsMatch,
   coerceVerdict,
   describeInquisitorRead,
+  hasContrastingAxis,
   normalizeInquisitorRead,
   paradoxDraftFor,
 } from '../../lib/inquisitor/parse';
@@ -40,6 +42,7 @@ const TRUE_READ: InquisitorRead = {
   proof: ['A Taylor series is defined as the unique polynomial whose derivatives match the function at the origin.'],
   tripwire: '',
   correction: '',
+  contextAxis: '',
 };
 
 describe('the inquisitor contract', () => {
@@ -72,10 +75,27 @@ describe('the inquisitor contract', () => {
   });
 
   it('requires verdict, claim and proof in the schema', () => {
+    // The context axis widened the payload, deliberately: a claim whose truth
+    // turns on a regime needs somewhere to put the regime, and a field the
+    // model cannot return is a rule it cannot follow. The three required fields
+    // are unchanged — an axis belongs to the verdict that carries a boundary,
+    // and demanding it on every read would invent context for claims that have
+    // none.
     expect(inquisitorSchema.required).toEqual(['verdict', 'claim', 'proof']);
     expect(Object.keys(inquisitorSchema.properties).sort()).toEqual(
-      ['claim', 'correction', 'proof', 'tripwire', 'verdict'].sort()
+      ['claim', 'contextAxis', 'contextDependent', 'correction', 'proof', 'tripwire', 'verdict'].sort()
     );
+  });
+
+  it('tells a context-dependent claim to name its regimes instead of hedging', () => {
+    expect(INQUISITOR_SYSTEM_PROMPT).toContain('"It depends" is never the verdict');
+    expect(INQUISITOR_SYSTEM_PROMPT).toContain('NAME THE AXIS');
+    expect(INQUISITOR_SYSTEM_PROMPT).toContain('A one-word axis is not an axis');
+  });
+
+  it('bounds the restatement to vagueness rather than convenience', () => {
+    expect(INQUISITOR_SYSTEM_PROMPT).toContain('Restating is for vagueness, never for convenience');
+    expect(INQUISITOR_SYSTEM_PROMPT).toContain('keep every term the');
   });
 
   it('leaves the claim last in the user turn, with the context above it', () => {
@@ -245,6 +265,94 @@ describe('normalizeInquisitorRead — what the learner is shown', () => {
     expect(validateInquisitorRead({ verdict: 'TRUE', claim: 'x', proof: [] }).ok).toBe(false);
   });
 
+  it('carries a context-dependent read only when the regimes are actually named', () => {
+    const result = normalizeInquisitorRead({
+      verdict: 'TRUE_WITH_BOUNDARY_TRIPWIRE',
+      claim: 'Elevated cortisol causes immunosuppression.',
+      proof: ['Glucocorticoids suppress lymphocyte proliferation and cytokine production.'],
+      tripwire: 'In the acute stress response cortisol mobilises immune cells into the circulation, so surveillance rises before it falls.',
+      contextDependent: true,
+      contextAxis: 'acute vs chronic',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.read.verdict).toBe('TRUE_WITH_BOUNDARY_TRIPWIRE');
+    expect(result.read.contextAxis).toBe('acute vs chronic');
+    expect(result.downgraded).toBe(false);
+  });
+
+  it('accepts a regime pair that never says "vs", because that is still an axis', () => {
+    const result = normalizeInquisitorRead({
+      verdict: 'TRUE_WITH_BOUNDARY_TRIPWIRE',
+      claim: 'Elevated cortisol suppresses immunity.',
+      proof: ['Chronic glucocorticoid exposure downregulates inflammatory signalling.'],
+      tripwire: 'The acute response raises immune surveillance instead.',
+      contextDependent: true,
+      contextAxis: 'acute and chronic exposure',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.read.contextAxis).toContain('acute');
+  });
+
+  it('refuses a context-dependent claim whose axis names nothing', () => {
+    const base = {
+      verdict: 'TRUE_WITH_BOUNDARY_TRIPWIRE',
+      claim: 'Context matters here.',
+      proof: ['The effect changes with the regime.'],
+      tripwire: 'The effect reverses in the other regime.',
+      contextDependent: true,
+    };
+
+    for (const axis of ['', 'dose', 'it depends', 'in some cases', 'chronic']) {
+      const result = normalizeInquisitorRead({ ...base, contextAxis: axis });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.reason).toBe('noContextAxis');
+      expect(result.message).toContain('without naming the context');
+    }
+  });
+
+  it('refuses a context-dependent claim dressed as a plain TRUE instead of hiding the condition', () => {
+    const result = normalizeInquisitorRead({
+      verdict: 'TRUE',
+      claim: 'Elevated cortisol causes immunosuppression.',
+      proof: ['Glucocorticoids suppress cytokine production.'],
+      contextDependent: true,
+      contextAxis: 'acute vs chronic',
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('noContextAxis');
+  });
+
+  it('leaves a mathematical boundary alone — a counterexample needs no regime', () => {
+    const result = normalizeInquisitorRead({
+      verdict: 'TRUE_WITH_BOUNDARY_TRIPWIRE',
+      claim: 'Smoothness implies analyticity.',
+      proof: ['The remainder term is what an equality requires.'],
+      tripwire: 'e^(-1/x^2) is smooth and not analytic at the origin.',
+      contextAxis: '',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.read.tripwire).toContain('e^(-1/x^2)');
+    expect(result.read.contextAxis).toBe('');
+  });
+
+  it('never renders a stray axis on a read that carries no boundary', () => {
+    const result = normalizeInquisitorRead({
+      verdict: 'TRUE',
+      claim: 'Energy is conserved.',
+      proof: ['Noether: a time-translation symmetry yields a conserved quantity.'],
+      contextAxis: 'low vs high energy',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.read.contextAxis).toBe('');
+  });
+
   it('describes each verdict in one line for the panel', () => {
     expect(describeInquisitorRead(TRUE_READ)).toContain('Rigorous as stated');
     expect(
@@ -253,6 +361,101 @@ describe('normalizeInquisitorRead — what the learner is shown', () => {
     expect(describeInquisitorRead({ ...TRUE_READ, verdict: 'FALSE', correction: 'x' })).toContain(
       'Not rigorous'
     );
+  });
+});
+
+describe('claim fidelity — the verdict is about the learner’s sentence', () => {
+  const submitted = 'Elevated cortisol causes immunosuppression.';
+
+  it('accepts a restatement that only adds the mechanism', () => {
+    const result = normalizeInquisitorRead(
+      {
+        verdict: 'TRUE_WITH_BOUNDARY_TRIPWIRE',
+        claim:
+          'Elevated cortisol causes immunosuppression by suppressing lymphocyte proliferation.',
+        proof: ['Glucocorticoids suppress T-cell proliferation.'],
+        tripwire: 'Acute mobilisation raises surveillance before it falls.',
+        contextDependent: true,
+        contextAxis: 'acute vs chronic',
+      },
+      submitted
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Faithful, and still labelled: the learner sees which sentence was tested.
+    expect(result.claimRestated).toBe(true);
+  });
+
+  it('reports no restatement when the model used the learner’s own sentence', () => {
+    const result = normalizeInquisitorRead(
+      {
+        verdict: 'TRUE',
+        claim: submitted,
+        proof: ['Glucocorticoids suppress lymphocyte function.'],
+      },
+      submitted
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.claimRestated).toBe(false);
+  });
+
+  it('refuses a verdict about a sentence the learner did not write', () => {
+    // The failure this exists for: the input says "elevated cortisol", and the
+    // read comes back about "chronic psychological stress".
+    const result = normalizeInquisitorRead(
+      {
+        verdict: 'FALSE',
+        claim: 'Chronic psychological stress impairs wound healing through vagal tone.',
+        proof: ['Vagal withdrawal raises inflammatory tone.'],
+        correction: 'Stress impairs healing through glucocorticoid signalling, not vagal tone.',
+      },
+      submitted
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('claimDrift');
+    expect(result.message).toContain('different sentence');
+  });
+
+  it('checks fidelity only when the caller supplies the sentence it submitted', () => {
+    const result = normalizeInquisitorRead({
+      verdict: 'TRUE',
+      claim: 'Something else entirely.',
+      proof: ['A law that forces it.'],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.claimRestated).toBe(false);
+  });
+
+  it('matches on content words the shorter sentence carries', () => {
+    expect(claimsMatch('Cortisol suppresses immunity.', 'Cortisol suppresses immunity in chronic stress.')).toBe(
+      true
+    );
+    expect(claimsMatch('Cortisol suppresses immunity.', 'Insulin drives glucose uptake.')).toBe(false);
+    expect(claimsMatch('', 'anything')).toBe(false);
+    expect(claimsMatch('   ', 'anything')).toBe(false);
+  });
+});
+
+describe('hasContrastingAxis — two ends or nothing', () => {
+  it('accepts the forms that name two regimes', () => {
+    expect(hasContrastingAxis('acute vs chronic')).toBe(true);
+    expect(hasContrastingAxis('dose: low vs high')).toBe(true);
+    expect(hasContrastingAxis('in vitro vs in vivo')).toBe(true);
+    expect(hasContrastingAxis('low dose, high dose')).toBe(true);
+    expect(hasContrastingAxis('above the melting point and below it')).toBe(true);
+  });
+
+  it('refuses a hedge, a variable name, or a single end', () => {
+    expect(hasContrastingAxis('')).toBe(false);
+    expect(hasContrastingAxis('dose')).toBe(false);
+    expect(hasContrastingAxis('it depends')).toBe(false);
+    expect(hasContrastingAxis('in some cases')).toBe(false);
+    expect(hasContrastingAxis('chronic')).toBe(false);
   });
 });
 

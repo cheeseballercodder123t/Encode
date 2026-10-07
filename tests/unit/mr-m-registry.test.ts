@@ -69,6 +69,9 @@ describe('Mr M intervention registry', () => {
   it('keeps the ids the app renders against', () => {
     expect(getAllInterventions().map((i) => i.id)).toEqual([
       'paradox_ledger',
+      // Second, because a patch already written down is the standing
+      // constraint the rest of the stage is read through.
+      'patch_registry',
       'axiom_first',
       'ontology_cards',
       'state_machine_steps',
