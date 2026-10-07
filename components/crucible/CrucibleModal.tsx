@@ -112,6 +112,18 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
   const [elapsedPerState, setElapsedPerState] = useState<number[]>([]);
   const [summaryTable, setSummaryTable] = useState<StatePacing[]>([]);
 
+  /**
+   * The checkpoint numbers, keyed by the state's position in the FLATTENED
+   * sprint so the summary can read them back in the order the HUD paced them.
+   *
+   * Optional at every step, and that is the point: in an exam room the algebra
+   * goes on paper and only the answer gets bubbled, so a clock that demands
+   * typed equations measures typing speed rather than the thing it claims to
+   * rehearse. Nothing here is required to advance, and nothing about a state's
+   * recorded elapsed time depends on whether one was typed.
+   */
+  const [checkpoints, setCheckpoints] = useState<Record<number, string>>({});
+
   const [governor, setGovernor] = useState<GovernorDecision | null>(null);
   const [warnings, setWarnings] = useState<PreflightWarning[]>([]);
   const [fusion, setFusion] = useState<FusionRow | null>(null);
@@ -197,6 +209,10 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
 
   const problem = plan?.problems[problemIndex] ?? null;
   const states = problem?.states ?? [];
+  /** How many states the problems before this one hold — the HUD's own index. */
+  const problemOffset = (plan?.problems ?? [])
+    .slice(0, problemIndex)
+    .reduce((acc, entry) => acc + entry.states.length, 0);
   const bankedSeconds = elapsedPerState.reduce((acc, value) => acc + value, 0);
   const liveStateSeconds = Math.max(0, elapsedSeconds - bankedSeconds);
 
@@ -244,6 +260,7 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
       setStateIndex(0);
       setElapsedPerState([]);
       setSummaryTable([]);
+      setCheckpoints({});
       const began = Date.now();
       setStartedAt(began);
       setNow(began);
@@ -445,8 +462,13 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                 >
                   {isLoading ? 'Writing the sprint…' : 'Start the sprint'}
                 </button>
-                <span className="text-[10px] font-mono text-solder">
-                  no answer key · the summary reports pacing, not a score
+                <span
+                  data-testid="crucible-paper-note"
+                  className="text-[10px] font-mono text-solder leading-relaxed"
+                >
+                  no answer key · the summary reports pacing, not a score · work it on paper and type
+                  only the checkpoint number if you want it recorded — the sprint is paced on the step,
+                  not on your typing
                 </span>
               </div>
             </div>
@@ -540,6 +562,22 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                         </span>
                         {state.label}
                       </span>
+                      {/* One optional numeric checkpoint per state. Nothing here is
+                          required to advance, and the arithmetic belongs on paper. */}
+                      <input
+                        inputMode="decimal"
+                        value={checkpoints[problemOffset + index] ?? ''}
+                        onChange={(event) =>
+                          setCheckpoints((prev) => ({
+                            ...prev,
+                            [problemOffset + index]: event.target.value.slice(0, 24),
+                          }))
+                        }
+                        placeholder="checkpoint no."
+                        aria-label={`Checkpoint number for ${state.label} (optional)`}
+                        data-testid={`crucible-checkpoint-${index}`}
+                        className="shrink-0 w-24 rounded-sm border border-edge bg-inset px-1.5 py-1 font-mono text-[10px] text-bone placeholder-solder outline-none focus:border-amber-500/50 transition-colors duration-150"
+                      />
                       <span className="shrink-0 font-mono text-[10px] text-solder text-right">
                         <span data-testid={`crucible-state-target-${index}`}>
                           target {formatMinutes(state.targetSec)}
@@ -592,6 +630,13 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                 <span className="text-[10px] font-mono text-solder">
                   elapsed is stamped when you mark a state done — the HUD never guesses
                 </span>
+                <span
+                  data-testid="crucible-checkpoint-note"
+                  className="text-[10px] font-mono text-solder leading-relaxed"
+                >
+                  the checkpoint slot is optional: nothing has to be typed to advance, and a state with
+                  no checkpoint is paced on its elapsed time alone
+                </span>
               </div>
             </div>
           )}
@@ -638,6 +683,13 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                     className="flex items-center justify-between gap-2 text-[11px] font-mono"
                   >
                     <span className="text-bone/90 truncate">{entry.state.label}</span>
+                    {/* Only when one was actually typed: an empty column, or a
+                        dash against every state, would read as a missing answer. */}
+                    {checkpoints[index]?.trim() ? (
+                      <span className="shrink-0 text-solder">
+                        checkpoint {checkpoints[index].trim()}
+                      </span>
+                    ) : null}
                     <span
                       className={
                         entry.status === 'lagging'
@@ -654,8 +706,7 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                 ))}
               </ul>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
+              <div className="flex items-center gap-2 flex-wrap">                  <button
                   type="button"
                   onClick={() => {
                     setPhase('setup');
@@ -664,6 +715,7 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                     setStateIndex(0);
                     setProblemIndex(0);
                     setSummaryTable([]);
+                    setCheckpoints({});
                     playSound('click');
                   }}
                   data-testid="crucible-again"

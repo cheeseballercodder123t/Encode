@@ -3,6 +3,8 @@ import {
   atomsOf,
   classifyTrap,
   formulaTokens,
+  powerEvidenceIn,
+  poweredSymbols,
   quantityNumbers,
 } from '../../lib/mr-m/diagnostics';
 
@@ -186,5 +188,159 @@ describe('classifyTrap — restraint', () => {
   it('does not invent a factor of two out of bare coefficients', () => {
     // `2` and `1` are coefficients, not measurements.
     expect(classifyTrap({ learnerText: 'I got 1 mole', expectedText: 'It should be 2 moles' })).toBeNull();
+  });
+});
+
+describe('classifyTrap — the vocabulary is arithmetic, not chemistry', () => {
+  // The first version of the numeric diff searched for a factor of two, three
+  // orders of magnitude and a sign flip, so a coefficient of seven, a dropped
+  // exponent and a dropped `ln 2` all resolved to `null` — a wrong answer with
+  // no diagnosis at all, which the panel then fills with prose.
+
+  it('names a whole factor beyond two, and says which factor it is', () => {
+    const seven = classifyTrap({ learnerText: '0.13', expectedText: '0.91' });
+    expect(seven?.trapId).toBe('whole_factor_off');
+    expect(seven?.structuralReason).toContain('seven');
+    expect(seven?.arithmeticReveal).toBe('0.91 ÷ 0.13 = 7.00');
+
+    // Four is both a whole factor and a whole power, and with no law in the
+    // material it is read the conservative way, as a coefficient.
+    const four = classifyTrap({ learnerText: '0.13', expectedText: '0.52' });
+    expect(four?.trapId).toBe('whole_factor_off');
+    expect(four?.structuralReason).toContain('four');
+  });
+
+  it('leaves a factor of two on its own label', () => {
+    const diagnosis = classifyTrap({
+      learnerText: 'I get 0.0168 kJ of heat',
+      expectedText: '0.0336 kJ of heat leaves the water',
+    });
+    expect(diagnosis?.trapId).toBe('factor_of_two');
+    expect(diagnosis?.arithmeticReveal).toBe('0.0336 ÷ 0.0168 = 2.00');
+  });
+
+  it('stays silent past the coefficient ceiling rather than calling every ratio a factor', () => {
+    // 37 is not a coefficient this layer can name, and it is not a power either.
+    expect(classifyTrap({ learnerText: '2.7', expectedText: '99.9' })).toBeNull();
+  });
+});
+
+describe('classifyTrap — a dropped exponent, and a dropped logarithm', () => {
+  it('reads a whole power as a dropped exponent, with the arithmetic and the law', () => {
+    const diagnosis = classifyTrap({
+      learnerText: 'v = 4.0 m/s',
+      expectedText: 'v = 16.0 m/s',
+      sourceText: 'The flow rate scales with v² at a fixed gradient.',
+    });
+    expect(diagnosis?.trapId).toBe('power_law_dropped');
+    expect(diagnosis?.arithmeticReveal).toContain('16 ÷ 4 = 4.00');
+    expect(diagnosis?.arithmeticReveal).toContain('= 2^2');
+    expect(diagnosis?.structuralReason).toContain('v²');
+  });
+
+  it('reaches the same exponent label when the material names the power in words', () => {
+    // The word form is not notation, so this reading arrives through the numeric
+    // diff — which is why both quantities here are measured rather than
+    // coefficient-sized.
+    const diagnosis = classifyTrap({
+      learnerText: 'v = 4.5 m/s',
+      expectedText: 'v = 18.0 m/s',
+      sourceText: 'The radius is squared.',
+    });
+    expect(diagnosis?.trapId).toBe('power_law_dropped');
+    expect(diagnosis?.arithmeticReveal).toContain('18 ÷ 4.5 = 4.00');
+    expect(diagnosis?.arithmeticReveal).toContain('= 2^2');
+  });
+
+  it('names the logarithm constant a rate law leaves behind', () => {
+    const diagnosis = classifyTrap({
+      learnerText: 't½ = 1.92 h',
+      expectedText: 't½ = 2.77 h',
+      sourceText: 'For a first-order decay, t½ = ln 2 / k.',
+    });
+    expect(diagnosis?.trapId).toBe('logarithm_dropped');
+    expect(diagnosis?.arithmeticReveal).toContain('1 / ln 2');
+    expect(diagnosis?.structuralReason).toContain('ln 2');
+  });
+
+  it('reads ln 10 the same way, because the fold names the constant and not the direction', () => {
+    // 0.997 / 0.433 = 2.3025, which is ln 10 folded: the same fracture as its
+    // reciprocal, which is what makes one constant cover both directions.
+    const diagnosis = classifyTrap({ learnerText: '0.433', expectedText: '0.997' });
+    expect(diagnosis?.trapId).toBe('logarithm_dropped');
+    expect(diagnosis?.arithmeticReveal).toContain('ln 10');
+  });
+});
+
+describe('poweredSymbols / powerEvidenceIn — the extractor reads notation, not only formulae', () => {
+  it('reads a radical on a symbol, which no element regex can', () => {
+    expect(poweredSymbols("f'(x) = 1 / (2√x)")).toEqual([{ symbol: 'x', power: '√' }]);
+  });
+
+  it('reads a superscript and a caret exponent alike', () => {
+    const powers = poweredSymbols('r² and x^4');
+    expect(powers).toContainEqual({ symbol: 'r', power: '²' });
+    expect(powers).toContainEqual({ symbol: 'x', power: '^4' });
+    expect(powers).toHaveLength(2);
+  });
+
+  it('ignores a superscript outside the extracted set, and an exponent on a number', () => {
+    // ¹ is a footnote marker, and 10^3 is a conversion rather than a law.
+    expect(poweredSymbols('a footnote¹ here')).toEqual([]);
+    expect(poweredSymbols('10^3 mL')).toEqual([]);
+  });
+
+  it('counts a power named in words as evidence, and a plain quantity as none', () => {
+    expect(powerEvidenceIn('a cubed quantity')).toBe(true);
+    expect(powerEvidenceIn('The mass is 5.0 g.')).toBe(false);
+  });
+});
+
+describe('classifyTrap — the symbolic line the formula regex could never read', () => {
+  it('reads a dropped exponent when the answer carries no measured quantity at all', () => {
+    // A derivative has no element token, no subscript and no measured quantity,
+    // so every other rule here is silent on it and the exponent is the only
+    // evidence there is.
+    const diagnosis = classifyTrap({
+      learnerText: 'the slope is x',
+      expectedText: "f'(x) = 1 / (2√x)",
+    });
+    expect(diagnosis?.trapId).toBe('power_law_dropped');
+    expect(diagnosis?.structuralReason).toContain('√x');
+    // No pair of numbers exists to divide, and no arithmetic is invented.
+    expect(diagnosis?.arithmeticReveal).toBe('');
+  });
+
+  it('is silent when the learner already wrote the exponent', () => {
+    expect(
+      classifyTrap({ learnerText: '1/(2√x)', expectedText: "f'(x) = 1 / (2√x)" })
+    ).toBeNull();
+  });
+
+  // A GAP, pinned so it stays visible rather than guessed at: the mention test
+  // requires a non-alphanumeric boundary before the symbol, and here the
+  // coefficient sits flush against it (`2x`), so the derivative case the
+  // limitation names still comes back with nothing. The fix belongs in the
+  // module's mention test; this expectation moves with it.
+  it("reads the limitation's own derivative case: 1/(2x) against 1/(2√x)", () => {
+    // The coefficient sits flush against the symbol here. A digit is a boundary
+    // because a quantity that only ever appears with a coefficient in front of it
+    // would otherwise never read as mentioned, and the dropped root is exactly
+    // the case this rule exists for.
+    const diagnosis = classifyTrap({
+      learnerText: 'the derivative is 1/(2x)',
+      expectedText: "f'(x) = 1 / (2√x)",
+    });
+    expect(diagnosis?.trapId).toBe('power_law_dropped');
+    expect(diagnosis?.structuralReason).toContain('√x');
+  });
+
+  it("does not read a formula's own subscript neighbour as a mention", () => {
+    // The counterweight to the digit boundary above: in NH4NO3 the H is followed
+    // by a digit, so a bare `H` in an answer is not a mention of it and no
+    // exponent is claimed from a subscript.
+    expect(
+      classifyTrap({ learnerText: 'I wrote H', expectedText: 'Ammonium nitrate is NH4NO3' })
+    ).toBeNull();
   });
 });

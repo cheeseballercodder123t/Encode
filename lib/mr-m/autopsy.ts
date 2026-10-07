@@ -21,11 +21,16 @@
 //   2. the NUMERIC layer, which is this module's own contribution: pair every
 //      quantity in the expected answer against every quantity the learner
 //      wrote, fold the ratio so a factor of two reads as 2 from either
-//      direction, and name the shape (2, 3, 1000, or a pure sign inversion).
+//      direction, and name the shape. The vocabulary is arithmetic, not
+//      chemistry: a pure sign inversion, a factor of two, any whole factor from
+//      three to twelve, a whole power of a small number (an exponent that was
+//      dropped), one of the logarithm constants, or three orders of magnitude.
 //
 // Anything that survives neither layer returns null. An invented diagnosis is
 // exactly the arbitrary noise this mode exists to remove, so "no clean signal"
-// is a real answer and the panel says nothing.
+// is a real answer and the panel says nothing. One class of error is left to
+// the prose on purpose: an integration constant is not a ratio, so no pair of
+// numbers can name it and this layer does not pretend to.
 
 import { atomsOf, classifyTrap, formulaTokens, quantityNumbers } from './diagnostics';
 import type {
@@ -49,9 +54,14 @@ export interface QuantityDiff {
 export interface DiscrepancyReading {
   kind: DiscrepancyKind;
   /**
-   * The existing trap taxonomy's id, when one honestly names the same failure.
-   * `STOICHIOMETRIC_RATIO` has no member that claims it, so it carries none —
-   * rounding it onto `factor_of_two` would send the learner to fix a 2 that is
+   * The trap taxonomy's id, when one honestly names the same failure.
+   *
+   * Every kind this diff can name now has a member that claims it —
+   * `whole_factor_off`, `power_law_dropped` and `logarithm_dropped` were added
+   * to the taxonomy for exactly the shapes that used to resolve to nothing —
+   * and the field stays nullable because a future kind without an honest label
+   * must be allowed to say so rather than be rounded onto the nearest one: a
+   * factor of three called `factor_of_two` sends the learner to fix a 2 that is
    * actually a 3.
    */
   trapId: TrapId | null;
@@ -73,6 +83,9 @@ const TRAP_TO_KIND: Partial<Record<TrapId, DiscrepancyKind>> = {
   molar_mass_denominator: 'SUBSCRIPT_DROPPED',
   missing_subscript: 'SUBSCRIPT_DROPPED',
   unit_slip: 'DIMENSIONAL_CONVERSION_ERROR',
+  whole_factor_off: 'STOICHIOMETRIC_RATIO',
+  power_law_dropped: 'POWER_LAW',
+  logarithm_dropped: 'LOG_SCALE',
 };
 
 /** The reverse direction, for a shape the numeric layer found first. */
@@ -82,6 +95,9 @@ const KIND_TO_TRAP: Partial<Record<DiscrepancyKind, TrapId>> = {
   FACTOR_OF_TWO: 'factor_of_two',
   SUBSCRIPT_DROPPED: 'missing_subscript',
   DIMENSIONAL_CONVERSION_ERROR: 'unit_slip',
+  STOICHIOMETRIC_RATIO: 'whole_factor_off',
+  POWER_LAW: 'power_law_dropped',
+  LOG_SCALE: 'logarithm_dropped',
 };
 
 function fmt(n: number): string {
@@ -107,6 +123,249 @@ export function foldRatio(ratio: number): number {
 /** How close a folded ratio is to a signature, as an absolute deviation. */
 function deviationFromFold(folded: number, target: number): number {
   return Math.abs(folded - target);
+}
+
+// ─── The signature set ──────────────────────────────────────────────────────
+//
+// Everything in this section is arithmetic shape, and the shapes are the point:
+// each one has a different structural cause, so naming the shape is what lets
+// the narrative half explain it instead of describing it.
+
+/** How far a folded ratio may sit from a whole factor before it is something else. */
+const INTEGER_TOLERANCE = 0.03;
+
+/** Above this a "coefficient" is really an outlier, and the layer stays silent. */
+const MAX_INTEGER_FACTOR = 12;
+
+/** The whole factors spoken as words, so a refusal reads like a sentence. */
+const NUMBER_WORDS: Record<number, string> = {
+  2: 'two',
+  3: 'three',
+  4: 'four',
+  5: 'five',
+  6: 'six',
+  7: 'seven',
+  8: 'eight',
+  9: 'nine',
+  10: 'ten',
+  11: 'eleven',
+  12: 'twelve',
+};
+
+export interface PowerSignature {
+  base: number;
+  exponent: number;
+}
+
+/**
+ * The whole powers worth naming, smallest base first.
+ *
+ * 4 = 2², 8 = 2³, 9 = 3², 16 = 2⁴, 25 = 5², 27 = 3³, 32 = 2⁵, 64 = 4³, 81 = 3⁴,
+ * 125 = 5³, 243 = 3⁵. Above these the claim stops being diagnostic — a factor
+ * of 37 is a coefficient, not an exponent — and the smallest base is tried first
+ * because `16 = 2⁴` is how a learner reads it, not `16 = 4²`.
+ */
+const POWER_SIGNATURES: PowerSignature[] = [
+  { base: 2, exponent: 2 },
+  { base: 2, exponent: 3 },
+  { base: 3, exponent: 2 },
+  { base: 2, exponent: 4 },
+  { base: 4, exponent: 2 },
+  { base: 5, exponent: 2 },
+  { base: 3, exponent: 3 },
+  { base: 2, exponent: 5 },
+  { base: 4, exponent: 3 },
+  { base: 8, exponent: 2 },
+  { base: 3, exponent: 4 },
+  { base: 9, exponent: 2 },
+  { base: 5, exponent: 3 },
+  { base: 3, exponent: 5 },
+];
+
+interface LogSignature {
+  /** The constant, folded onto the magnitude the way every ratio here is. */
+  folded: number;
+  label: string;
+  /** Where the constant comes from, so the refusal is not a bare number. */
+  blurb: string;
+}
+
+/**
+ * The two logarithm constants a wrong answer lands on.
+ *
+ * Only the folded forms are listed, because every ratio in this module is
+ * folded: ln 2 = 0.6931 and 1 / ln 2 = 1.4427 are the same fracture seen from
+ * two ends, and the fold has already chosen one of them.
+ */
+const LOG_SIGNATURES: LogSignature[] = [
+  {
+    folded: 1.4427,
+    label: '1 / ln 2',
+    blurb: 'ln 2 = 0.6931 is the constant a half-life or a doubling time carries',
+  },
+  {
+    folded: 2.3026,
+    label: 'ln 10',
+    blurb: 'ln 10 = 2.3026 is the bridge between a base-10 scale and a natural-exponential law',
+  },
+];
+
+/** A logarithm, or a scale built on one, is in play in the material. */
+const LOG_CONTEXT = /\b(ln|log|log10|half[- ]?life|decay constant|doubling time|pKa?|pH|decibel|dB)\b/i;
+
+/** True when the material names a logarithm or a scale built on one. */
+export function hasLogContext(text: string): boolean {
+  return LOG_CONTEXT.test(text || '');
+}
+
+const SUPERSCRIPT_DIGITS = '²³⁴⁵⁶⁷⁸⁹';
+
+/**
+ * Every exponent the material writes ON a symbol: `r²` → 2, `r^4` → 4, `x³` → 3.
+ *
+ * Only an exponent attached to a symbol counts. A bare superscript is a footnote,
+ * and treating it as a power would let any sentence manufacture the evidence that
+ * turns a dropped coefficient into a dropped exponent.
+ */
+export function exponentsIn(text: string): number[] {
+  const out: number[] = [];
+  const re = /[A-Za-zΔθλρ][A-Za-z0-9_]*(?:\^([0-9]{1,2})|([²³⁴⁵⁶⁷⁸⁹]))/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text || '')) !== null) {
+    const value = match[2] ? SUPERSCRIPT_DIGITS.indexOf(match[2]) + 2 : Number(match[1]);
+    if (Number.isFinite(value) && value >= 2) out.push(value);
+  }
+  return out;
+}
+
+/** The first exponent written on a symbol in the material, exactly as written. */
+export function powerLawIn(text: string): string {
+  const match = (text || '').match(/[A-Za-zΔθλρ][A-Za-z0-9_]*(?:\^[0-9]{1,2}|[²³⁴⁵⁶⁷⁸⁹])/);
+  return match ? match[0].replace(/\s+/g, '') : '';
+}
+
+/**
+ * Whether the material writes an exponent at all.
+ *
+ * A power law in the material (`r²`, `r^4`, a squared quantity) is what makes a
+ * whole-power ratio an EXPONENT problem; with no law in sight, the same number
+ * is read the conservative way, as a dropped coefficient. The check deliberately
+ * does not try to match the exponent: a ratio of 4 against a fourth-power law is
+ * the third power of the variable, not the fourth, and pretending to know which
+ * power went missing from a single ratio is the inference this module refuses to
+ * make. So it asks only whether a law is present — and it reads that from an
+ * exponent token, never from a bare superscript that could be a footnote.
+ */
+export function hasPowerLawEvidence(text: string): boolean {
+  const body = text || '';
+  if (exponentsIn(body).length > 0) return true;
+  return /\b(squared|square of|quadratic|cubed|cube of|cubic)\b/i.test(body);
+}
+
+/** The whole power a folded ratio sits on, smallest base first. */
+function powerSignatureOf(folded: number): PowerSignature | null {
+  for (const signature of POWER_SIGNATURES) {
+    if (near(folded, Math.pow(signature.base, signature.exponent), 0.02)) return signature;
+  }
+  return null;
+}
+
+/** The logarithm constant a folded ratio sits on. */
+function logSignatureOf(folded: number): LogSignature | null {
+  for (const signature of LOG_SIGNATURES) {
+    if (near(folded, signature.folded, 0.02)) return signature;
+  }
+  return null;
+}
+
+/**
+ * The whole factor a folded ratio sits on, when it is one worth naming.
+ *
+ * Starts at three because two has its own name and its own explanation — an atom
+ * count is the commonest cause of exactly two, and calling that a coefficient
+ * would send the learner to the wrong line.
+ */
+export function integerFactorOf(folded: number): number | null {
+  const rounded = Math.round(folded);
+  if (rounded < 3 || rounded > MAX_INTEGER_FACTOR) return null;
+  return near(folded, rounded, INTEGER_TOLERANCE) ? rounded : null;
+}
+
+/** What the material tells us about the law an answer came from. */
+export interface SignatureContext {
+  /** The expected answer plus the stage's source text. */
+  text?: string;
+}
+
+/** A named shape, with the tier that decides precedence between two candidates. */
+export interface ShapeMatch {
+  kind: DiscrepancyKind;
+  tier: number;
+  score: number;
+}
+
+/**
+ * The one place a folded ratio becomes a named shape.
+ *
+ * `rankTerms` and `signatureOf` both read from here, so the ranking and the name
+ * can never disagree about what a pair is — a table duplicated across two
+ * functions is a table that eventually says two different things about one
+ * number.
+ *
+ * The order of the checks is the taxonomy's precedence, and two of them are
+ * contextual rather than numeric:
+ *
+ *   * a whole power WITH exponent evidence is an exponent problem; the same
+ *     number without that evidence is read the conservative way, as a dropped
+ *     coefficient. `4` is both, and only the material says which;
+ *   * a whole power with no evidence at all (16, 32, 243) is still named, but
+ *     below the coefficient tier, because a factor nobody wrote down is more
+ *     often a coefficient than an exponent.
+ */
+export function shapeOf(term: QuantityDiff, context: SignatureContext = {}): ShapeMatch | null {
+  if (!term || !Number.isFinite(term.folded) || term.folded <= 0) return null;
+
+  if (term.ratio < 0 && near(term.folded, 1, 0.02)) {
+    return { kind: 'SIGN_FLIP', tier: 0, score: 0 };
+  }
+  if (near(term.folded, 2, INTEGER_TOLERANCE)) {
+    return { kind: 'FACTOR_OF_TWO', tier: 1, score: deviationFromFold(term.folded, 2) };
+  }
+  const log = logSignatureOf(term.folded);
+  if (log) {
+    return { kind: 'LOG_SCALE', tier: 1, score: deviationFromFold(term.folded, log.folded) };
+  }
+  if (near(term.folded, 1000, 0.05)) {
+    return {
+      kind: 'DIMENSIONAL_CONVERSION_ERROR',
+      tier: 1,
+      score: deviationFromFold(term.folded, 1000),
+    };
+  }
+
+  const power = powerSignatureOf(term.folded);
+  if (power && hasPowerLawEvidence(context.text || '')) {
+    return {
+      kind: 'POWER_LAW',
+      tier: 2,
+      score: deviationFromFold(term.folded, Math.pow(power.base, power.exponent)),
+    };
+  }
+
+  const integer = integerFactorOf(term.folded);
+  if (integer !== null) {
+    return { kind: 'STOICHIOMETRIC_RATIO', tier: 2, score: deviationFromFold(term.folded, integer) };
+  }
+
+  if (power) {
+    return {
+      kind: 'POWER_LAW',
+      tier: 3,
+      score: deviationFromFold(term.folded, Math.pow(power.base, power.exponent)),
+    };
+  }
+
+  return null;
 }
 
 /** Every crossed pair of measured quantities. Subscripts and coefficients are
@@ -138,26 +397,15 @@ export function crossedTerms(learnerText: string, expectedText: string): Quantit
  * A sign inversion (right magnitude, wrong sign) is a TIER above every
  * magnitude shape rather than merely a low score within it. Both are exact
  * matches for their own signature, so a pure score comparison leaves a genuine
- * sign flip and a genuine factor of three tied at zero deviation — and which
- * one won would depend on the order the pairs happened to be crossed in. The
- * tier makes the precedence a property of the taxonomy instead.
+ * sign flip and a genuine whole factor tied at zero deviation — and which one
+ * won would depend on the order the pairs happened to be crossed in. The tier
+ * makes the precedence a property of the taxonomy instead.
  */
-export function rankTerms(terms: QuantityDiff[]): QuantityDiff[] {
+export function rankTerms(terms: QuantityDiff[], context: SignatureContext = {}): QuantityDiff[] {
   const scored = terms
     .map((term) => {
-      if (term.ratio < 0 && near(term.folded, 1, 0.02)) {
-        return { term, tier: 0, score: 0 };
-      }
-      if (near(term.folded, 2, 0.03)) {
-        return { term, tier: 1, score: deviationFromFold(term.folded, 2) };
-      }
-      if (near(term.folded, 3, 0.03)) {
-        return { term, tier: 1, score: deviationFromFold(term.folded, 3) };
-      }
-      if (near(term.folded, 1000, 0.05)) {
-        return { term, tier: 1, score: deviationFromFold(term.folded, 1000) };
-      }
-      return null;
+      const shape = shapeOf(term, context);
+      return shape ? { term, tier: shape.tier, score: shape.score } : null;
     })
     .filter((entry): entry is { term: QuantityDiff; tier: number; score: number } => entry !== null)
     .sort((a, b) => a.tier - b.tier || a.score - b.score);
@@ -166,12 +414,11 @@ export function rankTerms(terms: QuantityDiff[]): QuantityDiff[] {
 }
 
 /** The signature a ranked pair carries, or null when it carries none. */
-export function signatureOf(term: QuantityDiff): DiscrepancyKind | null {
-  if (term.ratio < 0 && near(term.folded, 1, 0.02)) return 'SIGN_FLIP';
-  if (near(term.folded, 2, 0.03)) return 'FACTOR_OF_TWO';
-  if (near(term.folded, 3, 0.03)) return 'STOICHIOMETRIC_RATIO';
-  if (near(term.folded, 1000, 0.05)) return 'DIMENSIONAL_CONVERSION_ERROR';
-  return null;
+export function signatureOf(
+  term: QuantityDiff,
+  context: SignatureContext = {}
+): DiscrepancyKind | null {
+  return shapeOf(term, context)?.kind ?? null;
 }
 
 /** `6 ÷ 3 = 2.00`, from the learner's own numbers, both directions folded. */
@@ -229,13 +476,38 @@ function numericFinding(
         whereItBreaks: 'the stoichiometric factor in front of the species',
       };
     }
-    case 'STOICHIOMETRIC_RATIO':
+    case 'STOICHIOMETRIC_RATIO': {
+      // The factor itself is carried into the sentence, because "a factor of
+      // three" is wrong prose for a factor of seven and the learner can check
+      // the number against their own line either way.
+      const factor = Math.round(term.folded);
+      const word = NUMBER_WORDS[factor] ?? fmt(factor);
       return {
-        structuralReason:
-          'Your value is off by exactly a factor of three, which is a coefficient, not a calculation. When the balanced equation is not all 1:1 — 3 A + 2 B → products — every mole-to-mole conversion carries the coefficient in front of the species, and a line written as though the ratio were 1:1 lands on exactly this ratio.',
+        structuralReason: `Your value is off by exactly a factor of ${word}, which is a coefficient or a count rather than a calculation. In a balanced equation that is not all 1:1 — 3 A + 2 B → products — every mole-to-mole conversion carries the coefficient in front of its species, and a line written as though the ratio were 1:1 lands on exactly this whole factor. The same shape appears outside chemistry, wherever a whole number belongs in the definition (a valence, a charge, a multiplicity, a count per formula unit) and never made it into the line.`,
         arithmeticReveal: magnitudeReveal(term),
-        whereItBreaks: 'the coefficient in front of the species in the balanced equation',
+        whereItBreaks: 'the whole-number factor that belongs in the line before the arithmetic',
       };
+    }
+    case 'POWER_LAW': {
+      const power = powerSignatureOf(term.folded);
+      if (!power) return null;
+      const law = powerLawIn(sourceText);
+      return {
+        structuralReason: `Your value is exactly ${fmt(term.folded)} times the other one, and ${fmt(term.folded)} is a WHOLE POWER — ${power.base} raised to the ${power.exponent}. That is the signature of an EXPONENT rather than of a coefficient: a quantity that enters a law squared, cubed or to the fourth power produces exactly this kind of factor when its exponent is written one step off, and no amount of re-adding the numbers reconciles it.${law ? ` The material's own law carries ${law}.` : ''} Read the exponent on every quantity in the law before substituting anything.`,
+        arithmeticReveal: `${magnitudeReveal(term)}, and ${fmt(term.folded)} = ${power.base}^${power.exponent}`,
+        whereItBreaks: 'the exponent on the quantity, not the numbers multiplied together',
+      };
+    }
+    case 'LOG_SCALE': {
+      const log = logSignatureOf(term.folded);
+      if (!log) return null;
+      const context = hasLogContext(sourceText);
+      return {
+        structuralReason: `Your value sits exactly one logarithm-constant away from the one that holds: ${fmt(term.folded)} is ${log.label}, and ${log.blurb}. That is the signature of a LOGARITHM dropped or taken in the wrong base — not of a coefficient and not of a conversion — so the missing step is not arithmetic and re-reading the numbers cannot find it.${context ? ' The material names a log scale, so that constant belongs in this answer.' : ''}`,
+        arithmeticReveal: `${magnitudeReveal(term)} ≈ ${log.label}`,
+        whereItBreaks: 'the logarithm, or the base it is taken in',
+      };
+    }
     case 'DIMENSIONAL_CONVERSION_ERROR':
       return {
         structuralReason:
@@ -279,7 +551,10 @@ export function diagnoseDiscrepancy(input: TrapInput): DiscrepancyReading | null
   const expectedText = (input?.expectedText || '').trim();
   const sourceText = `${expectedText}\n${input?.sourceText || ''}`;
 
-  const terms = rankTerms(crossedTerms(learnerText, expectedText));
+  // The material travels with the terms: whether a factor of four is a dropped
+  // coefficient or a dropped exponent is decided by the law the answer came
+  // from, and by nothing in the pair of numbers.
+  const terms = rankTerms(crossedTerms(learnerText, expectedText), { text: sourceText });
 
   const structural: TrapDiagnosis | null = classifyTrap(input);
   if (structural) {
@@ -306,7 +581,7 @@ export function diagnoseDiscrepancy(input: TrapInput): DiscrepancyReading | null
 
   const best = terms[0];
   if (!best) return null;
-  const kind = signatureOf(best);
+  const kind = signatureOf(best, { text: sourceText });
   if (!kind) return null;
 
   const finding = numericFinding(kind, best, sourceText);
@@ -344,6 +619,10 @@ export function patchStatementFor(reading: DiscrepancyReading, topic: string): s
       return `${scope} — a factor of two was dropped. Find the 2 (coefficient or subscript) in the equation before converting moles.`;
     case 'STOICHIOMETRIC_RATIO':
       return `${scope} — the coefficients are not all 1:1. Carry each species' own coefficient through every mole-to-mole conversion.`;
+    case 'POWER_LAW':
+      return `${scope} — an exponent was dropped or added. Write the law with its powers (squared, cubed, to the fourth) before substituting any number.`;
+    case 'LOG_SCALE':
+      return `${scope} — a logarithm is missing or in the wrong base. Name the constant (ln 2, ln 10) and the scale it belongs to before the arithmetic.`;
     case 'SUBSCRIPT_DROPPED':
       return `${scope} — an atom count was dropped. Read the subscript before computing a molar mass.`;
     case 'DIMENSIONAL_CONVERSION_ERROR':

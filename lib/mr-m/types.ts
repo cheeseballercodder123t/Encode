@@ -104,6 +104,14 @@ export const TRAP_IDS = [
   'zero_point_confusion',
   'path_vs_state_confusion',
   'sign_convention_flip',
+  // The three the numeric diff needed and the taxonomy did not have. The
+  // original ten were written for chemistry, and a discrepancy that is
+  // arithmetic rather than chemical had nowhere to land: a whole factor of
+  // seven, a dropped exponent, a dropped logarithm all resolved to `null` and
+  // fell back to prose. These names are the honest labels for those shapes.
+  'whole_factor_off',
+  'power_law_dropped',
+  'logarithm_dropped',
 ] as const;
 
 export type TrapId = (typeof TRAP_IDS)[number];
@@ -120,6 +128,9 @@ export const TRAP_LABELS: Record<TrapId, string> = {
   zero_point_confusion: 'Zero point confused',
   path_vs_state_confusion: 'Path vs state confused',
   sign_convention_flip: 'Sign convention flipped',
+  whole_factor_off: 'Whole factor off',
+  power_law_dropped: 'Exponent dropped or added',
+  logarithm_dropped: 'Logarithm missing or in the wrong base',
 };
 
 /** What `classifyTrap` is allowed to look at. All pure text. */
@@ -185,15 +196,25 @@ export interface ParadoxEntry {
 // The kinds below are the plan's own vocabulary, and they are deliberately
 // SEPARATE from `TRAP_IDS`: the trap taxonomy names the structural reason a
 // stage broke, while a discrepancy names the arithmetic shape of the break
-// (a sign, a factor of two, three orders of magnitude). Several of them map
-// onto a trap id and several do not — and a kind with no honest mapping keeps
-// none, rather than being rounded onto the nearest label.
-
+// (a sign, a factor of two, a whole power, a logarithm, three orders of
+// magnitude). Several of them map onto a trap id and several do not — and a
+// kind with no honest mapping keeps none, rather than being rounded onto the
+// nearest label.
+//
+// The vocabulary is arithmetic rather than chemical. A factor of twelve, a
+// squared quantity and a dropped ln 2 are the same KIND of failure as a dropped
+// subscript — a step that is structurally missing — so they are named by the
+// shape they leave behind, which is what generalises past this learner's current
+// two subjects. `STOICHIOMETRIC_RATIO` keeps its name because it is the label
+// already written into stored patches, but it now covers every whole factor from
+// 3 to 12, not just the valence of three the plan happened to use as its example.
 export const DISCREPANCY_KINDS = [
   'SIGN_FLIP',
   'ORDER_INVERSION',
   'FACTOR_OF_TWO',
   'STOICHIOMETRIC_RATIO',
+  'POWER_LAW',
+  'LOG_SCALE',
   'SUBSCRIPT_DROPPED',
   'DIMENSIONAL_CONVERSION_ERROR',
 ] as const;
@@ -206,6 +227,8 @@ export const DISCREPANCY_LABELS: Record<DiscrepancyKind, string> = {
   ORDER_INVERSION: 'ORDER_INVERSION',
   FACTOR_OF_TWO: 'FACTOR_OF_TWO',
   STOICHIOMETRIC_RATIO: 'STOICHIOMETRIC_RATIO',
+  POWER_LAW: 'POWER_LAW',
+  LOG_SCALE: 'LOG_SCALE',
   SUBSCRIPT_DROPPED: 'SUBSCRIPT_DROPPED',
   DIMENSIONAL_CONVERSION_ERROR: 'DIMENSIONAL_CONVERSION_ERROR',
 };

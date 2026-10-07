@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   crossedTerms,
   diagnoseDiscrepancy,
+  exponentsIn,
   foldRatio,
+  hasPowerLawEvidence,
   patchStatementFor,
+  powerLawIn,
   rankTerms,
   signatureOf,
 } from '../../lib/mr-m/autopsy';
@@ -57,8 +60,64 @@ describe('crossedTerms / rankTerms', () => {
     expect(signatureOf({ expected: 1000, learner: 1, ratio: 1000, folded: 1000 })).toBe(
       'DIMENSIONAL_CONVERSION_ERROR'
     );
-    // 7 is not a fracture this taxonomy knows.
-    expect(signatureOf({ expected: 7, learner: 1, ratio: 7, folded: 7 })).toBeNull();
+    // 1.37 carries no shape: not a whole factor, not a power, not a log
+    // constant. This is the case that used to be pinned with `7`, which the
+    // widened vocabulary now names as a dropped coefficient.
+    expect(signatureOf({ expected: 1.37, learner: 1, ratio: 1.37, folded: 1.37 })).toBeNull();
+    expect(signatureOf({ expected: 2.5, learner: 1, ratio: 2.5, folded: 2.5 })).toBeNull();
+  });
+});
+
+describe('the signatures are arithmetic, not chemistry', () => {
+  it('names any whole factor a line can drop, not only a valence of three', () => {
+    for (const factor of [3, 4, 7, 12]) {
+      expect(signatureOf({ expected: factor, learner: 1, ratio: factor, folded: factor })).toBe(
+        'STOICHIOMETRIC_RATIO'
+      );
+    }
+    // The ceiling exists so the label stays diagnostic: past a dozen, a ratio
+    // is an outlier rather than a dropped coefficient this layer can name.
+    expect(signatureOf({ expected: 37, learner: 1, ratio: 37, folded: 37 })).toBeNull();
+  });
+
+  it('reads a whole power as a dropped exponent when the material carries a law', () => {
+    const term = { expected: 16, learner: 4, ratio: 4, folded: 4 };
+    // 4 is both a coefficient and 2², and only the material says which.
+    expect(signatureOf(term)).toBe('STOICHIOMETRIC_RATIO');
+    expect(signatureOf(term, { text: 'Flow scales with r⁴.' })).toBe('POWER_LAW');
+    expect(signatureOf(term, { text: 'The radius is squared.' })).toBe('POWER_LAW');
+    // A factor that is not a whole power stays a factor, law or no law.
+    expect(signatureOf({ expected: 5, learner: 1, ratio: 5, folded: 5 }, { text: 'r²' })).toBe(
+      'STOICHIOMETRIC_RATIO'
+    );
+  });
+
+  it('names a whole power above the coefficient ceiling with nothing to tie it to', () => {
+    // 16 is past every whole factor this layer calls a coefficient, so a factor
+    // nobody wrote down is read as an exponent rather than left silent.
+    expect(signatureOf({ expected: 32, learner: 2, ratio: 16, folded: 16 })).toBe('POWER_LAW');
+    expect(signatureOf({ expected: 243, learner: 1, ratio: 243, folded: 243 })).toBe('POWER_LAW');
+  });
+
+  it('reads the logarithm constants a rate law or a scale leaves behind', () => {
+    // ln 2 and 1/ln 2 are the same fracture seen from two ends, and the fold
+    // has already chosen the magnitude, so one constant covers both directions.
+    expect(signatureOf({ expected: 2.77, learner: 1.92, ratio: 1.4427, folded: 1.4427 })).toBe(
+      'LOG_SCALE'
+    );
+    expect(signatureOf({ expected: 0.6931, learner: 0.3, ratio: 2.31, folded: 2.31 })).toBe(
+      'LOG_SCALE'
+    );
+  });
+
+  it('reads the exponent helpers off the material and nothing else', () => {
+    expect(exponentsIn('r² and x^4')).toEqual([2, 4]);
+    expect(exponentsIn('a bare ² is a footnote')).toEqual([]);
+    expect(powerLawIn('Flow scales with r^4 at a fixed gradient.')).toBe('r^4');
+    expect(powerLawIn('No powers here.')).toBe('');
+    expect(hasPowerLawEvidence('r³')).toBe(true);
+    expect(hasPowerLawEvidence('a cubed quantity')).toBe(true);
+    expect(hasPowerLawEvidence('The mass is 5.0 g.')).toBe(false);
   });
 });
 
@@ -96,14 +155,15 @@ describe('diagnoseDiscrepancy — the structural layer wins when both fire', () 
     expect(reading!.arithmeticReveal).toContain('1000.00');
   });
 
-  it('names a factor of three as its own kind, and claims no trap id for it', () => {
-    // The existing taxonomy has no member that honestly names a stoichiometric
-    // ratio of three. Rounding this onto `factor_of_two` would send the learner
-    // to look for a 2 that is actually a 3.
+  it('names a factor of three as its own kind, under its own trap id', () => {
+    // The taxonomy used to have no member that honestly names a stoichiometric
+    // ratio of three, so this reading carried no trap id at all. It does now,
+    // for the same reason the kind exists: rounding it onto `factor_of_two`
+    // would send the learner to look for a 2 that is actually a 3.
     const reading = diagnoseDiscrepancy({ learnerText: '0.3', expectedText: '0.9' });
     expect(reading!.kind).toBe('STOICHIOMETRIC_RATIO');
-    expect(reading!.trapId).toBeNull();
-    expect(reading!.origin).toBe('numeric');
+    expect(reading!.trapId).toBe('whole_factor_off');
+    expect(reading!.origin).toBe('structural');
     expect(reading!.structuralReason).toContain('three');
   });
 
@@ -119,6 +179,43 @@ describe('diagnoseDiscrepancy — the structural layer wins when both fire', () 
     const other = diagnoseDiscrepancy({ learnerText: '0.0168', expectedText: '0.0168' });
     expect(withExemplar!.kind).toBe('FACTOR_OF_TWO');
     expect(other).toBeNull();
+  });
+
+  it('names a dropped exponent in a kinetics answer, from the law in the material', () => {
+    const reading = diagnoseDiscrepancy({
+      learnerText: 'v = 4.0 m/s',
+      expectedText: 'v = 16.0 m/s',
+      sourceText: 'The flow rate scales with v² at a fixed gradient.',
+    });
+    expect(reading!.kind).toBe('POWER_LAW');
+    expect(reading!.trapId).toBe('power_law_dropped');
+    // The exponent is read off the material structurally, from its own notation.
+    expect(reading!.origin).toBe('structural');
+    // The arithmetic is computed here: the factor and the power it is.
+    expect(reading!.arithmeticReveal).toContain('16 ÷ 4 = 4.00');
+    expect(reading!.arithmeticReveal).toContain('= 2^2');
+    expect(reading!.structuralReason).toContain('v²');
+  });
+
+  it('names a dropped logarithm in a half-life answer', () => {
+    const reading = diagnoseDiscrepancy({
+      learnerText: 't½ = 1.92 h',
+      expectedText: 't½ = 2.77 h',
+      sourceText: 'For a first-order decay, t½ = ln 2 / k.',
+    });
+    expect(reading!.kind).toBe('LOG_SCALE');
+    expect(reading!.trapId).toBe('logarithm_dropped');
+    expect(reading!.origin).toBe('structural');
+    expect(reading!.structuralReason).toContain('ln 2');
+    expect(reading!.arithmeticReveal).toContain('1 / ln 2');
+  });
+
+  it('names a coefficient of seven rather than staying silent', () => {
+    // The case this vocabulary was widened for: 3 A + 2 B was the only ratio a
+    // coefficient error could be, and every other whole number fell through.
+    const reading = diagnoseDiscrepancy({ learnerText: '0.13', expectedText: '0.91' });
+    expect(reading!.kind).toBe('STOICHIOMETRIC_RATIO');
+    expect(reading!.structuralReason).toContain('seven');
   });
 
   it('keeps every pair it considered, best first, for the diff table', () => {

@@ -32,6 +32,21 @@
 // `NUANCED` all bottom out at "name the context" or "name the case", which is
 // what `TRUE_WITH_BOUNDARY_TRIPWIRE` already means — a fourth verdict would
 // only be a way to avoid saying which.
+//
+// What the closed taxonomy DOES need is somewhere to put the context, because
+// an observational claim — "elevated cortisol causes immunosuppression", true
+// chronically and false in the acute stress response — is not a hedge and not
+// vague: it is exactly true inside a named regime. So a context-dependent claim
+// is `TRUE_WITH_BOUNDARY_TRIPWIRE` with the regimes on record: `contextAxis`
+// names the axis (acute vs chronic, dose, in vitro vs in vivo) and the tripwire
+// names the end of it where the claim fails. "It depends" stays refused; naming
+// what it depends on is the answer.
+//
+// The same reasoning applies to the claim that was interrogated. Restating a
+// topic into the checkable claim it should have been is a service; swapping in
+// a different subject, quantity or mechanism is not, and a verdict on a
+// sentence the learner did not write is worse than no verdict — which is what
+// `claimsMatch` and the `claimDrift` refusal are for.
 
 import { Type } from '@google/genai';
 
@@ -52,7 +67,8 @@ export interface InquisitorRead {
   /**
    * The claim as it was interrogated, quoted back. A vague input is restated
    * as the checkable claim it should have been, so a misreading is visible
-   * instead of hidden.
+   * instead of hidden — and when it differs from the learner's own sentence the
+   * panel labels it as a restatement rather than passing it off as theirs.
    */
   claim: string;
   /** The governing law and why it does or does not force the claim. 2–4 lines. */
@@ -61,6 +77,16 @@ export interface InquisitorRead {
   tripwire: string;
   /** The construction that does hold. Required by `FALSE`. */
   correction: string;
+  /**
+   * The regimes the claim's truth is conditional on — "acute vs chronic",
+   * "dose: low vs high", "in vitro vs in vivo". Empty for a claim whose truth
+   * does not turn on a regime.
+   *
+   * This is the field that makes an observational claim answerable without a
+   * fourth verdict: the axis is where the context lives, and it is only accepted
+   * when it actually contrasts two regimes (see `hasContrastingAxis`).
+   */
+  contextAxis: string;
 }
 
 /** Real reads bottom out in a couple of lines; more is a lecture. */
@@ -80,6 +106,11 @@ You are not a tutor and not a cheerleader. Do not praise the question, do not su
   because it is unconventional. A learner's own analogy is TRUE when the
   structure it maps actually carries the conclusion — say which structure.
 
+  "It depends" is never the verdict. When a claim's truth turns on the regime —
+  an observational claim, a biological or clinical one, anything whose answer
+  changes with dose, time or system — it is TRUE_WITH_BOUNDARY_TRIPWIRE: the
+  context is the boundary, and you name it (see [ 05 ]).
+
 [ 02 ] PROOF — 2 to ${MAX_PROOF_LINES} lines. Line one names the governing law or invariant (conservation, Coulomb, the definition of the derivative, a rate law, a dimensional necessity). The remaining lines derive the claim from it, or show exactly where the derivation fails. Never "it depends" and never "both are true in different contexts" without naming the context in that same line.
 
 [ 03 ] BOUNDARY TRIPWIRE — only for TRUE_WITH_BOUNDARY_TRIPWIRE: the exact counterexample or regime where it breaks, as a thing the learner can hold (a named function, a named condition, a specific physical regime). "In extreme cases" and "at very large values" are NOT tripwires. If you cannot name one, the verdict is TRUE. Never manufacture a boundary to have something to say — a fabricated edge teaches a limit that does not exist.
@@ -87,6 +118,24 @@ You are not a tutor and not a cheerleader. Do not praise the question, do not su
 [ 04 ] CORRECTION — only for FALSE: the construction that does hold, written out. NEVER return FALSE without it. A verdict with no fix is the grader this surface exists to replace.
 
 CLAIM FIELD — quote the claim you actually interrogated. If the input is too vague to be false — a topic, a question, a label — restate it as the checkable claim it should have been and interrogate THAT, so the learner sees the claim you tested rather than being graded on a claim they did not make.
+
+  Restating is for vagueness, never for convenience: keep every term the
+  learner wrote — every subject, quantity, direction and mechanism. Swapping one
+  out changes the claim, and a verdict on a sentence they did not write is worse
+  than no verdict at all.
+
+[ 05 ] CONTEXT AXIS — set "contextDependent" true when the claim's truth turns on
+  the regime, and then NAME THE AXIS: the two ends it flips between, as a pair —
+  "acute vs chronic", "dose: low vs high", "in vitro vs in vivo", "time since
+  exposure: hours vs weeks", "above vs below the melting point".
+  A one-word axis is not an axis, and "it depends", "in some cases" and "it varies"
+  are refusals to answer rather than answers: the axis is the pair of conditions
+  you would draw at the two ends of a diagram, and naming it IS the answer.
+
+  When contextDependent is true the verdict IS TRUE_WITH_BOUNDARY_TRIPWIRE: the
+  tripwire names the end of the axis where the claim fails, and the axis names
+  both ends. A context-dependent claim returned as plain TRUE is refused rather
+  than shown, because it would hide the condition the claim turns on.
 
 HARD RULE on arithmetic: never compute, re-derive or invent a numeric value to make a point. If a ratio or a limit is the argument, name the two quantities being compared and let the learner do the division. A wrong number in a verdict about rigour destroys the verdict.
 
@@ -116,6 +165,16 @@ export const inquisitorSchema = {
       type: Type.STRING,
       description:
         "TRUE_WITH_BOUNDARY_TRIPWIRE only: the exact counterexample, function or physical regime where the claim stops holding. Empty string when the claim is TRUE. Never an invented or vague boundary.",
+    },
+    contextDependent: {
+      type: Type.BOOLEAN,
+      description:
+        "True when the claim's truth turns on a regime (dose, time, acute vs chronic, in vitro vs in vivo). A context-dependent claim is TRUE_WITH_BOUNDARY_TRIPWIRE with the axis named, never a plain TRUE.",
+    },
+    contextAxis: {
+      type: Type.STRING,
+      description:
+        'The regimes the claim is conditional on, as a contrasting PAIR: "acute vs chronic", "dose: low vs high", "in vitro vs in vivo". Empty string when contextDependent is false. A single word or "it depends" is not an axis.',
     },
     correction: {
       type: Type.STRING,

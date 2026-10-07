@@ -17,6 +17,17 @@
 // because the learner spends real working memory on a connection that is not
 // load-bearing — and then has to unlearn it. So `matchFusion` returns null and
 // the caller stays single-topic.
+//
+// ROW MATCHING ALONE IS NOT ENOUGH, and that is the second refusal. A learner who
+// uploads one lecture on calorimetry hits this table, and a row is a collision of
+// TWO OR THREE chapters — handing them the full thermochemistry collision would
+// require formation enthalpies and gas work they have not met yet, which is not
+// an escalation, it is a hallucinated second chapter. So breadth is MEASURED:
+// `fusionReadiness` counts how many of the row's own topics the learner's
+// material actually carries, and a collision is only served when at least two of
+// them are present. One topic present is not a failed escalation either — it is
+// a DEEPER one, and `soloDepthBrief` raises the load inside the chapter the
+// learner actually has rather than inventing the chapter they do not.
 
 import type { FusionRow } from './types';
 
@@ -176,6 +187,136 @@ ${row.couplings.map((coupling) => `  · ${coupling}`).join('\n')}
 REQUIREMENTS:
 1. Do not staple two exercises together. A single answer must require both chapters, so that solving either chapter alone leaves the answer genuinely underdetermined.
 2. Every number must be physically consistent, and the units must survive the whole chain.
+3. No hints, no intermediate values, no method names in the statement.
+4. State the constraints and what is being asked for; the derivation is the learner's.`;
+}
+
+// ─── Breadth: a collision needs two chapters, and they have to be present ───
+
+/** What a topic's presence looks like in the learner's own material. */
+export interface FusionReadiness {
+  /** The row whose domain the topic belongs to, or null when nothing matched. */
+  row: FusionRow | null;
+  /** How many of the row's topics the material carries. */
+  matchedTopics: number;
+  /** How many topics the row collides, in total. */
+  totalTopics: number;
+  /** The topics the material actually carries, named as the row names them. */
+  present: string[];
+  /** The topics it does not, which is what the collision would have to invent. */
+  absent: string[];
+  /** True only when the collision is served: two or more topics present. */
+  ready: boolean;
+  /** One line, shown to the learner, because a re-aimed escalation must say so. */
+  reason: string;
+}
+
+/**
+ * The vocabulary that marks one topic as present.
+ *
+ * Derived from the topic's own words rather than added as a third list to keep
+ * in sync: a topic named "Heats of formation (ΔH°f)" is present when the
+ * material talks about formation enthalpies, and the words that say so are in
+ * its name. Words this short or this generic are dropped, because "of" and
+ * "the" are in every topic's name and would mark every topic present.
+ */
+const STOPWORDS = new Set([
+  'the', 'and', 'of', 'a', 'an', 'in', 'on', 'to', 'for', 'with', 'by',
+  'from', 'at', 'as', 'or', 'is', 'are', 'its', 'it', 'that', 'this', 'their',
+]);
+
+function topicWords(topic: string): string[] {
+  return normalize(topic)
+    .replace(/[()=+−-]/g, ' ')
+    .split(/[^a-z0-9°Δ]+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 4 && !STOPWORDS.has(word));
+}
+
+function topicPresent(topic: string, haystack: string): boolean {
+  const words = topicWords(topic);
+  if (words.length === 0) return false;
+  // A topic is present when its own distinctive vocabulary shows up — a single
+  // hit is enough for the CHAPTER to count, because the caller reports which
+  // chapters it collided, so a marginal hit is visible rather than silent.
+  return words.some((word) => haystack.includes(word));
+}
+
+/**
+ * How ready the material is for a collision on this topic.
+ *
+ * `topicText` is what the learner named (or the stage's topic); `context` is the
+ * source material when there is any. Both are searched, because a learner who
+ * types "calorimetry" while their notes cover formation enthalpies HAS the
+ * second chapter, and refusing the collision on the strength of the topic string
+ * alone would under-serve exactly the case this is built for.
+ */
+export function fusionReadiness(
+  topicText: string,
+  context = '',
+  rows: FusionRow[] = FUSION_MATRIX
+): FusionReadiness {
+  const row = matchFusion(topicText, rows) ?? matchFusion(context, rows);
+  if (!row) {
+    return {
+      row: null,
+      matchedTopics: 0,
+      totalTopics: 0,
+      present: [],
+      absent: [],
+      ready: false,
+      reason:
+        'No collision is on file for this material, so the escalation stays inside the chapter rather than inventing a second one.',
+    };
+  }
+
+  const haystack = `${normalize(topicText)} ${normalize(context)}`;
+  const present: string[] = [];
+  const absent: string[] = [];
+  for (const topic of row.topics) {
+    if (topicPresent(topic, haystack)) present.push(topic);
+    else absent.push(topic);
+  }
+
+  const ready = present.length >= 2;
+  return {
+    row,
+    matchedTopics: present.length,
+    totalTopics: row.topics.length,
+    present,
+    absent,
+    ready,
+    reason: ready
+      ? `${present.length} of ${row.topics.length} ${row.domain} chapters are in this material, so the sprint can collide them: ${present.join(' + ')}.`
+      : `Only one ${row.domain} chapter is in this material (${present[0] || row.topics[0]}), so the sprint goes DEEPER inside that chapter instead of colliding it with ${absent.join(' + ')} — a collision with a chapter you have not met is not an escalation, it is a problem you cannot finish.`,
+  };
+}
+
+/**
+ * The brief for a re-aimed escalation: same chapter, harder boundary conditions.
+ *
+ * This is what "boss level" means when the material carries one chapter. The
+ * load has to come from somewhere, and the honest source is the constraint
+ * mutation matrix applied to the chapter the learner actually has — asymmetry,
+ * a non-unit density, a phase change — rather than a second chapter's vocabulary
+ * bolted onto a problem that does not need it. It also says, in the prompt and
+ * in the learner's own copy, that no collision was faked.
+ */
+export function soloDepthBrief(readiness: FusionReadiness): string {
+  const topic = readiness.present[0] || readiness.row?.topics[0] || 'the topic';
+  const missing = readiness.absent.length > 0 ? readiness.absent.join(' + ') : 'a second chapter';
+  return `BOSS-LEVEL DEPTH — ${topic.toUpperCase()}, ONE CHAPTER.
+
+The learner has solved consecutive problems without scaffolding, so the load has to rise. It cannot rise by COLLISION here: this material carries one chapter, and ${missing} is not in it. Do NOT invent a second chapter, do NOT import vocabulary the learner has not met, and do NOT staple a distractor onto the statement.
+
+RAISE THE LOAD INSIDE ${topic.toUpperCase()} instead, by mutating its boundary conditions:
+  · Break any 1:1 or unit-value assumption the easy version relies on — unequal ratios, a non-unit density, an imperfect yield, a non-standard temperature or pressure.
+  · Require the SAME quantity to be reached from two constructions that must agree (an energy balance and a state function, a stoichiometric route and a conservation route), so a single formula cannot finish it.
+  · Make one stated constraint a DISTRACTOR that is true but not needed, so the learner has to decide what the system actually demands.
+
+REQUIREMENTS:
+1. One answer, still underdetermined by any single rule from this chapter.
+2. Every number physically consistent, and the units must survive the whole chain.
 3. No hints, no intermediate values, no method names in the statement.
 4. State the constraints and what is being asked for; the derivation is the learner's.`;
 }

@@ -249,16 +249,23 @@ lib/
   mr-m/                    # Mr M mode: the overlay registry + resolver (ordered
                            # interventions, applyWhen-gated, empty when the mode
                            # is off), the trap taxonomy with its deterministic
-                           # arithmetic reveal, the client-side perturbation
-                           # evaluator, payload coercion/normalization, the
-                           # paradox ledger and the engineering patch registry,
+                           # arithmetic reveal (whole factors, whole powers and
+                           # the logarithm constants, plus the exponent written
+                           # on a symbol in a non-chemical line), the client-side
+                           # perturbation evaluator, payload coercion/normalization,
+                           # the paradox ledger and the engineering patch registry,
                            # the discrepancy autopsy (crossed-quantity diff, the
                            # reciprocal fold, sign-before-magnitude precedence),
                            # and the encode/evaluate prompt directives
   escalation/              # Adaptive escalation: the ZPD friction governor
                            # (clean-win streak, boss level at two, a miss zeroes
-                           # it), the concept-fusion table, and the
-                           # constraint-mutation matrix with its tier gates
+                           # it), the concept-fusion table with its breadth gate
+                           # (a collision needs two chapters the material
+                           # actually carries, else the brief re-aims deeper),
+                           # the constraint-mutation matrix with its tier gates,
+                           # and the declared-ledger consistency gate (a safe
+                           # expression evaluator, closure and plausibility
+                           # rules, and the ok-versus-verified split)
   crucible/                # The timed sprint's model: largest-remainder clock
                            # allocation, integer-percent pacing bands, the
                            # stress-inoculation recovery read, plan coercion
@@ -299,8 +306,11 @@ lib/
   interference-traps.ts    # Hypercorrection trap cards captured at prediction-error time
   procedural-archetypes.ts # Parametric MCQ archetypes + 50-trial validator
   inquisitor/              # The claim-verification contract (three verdicts, no
-                           # preamble, no invented boundary), its refusal gate
-                           # (downgrade, or refuse rather than repair), and the
+                           # preamble, no invented boundary, and a NAMED context
+                           # axis for a claim whose truth turns on the regime),
+                           # its refusal gate (downgrade, or refuse rather than
+                           # repair; a restatement of the learner's own sentence
+                           # is refused as drift), and the
                            # boundary→paradox-ledger bridge
   fsrs-audit.ts            # Dense-cloze audit + auto-split
   stream-schema.ts         # Incremental JSON schema extractor for streamed generation

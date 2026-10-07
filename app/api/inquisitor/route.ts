@@ -55,7 +55,10 @@ export async function POST(req: NextRequest) {
       isChecker: true,
     });
 
-    const result = validateInquisitorRead(parsed);
+    // The learner's own sentence travels with the read, so the fidelity gate can
+    // refuse a verdict about a sentence they did not write before it ever
+    // reaches them.
+    const result = validateInquisitorRead(parsed, text);
     if (!result.ok) {
       // Deliberately a 4xx with the gate's own wording: the model answered, and
       // the answer is not shippable. Reporting it as a server failure would

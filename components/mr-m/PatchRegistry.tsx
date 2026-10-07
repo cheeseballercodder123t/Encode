@@ -34,7 +34,13 @@ const KIND_STYLES: Record<PatchEntry['kind'], string> = {
   ORDER_INVERSION: 'border-hazard-500/50 text-hazard-300 bg-hazard-500/10',
   FACTOR_OF_TWO: 'border-amber-500/50 text-amber-300 bg-amber-500/10',
   STOICHIOMETRIC_RATIO: 'border-amber-500/50 text-amber-300 bg-amber-500/10',
+  // A whole factor of seven and a dropped exponent are the same class of miss
+  // as a factor of two: the shape is arithmetic, and it is the whole-number
+  // factor or the power that went missing. The log constant shares the flux
+  // treatment, because the missing step is the notation rather than a factor.
+  POWER_LAW: 'border-amber-500/50 text-amber-300 bg-amber-500/10',
   SUBSCRIPT_DROPPED: 'border-flux-500/50 text-flux-300 bg-flux-500/10',
+  LOG_SCALE: 'border-flux-500/50 text-flux-300 bg-flux-500/10',
   DIMENSIONAL_CONVERSION_ERROR: 'border-flux-500/50 text-flux-300 bg-flux-500/10',
 };
 

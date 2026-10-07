@@ -158,6 +158,36 @@ test.describe('timed crucible', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Timed crucible sprint' })).toBeHidden();
   });
+
+  test('a checkpoint is optional and is reported back against its own state', async ({ page }) => {
+    // The exam room is paper and a bubble sheet. Typed equations under a clock
+    // measure typing, so the only thing the sheet asks for is the intermediate
+    // number — and it must be able to answer "which state was this?" without any
+    // of them being required.
+    await openCrucible(page);
+    await expect(page.getByTestId('crucible-paper-note')).toContainText('paced on the step');
+
+    await page.getByTestId('crucible-topic').fill('Thermochemistry');
+    await page.getByTestId('crucible-start').click();
+    await expect(page.getByTestId('crucible-checkpoint-note')).toBeVisible();
+
+    // One checkpoint on the first state, one on the first state of the SECOND
+    // problem: the summary has to key them by their own position in the sprint,
+    // which is the index the flattened state table already uses.
+    await page.getByTestId('crucible-checkpoint-0').fill('3.5');
+    for (let i = 0; i < 3; i++) await page.getByTestId('crucible-state-next').click();
+    await page.getByTestId('crucible-checkpoint-0').fill('7');
+    // Nothing was required to get here, and nothing is required to finish.
+    for (let i = 0; i < 5; i++) await page.getByTestId('crucible-state-next').click();
+
+    const summary = page.getByTestId('crucible-summary');
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText('checkpoint 3.5');
+    await expect(summary).toContainText('checkpoint 7');
+    // Exactly the two that were typed: an untouched state shows no checkpoint
+    // line at all, rather than an empty column or a dash.
+    await expect(page.getByText(/^checkpoint /)).toHaveCount(2);
+  });
 });
 
 test.describe('emergency triage buffer', () => {

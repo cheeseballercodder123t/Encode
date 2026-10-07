@@ -485,9 +485,18 @@ export function validateBatchEvaluation(raw: unknown): SafeBatchEvaluation {
  * answer assembled from nothing, which is worse than saying nothing. So the
  * rules live in `lib/inquisitor/parse.ts` (pure, unit-tested) and the route
  * turns a refusal into a message the learner can act on.
+ *
+ * `submittedClaim` is the learner's own sentence, and it is passed through so the
+ * fidelity gate can run here rather than only in the client: a verdict about a
+ * sentence the learner did not write is refused at the boundary it crossed,
+ * which is the only place that can also catch a restatement arriving from a
+ * proxy in front of the route.
  */
-export function validateInquisitorRead(raw: unknown): InquisitorParseResult {
-  return normalizeInquisitorRead(raw);
+export function validateInquisitorRead(
+  raw: unknown,
+  submittedClaim = ''
+): InquisitorParseResult {
+  return normalizeInquisitorRead(raw, submittedClaim);
 }
 
 // ─── Error autopsy: the narrative half ──────────────────────────────────────
