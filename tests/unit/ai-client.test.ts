@@ -5,6 +5,7 @@ import {
   aiCacheSize,
   clearUnsupportedModels,
   isUnsupportedModelError,
+  is503OrOverloadedError,
   unsupportedModelCount,
 } from '../../lib/ai-client';
 
@@ -280,5 +281,46 @@ describe('generateJSONWithProvider Gemini model availability memory', () => {
     gemini.calls = [];
     await generateJSONWithProvider({ systemPrompt: 's', userPrompt: 'b', settings: geminiSettings });
     expect(gemini.calls).toHaveLength(4);
+  });
+
+  it('classifies 503, 502, 504 and overloaded errors as 503/overloaded', () => {
+    expect(is503OrOverloadedError(new Error('503 Service Unavailable'))).toBe(true);
+    expect(is503OrOverloadedError(new Error('The model is overloaded. Please try again later.'))).toBe(true);
+    expect(is503OrOverloadedError({ status: 503, message: 'UNAVAILABLE' })).toBe(true);
+    expect(is503OrOverloadedError({ status: 502, message: 'Bad Gateway' })).toBe(true);
+    expect(is503OrOverloadedError({ status: 504, message: 'Gateway Timeout' })).toBe(true);
+    expect(is503OrOverloadedError(new Error('API key not valid'))).toBe(false);
+    expect(is503OrOverloadedError({ status: 401, message: 'Unauthorized' })).toBe(false);
+  });
+
+  it('falls down the ladder on 503 UNAVAILABLE, marks model dead for session, and skips it on next call', async () => {
+    gemini.handler = async ({ model }) => {
+      if (model === 'gemini-3.7-flash') {
+        throw new Error('503 UNAVAILABLE: The model is overloaded. Please try again later.');
+      }
+      return { text: '{"ok":true}' };
+    };
+
+    const first = await generateJSONWithProvider({
+      systemPrompt: 's',
+      userPrompt: 'first',
+      settings: geminiSettings,
+    });
+
+    // Falls back to gemini-3.6-flash and succeeds
+    expect(first).toEqual({ ok: true });
+    expect(gemini.calls).toEqual(['gemini-3.7-flash', 'gemini-3.6-flash']);
+    expect(unsupportedModelCount()).toBe(1);
+
+    gemini.calls = [];
+    const second = await generateJSONWithProvider({
+      systemPrompt: 's',
+      userPrompt: 'second',
+      settings: geminiSettings,
+    });
+
+    // gemini-3.7-flash was marked dead for the session, so call directly starts on gemini-3.6-flash
+    expect(second).toEqual({ ok: true });
+    expect(gemini.calls).toEqual(['gemini-3.6-flash']);
   });
 });

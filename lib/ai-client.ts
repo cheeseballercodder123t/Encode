@@ -174,6 +174,37 @@ export function isUnsupportedModelError(error: unknown): boolean {
   );
 }
 
+/**
+ * Detects HTTP 503 / UNAVAILABLE / overloaded service errors from Google GenAI
+ * or proxies, excluding credential / auth issues.
+ */
+export function is503OrOverloadedError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = String((error as any)?.message || error || '').toLowerCase();
+  if (
+    msg.includes('api key') ||
+    msg.includes('api_key') ||
+    msg.includes('unauthorized') ||
+    msg.includes('permission denied') ||
+    msg.includes('forbidden')
+  ) {
+    return false;
+  }
+  const status = (error as any)?.status ?? (error as any)?.code ?? (error as any)?.statusCode;
+  if (typeof status === 'number' && (status === 503 || status === 502 || status === 504)) {
+    return true;
+  }
+  return (
+    msg.includes('503') ||
+    msg.includes('502') ||
+    msg.includes('504') ||
+    msg.includes('unavailable') ||
+    msg.includes('overloaded') ||
+    msg.includes('bad gateway') ||
+    msg.includes('gateway timeout')
+  );
+}
+
 /** How many models this session has learned do not exist (exposed for tests). */
 export function unsupportedModelCount(): number {
   return unsupportedModels.size;
@@ -340,9 +371,26 @@ export async function generateJSONWithProvider({
           console.warn(`Gemini model ${mName} is not available on this key, falling back to the next model...`);
           continue;
         }
+
+        // 503 UNAVAILABLE / Overloaded: service is temporarily overloaded for this model.
+        // Mark model temporarily dead for the session so subsequent calls skip this rung,
+        // record the fallback metric, and step down to the next model in the ladder.
+        if (is503OrOverloadedError(err)) {
+          const isNew = !unsupportedModels.has(mName);
+          unsupportedModels.add(mName);
+          if (isNew) {
+            captureAiError(err, { provider: 'gemini', model: mName, reason: 'overloaded-503' });
+          }
+          aiMetrics.recordModelFallback();
+          console.warn(`Gemini model ${mName} is overloaded / unavailable (503), marking dead for session and falling back to next available model...`);
+          continue;
+        }
+
         const errStr = String(err?.message || err).toLowerCase();
+        const errStatus = (err as any)?.status ?? (err as any)?.code ?? (err as any)?.statusCode;
         // If it's a quota / rate limit / 429 error, try fallback model in loop
-        if (errStr.includes('quota') || errStr.includes('429') || errStr.includes('resource_exhausted') || errStr.includes('limit')) {
+        if (errStr.includes('quota') || errStr.includes('429') || errStr.includes('resource_exhausted') || errStr.includes('limit') || errStatus === 429) {
+          aiMetrics.recordModelFallback();
           console.warn(`Gemini model ${mName} hit rate limit / quota error, falling back to next available model...`);
           continue;
         }
@@ -550,13 +598,26 @@ export async function* streamTextWithProvider({
           console.warn(`Gemini stream model ${model} is not available on this key, falling back…`);
           continue;
         }
+        if (is503OrOverloadedError(err)) {
+          const isNew = !unsupportedModels.has(model);
+          unsupportedModels.add(model);
+          if (isNew) {
+            captureAiError(err, { provider: 'gemini', model, reason: 'overloaded-503' });
+          }
+          aiMetrics.recordModelFallback();
+          console.warn(`Gemini stream model ${model} is overloaded / unavailable (503), marking dead for session and falling back…`);
+          continue;
+        }
         const errStr = String(err?.message || err).toLowerCase();
+        const errStatus = (err as any)?.status ?? (err as any)?.code ?? (err as any)?.statusCode;
         if (
           errStr.includes('quota') ||
           errStr.includes('429') ||
           errStr.includes('resource_exhausted') ||
-          errStr.includes('limit')
+          errStr.includes('limit') ||
+          errStatus === 429
         ) {
+          aiMetrics.recordModelFallback();
           console.warn(`Gemini stream model ${model} hit a rate limit, falling back…`);
           continue;
         }

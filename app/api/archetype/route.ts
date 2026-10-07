@@ -7,8 +7,8 @@ import {
   validateProceduralArchetype,
 } from "@/lib/procedural-validator";
 
-/** Model used by the repair pass (the flash-3.1-lite tier). */
-const REPAIR_MODEL = "gemini-flash-3.1-lite";
+/** Model used by the repair pass (the flash-lite tier). */
+const REPAIR_MODEL = "gemini-3.5-flash-lite";
 
 const archetypeSchema = {
   type: Type.OBJECT,

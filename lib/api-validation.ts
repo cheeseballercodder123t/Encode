@@ -66,10 +66,13 @@ export const encodeSchema = z.object({
   hiddenTemplates: z.array(z.string().max(120)).max(60).default([]),
   /** Mr M mode: asks the encoder for the first-principles overlay payloads. */
   mrMMode: z.boolean().optional().default(false),
+  /** Stream flag used by /api/encode/stream downstream call. */
+  stream: z.boolean().optional(),
 });
 
 export const evaluateSchema = z.object({
   batchMode: z.boolean().optional(),
+  preSessionConfidence: z.number().min(0).max(5).optional(),
   stages: z
     .array(
       z.object({

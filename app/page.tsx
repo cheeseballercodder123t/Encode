@@ -734,30 +734,6 @@ export default function DeepEncodeApp() {
       sourceType: uploadedFile ? 'file' : 'notes',
     });
 
-    // If device is offline, immediately use deterministic client-side cognitive generator
-    // (honors the learner's hidden templates so offline feels identical to online).
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      try {
-        const offlineData = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);
-        setIsGuidedPathMode(false);
-        setGuidedModules([]);
-        setActivities(offlineData.activities);
-        setTopicSummary(offlineData.topicSummary);
-        setResearchContexts([]);
-        setYoutubeData(null);
-        setCurrentActivityIndex(0);
-        setUserResponses({});
-        loadStageInputs(0, offlineData.activities, {});
-        setXp(100);
-        addXP(100);
-        sound.playSuccess();
-        setAppState('encoding');
-        return;
-      } catch (offErr) {
-        console.error('Offline generator fallback error:', offErr);
-      }
-    }
-
     try {
       const sRate = computeSuccessRate(userResponses);
       // Streamed: the outline (and the topic title) arrive while the full schema
@@ -831,7 +807,7 @@ export default function DeepEncodeApp() {
         return;
       }
       const errMsg = String(error?.message || error || '');
-      const isProviderDown = errMsg.includes('Provider down') || (typeof navigator !== 'undefined' && !navigator.onLine);
+      const isProviderDown = errMsg.includes('Provider down');
       if (!isProviderDown) {
         console.error('API generation failed:', error);
         alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');

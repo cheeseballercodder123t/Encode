@@ -64,16 +64,20 @@ const MAX_RETRIES = 2;
 const BASE_BACKOFF_MS = 700;
 
 export function isRetryableStatus(status: number): boolean {
-  return RETRYABLE_STATUS.has(status);
+  return status === 429 || status === 503 || status === 502 || status === 504 || RETRYABLE_STATUS.has(status);
 }
 
 export function isRetryableError(err: unknown): boolean {
   if (err instanceof AiTimeoutError) return true;
+  const status = (err as any)?.status ?? (err as any)?.code ?? (err as any)?.statusCode;
+  if (typeof status === 'number' && isRetryableStatus(status)) return true;
   const msg = String((err as any)?.message || err).toLowerCase();
   // Gemini SDK surfaces quota/rate errors as messages, not statuses.
   if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted')) return true;
   if (msg.includes('rate limit') || msg.includes('rate_limit')) return true;
-  if (msg.includes('overloaded') || msg.includes('timeout') || msg.includes('timed out')) return true;
+  if (msg.includes('503') || msg.includes('unavailable') || msg.includes('overloaded')) return true;
+  if (msg.includes('502') || msg.includes('504') || msg.includes('bad gateway') || msg.includes('gateway timeout')) return true;
+  if (msg.includes('timeout') || msg.includes('timed out')) return true;
   if (msg.includes('fetch failed') || msg.includes('networkerror') || msg.includes('econnreset')) return true;
   return false;
 }

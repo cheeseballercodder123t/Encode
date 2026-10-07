@@ -32,6 +32,8 @@ describe('retry classification', () => {
   it('treats 429/5xx as retryable and 4xx as fatal', () => {
     expect(isRetryableStatus(429)).toBe(true);
     expect(isRetryableStatus(503)).toBe(true);
+    expect(isRetryableStatus(502)).toBe(true);
+    expect(isRetryableStatus(504)).toBe(true);
     expect(isRetryableStatus(401)).toBe(false);
     expect(isRetryableStatus(400)).toBe(false);
   });
@@ -40,6 +42,9 @@ describe('retry classification', () => {
     expect(isRetryableError(new AiTimeoutError('late'))).toBe(true);
     expect(isRetryableError(new Error('429 resource_exhausted'))).toBe(true);
     expect(isRetryableError(new Error('fetch failed'))).toBe(true);
+    expect(isRetryableError(new Error('503 Service Unavailable'))).toBe(true);
+    expect(isRetryableError(new Error('The model is overloaded. Please try again later.'))).toBe(true);
+    expect(isRetryableError({ status: 503, message: 'UNAVAILABLE' })).toBe(true);
     expect(isRetryableError(new Error('Invalid API key'))).toBe(false);
   });
 
