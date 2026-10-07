@@ -4,7 +4,7 @@
 // switch apps → File ▸ Import → pick the file → confirm. The whole point of
 // exporting here is to end the session the instant the card is forged, so if
 // the Anki desktop app is open with the AnkiConnect add-on
-// (code 2055492159) listening on 127.0.0.1:8765, the deck can be created and
+// (code 2055492159) listening on localhost:8765, the deck can be created and
 // the notes added directly, from the browser, with no file system in the loop.
 //
 // Two failure modes get first-class, actionable error text because both look
@@ -24,7 +24,7 @@
 import { shipsAsClozeNote, unwrapClozeDeletions } from './anki-exporter';
 import type { AnkiCardItem } from './anki-exporter';
 
-export const DEFAULT_ANKI_CONNECT_URL = 'http://127.0.0.1:8765';
+export const DEFAULT_ANKI_CONNECT_URL = 'http://localhost:8765';
 
 /** AnkiConnect API version this client speaks. */
 const ANKI_CONNECT_VERSION = 6;
@@ -118,7 +118,7 @@ function unreachableMessage(url: string, detail: string): string {
 const CORS_HINT =
   'The browser blocked the request to AnkiConnect. Add this app\'s origin (or "*") to ' +
   'webCorsOriginList in Tools ▸ Add-ons ▸ AnkiConnect ▸ Config, then restart Anki. ' +
-  'A page served over https cannot reach http://127.0.0.1:8765 at all — use the local dev server or the .apkg export.';
+  'A page served over HTTPS cannot connect directly to local Anki desktop — use the .apkg export or run the app locally.';
 
 /**
  * Calls one AnkiConnect action. Throws {@link AnkiConnectError} with a message
@@ -130,6 +130,16 @@ export async function ankiInvoke<T = any>(
   opts: AnkiInvokeOptions = {}
 ): Promise<T> {
   const url = sanitizeAnkiEndpoint(opts.url);
+
+  // Browser on HTTPS cannot reach unencrypted HTTP localhost directly (blocked by Mixed Content / CORS preflight).
+  // Intercept before fetch() to prevent browser console CORS network errors.
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://')) {
+    throw new AnkiConnectError(
+      'Direct Anki desktop connection is not supported from an HTTPS web origin. Use the .apkg export or run the app locally.',
+      'cors'
+    );
+  }
+
   const timeoutMs = opts.timeoutMs ?? 10000;
 
   const controller = new AbortController();

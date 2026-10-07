@@ -112,12 +112,27 @@ type ForgeEvent =
   | { type: 'error'; message: string };
 
 function cleanSource(raw: ForgeSourcePayload, index: number): ForgeSource {
+  const hasFile = Boolean(raw.file && ((raw.file as any).base64Data || (raw.file as any).data));
+  const hasUrl = Boolean(raw.url && /youtube\.com|youtu\.be/i.test(raw.url));
   const kind: ForgeSourceKind =
-    raw.kind === 'file' || raw.kind === 'youtube' ? raw.kind : 'text';
+    raw.kind === 'file' || raw.kind === 'youtube'
+      ? raw.kind
+      : hasFile
+      ? 'file'
+      : hasUrl
+      ? 'youtube'
+      : 'text';
+  const rawNotes = (raw.notes || (raw as any).content || (raw as any).text || (raw as any).body || '').trim();
+  const fallbackLabel =
+    raw.label ||
+    (raw as any).name ||
+    raw.file?.name ||
+    (rawNotes ? rawNotes.slice(0, 42).replace(/\s+/g, ' ') : '') ||
+    `Source ${index + 1}`;
   return {
     id: (raw.id || `src_${index + 1}`).slice(0, 60),
     kind,
-    label: (raw.label || (raw as any).name || '').slice(0, 120) || `Source ${index + 1}`,
+    label: String(fallbackLabel).slice(0, 120),
   };
 }
 
@@ -155,19 +170,23 @@ export async function POST(req: NextRequest) {
             z
               .object({
                 id: z.string().max(200).optional(),
-                name: z.string().max(300).optional(),
-                label: z.string().max(300).optional(),
+                name: z.string().max(500).optional(),
+                label: z.string().max(500).optional(),
                 kind: z.string().max(60).optional(),
-                content: z.string().max(200_000).optional(),
-                notes: z.string().max(200_000).optional(),
+                content: z.string().optional(),
+                notes: z.string().optional(),
+                text: z.string().optional(),
+                body: z.string().optional(),
                 url: z.string().max(2_000).optional(),
                 file: z
                   .object({
-                    name: z.string().max(300).optional(),
+                    name: z.string().max(500).optional(),
                     type: z.string().max(120).optional(),
                     size: z.number().optional(),
-                    base64Data: z.string().max(45 * 1024 * 1024).optional(),
+                    base64Data: z.string().optional(),
+                    data: z.string().optional(),
                   })
+                  .passthrough()
                   .nullable()
                   .optional(),
               })
@@ -298,8 +317,47 @@ export async function POST(req: NextRequest) {
       ? raw.notes.trim()
       : typeof (raw as any).content === 'string'
       ? (raw as any).content.trim()
+      : typeof (raw as any).text === 'string'
+      ? (raw as any).text.trim()
+      : typeof (raw as any).body === 'string'
+      ? (raw as any).body.trim()
       : '';
-    const file = raw.file && raw.file.base64Data && raw.file.type ? raw.file : null;
+
+    const rawFile = raw.file;
+    const base64Payload = rawFile?.base64Data || (rawFile as any)?.data || '';
+    const fileExt = (rawFile?.name || '').toLowerCase();
+    let inferredType = rawFile?.type || '';
+    if (!inferredType) {
+      if (fileExt.endsWith('.pdf')) inferredType = 'application/pdf';
+      else if (fileExt.endsWith('.png')) inferredType = 'image/png';
+      else if (fileExt.endsWith('.jpg') || fileExt.endsWith('.jpeg')) inferredType = 'image/jpeg';
+      else if (fileExt.endsWith('.webp')) inferredType = 'image/webp';
+      else if (fileExt.endsWith('.gif')) inferredType = 'image/gif';
+      else if (fileExt.endsWith('.mp3')) inferredType = 'audio/mpeg';
+      else if (fileExt.endsWith('.wav')) inferredType = 'audio/wav';
+      else if (fileExt.endsWith('.m4a')) inferredType = 'audio/m4a';
+      else if (fileExt.endsWith('.txt') || fileExt.endsWith('.md') || fileExt.endsWith('.markdown')) inferredType = 'text/plain';
+      else if (base64Payload) inferredType = 'application/octet-stream';
+    }
+
+    // If uploaded file is text or markdown, decode base64 into notes if notes is empty!
+    if (!notes && base64Payload && (inferredType.startsWith('text/') || fileExt.endsWith('.txt') || fileExt.endsWith('.md') || fileExt.endsWith('.markdown') || fileExt.endsWith('.csv'))) {
+      try {
+        notes = Buffer.from(base64Payload, 'base64').toString('utf-8').trim();
+      } catch {
+        /* keep base64 */
+      }
+    }
+
+    const file = base64Payload
+      ? {
+          name: rawFile?.name || `file_${i + 1}`,
+          type: inferredType,
+          size: rawFile?.size || 0,
+          base64Data: base64Payload,
+        }
+      : null;
+
     let label = source.label;
     let provenance = '';
     let resolvedForReuse: ResolvedSourcePayload | undefined;
@@ -382,6 +440,13 @@ export async function POST(req: NextRequest) {
         notes = `RECORDING TRANSCRIPT (${file.name || 'recording'}):\n${result.text}`;
         resolvedForReuse = { id: source.id, label, notes };
       }
+    }
+
+    if (source.kind === 'text' && !notes && file) {
+      source.kind = 'file';
+    }
+    if (source.kind === 'file' && !file && notes) {
+      source.kind = 'text';
     }
 
     if (source.kind === 'text' && !notes) {

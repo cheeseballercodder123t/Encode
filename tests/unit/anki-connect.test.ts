@@ -296,7 +296,7 @@ describe('failure messaging', () => {
       await ensureAnkiDeck('DeepEncode::Topic');
     } catch (err) {
       const message = describePushError(err);
-      expect(message).toContain('http://127.0.0.1:8765');
+      expect(message).toContain('http://localhost:8765');
       expect(message).toContain('2055492159');
       expect(message).toContain('webCorsOriginList');
       expect(err).toBeInstanceOf(AnkiConnectError);
@@ -323,6 +323,24 @@ describe('failure messaging', () => {
       vi.fn(async () => ({ ok: true, status: 200, json: async () => { throw new Error('nope'); } }))
     );
     await expect(ensureAnkiDeck('DeepEncode::Topic')).rejects.toThrow(/non-JSON reply/);
+  });
+
+  it('intercepts HTTP calls on HTTPS origins without triggering fetch', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const originalLocation = window.location;
+    delete (window as any).location;
+    window.location = { ...originalLocation, protocol: 'https:' } as any;
+
+    try {
+      await expect(ensureAnkiDeck('DeepEncode::Topic')).rejects.toMatchObject({
+        name: 'AnkiConnectError',
+        kind: 'cors',
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      (window as any).location = originalLocation;
+    }
   });
 });
 

@@ -134,7 +134,7 @@ describe('readAnkiDeckKeys', () => {
     const read = await readAnkiDeckKeys('Renal Physiology');
     expect(read.ok).toBe(false);
     expect(read.keys).toEqual([]);
-    expect(read.error).toContain('http://127.0.0.1:8765');
+    expect(read.error).toContain('http://localhost:8765');
     expect(describeAnkiRead(read)).toContain('AnkiConnect is unreachable');
     expect(describeAnkiRead(read)).toContain("this app's own memory only");
   });

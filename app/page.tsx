@@ -2561,6 +2561,7 @@ export default function DeepEncodeApp() {
         settings={aiSettings}
         onDeckReady={handleForgeDeckReady}
         initialNotes={rawNotes}
+        initialFile={uploadedFile}
       />
 
       {/* Feature: Multi-Document Comparative 4-Quadrant Synthesis */}

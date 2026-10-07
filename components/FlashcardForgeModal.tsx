@@ -100,6 +100,8 @@ interface FlashcardForgeModalProps {
   onDeckReady: (report: SegregationReport, target: ForgeExportTarget) => void;
   /** Pre-loaded notes (from extension, launchpad, or query params). */
   initialNotes?: string;
+  /** Pre-loaded file (from launchpad upload). */
+  initialFile?: UploadedFileAsset | null;
 }
 
 const SECTIONS: { id: keyof ForgeSectionCounts; label: string; blurb: string }[] = [
@@ -125,6 +127,8 @@ const FILE_TYPES = [
   'image/jpg',
   'image/webp',
   'image/gif',
+  'text/plain',
+  'text/markdown',
 ];
 const MEDIA_TYPES = [
   'audio/mpeg',
@@ -149,6 +153,7 @@ export function FlashcardForgeModal({
   settings,
   onDeckReady,
   initialNotes,
+  initialFile,
 }: FlashcardForgeModalProps) {
   const [sources, setSources] = useState<ForgeSourceDraft[]>([]);
   const [draftText, setDraftText] = useState('');
@@ -235,32 +240,47 @@ export function FlashcardForgeModal({
   // AnkiExportModal's read-on-open effect.
   /* eslint-disable react-hooks/set-state-in-effect -- seeding an editable draft from the notes the sheet opened with */
   React.useEffect(() => {
-    if (isOpen && initialNotes && initialNotes.trim() && sources.length === 0) {
-      const parsed = parseSlideDeck(initialNotes);
-      if (parsed.isSlideDeck && parsed.slides.length >= 2) {
-        const substantive = parsed.slides.filter((s) => !s.isLikelyFluff);
-        const slidesToAdd = (substantive.length > 0 ? substantive : parsed.slides).slice(0, MAX_SOURCES);
-        setSources(
-          slidesToAdd.map((s) => ({
-            id: idFor(`slide_${s.slideNumber}`),
-            kind: 'text',
-            label: s.title,
-            notes: s.combinedText,
-          }))
-        );
-      } else {
-        const text = initialNotes.trim();
-        setSources([
-          {
+    if (!isOpen) return;
+    if (sources.length === 0) {
+      const nextSources: ForgeSourceDraft[] = [];
+      if (initialNotes && initialNotes.trim()) {
+        const parsed = parseSlideDeck(initialNotes);
+        if (parsed.isSlideDeck && parsed.slides.length >= 2) {
+          const substantive = parsed.slides.filter((s) => !s.isLikelyFluff);
+          const slidesToAdd = (substantive.length > 0 ? substantive : parsed.slides).slice(0, MAX_SOURCES);
+          nextSources.push(
+            ...slidesToAdd.map((s) => ({
+              id: idFor(`slide_${s.slideNumber}`),
+              kind: 'text' as const,
+              label: s.title,
+              notes: s.combinedText,
+            }))
+          );
+        } else {
+          const text = initialNotes.trim();
+          nextSources.push({
             id: idFor('initial_notes'),
             kind: 'text',
             label: `${text.slice(0, 42).replace(/\s+/g, ' ')}${text.length > 42 ? '…' : ''}`,
             notes: text,
-          },
-        ]);
+          });
+        }
+      }
+      if (initialFile && nextSources.length < MAX_SOURCES) {
+        const isMedia = MEDIA_TYPES.includes(initialFile.type) || isTranscribableMedia(initialFile.type, initialFile.name);
+        nextSources.push({
+          id: idFor(isMedia ? 'media' : 'file'),
+          kind: 'file',
+          label: initialFile.name,
+          media: isMedia,
+          file: initialFile,
+        });
+      }
+      if (nextSources.length > 0) {
+        setSources(nextSources);
       }
     }
-  }, [isOpen, initialNotes, sources.length]);
+  }, [isOpen, initialNotes, initialFile, sources.length]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /**
@@ -439,27 +459,75 @@ export function FlashcardForgeModal({
     Array.from(files)
       .slice(0, MAX_SOURCES)
       .forEach((file) => {
-        const isMedia =
-          MEDIA_TYPES.includes(file.type) || isTranscribableMedia(file.type, file.name);
-        if (!isMedia && !FILE_TYPES.includes(file.type)) {
-          setError('Only PDFs, images (PNG/JPEG/WebP) and audio/video recordings can be forged.');
-          return;
-        }
+        const lowerName = file.name.toLowerCase();
+        const isTextDoc =
+          file.type.startsWith('text/') ||
+          /\.(txt|md|markdown|csv|tsv|json)$/i.test(file.name);
+
         if (file.size > 15 * 1024 * 1024) {
           setError(`${file.name} is over 15MB.`);
           return;
         }
+
+        if (isTextDoc) {
+          const textReader = new FileReader();
+          textReader.onload = (e) => {
+            const content = (e.target?.result as string) || '';
+            if (!content.trim()) return;
+            setSources((prev) =>
+              prev.length >= MAX_SOURCES
+                ? prev
+                : [
+                    ...prev,
+                    {
+                      id: idFor('text'),
+                      kind: 'text' as ForgeSourceKind,
+                      label: file.name,
+                      notes: content.trim(),
+                    },
+                  ]
+            );
+            playSound('pop');
+          };
+          textReader.readAsText(file);
+          return;
+        }
+
+        let effectiveType = file.type || '';
+        if (!effectiveType) {
+          if (lowerName.endsWith('.pdf')) effectiveType = 'application/pdf';
+          else if (lowerName.endsWith('.png')) effectiveType = 'image/png';
+          else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) effectiveType = 'image/jpeg';
+          else if (lowerName.endsWith('.webp')) effectiveType = 'image/webp';
+          else if (lowerName.endsWith('.gif')) effectiveType = 'image/gif';
+          else if (lowerName.endsWith('.mp3')) effectiveType = 'audio/mpeg';
+          else if (lowerName.endsWith('.wav')) effectiveType = 'audio/wav';
+          else if (lowerName.endsWith('.m4a')) effectiveType = 'audio/m4a';
+          else effectiveType = 'application/octet-stream';
+        }
+
+        const isMedia =
+          MEDIA_TYPES.includes(effectiveType) || isTranscribableMedia(effectiveType, file.name);
+        const isPdfOrImage =
+          FILE_TYPES.includes(effectiveType) ||
+          /\.(pdf|png|jpe?g|webp|gif)$/i.test(file.name);
+
+        if (!isMedia && !isPdfOrImage) {
+          setError('Only PDFs, images (PNG/JPEG/WebP), text/markdown notes, and audio/video recordings can be forged.');
+          return;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
           const result = e.target?.result as string;
           if (!result) return;
-          const base64Data = result.split(',')[1];
+          const base64Data = result.split(',')[1] || '';
           const asset: UploadedFileAsset = {
             name: file.name,
-            type: file.type,
+            type: effectiveType,
             size: file.size,
             base64Data,
-            previewUrl: file.type.startsWith('image/') ? result : undefined,
+            previewUrl: effectiveType.startsWith('image/') ? result : undefined,
           };
           setSources((prev) =>
             prev.length >= MAX_SOURCES
@@ -487,14 +555,31 @@ export function FlashcardForgeModal({
   };
 
   /** Where a draft source goes on the wire. */
-  const sourcePayloadFor = (s: ForgeSourceDraft) => ({
-    id: s.id,
-    kind: s.kind,
-    label: s.label,
-    notes: s.notes,
-    url: s.url,
-    file: s.file ? { name: s.file.name, type: s.file.type, base64Data: s.file.base64Data } : null,
-  });
+  const sourcePayloadFor = (s: ForgeSourceDraft) => {
+    const fileExt = (s.file?.name || '').toLowerCase();
+    let fileType = s.file?.type || '';
+    if (!fileType) {
+      if (fileExt.endsWith('.pdf')) fileType = 'application/pdf';
+      else if (fileExt.endsWith('.png')) fileType = 'image/png';
+      else if (fileExt.endsWith('.jpg') || fileExt.endsWith('.jpeg')) fileType = 'image/jpeg';
+      else if (fileExt.endsWith('.webp')) fileType = 'image/webp';
+      else if (fileExt.endsWith('.gif')) fileType = 'image/gif';
+      else if (fileExt.endsWith('.mp3')) fileType = 'audio/mpeg';
+      else if (fileExt.endsWith('.wav')) fileType = 'audio/wav';
+      else if (fileExt.endsWith('.m4a')) fileType = 'audio/m4a';
+      else if (fileExt.endsWith('.txt') || fileExt.endsWith('.md')) fileType = 'text/plain';
+      else fileType = 'application/octet-stream';
+    }
+
+    return {
+      id: s.id,
+      kind: s.kind,
+      label: s.label,
+      notes: s.notes || (s.kind === 'text' ? s.label : undefined),
+      url: s.url,
+      file: s.file ? { name: s.file.name, type: fileType, size: s.file.size, base64Data: s.file.base64Data } : null,
+    };
+  };
 
   const deckCount = (report: SegregationReport) =>
     report.declarativeFacts.length +
@@ -578,7 +663,6 @@ export function FlashcardForgeModal({
         refreshMemory(report, 'reset');
         setAnkiRead(null);
         void syncCloudMemory(report);
-        void checkAnkiDeck(report, true);
         // Remember WHICH sources this deck was built from. Next Monday the same
         // lecture can be skipped before it costs a model call, instead of being
         // re-cut and then diffed back out as "already in your deck".
@@ -595,7 +679,22 @@ export function FlashcardForgeModal({
     }
   };
 
-  const handleForge = () => runForge(activeSources, sectionList);
+  const handleForge = () => {
+    let toRun = [...activeSources];
+    if (draftText.trim() && !toRun.some((s) => s.notes === draftText.trim())) {
+      const text = draftText.trim();
+      const newSource: ForgeSourceDraft = {
+        id: idFor('text'),
+        kind: 'text',
+        label: `${text.slice(0, 42).replace(/\s+/g, ' ')}${text.length > 42 ? '…' : ''}`,
+        notes: text,
+      };
+      toRun.push(newSource);
+      setSources((prev) => [...prev, newSource]);
+      setDraftText('');
+    }
+    return runForge(toRun, sectionList);
+  };
 
   /**
    * Asks the real Anki collection what this topic already holds and folds those
@@ -605,6 +704,16 @@ export function FlashcardForgeModal({
    * the panel says the memory was not verified.
    */
   const checkAnkiDeck = async (report: SegregationReport, resetChoice = false) => {
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+      setAnkiRead({
+        ok: false,
+        decks: [],
+        notes: 0,
+        keys: [],
+        error: 'Direct Anki desktop sync is unavailable on HTTPS deployments. Use .apkg export or run the app locally.',
+      });
+      return;
+    }
     setCheckingAnki(true);
     try {
       const result = await syncDeckMemoryFromAnki(report.topic);
@@ -863,13 +972,18 @@ export function FlashcardForgeModal({
 
   /** Re-forge ONE failed source, leaving the sources that worked alone. */
   const handleRetrySource = async (id: string) => {
-    if (!merged || deckBusy !== '' || loopRunning) return;
+    if (deckBusy !== '' || loopRunning) return;
+    const source = activeSources.find((s) => s.id === id);
+    if (!merged) {
+      if (!source) return;
+      return runForge([source], sectionList);
+    }
     const row = outcomes.find((o) => o.id === id);
     playSound('click');
     setDeckBusy('more');
     setLiveSources([]);
     setLiveRunning([]);
-    noteDeck(`Retrying ${row?.label || 'that source'}…`);
+    noteDeck(`Retrying ${row?.label || source?.label || 'that source'}…`);
     try {
       const { addition } = await fetchMoreBatch([id]);
       if (!addition) throw new Error('That source returned nothing again — the reason is in its row.');
