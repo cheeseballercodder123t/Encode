@@ -21,6 +21,8 @@ import {
   PRIMING_RESPONSES,
   SEQUENCE_RESPONSE,
   DISCRIMINATION_RESPONSE,
+  INQUISITOR_TRIPWIRE_RESPONSE,
+  INQUISITOR_TRUE_RESPONSE,
 } from './fixtures';
 
 // ─── Route mocks ─────────────────────────────────────────────────────────────
@@ -82,7 +84,25 @@ export async function mockAiApis(page: Page) {
       contentType: 'application/json',
       body: JSON.stringify(probeCall === 1 ? PROBE_RESPONSE : PROBE_AXIOM_RESPONSE),
     });
-  });  await page.route('**/api/invert-step', (route) =>
+  });
+
+  // Question-first inquisitor: reads one claim per call. The default is the
+  // read that carries a boundary, because that is the one with a second step to
+  // test (holding it open in the ledger); a spec that wants another verdict
+  // overrides this route, which wins because it is registered later.
+  let inquisitorCall = 0;
+  await page.route('**/api/inquisitor', (route) => {
+    inquisitorCall += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        inquisitorCall === 1 ? INQUISITOR_TRIPWIRE_RESPONSE : INQUISITOR_TRUE_RESPONSE
+      ),
+    });
+  });
+
+  await page.route('**/api/invert-step', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

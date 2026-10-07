@@ -28,6 +28,7 @@ import { PWAInstallHeader } from '@/components/PWAInstallHeader';
 import { ConceptPrerequisitesModal } from '@/components/ConceptPrerequisitesModal';
 import { SkillTreeModal } from '@/components/SkillTreeModal';
 import { PathwayBuilderModal } from '@/components/pathway/PathwayBuilder';
+import { InquisitorModal } from '@/components/InquisitorModal';
 import { PretestModal } from '@/components/PretestModal';
 import { BlurtingModal } from '@/components/BlurtingModal';
 import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
@@ -174,6 +175,8 @@ export default function DeepEncodeApp() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSkillTreeOpen, setIsSkillTreeOpen] = useState(false);
   const [isPathwayOpen, setIsPathwayOpen] = useState(false);
+  // The question-first cockpit: a claim in, a verdict on whether it holds out.
+  const [isInquisitorOpen, setIsInquisitorOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   // Drill modals were removed : review lives in Anki/RemNote, not here.
 
@@ -1886,6 +1889,7 @@ export default function DeepEncodeApp() {
                 setAppState('encoding');
               }}
               onTryPathwayBuilder={() => setIsPathwayOpen(true)}
+              onOpenInquisitor={() => setIsInquisitorOpen(true)}
             />
 
                         {/* Bench: audits and export targets share one panel, in two
@@ -2298,6 +2302,13 @@ export default function DeepEncodeApp() {
 
       {/* Hands-on pathway / circuit builder */}
       <PathwayBuilderModal isOpen={isPathwayOpen} onClose={() => setIsPathwayOpen(false)} />
+
+      {/* Question-first inquisitor: verify a claim, hold its boundary open */}
+      <InquisitorModal
+        isOpen={isInquisitorOpen}
+        onClose={() => setIsInquisitorOpen(false)}
+        topic={topicSummary}
+      />
 
       {/* Course-level Prerequisite Skill Tree */}
       <SkillTreeModal
