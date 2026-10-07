@@ -160,6 +160,54 @@ describe('evaluateExpression — the closed function vocabulary', () => {
     expect(verification.failures).toEqual([]);
   });
 
+  it('reads scientific notation as one number, not a product with a symbol in it', () => {
+    // The generators write measured quantities this way, and reading `1.5e-3`
+    // as `1.5 * e - 3` would either refuse an honest relation or, worse, close
+    // a different equation than the one the model stated.
+    expect(evaluateExpression('1.5e-3', {})).toBe(0.0015);
+    expect(evaluateExpression('6.022E23', {})).toBe(6.022e23);
+    expect(evaluateExpression('2e5', {})).toBe(200000);
+    expect(evaluateExpression('1.5e+2', {})).toBe(150);
+    expect(evaluateExpression('2 * 1.5e-3', {})).toBe(0.003);
+  });
+
+  it('refuses a coefficient flush against a symbol, and a bare exponent marker', () => {
+    // `2x` is ambiguous in exactly the way this module refuses to guess about: a
+    // coefficient times a symbol, or a quantity with a unit. `2Ea` and `2e` are
+    // the same ambiguity wearing an exponent's clothes.
+    expect(evaluateExpression('2x', { x: 3 })).toBeNull();
+    expect(evaluateExpression('2e', {})).toBeNull();
+    expect(evaluateExpression('2Ea', { Ea: 5 })).toBeNull();
+    // A declared `e` is still usable where it cannot be mistaken for an
+    // exponent marker, and a declared quantity still outranks the constant.
+    expect(evaluateExpression('2 * e', { e: 3 })).toBe(6);
+    expect(evaluateExpression('2 * e', {})).toBeCloseTo(2 * Math.E, 10);
+  });
+
+  it('multiplies implicitly against a group, and the exponent binds to the group', () => {
+    expect(evaluateExpression('2(3 + 4)', {})).toBe(14);
+    expect(evaluateExpression('(2)(3)', {})).toBe(6);
+    expect(evaluateExpression('3 * 2(x + 1)', { x: 1 })).toBe(12);
+    // Implicit multiplication carries multiplication's own precedence, so this
+    // is 2 · 9 = 18 and not (2 · 3)^2 = 36.
+    expect(evaluateExpression('2(3)^2', {})).toBe(18);
+  });
+
+  it('closes a relation written the way a generator actually writes one', () => {
+    const verification = verifyLedger(
+      [
+        { symbol: 'n', value: 1.5e-3, unit: 'mol' },
+        { symbol: 'V', value: 0.25, unit: 'L' },
+        { symbol: 'c', value: 6e-3, unit: 'mol/L' },
+      ],
+      [{ lhs: 'n', rhs: 'c * V', note: 'moles from concentration and volume' }]
+    );
+
+    expect(verification.ok).toBe(true);
+    expect(verification.verified).toBe(true);
+    expect(verification.failures).toEqual([]);
+  });
+
   it('closes a logarithmic relation and still catches the dropped logarithm', () => {
     // First-order decay: ln(a_over_a0) = -k * t.
     const closed = verifyLedger(

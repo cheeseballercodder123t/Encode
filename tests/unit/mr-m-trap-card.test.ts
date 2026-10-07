@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildAutopsyTrapCard } from '../../lib/mr-m/trap-card';
+import type { DiscrepancyReading } from '../../lib/mr-m/autopsy';
 import type { TrapAutopsy, TrapDiagnosis } from '../../lib/mr-m/types';
 
 /**
@@ -14,6 +15,24 @@ const diagnosis: TrapDiagnosis = {
   structuralReason: 'You divided by the molar mass once instead of accounting for both nitrogens.',
   arithmeticReveal: '0.0337 ÷ 0.0168 = 2.00',
   whereItBreaks: 'Step 2 — the mole ratio absorbed the second nitrogen.',
+};
+
+/**
+ * The wider deterministic read — what the workbench and the patch registry now
+ * hand the panel. Same shape as a `TrapDiagnosis`, plus the arithmetic `kind`
+ * and the pairs the diff crossed, and a nullable trap id. Before this the
+ * builder took only a `TrapDiagnosis`, so a numeric reading could not become a
+ * card at all.
+ */
+const reading: DiscrepancyReading = {
+  kind: 'STOICHIOMETRIC_RATIO',
+  trapId: 'whole_factor_off',
+  structuralReason:
+    'Your value is off by exactly a factor of three, which is a coefficient or a count rather than a slip in the arithmetic.',
+  arithmeticReveal: '0.0336 ÷ 0.0112 = 3.00',
+  whereItBreaks: 'the whole-number factor that belongs in the line before the arithmetic',
+  terms: [{ expected: 0.0336, learner: 0.0112, ratio: 3, folded: 3 }],
+  origin: 'numeric',
 };
 
 const autopsy: TrapAutopsy = {
@@ -70,6 +89,32 @@ describe('buildAutopsyTrapCard', () => {
     });
     expect(card!.cardBack).toContain('{{c1::0.0312 mol}}');
     expect(card!.correctAnswer).toBe('0.0312 mol');
+  });
+
+  it('accepts the wider numeric reading and carries its arithmetic and its reason', () => {
+    const card = buildAutopsyTrapCard({
+      ...base,
+      diagnosis: reading,
+      autopsy: null,
+      committedAnswer: '0.0112 kJ of heat leaves the water.',
+      correctAnswer: '0.0336 kJ of heat leaves the water.',
+    });
+
+    expect(card).not.toBeNull();
+    // The reveal is the numeric diff's crossing, not the structural label's.
+    expect(card!.cardBack).toContain('0.0336 ÷ 0.0112 = 3.00');
+    expect(card!.flawExplanation).toBe(reading.structuralReason);
+    expect(card!.cardBack).toContain('the whole-number factor');
+  });
+
+  it('builds from a reading whose kind has no trap id at all', () => {
+    // The trap id is nullable on purpose: a kind with no honest label must not
+    // be rounded onto the nearest one, and the card must not need it.
+    const kindWithoutTrap: DiscrepancyReading = { ...reading, trapId: null };
+    const card = buildAutopsyTrapCard({ ...base, diagnosis: kindWithoutTrap, autopsy: null });
+
+    expect(card).not.toBeNull();
+    expect(card!.cardBack).toContain('0.0336 ÷ 0.0112 = 3.00');
   });
 
   it('returns null without a committed answer — a card must name what they answered', () => {

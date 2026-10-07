@@ -159,6 +159,40 @@ test.describe('timed crucible', () => {
     await expect(page.getByTestId('crucible-governor')).not.toContainText('This sprint collides');
   });
 
+  test('a streak earned on one chapter does not escalate another', async ({ page }) => {
+    await mockAiApis(page);
+    // Two clean wins, but on a DIFFERENT chapter than the one the sprint is
+    // timed against. Before the streak was scoped, the log made the boss banner
+    // appear on ANY topic: the read was global, and the `boss: true` that the
+    // banner implied was sent to the route with it — so a chapter with nothing
+    // logged against it was written harder for a reason that belonged elsewhere.
+    await page.addInitScript((history) => {
+      window.localStorage.setItem('deepencode_friction_log_v1', JSON.stringify(history));
+    }, SEEDED_CLEAN_WINS);
+
+    // The request carries the claim, so the claim is what gets asserted.
+    let bossFlag: boolean | null = null;
+    await page.route('**/api/crucible', async (route) => {
+      bossFlag = Boolean(JSON.parse(route.request().postData() || '{}').boss);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(CRUCIBLE_RESPONSE),
+      });
+    });
+    await page.goto('/');
+
+    await page.getByTestId('open-crucible').click();
+    await page.getByTestId('crucible-topic').fill('Electrochemistry');
+
+    // Nothing has been earned on this chapter, so no escalation is claimed.
+    await expect(page.getByTestId('crucible-governor')).toHaveCount(0);
+
+    await page.getByTestId('crucible-start').click();
+    await expect(page.getByTestId('crucible-clock')).toContainText('problem 1 of');
+    expect(bossFlag).toBe(false);
+  });
+
   test('a repeated fracture is warned about before the clock starts, and a slip is not', async ({
     page,
   }) => {

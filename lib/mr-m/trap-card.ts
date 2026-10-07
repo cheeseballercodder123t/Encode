@@ -13,7 +13,22 @@
 // enough honest material to make a card worth keeping.
 
 import type { ConfidenceTier, InterferenceTrap } from '@/lib/interference-traps';
+import type { DiscrepancyReading } from './autopsy';
 import type { TrapAutopsy, TrapDiagnosis } from './types';
+
+/**
+ * Either deterministic read of a wrong answer, as a panel receives it.
+ *
+ * `TrapDiagnosis` is the structural classifier's own reading;
+ * `DiscrepancyReading` is the wider one from `diagnoseDiscrepancy`, which runs
+ * that classifier first and then the numeric diff this module's card cites —
+ * the same shape plus the arithmetic `kind` and the pairs it crossed, and a
+ * nullable trap id because a kind with no honest label must be allowed to say
+ * so. Both are accepted here so a fracture is named identically on every
+ * surface: the panel beside the examiner's read, the patch registry, and the
+ * card this builder writes.
+ */
+export type AutopsyDiagnosis = DiscrepancyReading | TrapDiagnosis;
 
 const TIERS: readonly ConfidenceTier[] = ['guess', 'half', 'bet'];
 
@@ -33,7 +48,7 @@ export interface AutopsyCardInput {
   /** The exemplar / expert completion for the stage, when one exists. */
   correctAnswer: string;
   /** The deterministic half of the autopsy, when it fired. */
-  diagnosis?: TrapDiagnosis | null;
+  diagnosis?: AutopsyDiagnosis | null;
   /** The model's narrative half, when it wrote one. */
   autopsy?: TrapAutopsy | null;
   /** The tier the learner says they held at the moment they committed. */

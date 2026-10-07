@@ -760,3 +760,163 @@ Escape), `e2e/mr-m-mode.spec.ts` (the workbench pre-flight strip, with the
 single-hit slip still silent) and `e2e/sequence.spec.ts` (a wrong chain recorded
 as `ORDER_INVERSION` with `hits: 1` and no numeric value claimed, and still too
 rare to warn).
+
+## 10. The audit pass: what a topic outside the fixture actually meets
+
+An external audit of a stale checkout reported ten limitations. They were each
+re-checked against the code before anything was changed, and the result is three
+kinds of entry: four were already answered by §9, four were real and are fixed
+here, and the rest are design limits that this pass makes HONEST rather than
+pretending to remove.
+
+### 10.1 Already fixed in §9 (the audit was reading an older tree)
+
+The evaluator’s missing functions (`ln`, `log`, `exp`, `sqrt`, `sin`, `cos` and
+the constants `pi`/`e`), the two stores missing from the backup’s `EXTRA_KEYS`,
+the claim gate’s missing stemming, and the triage plan’s missing persistence
+were all shipped in §9. Their sections stand; nothing here re-litigates them.
+
+### 10.2 Scientific notation, and implicit multiplication against a group
+
+**What was wrong.** The tokenizer split `1.5e-3` into a number, a symbol, a minus
+and a number, so every relation written in scientific notation — which is how a
+generator writes a measured quantity — was refused as unevaluable, and `2(x + 1)`
+was refused too. The refusal was at least honest (a wrong value would have been
+worse), but it refused correct physics, which §9.1 already established as the
+worst failure this gate can have.
+
+**What this pass does.** `1.5e-3`, `6.022E23`, `2e5` and `1.5e+2` are single
+numbers; an exponent marker only counts when a digit follows the optional sign,
+so `2Ea` stays a number followed by a declared symbol rather than silently
+becoming `2 * E * a`. `2(x + 1)` is a product, and the group is parsed as a power
+so `2(3)^2` is 18 rather than 36 — implicit multiplication carries
+multiplication’s own precedence.
+
+**What it does not solve.** `2x` and a bare `2e` stay REFUSED, deliberately: a
+coefficient flush against a symbol is also how a quantity and its unit are
+written (`2 m`, `5 g`), and a relation that closed on the wrong product would be
+worse than one refused. The evaluator still is not a CAS and still verifies only
+what the model declared.
+
+### 10.3 The workbench autopsy was split-brained
+
+**What was wrong.** `app/page.tsx` recorded patches through
+`diagnoseDiscrepancy`, whose first layer is the structural classifier and whose
+second is the numeric diff (the sign inversion, the factor of two, whole factors
+three to twelve, whole powers, the logarithm constants, the conversion). The
+workbench called `classifyTrap` directly. So on the workbench — where the work
+happens — a factor-of-three error, a dropped exponent or a dropped logarithm
+rendered NOTHING in the trap-autopsy panel and left the trap-card save with a
+`null` diagnosis, while the same answer produced a named, arithmetic-backed
+reading in the background. The panel and the record disagreed about the same
+answer.
+
+**What this pass does.** The panel is drawn by `diagnoseDiscrepancy`, with the
+same gating and the same inputs the registry uses, so the two can no longer
+disagree. That required one honest type change: a `DiscrepancyReading` is not a
+`TrapDiagnosis` (its `trapId` may be null, and it carries `kind`, `terms` and
+`origin`), so `AutopsyDiagnosis = DiscrepancyReading | TrapDiagnosis` is now what
+the panel and the card builder accept, and a reading with no trap id is headed by
+its own `kind` rather than rounded onto the nearest trap label.
+
+**What it does not solve.** The two vocabularies stay separate on purpose — a
+discrepancy names an arithmetic SHAPE, a trap names a structural REASON — and a
+kind with no honest trap mapping still keeps none.
+
+### 10.4 The armory went stale during a session
+
+**What was wrong.** The effect that hydrated `patches` depended only on the
+topic, so a check that recorded a fracture left the workbench’s patch panel and
+its pre-flight strip showing what was stored BEFORE the check — until the learner
+changed topic and changed back.
+
+**What this pass does.** The patch read is keyed to the check result
+(`feynmanResult`, a fresh object per check, written after the examiner answers),
+so a newly recorded fracture appears on the same screen that produced it. The
+browser test answers a factor of three away, then asserts both the arithmetic
+reveal and the new entry in the armory.
+
+### 10.5 The streak leaked across topics, and the boss copy overclaimed
+
+**What was wrong.** `recordAttempt` scopes a friction entry by the stage’s own
+title, and the comment at that call site says why: a clean run on one chapter
+says nothing about the next one. The reader ignored it — `cleanWinStreak` walked
+the whole log — so one clean win on Genetics plus one on Thermochemistry made a
+streak of two and escalated the next sprint on ANY topic. Worse, the sentence
+that reason produced promised that “the next one collides two chapters”, which is
+false for every chapter with no row in the hand-written fusion matrix (§6.2), and
+it rendered directly beside the readiness line that measures the truth.
+
+**What this pass does.** `cleanWinStreak`/`governorDecision` take the topic and
+count only that topic’s entries (forgiving about case and whitespace), the
+crucible recomputes the decision against the editable topic it is actually timed
+against, and the governor’s sentence now claims only what the governor does — the
+load is raised — leaving the collision claim to the line that can measure it.
+
+**What it does not solve.** The fusion table is still hand-written, so most
+topics get a re-aimed single-chapter escalation rather than a collision; the copy
+now says so instead of implying otherwise. And the crucible still records nothing
+into the governor, deliberately: a sprint is PACED, not graded, while the
+governor’s trigger is a ladder-based mastery signal, so logging a sprint as a
+clean win would invent a reading it never took. That reason is written at the
+crucible’s completion path so the next reader finds a decision, not an omission.
+
+### 10.6 A model the key does not have killed the whole request
+
+**What was wrong.** The Gemini ladder is `target → 3.6 → 3.5 → 2.5`, and only a
+quota/rate-limit error fell through to the next rung. A “model not found” error
+matched none of those branches, so it hit the structural throw: on a key without
+the default `gemini-3.7-flash`, every generation failed outright on a model the
+learner never chose. (The audit described this as three wasted round trips; the
+code did not even get that far.)
+
+**What this pass does.** A model-not-found error is classified (message-shaped,
+with a numeric guard so a 429/401/5xx can never be mistaken for it), REMEMBERED
+for the session, and skipped when the ladder is built — so the first call falls
+through to a model that answers and every later call starts where the last one
+succeeded. Quota, timeout, credential and structural errors keep their existing
+behavior; an all-dead ladder is still attempted rather than replaced by an
+invented error.
+
+**What it does not solve.** The memory is per session and in-process only (no
+persistence, no cross-tab sharing), and the streaming helper’s own model
+resolution does not consult it yet.
+
+### 10.7 Deliberate non-changes, and one claim the audit got wrong
+
+* The triage sheet still traps focus and still shows one task: hiding everything
+  else IS the intervention. What changed in §9.4 is that the escape hatch is now
+  usable — Escape closes the sheet, and reopening it resumes the running runway
+  rather than destroying it (`e2e/cockpit-escalation.spec.ts` proves the plan
+  comes back, the dump does not, and the model is asked exactly once).
+* `/api/crucible`’s second model call is bounded at one repair pass, fired only
+  when a problem failed the arithmetic gate, and accepted only when it improves
+  on the first attempt. It is a real cost, not a loop; the audit’s “frequently
+  breaches the serverless timeout” is an inference, not a measurement.
+* `hasContrastingAxis` already splits on `/`, and the audit’s own example
+  (`pH: acidic vs basic`) already passes on `vs`. Nothing was changed there.
+
+### Verification (§10)
+
+Unit: `tests/unit/escalation-consistency.test.ts` (scientific notation, the
+implicit group product and its precedence, and `2x`/`2e`/`2Ea` still refused),
+`tests/unit/mr-m-trap-card.test.ts` (a numeric reading builds a card),
+`tests/unit/escalation-governor.test.ts` (a chapter is not escalated on wins
+scored elsewhere; the boss sentence no longer promises a collision) and
+`tests/unit/ai-client.test.ts` (the real ladder, driven with the SDK mocked at
+its boundary: a missing target falls through and is remembered, a quota error is
+neither, and an all-dead ladder is still attempted).
+
+Browser: `e2e/mr-m-mode.spec.ts` (a whole-factor error named with its arithmetic
+AND appearing in the armory on the same check; the earlier structural autopsy
+unchanged), `e2e/cockpit-escalation.spec.ts` (a streak earned on one chapter does
+not escalate another, with `boss: false` asserted on the request that is actually
+posted) and `e2e/sequence.spec.ts` (unchanged, re-run because the workbench’s
+effects changed).
+
+Tooling: `package.json` gains targeted spec scripts (`test:e2e:cockpit`,
+`test:e2e:mrm`, `test:e2e:sequence`, `test:e2e:inquisitor`), and the README’s
+Testing section documents the full-sweep recipe against a production build
+(`build` → `start` → `PLAYWRIGHT_BASE_URL=… playwright test --workers=2`), which
+`playwright.config.ts` already supports by not launching its own server when that
+variable is set.

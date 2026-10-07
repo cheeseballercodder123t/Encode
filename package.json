@@ -10,7 +10,11 @@
     "clean": "next clean",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:cockpit": "playwright test e2e/cockpit-escalation.spec.ts",
+    "test:e2e:mrm": "playwright test e2e/mr-m-mode.spec.ts",
+    "test:e2e:sequence": "playwright test e2e/sequence.spec.ts",
+    "test:e2e:inquisitor": "playwright test e2e/inquisitor.spec.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

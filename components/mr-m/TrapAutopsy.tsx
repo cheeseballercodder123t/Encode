@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import type { InterventionProps } from '@/lib/mr-m/registry';
 import type { ConfidenceTier } from '@/lib/interference-traps';
-import { TRAP_LABELS, type TrapId } from '@/lib/mr-m/types';
+import { DISCREPANCY_LABELS, TRAP_LABELS, type TrapId } from '@/lib/mr-m/types';
 
 // ─── Mr M mode: the post-mortem ─────────────────────────────────────────────
 //
@@ -69,7 +69,19 @@ function TrapAutopsyInner({
   if (!trapDiagnosis && !autopsy?.structuralReason) return null;
 
   const trapId = (trapDiagnosis?.trapId || autopsy?.trapId || '') as TrapId | '';
-  const heading = trapId ? TRAP_LABELS[trapId] : 'Structural post-mortem';
+  /**
+   * The arithmetic shape, when the reading carries one.
+   *
+   * The two vocabularies are deliberately separate (see `DiscrepancyReading`),
+   * and a kind with no honest trap id keeps its own name rather than being
+   * rounded onto the nearest label — calling a factor of three
+   * `factor_of_two` would send the learner to fix a 2 that is actually a 3. So
+   * a reading whose trap id is null is headed by the shape the diff named,
+   * instead of falling back to a title that names nothing.
+   */
+  const kindLabel =
+    trapDiagnosis && 'kind' in trapDiagnosis ? DISCREPANCY_LABELS[trapDiagnosis.kind] : '';
+  const heading = trapId ? TRAP_LABELS[trapId] : kindLabel || 'Structural post-mortem';
   const reason = trapDiagnosis?.structuralReason || autopsy?.structuralReason || '';
   const whereItBreaks = trapDiagnosis?.whereItBreaks || autopsy?.whereItBreaks || '';
   const arithmeticReveal = trapDiagnosis?.arithmeticReveal || '';
@@ -94,12 +106,12 @@ function TrapAutopsyInner({
         </p>
       </div>
 
-      {trapId ? (
+      {trapId || kindLabel ? (
         <span
           data-testid="mr-m-autopsy-trap"
           className="inline-block font-mono text-[10px] uppercase tracking-wider text-hazard-300 border border-hazard-500/40 rounded-full px-2.5 py-1"
         >
-          {trapId}
+          {trapId || kindLabel}
         </span>
       ) : null}
 
