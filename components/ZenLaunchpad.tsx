@@ -128,6 +128,12 @@ interface ZenLaunchpadProps {
   onTryToyExample: (id: string) => void;
   /** Optional hands-on pathway/circuit builder entry beside the toy labs. */
   onTryPathwayBuilder?: () => void;
+  /**
+   * Optional question-first cockpit entry. Sits in the action row rather than
+   * the lab rail because it needs no source: an interrogation starts from a
+   * sentence the learner already believes.
+   */
+  onOpenInquisitor?: () => void;
   /** Don't accept server-rendered control clicks before state hydration. */
   ready: boolean;
 }
@@ -234,6 +240,7 @@ export function ZenLaunchpad({
   onForge,
   onTryToyExample,
   onTryPathwayBuilder,
+  onOpenInquisitor,
   ready,
   isLoading
 }: ZenLaunchpadProps) {
@@ -479,6 +486,20 @@ export function ZenLaunchpad({
                   title="Fluff Guillotine: triage the source into causal kernels, evidence and throat-clearing, then strip the noise before encoding"
                 >
                   Strip noise
+                </button>
+              )}
+              {onOpenInquisitor && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playSound('click');
+                    onOpenInquisitor();
+                  }}
+                  data-testid="open-inquisitor"
+                  className="px-3.5 py-2 border border-flux-500/50 text-flux-300 hover:bg-flux-500/10 text-xs rounded-full transition-colors duration-150 cursor-pointer"
+                  title="Question-first inquisitor: state a claim you suspect is true and get the verdict, the governing law behind it, and the exact case where it stops holding"
+                >
+                  Interrogate a claim
                 </button>
               )}
               <button

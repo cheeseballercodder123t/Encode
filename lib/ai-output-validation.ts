@@ -21,6 +21,7 @@ import { validateToyModelConfig } from './toy-models/validation';
 import { repairJson } from './json-repair';
 import { aiMetrics } from './ai-hardening';
 import { normalizeAutopsy, normalizeMrM } from './mr-m/payloads';
+import { normalizeInquisitorRead, type InquisitorParseResult } from './inquisitor/parse';
 
 // ─── JSON sanitizing ─────────────────────────────────────────────────────────
 
@@ -468,4 +469,23 @@ export function validateBatchEvaluation(raw: unknown): SafeBatchEvaluation {
     analysis: asString(data.analysis, ''),
     perStageGrades,
   };
+}
+
+// ─── Question-first inquisitor validation ───────────────────────────────────
+
+/**
+ * The inquisitor's read is the one payload in this file that is allowed to be
+ * REJECTED rather than repaired, so this returns a refusal union instead of a
+ * safe shape.
+ *
+ * Every other validator here has a benign default because its subject is
+ * content the learner asked to generate. This one is a verdict about whether
+ * their reasoning holds: a verdict with no proof, or a `false` with no fix, has
+ * no benign default — the only "safe shape" would be a plausible-looking
+ * answer assembled from nothing, which is worse than saying nothing. So the
+ * rules live in `lib/inquisitor/parse.ts` (pure, unit-tested) and the route
+ * turns a refusal into a message the learner can act on.
+ */
+export function validateInquisitorRead(raw: unknown): InquisitorParseResult {
+  return normalizeInquisitorRead(raw);
 }

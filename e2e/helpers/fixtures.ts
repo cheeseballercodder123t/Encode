@@ -1201,3 +1201,45 @@ export const PRIMING_RESPONSES: Record<string, unknown> = {
   extremum: PRIMING_EXTREMUM_RESPONSE,
 };
 
+// ─── Question-first inquisitor (/api/inquisitor) ─────────────────────────────
+//
+// Three reads, because the three verdicts are three different surfaces: a plain
+// true, a true-with-one-boundary (which is the one that becomes a ledger entry),
+// and a false whose correction must be on screen. The refusal path is a status
+// code rather than a payload, so it is mocked inline by the spec that needs it.
+
+export const INQUISITOR_TRUE_RESPONSE = {
+  verdict: 'TRUE',
+  claim: 'Bond breaking releases energy, because breaking a bond gives off the stored energy.',
+  proof: [
+    'Bond enthalpy is defined as the energy REQUIRED to break the bond, measured from the separated atoms as the reference state.',
+    'The familiar release of energy in an exothermic reaction comes from forming the products\u2019 bonds, which outweighs what the breaking costs.',
+  ],
+  tripwire: '',
+  correction: '',
+};
+
+export const INQUISITOR_TRIPWIRE_RESPONSE = {
+  verdict: 'TRUE_WITH_BOUNDARY_TRIPWIRE',
+  claim: 'Every smooth function equals its own Taylor series near the point of expansion.',
+  proof: [
+    'A Taylor series is defined as the polynomial whose derivatives match the function at the origin, so it always exists for a smooth function.',
+    'Its equality to the function requires that the remainder term vanish, which smoothness alone does not force.',
+  ],
+  tripwire:
+    'f(x) = e^(-1/x^2) is smooth everywhere, yet every one of its derivatives at zero is 0, so its Taylor series is the zero function.',
+  correction: '',
+};
+
+export const INQUISITOR_FALSE_RESPONSE = {
+  verdict: 'FALSE',
+  claim: 'Bond breaking releases energy, because breaking a bond gives off the stored energy.',
+  proof: [
+    'Energy is conserved, and a bond is a lower-energy state than the separated atoms it releases from.',
+    'So the breaking direction runs uphill and the forming direction releases; the intuition has the arrow backwards.',
+  ],
+  tripwire: '',
+  correction:
+    'Breaking a bond COSTS energy \u2014 that cost is the bond enthalpy. Forming a bond releases it. ATP hydrolysis is exothermic because the new bonds formed outweigh the one broken.',
+};
+
