@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Activity, MnemonicPegVisualData } from '@/lib/types';
 import { playSound } from '@/lib/audio';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -15,7 +16,6 @@ interface Props {
 export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [selectedLetter, setSelectedLetter] = useState<number | null>(0);
-  const [showClue, setShowClue] = useState(false);
 
   const defaultLetters = [
     { letter: 'O', word: 'Olfactory', mnemonicCue: 'Old Olympus Towering Tops...' },
@@ -60,24 +60,16 @@ export function MnemonicPegVisual({ activity, field1, field2, field3, selectedPr
               {challenge.premisePrompt}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => { setShowClue(!showClue); playSound('click'); }}
-            className={`text-[10px] font-mono font-bold uppercase tracking-wider border transition-none cursor-pointer ${
-              showClue
-                ? 'bg-amber border-amber text-chassis'
-                : 'bg-chassis border-edge text-solder'
-            }`}
-          >
-            {showClue ? 'HIDE HINT' : 'GET PEG CLUE'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="pt-2 border-t border-edge text-[11px] text-solder italic">
-            MNEMONIC CLUE: {challenge.clue}
-          </div>
-        )}
+        {/* The ladder replaces the one-shot hint: rungs arrive one at a time,
+            weakest first, and the last one scaffolds rather than answers. */}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="GET PEG CLUE"
+          title="MNEMONIC CLUE"
+        />
       </div>
 
       {/* Interactive Letter Peg Cards */}

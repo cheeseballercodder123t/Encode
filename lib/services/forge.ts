@@ -1,9 +1,12 @@
 import {
+  BoundaryTripwireItem,
+  ClinicalCorrelateItem,
   ConceptualMechanismItem,
   ConfusablePairItem,
   DeclarativeFactItem,
   PracticeQuestionItem,
   SegregationReport,
+  SequentialCascadeItem,
   WorkedExampleItem,
 } from '@/lib/types';
 import { ClaimInput, Contradiction, detectContradictions } from './contradiction';
@@ -97,6 +100,21 @@ const EMPTY_COUNTS: ForgeSectionCounts = { facts: 0, mechanisms: 0, drills: 0, e
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * A fact's optional clinical face, coerced or dropped.
+ *
+ * Both halves are required: a correlate with no question is not a card, and a
+ * question with no answer is a hole. A half-supplied object is discarded rather
+ * than repaired, because the repair would be invented content.
+ */
+function clinicalCorrelateOf(raw: unknown): ClinicalCorrelateItem | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const pair = raw as { question?: unknown; answer?: unknown };
+  const question = text(pair.question);
+  const answer = text(pair.answer);
+  return question && answer ? { question, answer } : undefined;
 }
 
 /** Case/punctuation/space-insensitive key, so near-identical cards collapse. */
@@ -415,6 +433,7 @@ export function normalizeSegregationReport(raw: any, sourceId = 'src'): Segregat
       clozeSuggestion: text(f.clozeSuggestion) || undefined,
       tag: text(f.tag) || undefined,
       memoryHook: text(f.memoryHook) || undefined,
+      clinicalCorrelate: clinicalCorrelateOf(f.clinicalCorrelate),
     }));
 
   const mechanisms: ConceptualMechanismItem[] = (Array.isArray(raw.conceptualMechanisms) ? raw.conceptualMechanisms : [])
@@ -493,8 +512,40 @@ export function normalizeSegregationReport(raw: any, sourceId = 'src'): Segregat
     });
   }
 
+  // Ordered processes. Two steps is the floor: one step is a fact, and a
+  // "sequence" of one gets quizzed as a fragment, which is what this shape
+  // exists to prevent.
+  const sequentialCascades: SequentialCascadeItem[] = (Array.isArray(raw.sequentialCascades) ? raw.sequentialCascades : [])
+    .filter((c: any) => c && typeof c === 'object' && text(c.process) && Array.isArray(c.steps))
+    .slice(0, 3)
+    .map((c: any, i: number) => ({
+      id: namespaceId(sourceId, c.id, `cascade_${i + 1}`),
+      process: text(c.process),
+      steps: c.steps.map((step: any) => text(step)).filter(Boolean).slice(0, 8),
+      disruptor: text(c.disruptor) || undefined,
+    }))
+    .filter((cascade: SequentialCascadeItem) => cascade.steps.length >= 2);
+
+  const boundaryTripwires: BoundaryTripwireItem[] = (Array.isArray(raw.boundaryTripwires) ? raw.boundaryTripwires : [])
+    .filter((t: any) => t && typeof t === 'object' && text(t.law) && text(t.breaksWhen))
+    .slice(0, 4)
+    .map((t: any, i: number) => ({
+      id: namespaceId(sourceId, t.id, `tripwire_${i + 1}`),
+      law: text(t.law),
+      breaksWhen: text(t.breaksWhen),
+      indicator: text(t.indicator) || undefined,
+    }));
+
   const topic = text(raw.topic);
-  if (facts.length === 0 && mechanisms.length === 0 && drills.length === 0 && examples.length === 0 && confusablePairs.length === 0) {
+  if (
+    facts.length === 0 &&
+    mechanisms.length === 0 &&
+    drills.length === 0 &&
+    examples.length === 0 &&
+    confusablePairs.length === 0 &&
+    sequentialCascades.length === 0 &&
+    boundaryTripwires.length === 0
+  ) {
     return null;
   }
 
@@ -505,6 +556,8 @@ export function normalizeSegregationReport(raw: any, sourceId = 'src'): Segregat
     practiceQuestions: drills,
     workedExamples: examples,
     confusablePairs: confusablePairs.length > 0 ? confusablePairs : undefined,
+    sequentialCascades: sequentialCascades.length > 0 ? sequentialCascades : undefined,
+    boundaryTripwires: boundaryTripwires.length > 0 ? boundaryTripwires : undefined,
     compressionRatio: text(raw.compressionRatio) || undefined,
   };
 }
@@ -526,7 +579,17 @@ export function totalReportCards(report: SegregationReport): number {
 }
 
 export function isEmptyForgeReport(report: SegregationReport): boolean {
-  return totalReportCards(report) === 0;
+  // `totalReportCards` counts the four coverage sections, which is what the
+  // coverage report is about — but they are not the only shapes a report can
+  // ship. A source that produced a discrimination matrix, an ordered cascade or
+  // a boundary tripwire has content even when the four counted sections came
+  // back empty, and calling that "empty" would silently drop it.
+  return (
+    totalReportCards(report) === 0 &&
+    (report.confusablePairs?.length || 0) === 0 &&
+    (report.sequentialCascades?.length || 0) === 0 &&
+    (report.boundaryTripwires?.length || 0) === 0
+  );
 }
 
 /**
@@ -670,7 +733,30 @@ export function mergeSegregationReports(
     }
   }
 
-  const total = allFacts.length + mechanisms.length + drills.length + examples.length + confusablePairs.length;
+  // The two process/limit shapes merge on the same rule: the process name (or
+  // the law) is the identity, so two sources describing the same cascade do not
+  // ship two copies of it.
+  const sequentialCascades: SequentialCascadeItem[] = [];
+  const boundaryTripwires: BoundaryTripwireItem[] = [];
+  for (const input of inputs) {
+    for (const cascade of input.report?.sequentialCascades || []) {
+      if (!take(cascade.process)) continue;
+      sequentialCascades.push(cascade);
+    }
+    for (const tripwire of input.report?.boundaryTripwires || []) {
+      if (!take(tripwire.law)) continue;
+      boundaryTripwires.push(tripwire);
+    }
+  }
+
+  const total =
+    allFacts.length +
+    mechanisms.length +
+    drills.length +
+    examples.length +
+    confusablePairs.length +
+    sequentialCascades.length +
+    boundaryTripwires.length;
   const report: SegregationReport = {
     topic: topic?.trim() || inputs.find((i) => i.report?.topic)?.report?.topic || 'Forged Deck',
     declarativeFacts: allFacts,
@@ -678,6 +764,8 @@ export function mergeSegregationReports(
     practiceQuestions: drills,
     workedExamples: examples,
     confusablePairs: confusablePairs.length > 0 ? confusablePairs : undefined,
+    sequentialCascades: sequentialCascades.length > 0 ? sequentialCascades : undefined,
+    boundaryTripwires: boundaryTripwires.length > 0 ? boundaryTripwires : undefined,
     compressionRatio: summarizeMerge(dropped, sources.filter((s) => s.status === 'ok').length, contradictions.length),
     // Provenance travels with the deck. The card ids already carry the source
     // (`src_2-f1`), but an id is not a name: the split export wants to write
@@ -714,6 +802,8 @@ export function collectCardFronts(report: SegregationReport): string[] {
   for (const mech of report.conceptualMechanisms) if (mech.conceptName) lines.push(mech.conceptName);
   for (const drill of report.practiceQuestions || []) if (drill.question) lines.push(drill.question);
   for (const example of report.workedExamples || []) if (example.title) lines.push(example.title);
+  for (const cascade of report.sequentialCascades || []) if (cascade.process) lines.push(cascade.process);
+  for (const tripwire of report.boundaryTripwires || []) if (tripwire.law) lines.push(tripwire.law);
   return lines;
 }
 
@@ -728,6 +818,10 @@ export function deckCardKeys(report: SegregationReport): Set<string> {
   report.conceptualMechanisms.forEach((m) => add(m.conceptName));
   (report.practiceQuestions || []).forEach((q) => add(q.question));
   (report.workedExamples || []).forEach((e) => add(`${e.title} ${e.problem}`));
+  // The new shapes are cards too: without their keys a re-forge would ship a
+  // second copy of a cascade or a tripwire the deck already had.
+  (report.sequentialCascades || []).forEach((c) => add(c.process));
+  (report.boundaryTripwires || []).forEach((t) => add(t.law));
   return keys;
 }
 

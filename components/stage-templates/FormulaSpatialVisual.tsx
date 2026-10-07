@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, FormulaSpatialVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function FormulaSpatialVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [selectedComp, setSelectedComp] = useState<number | null>(0);
-  const [showClue, setShowClue] = useState(false);
 
   const defaultComponents = [
     { symbol: 'X', meaning: 'Primary Dependent Variable / Rate', role: 'variable' as const, unitDimension: 'Dimensionless / Standard Unit' },
@@ -67,20 +67,14 @@ export function FormulaSpatialVisual({ activity, field1, field2, field3, selecte
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-edge bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Dimension Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-edge/90 italic font-mono">
-            💡 <strong>Dimensional Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Dimension Clue"
+          title="Dimensional Clue"
+        />
       </div>
 
       {/* Interactive Formula Subway Line */}

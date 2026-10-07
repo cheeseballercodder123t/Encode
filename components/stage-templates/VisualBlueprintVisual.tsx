@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, VisualBlueprintVisualData, VisualBlueprintAnchor } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function VisualBlueprintVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [selectedAnchor, setSelectedAnchor] = useState<string | null>(null);
-  const [showClue, setShowClue] = useState(false);
 
   const defaultAnchors: VisualBlueprintAnchor[] = [
     { id: 'top', label: 'Top / Anterior Zone', spatialPosition: 'top', sensoryDetail: 'Primary driving intake / signal receptor' },
@@ -66,20 +66,14 @@ export function VisualBlueprintVisual({ activity, field1, field2, field3, select
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Spatial Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-bone/90 italic font-mono">
-            💡 <strong>Spatial Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Spatial Clue"
+          title="Spatial Clue"
+        />
       </div>
 
       {/* Interactive Spatial Mental Canvas */}

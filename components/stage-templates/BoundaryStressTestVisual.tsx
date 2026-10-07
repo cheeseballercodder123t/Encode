@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, BoundaryStressTestVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function BoundaryStressTestVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [sliderValues, setSliderValues] = useState<Record<number, number>>({ 0: 85, 1: 95 });
-  const [showClue, setShowClue] = useState(false);
 
   const defaultGauges = [
     {
@@ -73,20 +73,14 @@ export function BoundaryStressTestVisual({ activity, field1, field2, field3, sel
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-hazard-400 hover:text-hazard-300 bg-hazard-900/30 px-2 py-1 border border-hazard-500/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Edge Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-hazard-500/20 text-[11px] text-hazard-200/90 italic font-mono">
-            💡 <strong>Limit Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Edge Clue"
+          title="Limit Clue"
+        />
       </div>
 
       {/* Interactive Parameter Gauges with Live Sliders */}

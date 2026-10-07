@@ -395,6 +395,24 @@ export interface DeclarativeFactItem {
   question?: string;
   /** Why this fact is worth remembering (one crisp line). */
   memoryHook?: string;
+  /**
+   * Where this fact shows up clinically or in the field ("TTX abolishes phase 0
+   * by blocking voltage-gated Na+ channels"). Exported as its own tagged card,
+   * so a cram session can filter to the facts that actually get asked about.
+   */
+  clinicalCorrelate?: ClinicalCorrelateItem;
+}
+
+/**
+ * The clinical or practical face of a fact, as its own question/answer pair.
+ *
+ * It is deliberately NOT folded into the fact's back: it answers a different
+ * question ("where does this actually show up?"), and folding it in would make
+ * one card carry two ideas — the thing the Wozniak pass exists to prevent.
+ */
+export interface ClinicalCorrelateItem {
+  question: string;
+  answer: string;
 }
 
 export interface PracticeQuestionItem {
@@ -450,6 +468,45 @@ export interface ConfusablePairItem {
   diagnosticAnswer: string;
 }
 
+/**
+ * One ordered process — a cascade — rendered as ONE step-by-step card rather
+ * than as N disconnected Q→A cards.
+ *
+ * A GPCR cascade chopped into five cards loses the chronology that IS the
+ * knowledge: the learner can answer every individual step and still have no idea
+ * what happens in what order. RemNote's list-answer form (`>>1.`) quizzes the
+ * sequence as a sequence, so the causal order is what gets retrieved.
+ */
+export interface SequentialCascadeItem {
+  id: string;
+  /** The process being sequenced, e.g. 'GPCR signal transduction'. */
+  process: string;
+  /** Ordered steps, 3-8 of them, each one atomic action. */
+  steps: string[];
+  /** Optional: what interrupts or terminates the sequence. */
+  disruptor?: string;
+}
+
+/**
+ * A boundary tripwire: the condition under which a law stops describing the
+ * system.
+ *
+ *
+ * Exams rarely ask "what is the formula" — they ask where the formula voids
+ * (non-ohmic components, allosteric enzymes, relativistic speeds). Testing the
+ * limit of validity is what breaks the illusion of explanatory depth, and it is
+ * the one place a memorised rule is guaranteed to be applied wrongly.
+ */
+export interface BoundaryTripwireItem {
+  id: string;
+  /** The law or rule whose limits are being probed. */
+  law: string;
+  /** Under what condition it stops holding. */
+  breaksWhen: string;
+  /** The observable tell that the failure is happening. */
+  indicator?: string;
+}
+
 export interface SegregationReport {
   topic: string;
   declarativeFacts: DeclarativeFactItem[];
@@ -460,6 +517,13 @@ export interface SegregationReport {
   workedExamples?: WorkedExampleItem[];
   /** Confusable pairs & discrimination matrix cards separating lookalikes. */
   confusablePairs?: ConfusablePairItem[];
+  /**
+   * Ordered processes rendered as single sequence cards. Optional and silent:
+   * a source with no multi-step process produces none and no section appears.
+   */
+  sequentialCascades?: SequentialCascadeItem[];
+  /** Where a stated law stops holding. Optional and silent, like the cascades. */
+  boundaryTripwires?: BoundaryTripwireItem[];
   compressionRatio?: string;
   /**
    * Source id → the learner's name for that input ("Lecture 4 slides"), set by

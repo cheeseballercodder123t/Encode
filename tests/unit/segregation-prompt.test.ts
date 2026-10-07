@@ -60,6 +60,33 @@ describe('buildSegregationSystemPrompt — coverage contract', () => {
     expect(prompt).toContain('proton gradient drives ATP synthase');
   });
 
+  it('asks for cascades and tripwires as ceilings with an honest empty array', () => {
+    expect(prompt).toContain('sequentialCascades 0-3, boundaryTripwires 0-4');
+    expect(prompt).toContain('an ORDERED PROCESS');
+    expect(prompt).toContain('a LIMIT OF VALIDITY');
+    expect(prompt).toContain('A source with neither produces empty arrays for both');
+    // A cascade is a chronology, not a topic list — the failure shape is named.
+    expect(prompt).toContain('A cascade is a chronology, never a list of facts about one topic');
+    // And a tripwire may not be invented to fill the slot.
+    expect(prompt).toContain('an empty array beats an invented failure mode');
+  });
+
+  it('requires a real clinical question, and says omitting the field is correct', () => {
+    expect(prompt).toContain('clinicalCorrelate (it ships as a separate tagged card)');
+    expect(prompt).toContain('Omitting the field is correct for a fact with no clinical life');
+  });
+
+  it('declares the two new arrays and the clinical pair in the schema', () => {
+    const properties = segregationSchema.properties as Record<string, any>;
+    expect(properties.sequentialCascades.items.required).toEqual(['id', 'process', 'steps']);
+    expect(properties.boundaryTripwires.items.required).toEqual(['id', 'law', 'breaksWhen']);
+    const factProps = properties.declarativeFacts.items.properties as Record<string, any>;
+    expect(factProps.clinicalCorrelate.required).toEqual(['question', 'answer']);
+    // Optional: a source with no such process must not be forced to invent one.
+    expect(properties.sequentialCascades.description).toContain('Leave the array empty');
+    expect(properties.boundaryTripwires.description).toContain('leave the array empty rather than inventing');
+  });
+
   it('caps the vignette in the schema the model is held to', () => {
     // The ceiling belongs on the field itself, not in the prose: this is the
     // description the model actually receives for diagnosticVignette.

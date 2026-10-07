@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, CauseEffectVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function CauseEffectVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [isPerturbed, setIsPerturbed] = useState(true);
-  const [showClue, setShowClue] = useState(false);
 
   const defaultNodes = [
     { id: '1', label: '1. Baseline Steady State', subtext: 'System in balanced equilibrium', type: 'input' as const },
@@ -80,20 +80,14 @@ export function CauseEffectVisual({ activity, field1, field2, field3, selectedPr
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-hazard-400 hover:text-hazard-300 bg-hazard-900/30 px-2 py-1 border border-hazard-500/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Clue' : 'Socratic Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-hazard-500/20 text-[11px] text-hazard-200/90 italic font-mono">
-            💡 <strong>Dynamic Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Socratic Clue"
+          title="Dynamic Clue"
+        />
       </div>
 
       {/* Interactive Ripple Chain Nodes */}

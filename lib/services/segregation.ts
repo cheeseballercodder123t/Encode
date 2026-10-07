@@ -27,7 +27,16 @@ export const segregationSchema = {
           question: { type: Type.STRING, description: "Short drill prompt under 15 words, e.g. 'Na+/K+ pump net ion movement?'" },
           clozeSuggestion: { type: Type.STRING, description: "Context sentence with ONLY the key term in {{}}" },
           tag: { type: Type.STRING, description: "e.g. 'Date', 'Formula', 'Constant', 'Anatomy', 'Definition'" },
-          memoryHook: { type: Type.STRING, description: "One crisp line on why this matters or how to remember it" }
+          memoryHook: { type: Type.STRING, description: "One crisp line on why this matters or how to remember it" },
+          clinicalCorrelate: {
+            type: Type.OBJECT,
+            description: "Optional: where this fact shows up clinically or in practice. Include it ONLY for facts that genuinely have one — a drug, a disease, a device, a safety limit. Omit the field entirely rather than inventing a clinical link",
+            properties: {
+              question: { type: Type.STRING, description: "A short clinical/practical question under 15 words, e.g. 'What is the clinical effect of tetrodotoxin on action potentials?'" },
+              answer: { type: Type.STRING, description: "The answer, ONE sentence under 25 words" }
+            },
+            required: ["question", "answer"]
+          }
         },
         required: ["id", "factStatement", "clozeSuggestion"]
       }
@@ -113,6 +122,34 @@ export const segregationSchema = {
         required: ["id", "conceptA", "conceptB", "distinguishingAxis", "boundaryCondition", "conceptAFeature", "conceptBFeature", "diagnosticVignette", "diagnosticAnswer"]
       }
     },
+    sequentialCascades: {
+      type: Type.ARRAY,
+      description: "Ordered processes, 0-3 items, ONLY for a source process with a real chronological causality (signalling cascades, reaction cycles, algorithm passes, phase progressions). Each cascade becomes ONE sequence card, so the order itself is what gets retrieved. Leave the array empty when the source has no such process — a list of facts is not a cascade",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          process: { type: Type.STRING, description: "The process name, e.g. 'GPCR signal transduction'" },
+          steps: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3-8 ordered steps, each ONE atomic action, in the order they actually occur" },
+          disruptor: { type: Type.STRING, description: "Optional: what terminates or interrupts the sequence (e.g. 'intrinsic GTPase hydrolyzes GTP, reassociating the trimer')" }
+        },
+        required: ["id", "process", "steps"]
+      }
+    },
+    boundaryTripwires: {
+      type: Type.ARRAY,
+      description: "Limit-of-validity probes, 0-4 items: for a law the source states, the condition under which it STOPS holding. Exams ask where a rule breaks, not where it works. Only include conditions the source supports or that are standard textbook knowledge for the quantity; leave the array empty rather than inventing a failure mode",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          law: { type: Type.STRING, description: "The law or rule, named as the source states it (e.g. \"Ohm's law V = IR\", 'Michaelis-Menten kinetics')" },
+          breaksWhen: { type: Type.STRING, description: "Under what condition it stops describing the system, ONE sentence" },
+          indicator: { type: Type.STRING, description: "Optional: the observable tell that the failure is happening (e.g. 'sigmoidal rather than hyperbolic v vs [S] curve')" }
+        },
+        required: ["id", "law", "breaksWhen"]
+      }
+    },
     compressionRatio: {
       type: Type.STRING,
       description: "Estimated fluff reduction e.g. '62% Fluff Eliminated'"
@@ -152,7 +189,10 @@ const CARD_BREVITY_RULES = `CARD BREVITY RULES (a long card is a failed card):
 - Every quadrant field (whatIsIt / whyItMatters / howItWorks / whatIfEdgeCase): 1-2 SHORT sentences, never a paragraph.
 - practiceQuestions: answerable in under ~10 seconds. If it needs an essay, split it into smaller questions.
 - No card front may exceed 25 words. No back may exceed 40 words.
-- memoryHook (it ships as the cloze HINT, attached to the deletion): at most 12 words, and it must scaffold the MECHANISM rather than leak the answer. Bad, because it counts letters: "starts with M". Bad, because it restates the answer: "the powerhouse of the cell". Good, because it makes the answer derivable: "double membrane whose proton gradient drives ATP synthase". Never a giveaway, never a riddle about spelling.`;
+- memoryHook (it ships as the cloze HINT, attached to the deletion): at most 12 words, and it must scaffold the MECHANISM rather than leak the answer. Bad, because it counts letters: "starts with M". Bad, because it restates the answer: "the powerhouse of the cell". Good, because it makes the answer derivable: "double membrane whose proton gradient drives ATP synthase". Never a giveaway, never a riddle about spelling.
+- clinicalCorrelate (it ships as a separate tagged card): a real clinical/practical question (under 15 words) and its answer (one sentence, under 25 words), and only where a real one exists — a drug, a disease, a device, a safety limit. Omitting the field is correct for a fact with no clinical life; never manufacture one to fill it.
+- sequentialCascades: each step is ONE atomic action, and the order must be the real order the system executes. A cascade is a chronology, never a list of facts about one topic. 0-3 cascades; an empty array is correct when the source has no process.
+- boundaryTripwires: name where a stated law STOPS holding, not where it works. breaksWhen is one sentence; indicator is the observable tell, not a restatement. 0-4 tripwires; an empty array beats an invented failure mode.`;
 
 /**
  * The card-authoring contract. `sourceLabel` names which upload produced this
@@ -179,7 +219,8 @@ COVERAGE CONTRACT (the deck is exactly as long as the source earns — not one c
 - Then STOP. There is no card target to reach. A ten-slide deck containing nine real facts is nine cards, and that is a COMPLETE pass, not a short one. Padding toward a count is the one failure mode this contract exists to prevent.
 - Forbidden filler, without exception: slide or section titles, agenda and logistics, page numbers, colours or layout choices, course administration, and anything the source does not state — never invent a date, number, name or mechanism to fill space.
 - If two candidate cards test the same knowledge, keep the sharper one and delete the other. A candidate that survives only as a rephrasing of a card you already wrote is a duplicate, not coverage.
-- Section sizes are CEILINGS, not quotas: declarativeFacts up to 32, conceptualMechanisms 4-8, practiceQuestions 12-24, workedExamples 2-4, confusablePairs 2-4. Returning fewer than the range — or an empty array for a section this source cannot honestly support — is a correct answer.
+- Section sizes are CEILINGS, not quotas: declarativeFacts up to 32, conceptualMechanisms 4-8, practiceQuestions 12-24, workedExamples 2-4, confusablePairs 2-4, sequentialCascades 0-3, boundaryTripwires 0-4. Returning fewer than the range — or an empty array for a section this source cannot honestly support — is a correct answer.
+- Two shapes are worth looking for explicitly, because they are the ones a source states without labelling: an ORDERED PROCESS (a chronology that must be recalled in sequence) belongs in sequentialCascades, and a LIMIT OF VALIDITY (where a stated law stops describing the system) belongs in boundaryTripwires. A source with neither produces empty arrays for both.
 - Do not manufacture a fact, a mechanism, a worked example or a confusable pair that the source does not contain. Under-produce rather than invent.
 
 ${CARD_BREVITY_RULES}

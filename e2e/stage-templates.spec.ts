@@ -43,6 +43,19 @@ const WORKOUT = {
         exampleAnswer: 'The kitchen kettle screams 1,200 mOsm.',
       },
       visualData: {
+        // This stage's own challenge, carrying the ladder's rungs: three ordered
+        // scaffolds, weakest first, none of which states the answer.
+        generationChallenge: {
+          premisePrompt: 'Which part of the tubule is doing the work, and in which direction?',
+          clue: 'One sentence is all this stage used to carry.',
+          clues: [
+            'Start at the vessel that feeds the loop.',
+            'Follow the limb whose wall lets water leave.',
+            'Now name the two limbs whose filtrate flows in opposite directions.',
+          ],
+          missingRoleOrTarget: 'the countercurrent multiplier',
+          expertCompletion: 'The descending limb loses water; the ascending limb pumps solute.',
+        },
         palaceTheme: 'Childhood Home',
         palaceRooms: [
           {
@@ -114,5 +127,37 @@ test.describe('Stage template dispatch', () => {
     await expect(page.getByText('Familiar Source Anchor').first()).toBeVisible();
     await expect(page.getByText('Target Science Concept').first()).toBeVisible();
     await expect(page.getByText(FIRST_PRINCIPLES_TITLE)).toHaveCount(0);
+  });
+
+  test('the clue ladder hands over one rung at a time and never reveals the answer', async ({ page }) => {
+    await mockAiApis(page);
+    await page.route(ENCODE_ROUTE, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(WORKOUT) })
+    );
+
+    await startEncodeFromNotes(page, 'Loop of Henle: countercurrent multiplication and exchange.');
+    await confirmReadiness(page);
+    await expectStage(page, 1);
+
+    const clueButton = page.getByTestId('clue-ladder-button');
+    // Nothing is given away up front: a hint the learner never asked for
+    // replaces their recall attempt instead of rescuing it.
+    await expect(page.getByTestId('clue-rung-1')).toHaveCount(0);
+
+    await clueButton.click();
+    await expect(page.getByTestId('clue-rung-1')).toBeVisible();
+    await expect(page.getByTestId('clue-rung-2')).toHaveCount(0);
+
+    await clueButton.click();
+    await expect(page.getByTestId('clue-rung-2')).toBeVisible();
+    await expect(page.getByTestId('clue-rung-3')).toHaveCount(0);
+
+    // The last click is the end of the ladder. It stops at the strongest
+    // scaffold and says so rather than revealing the answer, because a
+    // revealed answer ends the attempt and the attempt is what encodes.
+    await clueButton.click();
+    await expect(page.getByTestId('clue-rung-3')).toBeVisible();
+    await expect(page.getByTestId('clue-ladder-no-answer')).toBeVisible();
+    await expect(clueButton).toBeDisabled();
   });
 });

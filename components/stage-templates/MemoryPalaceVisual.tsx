@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, MemoryPalaceVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -15,7 +16,6 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
   const visualData = activity.visualData || {};
   const [activeLocus, setActiveLocus] = useState<number>(0);
   const [revealedHooks, setRevealedHooks] = useState<Record<number, boolean>>({ 0: true });
-  const [showClue, setShowClue] = useState(false);
 
   const defaultRooms = [
     { locusNumber: 1, roomName: 'Foyer / Grand Entrance', itemPlaced: 'First Key Concept', vividSensoryHook: 'Glow-in-the-dark neon door that screams when touched' },
@@ -71,20 +71,14 @@ export function MemoryPalaceVisual({ activity, field1, field2, field3, selectedP
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-amber bg-amber/30 px-2 py-1 border border-amber/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Sensory Hint'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber/90 italic font-mono">
-            💡 <strong>Mnemonic Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Sensory Hint"
+          title="Mnemonic Clue"
+        />
       </div>
 
       {/* Interactive Loci Stations Walk */}
