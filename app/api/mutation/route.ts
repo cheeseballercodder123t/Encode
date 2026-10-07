@@ -112,7 +112,7 @@ const mutationSchema = {
 };
 
 /** The instruction that makes the declared arithmetic mandatory at the top tier. */
-const LEDGER_INSTRUCTION = `DECLARE YOUR ARITHMETIC. The "ledger" object is not optional for a Tier 3 problem: list every quantity you used with its signed value and unit, then every relation between them as an equality in those symbols (only + - * / ^, parentheses, numbers and your own symbols). A checker evaluates every relation you write, and a problem whose relations do not close is rejected before the learner ever sees it. If a number in your statement cannot be related to the others, it does not belong in the statement.`;
+const LEDGER_INSTRUCTION = `DECLARE YOUR ARITHMETIC. The "ledger" object is not optional for a Tier 3 problem: list every quantity you used with its signed value and unit, then every relation between them as an equality in those symbols (only + - * / ^, parentheses, numbers and your own symbols). A checker evaluates every relation you write, and a problem whose relations do not close is rejected before the learner ever sees it. If a number in your statement cannot be related to the others, it does not belong in the statement. An expression may also call the unary functions ln(x), log(x) (base 10; log10(x) is the same), exp(x), sqrt(x), abs(x), sin(x), cos(x) and tan(x) in radians, and use the constants pi and e — no other name is understood, and an unknown one makes the relation unevaluable. Write an exponential as exp(-Ea / (R * T)), not as e^-Ea/(R*T): grouping inside a function or an exponent is yours to state.`;
 
 /** The topic is a chapter or concept, not a source dump. */
 const MAX_TOPIC_LENGTH = 300;

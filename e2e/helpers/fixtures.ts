@@ -1254,6 +1254,21 @@ export const CRUCIBLE_RESPONSE = {
       ],
     },
   ],
+  // The arithmetic gate's own report, in the shape the route returns it: two of
+  // the three served problems arrived with every declared relation closed, one
+  // problem did not survive the check at all (so the sprint is one problem
+  // shorter than the proctor wrote), and the escalation is the re-aimed one a
+  // single-chapter material earns. The client received all of this and rendered
+  // none of it until the summary grew a receipt for it.
+  ledger: { verifiedProblems: 2, checkedProblems: 3 },
+  rejectedProblems: [
+    'Unequal titration: RELATION_2 does not close: n_base = 0.011 against n_base = 0.0128 (14.1% apart)',
+  ],
+  escalation: {
+    mode: 'depth',
+    reason:
+      'Only one Thermochemistry chapter is in this material, so the sprint goes DEEPER inside that chapter instead of colliding it with two chapters you have not met.',
+  },
 };
 
 // ─── Emergency triage (/api/crisis) ─────────────────────────────────────────

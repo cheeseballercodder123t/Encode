@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   buildPanicLines,
   buildTriagePlan,
+  decodeTriageResume,
+  encodeTriageResume,
   FREEZE_HOURS,
   FREEZE_RISK_PCT,
   gradeRiskPct,
@@ -9,9 +11,12 @@ import {
   parseCrisisDump,
   parseCrisisTask,
   parseDeadline,
+  resumeRemainingMs,
   runwayAction,
   RUNWAY_MINUTES,
   splitCrisisItems,
+  type TriagePlan,
+  type TriageResumeState,
 } from '../../lib/crisis/buffer';
 
 /**
@@ -287,5 +292,77 @@ describe('mergeCrisisReads — the model reads, TypeScript computes', () => {
   it('survives a malformed read payload', () => {
     expect(mergeCrisisReads(lines, 'not an array', NOW).length).toBe(2);
     expect(mergeCrisisReads(lines, [null, 42], NOW).length).toBe(2);
+  });
+});
+
+describe('the resume record — the plan and the runway survive a reload', () => {
+  // Forty-five minutes into a ninety-minute runway is exactly the state that
+  // used to be destroyed by closing the sheet or reloading the page.
+  const DUMP = 'Chem makeup quiz — due tomorrow, worth 5%\nGothic Lit essay — Oct 14, worth 30%';
+  const plan = buildTriagePlan(parseCrisisDump(DUMP, NOW), { now: NOW });
+  const state: TriageResumeState = {
+    dump: DUMP,
+    plan,
+    runwayStartedAt: NOW,
+    runwayDurationMs: RUNWAY_MINUTES * 60 * 1000,
+    savedAt: NOW,
+  };
+
+  it('round-trips the dump, the plan and the runway’s start', () => {
+    const raw = encodeTriageResume(state);
+    expect(typeof raw).toBe('string');
+
+    const back = decodeTriageResume(raw);
+    expect(back?.dump).toBe(DUMP);
+    expect(back?.plan.tasks.length).toBe(plan.tasks.length);
+    expect(back?.plan.focus?.title).toBe(plan.focus?.title);
+    expect(back?.plan.frozen.length).toBe(plan.frozen.length);
+    expect(back?.plan.withheld.length).toBe(plan.withheld.length);
+    expect(back?.plan.panicLines).toEqual(plan.panicLines);
+    expect(back?.runwayStartedAt).toBe(NOW);
+    expect(back?.runwayDurationMs).toBe(RUNWAY_MINUTES * 60 * 1000);
+  });
+
+  it('counts the time already spent, and never runs past zero', () => {
+    const full = RUNWAY_MINUTES * 60 * 1000;
+    expect(resumeRemainingMs(state, NOW + 45 * 60 * 1000)).toBe(full - 45 * 60 * 1000);
+    expect(resumeRemainingMs(state, NOW + full)).toBe(0);
+    // An hour past the end is still zero: the clock is spent, not negative, and
+    // an expired runway is reported as spent rather than reset.
+    expect(resumeRemainingMs(state, NOW + full + 60 * 60 * 1000)).toBe(0);
+    // A plan saved before the runway ever started holds no runway at all.
+    expect(resumeRemainingMs({ ...state, runwayStartedAt: 0 }, NOW)).toBe(0);
+  });
+
+  it('reads nothing out of a record it cannot trust', () => {
+    expect(decodeTriageResume(null)).toBeNull();
+    expect(decodeTriageResume(undefined)).toBeNull();
+    expect(decodeTriageResume('')).toBeNull();
+    expect(decodeTriageResume('   ')).toBeNull();
+    expect(decodeTriageResume('not json')).toBeNull();
+    expect(decodeTriageResume('{}')).toBeNull();
+    expect(decodeTriageResume('[]')).toBeNull();
+    // A plan that is not a plan — the sheet must come back empty rather than
+    // render a focus task that is not a task.
+    expect(
+      decodeTriageResume(JSON.stringify({ ...state, plan: { tasks: 'nope' } }))
+    ).toBeNull();
+    expect(
+      decodeTriageResume(
+        JSON.stringify({
+          ...state,
+          plan: { ...plan, tasks: [{ id: 'crisis-1' }], frozen: [], panicLines: [], withheld: [] },
+        })
+      )
+    ).toBeNull();
+    // A runway length that is not a length, and a record with no dump.
+    expect(
+      decodeTriageResume(JSON.stringify({ ...state, runwayDurationMs: 'ninety minutes' }))
+    ).toBeNull();
+    expect(decodeTriageResume(JSON.stringify({ ...state, dump: 42 }))).toBeNull();
+  });
+
+  it('refuses to encode a plan it could not read back', () => {
+    expect(encodeTriageResume({ ...state, plan: null as unknown as TriagePlan })).toBeNull();
   });
 });

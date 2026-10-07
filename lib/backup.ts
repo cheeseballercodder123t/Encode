@@ -53,6 +53,15 @@ const EXTRA_KEYS = [
   'deepencode_interference_traps_v1',
   'deepencode_sm2_manifest',
   'deepencode_mr_m_paradox_v1',
+  // The two stores a restore used to wipe in silence: the engineering patch
+  // registry (the standing defects a stage is pre-flighted against, keyed in
+  // `lib/mr-m/ledger.ts`) and the ZPD friction log (the clean-win streak and
+  // the attempts behind it, keyed in `lib/escalation/governor.ts`). Both are
+  // accumulated over weeks, and neither is reconstructible from anything else
+  // in the file — a backup without them restores a learner's material and
+  // forgets what they had learned about their own mistakes.
+  'deepencode_mr_m_patches_v1',
+  'deepencode_friction_log_v1',
 ] as const;
 
 function isBrowser(): boolean {

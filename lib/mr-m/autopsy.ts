@@ -33,6 +33,7 @@
 // numbers can name it and this layer does not pretend to.
 
 import { atomsOf, classifyTrap, formulaTokens, quantityNumbers } from './diagnostics';
+import { describeParsonsFix, gradeParsons, type ParsonsTile } from '../parsons';
 import type {
   DiscrepancyKind,
   TrapDiagnosis,
@@ -595,6 +596,72 @@ export function diagnoseDiscrepancy(input: TrapInput): DiscrepancyReading | null
     whereItBreaks: finding.whereItBreaks,
     terms,
     origin: 'numeric',
+  };
+}
+
+/**
+ * The structural reading of an ORDERING drill — the Parsons chain, and any
+ * other template whose canonical order the app knows.
+ *
+ * The numeric diff cannot reach this one, and that is by design rather than by
+ * omission: a scrambled chain carries no arithmetic, so `diagnoseDiscrepancy`
+ * finds no pair of numbers and says nothing. That silence is right for a diff
+ * and wrong for a learner who has just put every step of the mechanism on the
+ * page in the wrong order.
+ *
+ * Here nothing has to be inferred. Both orders are in hand — the canonical one
+ * came from the examiner, the learner's one is what they placed — so the
+ * fracture is MEASURED, and it is always the same fracture: every step is
+ * present and only the order the material physically forces is wrong. That is
+ * `ORDER_INVERSION` and nothing else. Learning gains from a Parsons problem come
+ * from the structure, so the record worth keeping is the structural one.
+ *
+ * Returns null when the order is right, when either side is empty, and when the
+ * two describe different chains (a length mismatch is a payload problem, not a
+ * fracture — naming one from it would be exactly the invented diagnosis this
+ * layer exists to refuse).
+ */
+export function diagnoseSequence(input: {
+  /** The learner's own order, as ids into `canonical`. */
+  submitted: string[];
+  /** The canonical order, in the order the material forces. */
+  canonical: string[];
+  /** Display text per CANONICAL index, for the reveal line. */
+  labels: string[];
+}): DiscrepancyReading | null {
+  const submitted = Array.isArray(input?.submitted) ? input.submitted : [];
+  const canonical = Array.isArray(input?.canonical) ? input.canonical : [];
+  if (submitted.length === 0 || canonical.length === 0) return null;
+  if (submitted.length !== canonical.length) return null;
+
+  // Positional grading is the drill's own, reused rather than re-derived: two
+  // implementations of "which link is wrong" would eventually point at
+  // different links, and the learner would be told to fix a step the drill had
+  // already accepted.
+  const grade = gradeParsons(submitted, canonical);
+  if (grade.correct) return null;
+
+  const labels = Array.isArray(input?.labels) ? input.labels : [];
+  const tiles: ParsonsTile[] = canonical.map((id, index) => ({
+    id,
+    text: labels[index] || id,
+  }));
+  // The library's own sentence names the misplaced step and what must precede
+  // it, so the reveal stays causal instead of "try again".
+  const moved = describeParsonsFix(submitted, tiles);
+  const firstWrong = grade.firstWrongIndex ?? 0;
+
+  return {
+    kind: 'ORDER_INVERSION',
+    trapId: 'reversed_order',
+    structuralReason:
+      'Every step of the mechanism is on the page and the order is wrong, which is an ordering failure rather than a missing fact: there is no number to re-add and no definition to look up, because the links are all present and the sequence the physics forces is the thing that broke. Read the chain as a chain — what must be true before each step can happen — and the misplaced link is the one whose precondition is not yet met.',
+    arithmeticReveal: moved || `step ${firstWrong + 1} is not in the position the chain forces`,
+    whereItBreaks: 'the causal order, not any single step',
+    // Empty on purpose: this reading is structural, and there is no pair of
+    // numbers here to pretend to a ratio about.
+    terms: [],
+    origin: 'structural',
   };
 }
 

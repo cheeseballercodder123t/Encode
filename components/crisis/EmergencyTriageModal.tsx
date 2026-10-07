@@ -6,9 +6,14 @@ import { loadAISettings } from '@/lib/storage';
 import { playSound } from '@/lib/audio';
 import { formatClock } from '@/lib/crucible/budget';
 import {
+  decodeTriageResume,
+  encodeTriageResume,
+  resumeRemainingMs,
   RUNWAY_MINUTES,
   runwayAction,
+  TRIAGE_RESUME_KEY,
   type TriagePlan,
+  type TriageResumeState,
 } from '@/lib/crisis/buffer';
 
 // ─── The executive-function emergency triage buffer ─────────────────────────
@@ -46,18 +51,73 @@ type Phase = 'dump' | 'plan' | 'runway';
 /** How often the runway clock repaints. */
 const TICK_MS = 500;
 
+/**
+ * localStorage is optional, not guaranteed: private modes, quota and a server
+ * render can all take it away, and none of them may take the plan with it.
+ */
+function canUseStorage(): boolean {
+  try {
+    return typeof window !== 'undefined' && !!window.localStorage;
+  } catch {
+    return false;
+  }
+}
+
+/** A record whose runway was actually started — a plan with no clock resumes as a plan. */
+function resumableRunway(record: TriageResumeState): boolean {
+  return Boolean(record.runwayStartedAt && record.plan.focus);
+}
+
+/** The phase a resumed record opens in: the runway only while it still has time. */
+function restoredPhase(record: TriageResumeState | null): Phase {
+  if (!record) return 'dump';
+  if (!resumableRunway(record)) return 'plan';
+  return resumeRemainingMs(record, Date.now()) > 0 ? 'runway' : 'plan';
+}
+
+/**
+ * The stored record, or null when there is none. Never throws, and never touches
+ * storage in a server render.
+ */
+function readResumeRecord(): TriageResumeState | null {
+  if (!canUseStorage()) return null;
+  try {
+    return decodeTriageResume(window.localStorage.getItem(TRIAGE_RESUME_KEY));
+  } catch {
+    return null;
+  }
+}
+
 export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalProps) {
   const sheetRef = useModalA11y(isOpen, onClose);
 
-  const [phase, setPhase] = useState<Phase>('dump');
-  const [dump, setDump] = useState('');
-  const [plan, setPlan] = useState<TriagePlan | null>(null);
+  // The record this mount resumes from, read ONCE in a lazy initializer rather
+  // than written into state from an effect. The sheet is MOUNTED only while it is
+  // open (see the conditional render in `app/page.tsx`), so this runs after the
+  // click that opened it and never during a server render — and it opens straight
+  // on the resumed state instead of painting an empty sheet for one frame and
+  // then cascading a re-render over it.
+  const [resumeRecord] = useState<TriageResumeState | null>(() => readResumeRecord());
+
+  const [phase, setPhase] = useState<Phase>(() => restoredPhase(resumeRecord));
+  const [dump, setDump] = useState(() => resumeRecord?.dump ?? '');
+  const [plan, setPlan] = useState<TriagePlan | null>(() => resumeRecord?.plan ?? null);
   const [error, setError] = useState<string | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [runwayStartedAt, setRunwayStartedAt] = useState(0);
-  const [runwayNow, setRunwayNow] = useState(0);
+  const [runwayStartedAt, setRunwayStartedAt] = useState(() =>
+    resumeRecord && resumableRunway(resumeRecord) ? resumeRecord.runwayStartedAt : 0
+  );
+  const [runwayNow, setRunwayNow] = useState(() => Date.now());
+  // True when a restored record's ninety minutes had already run out. The plan
+  // comes back; the clock does not.
+  const [runwayExpired, setRunwayExpired] = useState(
+    () =>
+      !!resumeRecord &&
+      resumableRunway(resumeRecord) &&
+      resumeRemainingMs(resumeRecord, Date.now()) <= 0
+  );
 
   // The runway clock. Wall-clock based, so a throttled tab cannot drift a
   // ninety-minute countdown, and it stops when the sheet closes.
@@ -67,9 +127,56 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
     return () => clearInterval(timer);
   }, [phase, runwayStartedAt]);
 
+  /**
+   * The record the sheet survives on.
+   *
+   * Everything used to live only in React state, so closing the sheet — or a
+   * reload forty-five minutes into the runway — destroyed the plan and the
+   * clock, and the learner had to re-paste the whole backlog and re-run triage
+   * from scratch. The record stores the runway's START epoch rather than a
+   * countdown, because the runway is wall-clock: an hour away from the tab is an
+   * hour of the runway either way, and a resumed countdown that pretended
+   * otherwise would be a lie about time already spent.
+   */
+  const persistResume = (next: { plan: TriagePlan; dump: string; runwayStartedAt: number }) => {
+    try {
+      if (!canUseStorage()) return;
+      const raw = encodeTriageResume({
+        dump: next.dump,
+        plan: next.plan,
+        runwayStartedAt: next.runwayStartedAt,
+        runwayDurationMs: next.plan.runwayMinutes * 60 * 1000,
+        savedAt: Date.now(),
+      });
+      if (raw) window.localStorage.setItem(TRIAGE_RESUME_KEY, raw);
+    } catch {
+      /* best-effort: a full quota must never be what strands tonight's plan */
+    }
+  };
+
+  const clearResume = () => {
+    try {
+      if (canUseStorage()) window.localStorage.removeItem(TRIAGE_RESUME_KEY);
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  // Reopening the sheet restores what the last visit left behind: the dump as
+  // typed, the plan as built, and the runway still running when it has time left
+  // on it. A runway whose ninety minutes are gone comes back as an EXPIRED note
+  // beside the plan — ready to be started again, but never handed back as a fresh
+  // clock, because that would silently rewrite how long the work has been owed.
+  // All of that is decided in the initializers above, on the mount that the
+  // opening click causes.
+
+  // The runway's own length, not a second constant: a restored record carries
+  // the minutes the plan was built with.
+  const runwayMinutes = plan?.runwayMinutes || RUNWAY_MINUTES;
   const runwaySecondsLeft = runwayStartedAt
-    ? Math.max(0, RUNWAY_MINUTES * 60 - (runwayNow - runwayStartedAt) / 1000)
-    : RUNWAY_MINUTES * 60;
+    ? Math.max(0, runwayMinutes * 60 - (runwayNow - runwayStartedAt) / 1000)
+    : runwayMinutes * 60;
+  const runwayOver = runwayStartedAt > 0 && runwaySecondsLeft <= 0;
 
   const triage = async () => {
     const text = dump.trim();
@@ -89,16 +196,21 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'The backlog could not be triaged.');
 
-      setPlan({
+      const nextPlan: TriagePlan = {
         tasks: data.tasks ?? [],
         frozen: data.frozen ?? [],
         focus: data.focus ?? null,
         panicLines: data.panicLines ?? [],
         withheld: data.withheld ?? [],
         runwayMinutes: data.runwayMinutes ?? RUNWAY_MINUTES,
-      });
+      };
+      setPlan(nextPlan);
       setReadError(typeof data.readError === 'string' ? data.readError : null);
       setPhase('plan');
+      setRunwayExpired(false);
+      // The plan is on disk before the learner ever sees it, so a sheet closed
+      // mid-read is not a triage run they have to pay for twice.
+      persistResume({ plan: nextPlan, dump: text, runwayStartedAt: 0 });
       playSound('success');
     } catch (e: any) {
       setError(e?.message || 'The backlog could not be triaged. Check your AI settings.');
@@ -109,11 +221,44 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
   };
 
   const startRunway = () => {
+    if (!plan) return;
     const began = Date.now();
     setRunwayStartedAt(began);
     setRunwayNow(began);
+    setRunwayExpired(false);
     setPhase('runway');
+    persistResume({ plan, dump, runwayStartedAt: began });
     playSound('pop');
+  };
+
+  // Finished: the runway was run, so the record has nothing left to resume. The
+  // dump stays in the textarea, so a second pass is one click rather than a
+  // re-paste.
+  const finishRunway = () => {
+    clearResume();
+    setPlan(null);
+    setRunwayStartedAt(0);
+    setRunwayNow(0);
+    setRunwayExpired(false);
+    setPhase('dump');
+    playSound('success');
+    onClose();
+  };
+
+  // Started over: an explicit control, because throwing tonight's plan away
+  // should be something the learner does on purpose and not something that
+  // happens to them.
+  const startOver = () => {
+    clearResume();
+    setPlan(null);
+    setDump('');
+    setRunwayStartedAt(0);
+    setRunwayNow(0);
+    setRunwayExpired(false);
+    setPhase('dump');
+    setReadError(null);
+    setError(null);
+    playSound('click');
   };
 
   if (!isOpen) return null;
@@ -265,6 +410,17 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
                 <p className="text-[10px] font-mono text-solder leading-relaxed">{readError}</p>
               )}
 
+              {runwayExpired && (
+                <p
+                  data-testid="triage-runway-expired"
+                  className="rounded-md border border-amber-500/40 bg-amber-500/[0.06] p-2.5 text-[11px] leading-relaxed text-amber-300"
+                >
+                  The {plan.runwayMinutes}-minute runway you started earlier has run out. The plan
+                  survived — start a fresh one when you are ready, or edit the dump and triage
+                  again.
+                </p>
+              )}
+
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
@@ -278,12 +434,25 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
                 <button
                   type="button"
                   onClick={() => {
+                    // Editing the dump keeps the plan on the record: the learner
+                    // is revising, not abandoning, and a sheet closed while they
+                    // think it over comes back where they left it. The runway is
+                    // no longer running, so the record is rewritten without one.
+                    persistResume({ plan, dump, runwayStartedAt: 0 });
                     setPhase('dump');
                     playSound('click');
                   }}
                   className="px-3 py-2 text-[11px] font-mono rounded-md border border-edge text-solder hover:text-bone transition-colors duration-150 cursor-pointer"
                 >
                   Edit the dump
+                </button>
+                <button
+                  type="button"
+                  onClick={startOver}
+                  data-testid="triage-start-over"
+                  className="px-3 py-2 text-[11px] font-mono rounded-md border border-edge text-solder hover:text-hazard-300 hover:border-hazard-500/50 transition-colors duration-150 cursor-pointer"
+                >
+                  [ START OVER ]
                 </button>
               </div>
             </div>
@@ -313,7 +482,7 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
                   <div
                     className="h-full bg-signal-500"
                     style={{
-                      width: `${Math.round((runwaySecondsLeft / (RUNWAY_MINUTES * 60)) * 100)}%`,
+                      width: `${Math.round((runwaySecondsLeft / (runwayMinutes * 60)) * 100)}%`,
                     }}
                   />
                 </div>
@@ -324,10 +493,20 @@ export function EmergencyTriageModal({ isOpen, onClose }: EmergencyTriageModalPr
                 </p>
               </div>
 
+              {runwayOver && (
+                <p
+                  data-testid="triage-runway-over"
+                  className="text-[11px] font-mono text-amber-300 leading-relaxed"
+                >
+                  The clock is out. Whatever landed in those minutes is the result — the plan stays
+                  where it is until you close this.
+                </p>
+              )}
+
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={finishRunway}
                   data-testid="triage-runway-done"
                   className="px-3.5 py-2 text-[11px] font-bold rounded-md bg-signal-500 hover:bg-signal-400 text-inset transition-colors duration-150 cursor-pointer"
                 >

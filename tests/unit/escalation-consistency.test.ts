@@ -84,6 +84,110 @@ describe('evaluateExpression — a parser, not a sandbox that runs strings', () 
   });
 });
 
+describe('evaluateExpression — the closed function vocabulary', () => {
+  // The gate used to know only the four operators, so a correct Arrhenius law,
+  // Nernst potential or Henderson–Hasselbalch line read as an UNDECLARED SYMBOL
+  // and an honest problem was refused as inconsistent. These pin the vocabulary
+  // that fixed it, and its limits.
+
+  it('calls the logarithms the subjects actually write', () => {
+    expect(evaluateExpression('ln(e)', {})).toBeCloseTo(1, 10);
+    // Base 10, because pH = pKa + log([A-]/[HA]) is base 10.
+    expect(evaluateExpression('log(1000)', {})).toBeCloseTo(3, 10);
+    expect(evaluateExpression('log10(100)', {})).toBeCloseTo(2, 10);
+    expect(evaluateExpression('ln(2)', {})).toBeCloseTo(Math.LN2, 10);
+  });
+
+  it('calls exp, sqrt, abs and the trigonometric ratios in radians', () => {
+    expect(evaluateExpression('exp(0)', {})).toBe(1);
+    expect(evaluateExpression('exp(-1)', {})).toBeCloseTo(Math.exp(-1), 10);
+    expect(evaluateExpression('sqrt(16)', {})).toBe(4);
+    expect(evaluateExpression('abs(-3) + abs(3)', {})).toBe(6);
+    expect(evaluateExpression('sin(0)', {})).toBe(0);
+    expect(evaluateExpression('cos(0)', {})).toBe(1);
+    expect(evaluateExpression('tan(0)', {})).toBe(0);
+  });
+
+  it('knows pi and e without a declaration, and lets a declaration win', () => {
+    expect(evaluateExpression('pi', {})).toBeCloseTo(Math.PI, 10);
+    expect(evaluateExpression('e', {})).toBeCloseTo(Math.E, 10);
+    // A ledger that measured its own `e` means its own number.
+    expect(evaluateExpression('e', { e: 2 })).toBe(2);
+  });
+
+  it('refuses a name outside the table rather than guessing at it', () => {
+    // `foo(2)` is not a multiplication and not a function: unknown, so null.
+    expect(evaluateExpression('foo(2)', {})).toBeNull();
+    expect(evaluateExpression('ln', {})).toBeNull();
+    // A declared quantity is not callable either.
+    expect(evaluateExpression('q(2)', { q: 5 })).toBeNull();
+  });
+
+  it('refuses a function outside its real domain instead of returning an infinity', () => {
+    expect(evaluateExpression('ln(0)', {})).toBeNull();
+    expect(evaluateExpression('ln(-1)', {})).toBeNull();
+    expect(evaluateExpression('log(0)', {})).toBeNull();
+    expect(evaluateExpression('sqrt(-1)', {})).toBeNull();
+    expect(evaluateExpression('1 / ln(1)', {})).toBeNull();
+  });
+
+  it('keeps ordinary precedence around a call, and grouping inside it', () => {
+    expect(evaluateExpression('2 * sqrt(9)', {})).toBe(6);
+    expect(evaluateExpression('sqrt(9) ^ 2', {})).toBe(9);
+    expect(evaluateExpression('exp(-(1 + 1))', {})).toBeCloseTo(Math.exp(-2), 10);
+    // The exponent's grouping is the model's: `e^-1/2` is (e^-1)/2 under the
+    // ordinary precedence, which is why the prompt asks for exp(...).
+    expect(evaluateExpression('e^-1/2', {})).toBeCloseTo(Math.exp(-1) / 2, 10);
+    expect(evaluateExpression('e^(-1/2)', {})).toBeCloseTo(Math.exp(-0.5), 10);
+  });
+
+  it('closes an Arrhenius relation that the old evaluator refused', () => {
+    // k = A * exp(-Ea / (R * T)), with the numbers chosen so it closes exactly.
+    const k = 1e13 * Math.exp(-75000 / (8.314 * 298));
+    const verification = verifyLedger(
+      [
+        { symbol: 'A', value: 1e13, unit: '1/s' },
+        { symbol: 'Ea', value: 75000, unit: 'J/mol' },
+        { symbol: 'R', value: 8.314, unit: 'J/molK' },
+        { symbol: 'T', value: 298, unit: 'K' },
+        { symbol: 'k', value: k, unit: '1/s' },
+      ],
+      [{ lhs: 'k', rhs: 'A * exp(-Ea / (R * T))', note: 'Arrhenius rate law' }]
+    );
+
+    expect(verification.ok).toBe(true);
+    expect(verification.verified).toBe(true);
+    expect(verification.failures).toEqual([]);
+  });
+
+  it('closes a logarithmic relation and still catches the dropped logarithm', () => {
+    // First-order decay: ln(a_over_a0) = -k * t.
+    const closed = verifyLedger(
+      [
+        { symbol: 'ln_ratio', value: Math.log(0.25), unit: '' },
+        { symbol: 'k', value: 0.0693, unit: '1/s' },
+        { symbol: 't', value: 20, unit: 's' },
+        { symbol: 'prod', value: -0.0693 * 20, unit: '' },
+      ],
+      [{ lhs: 'ln_ratio', rhs: 'prod', note: 'first-order decay' }]
+    );
+    expect(closed.ok).toBe(true);
+    expect(closed.verified).toBe(true);
+
+    // The same physics with the logarithm DROPPED still fails the closure — the
+    // vocabulary widens what can be evaluated, not what can be got away with.
+    const dropped = verifyLedger(
+      [
+        { symbol: 'ratio', value: 0.25, unit: '' },
+        { symbol: 'prod', value: -0.0693 * 20, unit: '' },
+      ],
+      [{ lhs: 'ratio', rhs: 'prod', note: 'first-order decay, log dropped' }]
+    );
+    expect(dropped.ok).toBe(false);
+    expect(dropped.verified).toBe(false);
+  });
+});
+
 describe('verifyLedger — closure', () => {
   it('verifies a ledger whose relations close', () => {
     const { quantities, relations } = exactEnergyLedger();
