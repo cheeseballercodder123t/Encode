@@ -56,6 +56,21 @@ export const REMNOTE_FORWARD = '>>';
 export const REMNOTE_MULTI_LINE = '>>>';
 /** List-answer front: the nested bullets are the card's list items. */
 export const REMNOTE_LIST_ANSWER = '>>1.';
+
+/**
+ * Purpose tags, so a learner can build a review queue out of a deck: "quiz me
+ * only on the traps tonight". RemNote reads `#[[Name]]` as a tag on the rem the
+ * line belongs to, so tagging the card line tags the card.
+ *
+ * Only two tags exist, and each one has a derivation the data actually
+ * supports: `Exam Trap` comes from a NAMED failure mode (a limit of validity, a
+ * drill with stated distractors), and `Clinical Correlate` comes from a fact the
+ * source gave a clinical face. A `High-Yield` tag was deliberately not added:
+ * nothing in the data distinguishes high-yield from everything, and a tag that
+ * matches the whole deck makes the filter worthless.
+ */
+export const REMNOTE_EXAM_TRAP = '#[[Exam Trap]]';
+export const REMNOTE_CLINICAL_CORRELATE = '#[[Clinical Correlate]]';
 /** Marks a child bullet as detail on the parent card's back, not a card. */
 export const REMNOTE_DETAIL = '#[[Extra Card Detail]]';
 
@@ -409,7 +424,7 @@ function pushCard(
   front: string,
   back: string,
   direction: RemnoteCardDirection,
-  opts: { indent?: string; reason?: string } = {}
+  opts: { indent?: string; reason?: string; tag?: string } = {}
 ): void {
   if (hasClozeDeletion(back)) {
     pushCloze(ctx, section, front ? `${front}: ${back}` : back, {
@@ -421,7 +436,11 @@ function pushCard(
   }
   const id = nextCardId(section);
   const chosen = ctx.overrides[id] || direction;
-  emit(ctx, section, remnoteCard(front, back, chosen, opts.indent));
+  // The tag rides at the end of the line: RemNote registers `#[[Name]]` as a
+  // tag on the rem wherever it appears, and putting it after the delimiter
+  // keeps it out of the question the learner reads.
+  const line = remnoteCard(front, back, chosen, opts.indent);
+  emit(ctx, section, opts.tag ? `${line} ${opts.tag}` : line);
   registerCard(ctx, section, {
     id,
     section: section.id,
@@ -714,6 +733,19 @@ export function generateSegregationRemnote(
 
     if (clozeDeletion) {
       pushCloze(ctx, facts, hook ? attachClozeHint(cloze, hook) : cloze, { front: cloze });
+      // The clinical face of a fact is its own card on purpose: it answers a
+      // different question, and folding it into the fact would make one card
+      // carry two ideas. Tagged so a cram session can filter to it.
+      if (fact.clinicalCorrelate?.answer) {
+        pushCard(
+          ctx,
+          facts,
+          fact.clinicalCorrelate.question,
+          fact.clinicalCorrelate.answer,
+          'forward',
+          { reason: 'clinical correlate', tag: REMNOTE_CLINICAL_CORRELATE }
+        );
+      }
       if (question) {
         pushCard(ctx, facts, question, `${fact.factStatement}${tag}`, 'forward', {
           indent: '  ',
@@ -796,7 +828,12 @@ export function generateSegregationRemnote(
     ]
       .filter(Boolean)
       .join(' ');
-    pushCard(ctx, drills, d.question, answer, 'forward', { reason: 'question front' });
+    // A drill that names its own wrong answers has declared a failure mode, and
+    // that is exactly what the Exam Trap tag is derived from.
+    pushCard(ctx, drills, d.question, answer, 'forward', {
+      reason: 'question front',
+      tag: traps ? REMNOTE_EXAM_TRAP : undefined,
+    });
     if (trapsAsDetail) pushDetail(ctx, drills, 'Traps', traps);
   }
 
@@ -851,9 +888,52 @@ export function generateSegregationRemnote(
     }
   }
 
+  // Ordered cascades. A process split across five Q→A cards tests five facts
+  // and teaches no chronology: the learner can answer every step and still not
+  // know what follows what, which is the whole knowledge. RemNote's list-answer
+  // form (`>>1.` with nested bullets) quizzes the ORDER, one step at a time.
+  const cascades = newSection('cascades', '🔗 Sequential Cascades', 'Sequential Cascades');
+  for (const cascade of report.sequentialCascades || []) {
+    cascades.activeSource = sourceIdOfItem(cascade.id);
+    const items = [...cascade.steps];
+    if (cascade.disruptor) items.push(`Interrupted by: ${cascade.disruptor}`);
+    pushMultiPart(ctx, cascades, cascade.process, items, {
+      kind: 'list-answer',
+      reason: 'one process is one ordered card, not N fragment cards',
+    });
+  }
+
+  // Boundary tripwires. Hard exams ask where a rule BREAKS far more often than
+  // they ask for the rule, and a law applied outside its validity is the one
+  // mistake recall cannot prevent — so each one ships as its own tagged card.
+  const tripwires = newSection('tripwires', '⚠️ Boundary Tripwires', 'Boundary Tripwires');
+  for (const tripwire of report.boundaryTripwires || []) {
+    tripwires.activeSource = sourceIdOfItem(tripwire.id);
+    const answer = [
+      tripwire.breaksWhen,
+      tripwire.indicator ? `Indicator: ${tripwire.indicator}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    pushCard(
+      ctx,
+      tripwires,
+      `Under what condition does ${tripwire.law} stop holding?`,
+      answer,
+      'forward',
+      { reason: 'limit of validity', tag: REMNOTE_EXAM_TRAP }
+    );
+  }
+
   const sectionsToAssemble = [facts, mechs, drills, examples];
+  if (report.sequentialCascades && report.sequentialCascades.length > 0) {
+    sectionsToAssemble.push(cascades);
+  }
   if (report.confusablePairs && report.confusablePairs.length > 0) {
     sectionsToAssemble.push(confusableSection);
+  }
+  if (report.boundaryTripwires && report.boundaryTripwires.length > 0) {
+    sectionsToAssemble.push(tripwires);
   }
 
   const assembled = assemblePayload(ctx, sectionsToAssemble);

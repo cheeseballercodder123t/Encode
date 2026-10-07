@@ -194,6 +194,14 @@ function reportItemFronts(report: SegregationReport): Record<string, string[]> {
     for (const front of byId(pair.id || `cp-${idx}-matrix`)) add(pair.id, front);
     for (const front of byIdPrefix(pair.id ? `${pair.id}-` : `cp-${idx}-`)) add(pair.id, front);
   });
+  // Cascades and tripwires are cards too. Missing here, a re-forge would count
+  // them as new every time and re-ship a deck the learner already has.
+  (report.sequentialCascades || []).forEach((cascade, idx) => {
+    for (const front of byId(cascade.id || `cascade-${idx}`)) add(cascade.id, front);
+  });
+  (report.boundaryTripwires || []).forEach((tripwire, idx) => {
+    for (const front of byId(tripwire.id || `tripwire-${idx}`)) add(tripwire.id, front);
+  });
 
   return grouped;
 }

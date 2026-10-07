@@ -5,6 +5,7 @@ import {
   collectCardFronts,
   countReportSections,
   createNearDuplicateIndex,
+  deckCardKeys,
   dedupeKey,
   dropKnownCards,
   formatCount,
@@ -645,5 +646,75 @@ describe('coverage report', () => {
 
     expect(more.report.sourceLabels).toEqual(merged.report.sourceLabels);
     expect(more.report.declarativeFacts.some((f) => f.factStatement.includes('NKCC2'))).toBe(true);
+  });
+});
+
+/**
+ * The forge is where model output becomes a report, so the two new shapes have
+ * to survive normalization (ids namespaced, caps enforced, a one-step "cascade"
+ * rejected) and the merge (deduped by process/law, not shipped twice).
+ */
+describe('cascades and tripwires through the forge', () => {
+  const raw = {
+    topic: 'Cell Signalling',
+    declarativeFacts: [],
+    conceptualMechanisms: [],
+    sequentialCascades: [
+      { id: 'c1', process: 'GPCR signal transduction', steps: ['bind', 'exchange GDP for GTP', 'dissociate'] },
+      { id: 'c2', process: 'Only one step', steps: ['alone'] },
+    ],
+    boundaryTripwires: [
+      { id: 't1', law: "Ohm's law", breaksWhen: 'non-ohmic components', indicator: 'nonlinear I–V' },
+      { id: 't2', law: '', breaksWhen: 'nothing' },
+    ],
+  };
+
+  it('namespaces ids, keeps real cascades and drops a one-step sequence', () => {
+    const report = normalizeSegregationReport(raw, 'src_2');
+    expect(report?.sequentialCascades).toHaveLength(1);
+    expect(report!.sequentialCascades![0].id).toBe('src_2-c1');
+    expect(report!.sequentialCascades![0].steps).toHaveLength(3);
+  });
+
+  it('keeps only tripwires that name both the law and the failure', () => {
+    const report = normalizeSegregationReport(raw, 'src_2');
+    expect(report?.boundaryTripwires).toHaveLength(1);
+    expect(report!.boundaryTripwires![0]).toMatchObject({
+      id: 'src_2-t1',
+      law: "Ohm's law",
+      indicator: 'nonlinear I–V',
+    });
+  });
+
+  it('carries a clinical correlate only when both halves are present', () => {
+    const withPair = normalizeSegregationReport(
+      {
+        ...raw,
+        declarativeFacts: [
+          { id: 'f1', factStatement: 'A fact.', clozeSuggestion: 'A {{fact}}.', clinicalCorrelate: { question: 'Where?', answer: 'In practice.' } },
+          { id: 'f2', factStatement: 'Another.', clozeSuggestion: 'Another {{fact}}.', clinicalCorrelate: { question: 'Where?' } },
+        ],
+      },
+      'src_3'
+    );
+    expect(withPair!.declarativeFacts[0].clinicalCorrelate).toEqual({ question: 'Where?', answer: 'In practice.' });
+    expect(withPair!.declarativeFacts[1].clinicalCorrelate).toBeUndefined();
+  });
+
+  it('does not treat a cascade-only report as empty', () => {
+    const report = normalizeSegregationReport(
+      { topic: 'T', declarativeFacts: [], conceptualMechanisms: [], sequentialCascades: raw.sequentialCascades },
+      'src_4'
+    );
+    expect(report).not.toBeNull();
+    expect(isEmptyForgeReport(report!)).toBe(false);
+  });
+
+  it('fingerprints the new cards so a re-forge does not re-ship them', () => {
+    const report = normalizeSegregationReport(raw, 'src_2')!;
+    const keys = deckCardKeys(report);
+    expect(keys.has(dedupeKey('GPCR signal transduction'))).toBe(true);
+    expect(keys.has(dedupeKey("Ohm's law"))).toBe(true);
+    expect(collectCardFronts(report)).toContain('GPCR signal transduction');
   });
 });

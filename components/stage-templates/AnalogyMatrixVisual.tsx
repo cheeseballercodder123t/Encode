@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Activity, AnalogyMatrixVisualData, AnalogyMappingItem } from '@/lib/types';
 import { buildCompletion } from '@/lib/visual-completion';
 import { DiagramBlank } from './DiagramBlank';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -17,7 +18,6 @@ interface Props {
 
 export function AnalogyMatrixVisual({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const visualData: AnalogyMatrixVisualData = activity.visualData || {};
-  const [showClue, setShowClue] = useState(false);
   const [showExpertSynthesis, setShowExpertSynthesis] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   // The familiar side stays; the target side of ONE row is empty and has to be
@@ -74,20 +74,14 @@ export function AnalogyMatrixVisual({ activity, field1, field2, field3, selected
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Socratic Hint'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-bone/90 italic font-mono">
-            💡 <strong>Socratic Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Socratic Hint"
+          title="Socratic Clue"
+        />
       </div>
 
       {/* Cross-Domain Mapping Conduit Rows with Live Generation Fill-In */}

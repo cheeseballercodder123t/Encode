@@ -700,3 +700,105 @@ describe('cloze hint sanitisation', () => {
     expect(two).toBe('{{a}}{({hint})} then {{b}}');
   });
 });
+
+/**
+ * Three card shapes that exist because the alternative loses the knowledge:
+ * an ordered cascade (chronology is the content), a boundary tripwire (where a
+ * law stops holding), and a fact's clinical face. Each ships with the purpose
+ * tag that makes it filterable during a cram session.
+ */
+describe('cascades, tripwires and clinical correlates', () => {
+  const base: SegregationReport = {
+    topic: 'Cell Signalling',
+    declarativeFacts: [
+      {
+        id: 'f-ttx',
+        factStatement: 'TTX blocks voltage-gated Na+ channels.',
+        clozeSuggestion: 'TTX blocks {{voltage-gated Na+ channels}}.',
+        question: 'What does TTX block?',
+        clinicalCorrelate: {
+          question: 'What is the clinical effect of tetrodotoxin on action potentials?',
+          answer: 'Blocks voltage-gated Na+ channels, abolishing phase 0 depolarization.',
+        },
+      },
+    ],
+    conceptualMechanisms: [],
+    sequentialCascades: [
+      {
+        id: 'c-gpcr',
+        process: 'GPCR signal transduction',
+        steps: [
+          'Extracellular ligand binds the receptor, inducing a conformational change',
+          'Gα exchanges GDP for GTP',
+          'Gα-GTP dissociates from the Gβγ dimer',
+          'Gα stimulates adenylyl cyclase to synthesize cAMP from ATP',
+        ],
+        disruptor: 'intrinsic GTPase hydrolyzes GTP back to GDP, reassociating the trimer',
+      },
+    ],
+    boundaryTripwires: [
+      {
+        id: 't-ohm',
+        law: "Ohm's law (V = IR)",
+        breaksWhen: 'In non-ohmic components — diodes, filaments at high temperature.',
+        indicator: 'current no longer scales linearly with voltage',
+      },
+    ],
+  };
+
+  const payload = generateSegregationRemnote(base);
+
+  it('renders a cascade as ONE ordered list-answer card, not N fragment cards', () => {
+    expect(payload.markdown).toContain('- GPCR signal transduction >>1.');
+    expect(payload.markdown).toContain('  - Extracellular ligand binds the receptor');
+    // Order is the content, so the steps keep the order the model gave them.
+    const lines = payload.markdown.split('\n');
+    const start = lines.findIndex((l) => l.includes('GPCR signal transduction >>1.'));
+    const steps = lines.slice(start + 1, start + 5);
+    expect(steps[0]).toContain('ligand binds');
+    expect(steps[1]).toContain('GDP for GTP');
+    expect(steps[3]).toContain('adenylyl cyclase');
+    // None of those steps is a card of its own.
+    for (const step of steps) expect(step).not.toContain('>>');
+  });
+
+  it('keeps the disrupter as the last item of the same card', () => {
+    expect(payload.markdown).toContain('  - Interrupted by: intrinsic GTPase hydrolyzes GTP');
+  });
+
+  it('renders a tripwire as its own card, tagged as an exam trap', () => {
+    expect(payload.markdown).toContain(
+      "- Under what condition does Ohm's law (V = IR) stop holding? >> In non-ohmic components — diodes, filaments at high temperature. Indicator: current no longer scales linearly with voltage #[[Exam Trap]]"
+    );
+  });
+
+  it('renders a clinical correlate as a separate tagged card', () => {
+    expect(payload.markdown).toContain(
+      '- What is the clinical effect of tetrodotoxin on action potentials? >> Blocks voltage-gated Na+ channels, abolishing phase 0 depolarization. #[[Clinical Correlate]]'
+    );
+  });
+
+  it('adds exactly one card per new shape, and no reverse cards', () => {
+    const withoutNewShapes = generateSegregationRemnote({
+      ...base,
+      declarativeFacts: base.declarativeFacts.map((fact) => ({ ...fact, clinicalCorrelate: undefined })),
+      sequentialCascades: undefined,
+      boundaryTripwires: undefined,
+    });
+    // A cascade, a tripwire and a clinical correlate: three cards, all forward.
+    expect(payload.cardCount - withoutNewShapes.cardCount).toBe(3);
+    expect((payload.forwardCount || 0) - (withoutNewShapes.forwardCount || 0)).toBe(3);
+    expect(payload.twoWayCount || 0).toBe(withoutNewShapes.twoWayCount || 0);
+  });
+
+  it('adds no cascade or tripwire section when the source has neither', () => {
+    const plain = generateSegregationRemnote({
+      ...base,
+      sequentialCascades: undefined,
+      boundaryTripwires: undefined,
+    });
+    expect(plain.markdown).not.toContain('Sequential Cascades');
+    expect(plain.markdown).not.toContain('Boundary Tripwires');
+    expect(plain.markdown).toContain('#[[Clinical Correlate]]');
+  });
+});

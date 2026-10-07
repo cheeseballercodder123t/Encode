@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, ContrastGridVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function ContrastGridVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [selectedQuadrant, setSelectedQuadrant] = useState<number | null>(0);
-  const [showClue, setShowClue] = useState(false);
 
   const defaultMatrix = {
     axisX: 'Property X (High vs Low)',
@@ -71,20 +71,14 @@ export function ContrastGridVisual({ activity, field1, field2, field3, selectedP
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Contrast Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-bone/90 italic font-mono">
-            💡 <strong>Contrast Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Contrast Clue"
+          title="Contrast Clue"
+        />
       </div>
 
       {/* Interactive 2x2 Matrix Grid */}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, PersonalSchemaVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function PersonalSchemaVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [isFlipped, setIsFlipped] = useState(false);
-  const [showClue, setShowClue] = useState(false);
 
   const challenge = visualData.generationChallenge || {
     premisePrompt: "How does this abstract principle directly alter how you make decisions, troubleshoot bugs, or diagnose problems in real life?",
@@ -56,20 +56,14 @@ export function PersonalSchemaVisual({ activity, field1, field2, field3, selecte
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-hazard bg-hazard/30 px-2 py-1 border border-hazard/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Intuition Hint'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-hazard/20 text-[11px] text-hazard/90 italic font-mono">
-            💡 <strong>Self-Reference Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Intuition Hint"
+          title="Self-Reference Clue"
+        />
       </div>
 
       {/* Interactive Spaced Repetition Flashcard Preview */}

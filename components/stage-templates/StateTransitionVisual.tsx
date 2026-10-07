@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Activity, StateTransitionVisualData } from '@/lib/types';
 import { buildCompletion } from '@/lib/visual-completion';
 import { DiagramBlank } from './DiagramBlank';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -18,7 +19,6 @@ interface Props {
 export function StateTransitionVisual({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const visualData = activity.visualData || {};
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
-  const [showClue, setShowClue] = useState(false);
   // The rate-limiting transition is deleted from the cycle, so the learner has
   // to state the trigger instead of reading it off the diagram.
   const blank = onAdopt ? buildCompletion(activity) : null;
@@ -73,20 +73,14 @@ export function StateTransitionVisual({ activity, field1, field2, field3, select
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-bone bg-inset/30 px-2 py-1 border border-edge/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get State Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-edge/20 text-[11px] text-bone200/90 italic font-mono">
-            💡 <strong>State Transition Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get State Clue"
+          title="State Transition Clue"
+        />
       </div>
 
       {/* Interactive State Cycle Steps */}

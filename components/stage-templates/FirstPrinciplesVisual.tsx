@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Activity, FirstPrinciplesVisualData } from '@/lib/types';
 import { buildCompletion } from '@/lib/visual-completion';
 import { DiagramBlank } from './DiagramBlank';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -18,7 +19,6 @@ interface Props {
 export function FirstPrinciplesVisual({ activity, field1, field2, field3, selectedPreset, onAdopt }: Props) {
   const visualData = activity.visualData || {};
   const [activeStep, setActiveStep] = useState<number | null>(null);
-  const [showClue, setShowClue] = useState(false);
   // The chain is the exercise, not decoration: one node is blanked and the
   // learner has to produce the link before the diagram shows it.
   const blank = onAdopt ? buildCompletion(activity) : null;
@@ -71,20 +71,14 @@ export function FirstPrinciplesVisual({ activity, field1, field2, field3, select
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-amber-300 bg-amber-900/30 px-2 py-1 border border-amber/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Axiom Clue'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber-200/90 italic font-mono">
-            💡 <strong>Axiomatic Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Axiom Clue"
+          title="Axiomatic Clue"
+        />
       </div>
 
       {/* Interactive Step-by-Step Causal Domino Chain */}

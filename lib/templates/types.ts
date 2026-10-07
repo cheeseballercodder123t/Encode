@@ -42,6 +42,14 @@ export interface MnemonicStoryboardVisualData {
 export interface GenerationChallenge {
   premisePrompt: string; // e.g., "If the cell is an industrial city factory, what is the mitochondria?"
   clue?: string; // Socratic hint to spark generation without giving the answer away
+  /**
+   * Ordered Socratic rungs, weakest first and narrowest last. Handed over one
+   * at a time so the learner decides when they have enough — a single hint is
+   * either a giveaway or useless, and which one depends on how stuck they are.
+   * `clue` stays supported and joins the ladder as its first rung, so a payload
+   * encoded before this existed still gets one.
+   */
+  clues?: string[];
   missingRoleOrTarget: string; // e.g., "Power Plant / Generator"
   expertCompletion?: string; // The full completed schema synthesized once the user attempts generation
   isUserCompleted?: boolean;

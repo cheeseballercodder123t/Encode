@@ -117,6 +117,7 @@ const visualDataSchema = {
       properties: {
         premisePrompt: { type: Type.STRING, description: "e.g. 'If the cell is an industrial factory, what is the mitochondria?'" },
         clue: { type: Type.STRING, description: "Socratic hint to guide generation without giving the answer away" },
+        clues: { type: Type.ARRAY, items: { type: Type.STRING }, description: "2-3 ordered Socratic rungs, weakest first: a nudge, then a narrower hint, then the strongest scaffold that makes the answer DERIVABLE. Each rung must add a new constraint or mechanism and must never state the answer — no spelling counts, no 'starts with M', no restatement of the target. The learner is handed one rung per request" },
         missingRoleOrTarget: { type: Type.STRING, description: "The missing target/mechanism the user should generate" },
         expertCompletion: { type: Type.STRING, description: "Full expert schema completion" }
       },
@@ -706,7 +707,7 @@ PARADOX FIRST: never open a stage with a definition request. For EVERY stage wri
 
 'gedankenexperiment': for every stage with a mechanism, one extreme qualitative thought experiment run BEFORE formalising, written as an instruction to become part of the system ("You are an enzyme. The pH drops from 7.4 to 2.0. What physically happens to you, step by step?"). Answerable by tracking charges, forces and shapes — no numbers to solve, no jargon to recite. Empty string only for pure rote stages where no mechanism exists.
 
-'visualData.generationChallenge' for EVERY stage: 'premisePrompt' (the setup, e.g. "If the cell is an industrial factory, what is the mitochondria?"), 'clue' (a hint that guides without giving it away), 'missingRoleOrTarget' (the mechanism to be deduced), 'expertCompletion' (the completed synthesis). What the learner deduces survives; what they read does not.
+'visualData.generationChallenge' for EVERY stage: 'premisePrompt' (the setup, e.g. "If the cell is an industrial factory, what is the mitochondria?"), 'clue' (a hint that guides without giving it away), 'clues' (2-3 ordered rungs, weakest first, each adding a constraint or mechanism and NONE of them stating the answer — the last one should make the answer derivable rather than giving it), 'missingRoleOrTarget' (the mechanism to be deduced), 'expertCompletion' (the completed synthesis). What the learner deduces survives; what they read does not.
 
 ONE mechanism per stage : one idea, one card. Every scaffold label and example answer must be answerable in UNDER 15 WORDS so the learner's wording becomes one atomic spaced-repetition card.
 

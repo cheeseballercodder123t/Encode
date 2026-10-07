@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Activity, TaxonomicChunkingVisualData } from '@/lib/types';
+import { ClueLadder } from './ClueLadder';
 
 interface Props {
   activity: Activity;
@@ -14,7 +15,6 @@ interface Props {
 export function TaxonomicChunkingVisual({ activity, field1, field2, field3, selectedPreset }: Props) {
   const visualData = activity.visualData || {};
   const [selectedBucket, setSelectedBucket] = useState<number | null>(0);
-  const [showClue, setShowClue] = useState(false);
 
   const defaultBuckets = [
     {
@@ -75,20 +75,14 @@ export function TaxonomicChunkingVisual({ activity, field1, field2, field3, sele
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowClue(!showClue)}
-            className="text-[10px] font-mono font-semibold text-amber bg-amber/30 px-2 py-1 border border-amber/20 shrink-0 transition-colors duration-150"
-          >
-            {showClue ? 'Hide Hint' : 'Get Chunking Rule'}
-          </button>
         </div>
 
-        {showClue && challenge.clue && (
-          <div className="mt-2.5 pt-2 border-t border-amber/20 text-[11px] text-amber/90 italic font-mono">
-            💡 <strong>Chunking Clue:</strong> {challenge.clue}
-          </div>
-        )}
+        <ClueLadder
+          clue={challenge.clue}
+          clues={visualData.generationChallenge?.clues}
+          label="Get Chunking Rule"
+          title="Chunking Clue"
+        />
       </div>
 
       {/* Interactive Cluster Buckets */}
