@@ -830,6 +830,14 @@ export default function DeepEncodeApp() {
         setAppState('input');
         return;
       }
+      const errMsg = String(error?.message || error || '');
+      const isProviderDown = errMsg.includes('Provider down') || (typeof navigator !== 'undefined' && !navigator.onLine);
+      if (!isProviderDown) {
+        console.error('API generation failed:', error);
+        alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');
+        setAppState('input');
+        return;
+      }
       console.warn('Network or API generation failed, falling back to local offline cognitive generator...', error);
       try {
         const offlineData = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);

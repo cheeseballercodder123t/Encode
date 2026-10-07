@@ -159,8 +159,14 @@ export const segregationSchema = {
 };
 
 /** Which arrays to fill; everything else must come back empty. */
-export function resolveSegregationSections(include?: string[]): Record<SegregationSection, boolean> {
-  const requested = Array.isArray(include) ? include : null;
+export function resolveSegregationSections(
+  include?: string[] | Record<string, boolean>
+): Record<SegregationSection, boolean> {
+  const requested = Array.isArray(include)
+    ? include
+    : include && typeof include === 'object'
+    ? Object.keys(include).filter((k) => (include as Record<string, boolean>)[k])
+    : null;
   return {
     facts: !requested || requested.includes('facts'),
     mechanisms: !requested || requested.includes('mechanisms'),

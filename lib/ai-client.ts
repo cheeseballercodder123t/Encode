@@ -508,6 +508,8 @@ export async function* streamTextWithProvider({
     for (const fallback of ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash']) {
       if (!modelsToTry.includes(fallback)) modelsToTry.push(fallback);
     }
+    const liveModels = modelsToTry.filter((name) => !unsupportedModels.has(name));
+    const effectiveModels = liveModels.length > 0 ? liveModels : modelsToTry;
 
     const parts: any[] = [{ text: systemPrompt }, { text: userPrompt }];
     if (file && file.base64Data && file.type) {
@@ -519,7 +521,7 @@ export async function* streamTextWithProvider({
     };
 
     let lastError: any = null;
-    for (const model of modelsToTry) {
+    for (const model of effectiveModels) {
       let emitted = false;
       try {
         const response = await ai.models.generateContentStream({
@@ -538,6 +540,16 @@ export async function* streamTextWithProvider({
       } catch (err: any) {
         lastError = err;
         if (emitted) throw err;
+        if (isUnsupportedModelError(err)) {
+          const isNew = !unsupportedModels.has(model);
+          unsupportedModels.add(model);
+          if (isNew) {
+            captureAiError(err, { provider: 'gemini', model, reason: 'unsupported-model' });
+          }
+          aiMetrics.recordModelFallback();
+          console.warn(`Gemini stream model ${model} is not available on this key, falling back…`);
+          continue;
+        }
         const errStr = String(err?.message || err).toLowerCase();
         if (
           errStr.includes('quota') ||

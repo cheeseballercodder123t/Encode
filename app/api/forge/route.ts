@@ -146,7 +146,10 @@ export async function POST(req: NextRequest) {
       .object({
         mode: z.enum(['forge', 'more', 'retry', 'condense']).optional(),
         topic: z.string().max(300).optional(),
-        include: z.record(z.string(), z.boolean()).optional(),
+        include: z.union([
+          z.array(z.string()),
+          z.record(z.string(), z.boolean()),
+        ]).optional(),
         sources: z
           .array(
             z.object({
@@ -170,6 +173,13 @@ export async function POST(req: NextRequest) {
   }
   const body: any = parsed.data;
 
+  const rawInclude = parsed.data.include;
+  const includeArray = Array.isArray(rawInclude)
+    ? rawInclude
+    : rawInclude && typeof rawInclude === 'object'
+    ? Object.keys(rawInclude).filter((k) => (rawInclude as Record<string, boolean>)[k])
+    : undefined;
+
   const settings = body?.settings;
   const mode: ForgeMode =
     body?.mode === 'more'
@@ -180,7 +190,7 @@ export async function POST(req: NextRequest) {
           ? 'condense'
           : 'forge';
   const topic = typeof body?.topic === 'string' ? body.topic : '';
-  const want = resolveSegregationSections(body?.include);
+  const want = resolveSegregationSections(includeArray);
 
   // ── Condense: no sources, no raw material — the deck the learner already
   // has is folded down by an editor pass. Merging is the only allowed move. ──

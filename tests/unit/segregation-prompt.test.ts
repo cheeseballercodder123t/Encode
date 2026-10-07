@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSegregationSystemPrompt,
   buildCondenseSystemPrompt,
+  resolveSegregationSections,
   segregationSchema,
 } from '@/lib/services/segregation';
 
@@ -117,5 +118,34 @@ describe('buildCondenseSystemPrompt — merging never invents', () => {
     expect(prompt).toContain('MERGE, never to delete knowledge');
     expect(prompt).toContain('NEVER merge unrelated cards just to shrink the count');
     expect(prompt).toContain('If the deck has no real overlap, return it essentially unchanged');
+  });
+});
+
+describe('resolveSegregationSections — polymorphic include input', () => {
+  it('defaults to all sections when undefined or null', () => {
+    expect(resolveSegregationSections(undefined)).toEqual({
+      facts: true,
+      mechanisms: true,
+      drills: true,
+      examples: true,
+    });
+  });
+
+  it('handles array of string section names', () => {
+    expect(resolveSegregationSections(['facts', 'drills'])).toEqual({
+      facts: true,
+      mechanisms: false,
+      drills: true,
+      examples: false,
+    });
+  });
+
+  it('handles record map of boolean section selections', () => {
+    expect(resolveSegregationSections({ facts: true, drills: true, mechanisms: false, examples: false })).toEqual({
+      facts: true,
+      mechanisms: false,
+      drills: true,
+      examples: false,
+    });
   });
 });
