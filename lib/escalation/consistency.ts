@@ -142,7 +142,16 @@ const CONSTANTS: Record<string, number> = { pi: Math.PI, e: Math.E };
 
 // ─── The evaluator ──────────────────────────────────────────────────────────
 
-type Token = { kind: 'number'; value: number } | { kind: 'symbol'; name: string } | { kind: '+' | '-' | '*' | '/' | '^' | '(' | ')' };
+type Token = (
+  | { kind: 'number'; value: number }
+  | { kind: 'symbol'; name: string }
+  | { kind: '+' | '-' | '*' | '/' | '^' | '(' | ')' }
+) & {
+  /** Index of the token's first character. */
+  at: number;
+  /** One past the token's last character, so adjacency is `previous.end === next.at`. */
+  end: number;
+};
 
 function tokenize(expression: string): Token[] | null {
   const text = String(expression || '');
@@ -161,10 +170,11 @@ function tokenize(expression: string): Token[] | null {
       while (end < text.length && /[0-9.]/.test(text[end])) end += 1;
       // Scientific notation (`1.5e-3`, `6.022E23`, `2e5`) is ONE number. The
       // exponent marker only counts when a digit follows the optional sign, so
-      // `2Ea` stays a number followed by the declared symbol `Ea` — an
-      // unevaluable relation — rather than silently becoming `2 * E * a`, and a
-      // bare `2e` is refused for the same reason: `e` there could be Euler's
-      // constant or a quantity, and this evaluator does not guess between them.
+      // `2Ea` stays a number followed by the declared symbol `Ea` — which the
+      // term parser then reads as the coefficient product `2 · Ea` — rather than
+      // becoming `2 · E · a`, and `2e` is two times Euler's constant rather than
+      // `2 · e - something`: the name is one token either way, so there is no
+      // exponent left to misread.
       let cursor = end;
       if (text[cursor] === 'e' || text[cursor] === 'E') {
         let exponent = cursor + 1;
@@ -177,7 +187,7 @@ function tokenize(expression: string): Token[] | null {
       const value = Number(text.slice(index, cursor));
       // `1.2.3` is not a number this evaluator should guess at.
       if (!Number.isFinite(value)) return null;
-      tokens.push({ kind: 'number', value });
+      tokens.push({ kind: 'number', value, at: index, end: cursor });
       index = cursor;
       continue;
     }
@@ -186,12 +196,12 @@ function tokenize(expression: string): Token[] | null {
       while (end < text.length && /[A-Za-z0-9_]/.test(text[end])) end += 1;
       const name = text.slice(index, end);
       if (!SYMBOL.test(name)) return null;
-      tokens.push({ kind: 'symbol', name });
+      tokens.push({ kind: 'symbol', name, at: index, end });
       index = end;
       continue;
     }
     if ('+-*/^()'.includes(char)) {
-      tokens.push({ kind: char } as Token);
+      tokens.push({ kind: char, at: index, end: index + 1 } as Token);
       index += 1;
       continue;
     }
@@ -211,14 +221,22 @@ function tokenize(expression: string): Token[] | null {
  * Beyond numbers, declared symbols, parentheses and the four operators, a
  * relation may call one of the {@link FUNCTIONS} — written `ln(x)`, `exp(x)`,
  * `sqrt(x)`, `sin(x)` — use the constants `pi` and `e`, write a number in
- * scientific notation (`1.5e-3`), and multiply implicitly against a GROUP
- * (`2(x + 1)`). Grouping inside a function argument or an exponent is the
- * model's job: `exp(-Ea / (R * T))` is unambiguous, while `e^-Ea/(R*T)` follows
- * the ordinary precedence and means `(e^-Ea)/(R*T)`. An unknown function name
- * returns null rather than being ignored, so a relation that calls one is
- * refused rather than mis-evaluated, and so is `2 x` — a coefficient flush
- * against a symbol is how a quantity and its unit are written, and this
- * evaluator will not guess which product was meant.
+ * scientific notation (`1.5e-3`), and multiply implicitly, against a GROUP
+ * (`2(x + 1)`) or against a symbol it TOUCHES (`2x`, `2Ea`, `2sin(x)`). Grouping
+ * inside a function argument or an exponent is the model's job:
+ * `exp(-Ea / (R * T))` is unambiguous, while `e^-Ea/(R*T)` follows the ordinary
+ * precedence and means `(e^-Ea)/(R*T)`. An unknown function name returns null
+ * rather than being ignored, so a relation that calls one is refused rather than
+ * mis-evaluated.
+ *
+ * The implicit product is split by WHITESPACE, and that split is the whole of
+ * the rule: `2x` is a coefficient and evaluates, while `2 x` is refused, because
+ * a number followed by a space and a symbol is how a quantity and its unit are
+ * written (`250 g`, `5 mol`) and reading that as a product would close a
+ * relation on a multiplication the generator never stated. Both halves are
+ * load-bearing — refusing the coefficient cost honest relations their check (the
+ * generators write `2x` in every law with a stoichiometric factor in it), and
+ * accepting the spaced form would have invented the product instead.
  */
 export function evaluateExpression(
   expression: string,
@@ -256,7 +274,21 @@ export function evaluateExpression(
     }
   };
 
-  /** term := power (('*' | '/') power | group)* — the last branch is an implicit product. */
+  /**
+   * Is the next token a symbol with no whitespace before it?
+   *
+   * `2x` and `2 x` tokenize identically and mean different things: the first is
+   * a coefficient, the second is a quantity and a unit. Only the first is a
+   * product this evaluator will read.
+   */
+  const isTouchingSymbol = (): boolean => {
+    const next = peek();
+    if (!next || next.kind !== 'symbol') return false;
+    const previous = tokens[position - 1];
+    return Boolean(previous) && previous.end === next.at;
+  };
+
+  /** term := power (('*' | '/') power | group | touchingSymbol)* — the last two are implicit products. */
   const parseTerm = (): number | null => {
     let left = parsePower();
     if (left === null) return null;
@@ -279,6 +311,13 @@ export function evaluateExpression(
         // The group is parsed as a POWER, so `2(3)^2` is 2·9 = 18 rather than
         // (2·3)^2 — implicit multiplication carries the ordinary precedence of
         // multiplication, and the exponent binds to the group.
+        const right = parsePower();
+        if (right === null) return null;
+        left *= right;
+      } else if (isTouchingSymbol()) {
+        // A coefficient flush against its symbol. Parsed as a POWER, like the
+        // group above, so `2x^2` is 2·(x²) — the exponent belongs to the symbol,
+        // which is how the law reads — and never (2x)².
         const right = parsePower();
         if (right === null) return null;
         left *= right;
