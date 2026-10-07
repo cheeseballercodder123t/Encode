@@ -1,7 +1,7 @@
 import React, { lazy } from 'react';
 import type { Activity, StageResponse } from '@/lib/types';
 import type { ConfidenceTier } from '@/lib/interference-traps';
-import type { MrMPayload, ParadoxEntry, TrapAutopsy, TrapDiagnosis } from './types';
+import type { MrMPayload, ParadoxEntry, PatchEntry, TrapAutopsy, TrapDiagnosis } from './types';
 import { mrMOf } from './payloads';
 
 // ─── Mr M mode: the intervention registry ───────────────────────────────────
@@ -67,10 +67,24 @@ export interface InterventionProps {
   onSaveTrapCard?: (input: { tier: ConfidenceTier; flawLine: string }) => void;
   /** True when the card for THIS check result has already been saved. */
   trapCardSaved?: boolean;
+  /** Every standing fault recorded against this topic, newest first. */
+  patches?: PatchEntry[];
+  /**
+   * Stable numbering for the whole armory, so `[ PATCH #12 ]` means the same
+   * record on every stage that shows it. Computed once by the workbench from
+   * the full registry (see `patchNumbers` in `ledger.ts`), never here.
+   */
+  patchIndex?: Record<string, number>;
+  /**
+   * Replaces one patch's one-line statement. This is the one field in the
+   * record that is the learner's own sentence, so it is kept verbatim.
+   */
+  onEditPatch?: (id: string, statement: string) => void;
 }
 
 export type InterventionPillar =
   | 'paradox'
+  | 'patches'
   | 'axiom'
   | 'ontology'
   | 'steps'
@@ -88,6 +102,8 @@ export interface InterventionContext {
   autopsy?: TrapAutopsy | null;
   /** True when this topic has at least one contradiction still open. */
   hasOpenParadox?: boolean;
+  /** True when this topic carries at least one recorded patch. */
+  hasPatches?: boolean;
 }
 
 export interface InterventionDefinition {
@@ -123,6 +139,9 @@ const SOCRATIC_SPAR = lazy(() =>
 const PARADOX_LEDGER_PANEL = lazy(() =>
   import('@/components/mr-m/ParadoxLedgerPanel').then((m) => ({ default: m.ParadoxLedgerPanel }))
 );
+const PATCH_REGISTRY = lazy(() =>
+  import('@/components/mr-m/PatchRegistry').then((m) => ({ default: m.PatchRegistry }))
+);
 
 /**
  * The id → renderer table `MisterMSurface` dispatches through. Declared once,
@@ -130,6 +149,7 @@ const PARADOX_LEDGER_PANEL = lazy(() =>
  */
 export const MR_M_COMPONENTS: Record<string, React.ComponentType<InterventionProps>> = {
   paradox_ledger: PARADOX_LEDGER_PANEL,
+  patch_registry: PATCH_REGISTRY,
   axiom_first: AXIOM_FIRST_PANEL,
   ontology_cards: ONTOLOGY_CARDS,
   state_machine_steps: STATE_MACHINE_RAIL,
@@ -160,6 +180,19 @@ export const MR_M_INTERVENTIONS: InterventionDefinition[] = [
       'Every contradiction you have not resolved yet, held on screen instead of left behind.',
     appliesWhen: (ctx) => ctx.hasOpenParadox === true,
     component: MR_M_COMPONENTS.paradox_ledger,
+  },
+  {
+    id: 'patch_registry',
+    pillar: 'patches',
+    title: 'Standing faults',
+    learnerTask:
+      'The fractures that have fired more than once on this topic, and the one-line patch that closes each.',
+    // One hit is a slip, and a wall of slips reads as noise. A patch has to have
+    // fired at least twice before it is allowed in front of a new attempt — the
+    // repeat threshold lives in the ledger, not here, so the panel and the
+    // warning it draws can never disagree about what counts as standing.
+    appliesWhen: (ctx) => ctx.hasPatches === true,
+    component: MR_M_COMPONENTS.patch_registry,
   },
   {
     id: 'axiom_first',

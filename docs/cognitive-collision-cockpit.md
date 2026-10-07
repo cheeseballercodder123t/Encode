@@ -219,3 +219,103 @@ The browser spec (`e2e/inquisitor.spec.ts`) drives the real sheet: the verdict
 and its law on screen, the boundary rendered, a committed boundary still open
 after the sheet is closed and reopened, a false read showing its fix, and a
 refused read reported as a refusal rather than rendered.
+
+## 7. Implementation status: Phases 2–5
+
+Written after the adaptive-escalation pass. This document's Component 4 (the
+timed proctor) and Component 5 (the autopsy engine) are the same two builds the
+later "Adaptive Escalation, Timed Crucibles & The Error Autopsy Engine"
+specification describes, so they are recorded here rather than in a parallel
+document: §6's "not built, and deliberately" no longer applies to either.
+
+### The Error Autopsy (Component 5, Phase 2)
+
+`lib/mr-m/autopsy.ts` answers *which line of the mental compiler threw the
+exception*, and it is deliberately two-layered. The structural layer is the
+shipped `classifyTrap`; the numeric layer is new — every quantity in the
+expected answer is crossed against every quantity the learner wrote, each ratio
+is folded onto its magnitude so a factor of two reads as `2` from either
+direction, and the shape is named (2, 3, 1000, or a pure sign inversion).
+
+Two rules carry the engine. **Arithmetic is never asked of a model**: `0.0336 ÷
+0.0168 = 2.00` is computed in TypeScript from the learner's own numbers
+(`app/api/autopsy/route.ts` runs on the checker slot, and only ever writes the
+narrative). And **no clean signal means no diagnosis**: a fracture that survives
+neither layer returns `null` and the panel says nothing, because an invented
+diagnosis is exactly the arbitrary noise this mode exists to remove. A sign
+inversion sits a tier above every magnitude shape, so precedence is a property
+of the taxonomy rather than of crossing order.
+
+Patches are persisted in `lib/mr-m/ledger.ts` as an extension of the paradox
+ledger: the same fracture on the same topic **re-opens its record and
+increments `hits`** instead of stacking a near-duplicate, which is what lets a
+pre-flight warning state how many times the fault has actually fired. Only a
+repeat warns (`REPEAT_HITS`), capped so the strip stays readable, and only
+against the topic the next attempt is really timed against.
+
+### The Constraint-Mutation Matrix (Phase 3)
+
+`lib/escalation/mutation.ts` holds the three tiers and the deterministic gates
+that decide whether a generated variant is actually the tier it claims. Beyond
+numerical substitution, the mutations are structural: unequal stoichiometric
+ratios, a non-unit density that makes `m_solute` and `m_solution` disagree, and
+at Tier 3 a phase change with its latent-heat term and boundary work. Tier 2 is
+a **quorum** — two of its three moves is the tier, and the individual moves are
+reported but not demanded — which is why "is this Tier 2" has exactly one
+answer. Tier 3 is refused in both directions: a variant that treats a phase
+change as a plain `ΔT` fails the latent-heat and boundary checks, and the
+refusal names the requirement rather than saying the model ignored the
+directive. Strong model, because the numbers have to stay physically valid.
+
+### The Timed Crucible (Component 4, Phase 4)
+
+`components/crucible/CrucibleModal.tsx` fronts `app/api/crucible/route.ts`. The
+model writes the problems and declares each *state*'s weight; it never
+touches the clock. `lib/crucible/budget.ts` allocates the sprint across those
+weights by the largest-remainder method, so the HUD's targets are whole seconds
+that sum to exactly the clock it is pacing, and the pacing bands are compared on
+integer percents — `1 - 0.2` is not exactly `0.8` in binary floating point, and a
+flag that disagrees with the arithmetic it prints is worse than no flag. The
+summary reports where the clock went and, separately, how much of an overrun was
+recovered, because recovering under load is the skill the rep trains. It never
+reports speed as a grade. The client re-runs the same coercion the route does, so
+a payload that is not a state machine is refused rather than paced.
+
+### The ZPD Governor, Concept Fusion and the Emergency Triage Buffer (Phase 5)
+
+`lib/escalation/governor.ts` escalates on two consecutive **clean** wins — solved
+with no clue rung requested — and a miss zeroes the streak rather than pausing
+it, because a failure is direct evidence that the difficulty is not too low.
+The decision is returned with its reason and rendered, since a difficulty knob
+the learner cannot see is indistinguishable from a bug.
+`lib/escalation/fusion.ts` supplies the cross-chapter collision the boss level
+is briefed with. `lib/crisis/buffer.ts` and
+`components/crisis/EmergencyTriageModal.tsx` are the night everything is due at
+once: a freeze is only offered when the marginal grade risk can be shown, the
+panic is dismantled with the weighted-average arithmetic, and an item with no
+stated weight is listed as withheld with what would make it decidable instead of
+being guessed at. The runway renders one task for ninety minutes.
+
+### Model routing
+
+The split §2 already describes is used literally: the checker slot
+(`geminiCheckerModel`) reads claims, decomposes a problem into a skeleton, reads
+a panicking dump (`/api/crisis`) and writes the autopsy narrative
+(`/api/autopsy`); the strong slot (`geminiModel`) synthesizes clue rungs,
+boss-level collisions and constraint-mutated problems (`/api/mutation`,
+`/api/crucible`); and all arithmetic — ratios, grade risk, clock allocation,
+pacing — happens in TypeScript. A route asks for a slot with `isChecker` and the
+resolver in `lib/ai-client.ts` owns the rest, including its own default and
+model fallback chain, so no route hardcodes a model name.
+
+### Verification
+
+`tests/unit/mr-m-autopsy.test.ts`, `tests/unit/mr-m-ledger.test.ts` (the patch
+half), `tests/unit/escalation-mutation.test.ts`,
+`tests/unit/escalation-governor.test.ts`, `tests/unit/escalation-fusion.test.ts`,
+`tests/unit/crucible-budget.test.ts` and `tests/unit/crisis-buffer.test.ts` pin
+every gate and every refusal. `e2e/cockpit-escalation.spec.ts` drives the two new
+sheets in the browser: the state-by-state time budget, the pacing read, the
+pre-flight tripwire drawn from a real patch ledger (with a single-hit slip
+staying silent), a sprint that is not a state machine refused instead of
+rendered, and the freeze → arithmetic → ninety-minute runway flow.

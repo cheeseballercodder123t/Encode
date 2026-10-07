@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { clueRungs } from '@/lib/clue-ladder';
+import { clueRungs, markRungRevealed } from '@/lib/clue-ladder';
 
 // ─── The shared clue-ladder control ─────────────────────────────────────────
 //
@@ -41,7 +41,12 @@ export function ClueLadder({ clue, clues, label, title }: ClueLadderProps) {
     <div data-testid="clue-ladder" className="mt-2.5 pt-2 border-t border-amber/20">
       <button
         type="button"
-        onClick={() => setRevealed((count) => Math.min(count + 1, rungs.length))}
+        onClick={() => {
+          // Counted where it happens: the governor reads "solved with no rung" as
+          // a clean win, and only this control knows whether a rung was taken.
+          if (revealed < rungs.length) markRungRevealed();
+          setRevealed((count) => Math.min(count + 1, rungs.length));
+        }}
         disabled={exhausted}
         aria-expanded={revealed > 0}
         aria-controls="clue-ladder-rungs"

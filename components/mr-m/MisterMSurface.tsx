@@ -4,7 +4,7 @@ import React, { Component, Suspense, useState, type ErrorInfo, type ReactNode } 
 import type { Activity, StageResponse } from '@/lib/types';
 import type { ConfidenceTier } from '@/lib/interference-traps';
 import { resolveInterventions, type InterventionProps } from '@/lib/mr-m/registry';
-import type { ParadoxEntry, TrapAutopsy, TrapDiagnosis } from '@/lib/mr-m/types';
+import type { ParadoxEntry, PatchEntry, TrapAutopsy, TrapDiagnosis } from '@/lib/mr-m/types';
 
 // ─── Mr M mode: the one surface that resolves them ──────────────────────────
 //
@@ -86,6 +86,11 @@ export interface MisterMSurfaceProps {
   correctAnswer?: string;
   onSaveTrapCard?: (input: { tier: ConfidenceTier; flawLine: string }) => void;
   trapCardSaved?: boolean;
+  /** Standing faults for this topic, newest first. */
+  patches?: PatchEntry[];
+  /** Stable armory numbering, keyed by patch id. */
+  patchIndex?: Record<string, number>;
+  onEditPatch?: (id: string, statement: string) => void;
   /** 'pre' renders the preparation surfaces, 'post' the post-mortems. */
   phase: 'pre' | 'post';
 }
@@ -104,6 +109,9 @@ export function MisterMSurface({
   correctAnswer,
   onSaveTrapCard,
   trapCardSaved,
+  patches,
+  patchIndex,
+  onEditPatch,
   phase,
 }: MisterMSurfaceProps) {
   const visible = resolveInterventions({
@@ -113,6 +121,7 @@ export function MisterMSurface({
     trapDiagnosis,
     autopsy,
     hasOpenParadox: (openParadoxes?.length ?? 0) > 0,
+    hasPatches: (patches?.length ?? 0) > 0,
   }).filter((intervention) => POST_CHECK_PILLARS.has(intervention.pillar) === (phase === 'post'));
 
   // Folding is offered for a DEEP preparation stack only, and it starts
@@ -139,6 +148,9 @@ export function MisterMSurface({
     correctAnswer,
     onSaveTrapCard,
     trapCardSaved,
+    patches,
+    patchIndex,
+    onEditPatch,
   };
 
   const panels = (

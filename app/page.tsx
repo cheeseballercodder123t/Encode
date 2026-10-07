@@ -47,6 +47,12 @@ import { useAuth } from '@/lib/auth-context';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
+import { CrucibleModal } from '@/components/crucible/CrucibleModal';
+import { EmergencyTriageModal } from '@/components/crisis/EmergencyTriageModal';
+import { diagnoseDiscrepancy, patchStatementFor } from '@/lib/mr-m/autopsy';
+import { recordPatch } from '@/lib/mr-m/ledger';
+import { recordAttempt } from '@/lib/escalation/governor';
+import { rungsRevealed } from '@/lib/clue-ladder';
 import { hashStringKey } from '@/lib/utils';
 import {
   extractSanitizedCardsFromSchema,
@@ -177,6 +183,10 @@ export default function DeepEncodeApp() {
   const [isPathwayOpen, setIsPathwayOpen] = useState(false);
   // The question-first cockpit: a claim in, a verdict on whether it holds out.
   const [isInquisitorOpen, setIsInquisitorOpen] = useState(false);
+  // The timed crucible: multi-constraint problems against an allocated clock.
+  const [isCrucibleOpen, setIsCrucibleOpen] = useState(false);
+  // The emergency buffer, for the night everything is due at once.
+  const [isTriageOpen, setIsTriageOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   // Drill modals were removed : review lives in Anki/RemNote, not here.
 
@@ -870,6 +880,18 @@ export default function DeepEncodeApp() {
     sound.playBeep(600, 'triangle', 0.1);
   };
 
+  /**
+   * When the current stage opened.
+   *
+   * The governor's third signal is time against expectation, and the stage's
+   * clock has to start somewhere honest — the moment the stage became the one
+   * on screen. Held in a ref because it is read at check time, never rendered.
+   */
+  const stageOpenedAtRef = useRef<number>(Date.now());
+  useEffect(() => {
+    stageOpenedAtRef.current = Date.now();
+  }, [currentActivityIndex]);
+
   // Feynman AI Answer Checker for individual stage (Supports Infinite Checks & Error Analysis)
   const handleCheckAnswer = async () => {
     if (!field1.trim() && !field2.trim()) return;
@@ -880,6 +902,13 @@ export default function DeepEncodeApp() {
 
     const nextCount = stageCheckCount + 1;
     setStageCheckCount(nextCount);
+
+    // The stage's exemplar, named once: it is the request's expectation and the
+    // autopsy's other side, and the two must be the same string.
+    const expectedAnswerText =
+      currentActivity.visualData?.generationChallenge?.expertCompletion ||
+      currentActivity.scaffold.exampleAnswer ||
+      '';
 
     try {
       const response = await fetch('/api/evaluate', {
@@ -899,7 +928,7 @@ export default function DeepEncodeApp() {
           field2Value: field2,
           field3Label: currentActivity.scaffold.field3Label,
           field3Value: field3,
-          expertCompletion: currentActivity.visualData?.generationChallenge?.expertCompletion || currentActivity.scaffold.exampleAnswer,
+          expertCompletion: expectedAnswerText,
           premisePrompt: currentActivity.visualData?.generationChallenge?.premisePrompt,
           strictnessLevel,
           // Taboo terms shown in the workbench for this stage: the examiner
@@ -925,6 +954,57 @@ export default function DeepEncodeApp() {
       }
 
       const secured = evalData.secured;
+
+      // ─── The two records a check produces (adaptive escalation + autopsy) ──
+      //
+      // Both are automatic, and that is deliberate rather than convenient. A
+      // friction attempt is telemetry about the PROBLEM — did the mechanism land,
+      // how much scaffolding did it take, how long did it cost — so recording it
+      // assumes nothing about the learner. A patch is a defect report against a
+      // COMPUTATION: the fracture and its arithmetic are measured in code, so
+      // logging one neither asks the learner to declare anything (unlike the trap
+      // card, which demands the confidence tier only they know) nor risks
+      // recording an invented diagnosis.
+      try {
+        recordAttempt({
+          // The stage's own title scopes the streak: a clean run on one chapter
+          // says nothing about the next one.
+          topic: topicSummary || currentActivity.title || 'Untitled',
+          secured,
+          rungsUsed: rungsRevealed(),
+          elapsedMs: Date.now() - stageOpenedAtRef.current,
+          // The stage does not carry a time estimate, so this stays 0 and the
+          // pacing read has nothing to compare against — reported as unknown
+          // rather than filled in with a guess.
+          expectedMs: 0,
+        });
+      } catch {
+        /* the friction log is best-effort: it must never block a check */
+      }
+
+      if (mrMMode && !secured) {
+        try {
+          const reading = diagnoseDiscrepancy({
+            learnerText: [field1, field2, field3].filter(Boolean).join('\n'),
+            expectedText: expectedAnswerText,
+            sourceText: `${currentActivity.prompt || ''}\n${currentActivity.contextSnippet || ''}`,
+          });
+          if (reading) {
+            recordPatch({
+              topic: topicSummary || currentActivity.title || 'Untitled',
+              kind: reading.kind,
+              // The scaffold sentence; the armory lets the learner rewrite it in
+              // their own words, and a later hit never overwrites that.
+              statement: patchStatementFor(reading, topicSummary),
+              arithmeticReveal: reading.arithmeticReveal,
+              learnerValue: reading.terms[0]?.learner ?? null,
+              expectedValue: reading.terms[0]?.expected ?? null,
+            });
+          }
+        } catch {
+          /* the patch registry is best-effort: no clean signal, no record */
+        }
+      }
 
       // "What's hard for me": log the stages whose mechanism is still open so
       // weak areas surface later (landing the mechanism clears the topic).
@@ -1890,6 +1970,8 @@ export default function DeepEncodeApp() {
               }}
               onTryPathwayBuilder={() => setIsPathwayOpen(true)}
               onOpenInquisitor={() => setIsInquisitorOpen(true)}
+              onOpenCrucible={() => setIsCrucibleOpen(true)}
+              onOpenTriage={() => setIsTriageOpen(true)}
             />
 
                         {/* Bench: audits and export targets share one panel, in two
@@ -2309,6 +2391,17 @@ export default function DeepEncodeApp() {
         onClose={() => setIsInquisitorOpen(false)}
         topic={topicSummary}
       />
+
+      {/* Timed crucible: the clock is allocated across each problem's states */}
+      <CrucibleModal
+        isOpen={isCrucibleOpen}
+        onClose={() => setIsCrucibleOpen(false)}
+        topic={topicSummary}
+        sourceContext={rawNotes}
+      />
+
+      {/* Emergency triage: freeze what can prove it is low-leverage, then run */}
+      <EmergencyTriageModal isOpen={isTriageOpen} onClose={() => setIsTriageOpen(false)} />
 
       {/* Course-level Prerequisite Skill Tree */}
       <SkillTreeModal

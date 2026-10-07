@@ -1,12 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   clearParadoxes,
+  clearPatches,
   hasOpenParadox,
   loadParadoxes,
+  loadPatches,
   openParadoxesFor,
+  patchesFor,
+  patchNumbers,
+  preflightWarnings,
   raiseParadox,
+  recordPatch,
+  REPEAT_HITS,
   resolveParadox,
   resolvedParadoxes,
+  updatePatchStatement,
+  warningsFrom,
 } from '../../lib/mr-m/ledger';
 
 /**
@@ -163,5 +172,174 @@ describe('Mr M paradox ledger', () => {
       vi.stubGlobal('localStorage', undefined as unknown as Storage);
       expect(resolvedParadoxes()).toEqual([]);
     });
+  });
+});
+
+/**
+ * The patch registry is the other half of the ledger: paradoxes are what is
+ * still OPEN, patches are what has been CLOSED. A fracture that fires once is a
+ * slip; the same one firing three times is a standing fault worth a pre-flight
+ * warning, so the hit count is the whole point of the record — and the one field
+ * that is the learner's own sentence must survive every one of those hits.
+ */
+describe('Mr M engineering patch registry', () => {
+  beforeEach(() => {
+    store.clear();
+    mockStorage();
+  });
+
+  const record = (over: Partial<Parameters<typeof recordPatch>[0]> = {}) =>
+    recordPatch({
+      topic: 'Thermochemistry',
+      kind: 'SIGN_FLIP',
+      statement: 'Anchor q_rxn = -q_water before the arithmetic.',
+      arithmeticReveal: '0.0336 ÷ -0.0336 = -1.00',
+      learnerValue: 0.0336,
+      expectedValue: -0.0336,
+      ...over,
+    });
+
+  it('records a fracture with the arithmetic that exposed it', () => {
+    const entry = record();
+    expect(entry).not.toBeNull();
+    expect(entry!.kind).toBe('SIGN_FLIP');
+    expect(entry!.hits).toBe(1);
+    expect(entry!.arithmeticReveal).toBe('0.0336 ÷ -0.0336 = -1.00');
+    expect(entry!.learnerValue).toBe(0.0336);
+    expect(entry!.expectedValue).toBe(-0.0336);
+
+    const stored = loadPatches();
+    expect(stored.length).toBe(1);
+    expect(stored[0].topic).toBe('Thermochemistry');
+  });
+
+  it('refuses a patch with nothing to do differently', () => {
+    expect(record({ statement: '   ' })).toBeNull();
+    expect(loadPatches()).toEqual([]);
+  });
+
+  it('re-opens the same fracture instead of stacking a near-duplicate', () => {
+    record();
+    const second = record();
+    expect(second!.hits).toBe(2);
+    expect(loadPatches().length).toBe(1);
+  });
+
+  it('moves the hit count and the arithmetic, never the learner’s own sentence', () => {
+    const first = record()!;
+    updatePatchStatement(first.id, 'Always check whether the thermometer measures the water or the reaction.');
+
+    const reopened = record({ arithmeticReveal: '0.0672 ÷ -0.0672 = -1.00' })!;
+    expect(reopened.hits).toBe(2);
+    expect(reopened.arithmeticReveal).toBe('0.0672 ÷ -0.0672 = -1.00');
+    // The scaffold must not come back and delete what they wrote.
+    expect(reopened.statement).toBe(
+      'Always check whether the thermometer measures the water or the reaction.'
+    );
+  });
+
+  it('keeps a different fracture on the same topic as its own patch', () => {
+    record();
+    record({ kind: 'FACTOR_OF_TWO', statement: 'Find the 2 in the balanced equation.' });
+    expect(loadPatches().length).toBe(2);
+  });
+
+  it('scopes patches to their own topic', () => {
+    record();
+    record({ topic: 'Optics', statement: 'Lens equation: mind the sign convention.' });
+    expect(patchesFor('thermochemistry').length).toBe(1);
+    expect(patchesFor('Optics').length).toBe(1);
+    expect(patchesFor('French Revolution').length).toBe(0);
+  });
+
+  it('numbers the armory from the oldest entry, so a number never moves', () => {
+    const a = recordPatch({ topic: 'A', kind: 'SIGN_FLIP', statement: 'a' }, 1)!;
+    const b = recordPatch({ topic: 'B', kind: 'SIGN_FLIP', statement: 'b' }, 2)!;
+    const c = recordPatch({ topic: 'C', kind: 'SIGN_FLIP', statement: 'c' }, 3)!;
+
+    const numbers = patchNumbers();
+    expect(numbers[a.id]).toBe(1);
+    expect(numbers[b.id]).toBe(2);
+    expect(numbers[c.id]).toBe(3);
+  });
+
+  it('warns only once a fracture has actually repeated', () => {
+    expect(REPEAT_HITS).toBe(2);
+    record();
+    // One hit is a slip, and a wall of slips reads as noise.
+    expect(preflightWarnings('Thermochemistry')).toEqual([]);
+
+    record();
+    const warnings = preflightWarnings('Thermochemistry');
+    expect(warnings.length).toBe(1);
+    expect(warnings[0].headline).toContain('SIGN_FLIP');
+    expect(warnings[0].headline).toContain('2 times');
+    expect(warnings[0].line).toContain('q_rxn');
+  });
+
+  it('draws the same warning from a list it was handed', () => {
+    record();
+    record();
+    expect(warningsFrom(patchesFor('Thermochemistry'))).toEqual(
+      preflightWarnings('Thermochemistry')
+    );
+  });
+
+  it('never warns about another topic’s fault', () => {
+    record();
+    record();
+    expect(preflightWarnings('Optics')).toEqual([]);
+  });
+
+  it('updates only the statement when the learner rewrites it', () => {
+    const entry = record()!;
+    updatePatchStatement(entry.id, '  Read the convention first.  ');
+    const stored = loadPatches()[0];
+    expect(stored.statement).toBe('Read the convention first.');
+    expect(stored.hits).toBe(1);
+    expect(stored.arithmeticReveal).toBe(entry.arithmeticReveal);
+  });
+
+  it('ignores a blank rewrite instead of erasing the patch line', () => {
+    const entry = record()!;
+    updatePatchStatement(entry.id, '   ');
+    expect(loadPatches()[0].statement).toBe(entry.statement);
+  });
+
+  it('keeps only the newest sixty patches', () => {
+    for (let i = 0; i < 65; i += 1) {
+      recordPatch({ topic: `topic-${i}`, kind: 'SIGN_FLIP', statement: `patch ${i}` }, 1_000 + i);
+    }
+    const stored = loadPatches();
+    expect(stored.length).toBe(60);
+    expect(stored[0].statement).toBe('patch 64');
+    expect(stored[stored.length - 1].statement).toBe('patch 5');
+  });
+
+  it('degrades to empty on malformed storage', () => {
+    store.set('deepencode_mr_m_patches_v1', '{ not json');
+    expect(loadPatches()).toEqual([]);
+
+    store.set(
+      'deepencode_mr_m_patches_v1',
+      JSON.stringify([{ id: 'x', kind: 'NOT_A_KIND', statement: 's', lastSeenAt: 1 }])
+    );
+    // A kind outside the vocabulary is dropped: the panel has no label for it.
+    expect(loadPatches()).toEqual([]);
+  });
+
+  it('does nothing when storage is unavailable', () => {
+    vi.stubGlobal('window', undefined as unknown as Window);
+    vi.stubGlobal('localStorage', undefined as unknown as Storage);
+    expect(() => record()).not.toThrow();
+    expect(loadPatches()).toEqual([]);
+    expect(() => clearPatches()).not.toThrow();
+  });
+
+  it('clears every record', () => {
+    record();
+    record({ topic: 'Optics' });
+    clearPatches();
+    expect(loadPatches()).toEqual([]);
   });
 });

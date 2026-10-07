@@ -24,10 +24,19 @@ import { CausalSentence } from './CausalSentence';
 import { ChapterRail } from './ChapterRail';
 import { StemPreview } from './StemPreview';
 import { buildCausalFrame, frameToSentence, type CausalFieldKey } from '@/lib/causal-frame';
+import { resetRungsRevealed } from '@/lib/clue-ladder';
 import { MisterMSurface } from '@/components/mr-m/MisterMSurface';
 import { classifyTrap } from '@/lib/mr-m/diagnostics';
-import { openParadoxesFor, raiseParadox, resolveParadox } from '@/lib/mr-m/ledger';
-import type { ParadoxEntry } from '@/lib/mr-m/types';
+import {
+  loadPatches,
+  openParadoxesFor,
+  patchNumbers,
+  patchesFor,
+  raiseParadox,
+  resolveParadox,
+  updatePatchStatement,
+} from '@/lib/mr-m/ledger';
+import type { ParadoxEntry, PatchEntry } from '@/lib/mr-m/types';
 import { buildAutopsyTrapCard } from '@/lib/mr-m/trap-card';
 import { saveInterferenceTrap, type ConfidenceTier } from '@/lib/interference-traps';
 
@@ -387,11 +396,32 @@ export function StudioWorkbench({
   // that has to survive a reload: it is read on mount and whenever the topic
   // changes, and the two handlers below are its only writers.
   const [paradoxes, setParadoxes] = useState<ParadoxEntry[]>([]);
+  // The armory: every fracture recorded against this topic, plus the stable
+  // numbering for the WHOLE registry so `[ PATCH #12 ]` means the same record
+  // here as it does on any other stage.
+  const [patches, setPatches] = useState<PatchEntry[]>([]);
+  const [patchIndex, setPatchIndex] = useState<Record<string, number>>({});
   /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
   useEffect(() => {
     setParadoxes(openParadoxesFor(topicSummary));
+    setPatches(patchesFor(topicSummary));
+    setPatchIndex(patchNumbers(loadPatches()));
   }, [topicSummary]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  /**
+   * Rewrites one patch line. The learner's sentence is stored verbatim; nothing
+   * else in the record moves, so editing a patch can never be mistaken for
+   * clearing it.
+   */
+  const handleEditPatch = useCallback(
+    (id: string, statement: string) => {
+      updatePatchStatement(id, statement);
+      setPatches(patchesFor(topicSummary));
+      setPatchIndex(patchNumbers(loadPatches()));
+    },
+    [topicSummary]
+  );
 
   const handleRaiseParadox = useCallback(
     (statement: string) => {
@@ -430,6 +460,17 @@ export function StudioWorkbench({
     }));
     onCheckAnswer();
   }, [field1, field2, field3, onCheckAnswer]);
+
+  /**
+   * A new stage is a new attempt, so the clue-ladder count starts at zero.
+   * The count lives in `lib/clue-ladder.ts` (the ladder is rendered inside the
+   * stage templates, so no component can pass it up the tree) and the governor
+   * reads it at check time — resetting on the stage boundary is what keeps
+   * "solved with no rung" meaning THIS problem rather than the whole session.
+   */
+  useEffect(() => {
+    resetRungsRevealed();
+  }, [currentActivityIndex]);
 
   /**
    * The deterministic half of the trap-aware autopsy. Computed only when a
@@ -985,6 +1026,9 @@ export function StudioWorkbench({
               correctAnswer={expectedAnswerText}
               onSaveTrapCard={handleSaveTrapCard}
               trapCardSaved={trapCardSaved}
+              patches={patches}
+              patchIndex={patchIndex}
+              onEditPatch={handleEditPatch}
             />
 
             {/* Optional Dual-Coding Sketchpad Toggle + why-ladder */}
@@ -1521,6 +1565,9 @@ export function StudioWorkbench({
               correctAnswer={expectedAnswerText}
               onSaveTrapCard={handleSaveTrapCard}
               trapCardSaved={trapCardSaved}
+              patches={patches}
+              patchIndex={patchIndex}
+              onEditPatch={handleEditPatch}
             />
 
             {/* Insert-missing-link loop: one sentence, Enter, done. */}
