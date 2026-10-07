@@ -260,7 +260,7 @@ export function FlashcardForgeModal({
         ]);
       }
     }
-  }, [isOpen, initialNotes]);
+  }, [isOpen, initialNotes, sources.length]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /**

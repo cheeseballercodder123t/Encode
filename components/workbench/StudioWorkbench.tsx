@@ -705,12 +705,14 @@ export function StudioWorkbench({
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = '';
+        let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
         }
-        if (transcript.trim()) {
-          setField2((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
+        if (finalTranscript.trim()) {
+          setField2((prev: string) => (prev ? `${prev.trim()} ${finalTranscript.trim()}` : finalTranscript.trim()));
         }
       };
 

@@ -354,7 +354,12 @@ export function useSession() {
   // synchronously (before the reducer re-renders).
   const fieldStateRef = useRef<FieldSnapshot>({ field1: '', field2: '', field3: '', selectedPreset: '' });
   useEffect(() => {
-    fieldStateRef.current = snapshotFields(state);
+    fieldStateRef.current = {
+      field1: state.field1,
+      field2: state.field2,
+      field3: state.field3,
+      selectedPreset: state.selectedPreset,
+    };
   }, [state.field1, state.field2, state.field3, state.selectedPreset]);
 
   const makeFieldSetter = useCallback((key: 'field1' | 'field2' | 'field3' | 'selectedPreset') =>

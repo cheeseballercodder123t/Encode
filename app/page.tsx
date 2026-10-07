@@ -35,7 +35,6 @@ import { SegregationRemnoteModal } from '@/components/SegregationRemnoteModal';
 import { AnkiExportModal } from '@/components/AnkiExportModal';
 import { FlashcardForgeModal, type ForgeExportTarget } from '@/components/FlashcardForgeModal';
 import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModal';
-import { generateOfflineWorkout } from '@/lib/services/offlineGenerator';
 import { generateRemnoteHierarchy } from '@/lib/remnote';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioIntro } from '@/components/StudioIntro';
@@ -806,35 +805,10 @@ export default function DeepEncodeApp() {
         setAppState('input');
         return;
       }
-      const errMsg = String(error?.message || error || '');
-      const isProviderDown = errMsg.includes('Provider down');
-      if (!isProviderDown) {
-        console.error('API generation failed:', error);
-        alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');
-        setAppState('input');
-        return;
-      }
-      console.warn('Network or API generation failed, falling back to local offline cognitive generator...', error);
-      try {
-        const offlineData = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);
-        setIsGuidedPathMode(false);
-        setGuidedModules([]);
-        setActivities(offlineData.activities);
-        setTopicSummary(`${offlineData.topicSummary} (Offline Backup)`);
-        setResearchContexts([]);
-        setYoutubeData(null);
-        setCurrentActivityIndex(0);
-        setUserResponses({});
-        loadStageInputs(0, offlineData.activities, {});
-        setXp(100);
-        addXP(100);
-        sound.playSuccess();
-        setAppState('encoding');
-      } catch (fallbackErr) {
-        console.error('Offline fallback also failed:', fallbackErr);
-        alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');
-        setAppState('input');
-      }
+      console.error('API generation failed:', error);
+      alert(error?.message || 'Something went wrong preparing your schema. Please check your settings or try again.');
+      setAppState('input');
+      return;
     } finally {
       clearGenerationInProgress();
       setGenStartedAt(null);

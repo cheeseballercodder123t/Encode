@@ -43,7 +43,7 @@ export function OrderingBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
 
 export function MatchingBody({ seg, onCorrect, onWrong, onNext }: BodyProps) {
   const q = seg.question!;
-  const pairs = q.pairs || [];
+  const pairs = useMemo(() => q.pairs || [], [q.pairs]);
   const [matches, setMatches] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState(false);
   const [pickLeft, setPickLeft] = useState<string | null>(null);

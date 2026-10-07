@@ -698,7 +698,10 @@ export async function* streamTextWithProvider({
     let carry = '';
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        carry += decoder.decode();
+        break;
+      }
       carry += decoder.decode(value, { stream: true });
       let newline = carry.indexOf('\n');
       while (newline >= 0) {
@@ -713,6 +716,18 @@ export async function* streamTextWithProvider({
           if (delta) yield delta;
         } catch {
           // A keep-alive or a partial frame: the next line will carry it.
+        }
+      }
+    }
+
+    if (carry.trim().startsWith('data:')) {
+      const payload = carry.trim().slice(5).trim();
+      if (payload !== '[DONE]') {
+        try {
+          const delta = JSON.parse(payload)?.choices?.[0]?.delta?.content;
+          if (delta) yield delta;
+        } catch {
+          // Ignored
         }
       }
     }

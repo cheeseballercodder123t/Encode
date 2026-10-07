@@ -117,7 +117,7 @@ function cleanSource(raw: ForgeSourcePayload, index: number): ForgeSource {
   return {
     id: (raw.id || `src_${index + 1}`).slice(0, 60),
     kind,
-    label: (raw.label || '').slice(0, 120) || `Source ${index + 1}`,
+    label: (raw.label || (raw as any).name || '').slice(0, 120) || `Source ${index + 1}`,
   };
 }
 
@@ -152,18 +152,34 @@ export async function POST(req: NextRequest) {
         ]).optional(),
         sources: z
           .array(
-            z.object({
-              id: z.string().max(200).optional(),
-              name: z.string().max(300).optional(),
-              kind: z.string().max(60).optional(),
-              content: z.string().max(200_000).optional(),
-            })
+            z
+              .object({
+                id: z.string().max(200).optional(),
+                name: z.string().max(300).optional(),
+                label: z.string().max(300).optional(),
+                kind: z.string().max(60).optional(),
+                content: z.string().max(200_000).optional(),
+                notes: z.string().max(200_000).optional(),
+                url: z.string().max(2_000).optional(),
+                file: z
+                  .object({
+                    name: z.string().max(300).optional(),
+                    type: z.string().max(120).optional(),
+                    size: z.number().optional(),
+                    base64Data: z.string().max(45 * 1024 * 1024).optional(),
+                  })
+                  .nullable()
+                  .optional(),
+              })
+              .passthrough()
           )
           .max(12)
           .optional(),
         only: z.array(z.string().max(200)).max(12).optional(),
         settings: z.any().optional(),
         report: z.any().optional(),
+        existing: z.array(z.string().max(400)).max(5_000).optional(),
+        resolved: z.any().optional(),
         known: z.array(z.string().max(400)).max(5_000).optional(),
       })
       .passthrough()
@@ -278,7 +294,11 @@ export async function POST(req: NextRequest) {
    */
   const runSource = async (raw: ForgeSourcePayload, i: number): Promise<SourceOutcome> => {
     const source = cleanSource(raw, i);
-    let notes = typeof raw.notes === 'string' ? raw.notes.trim() : '';
+    let notes = typeof raw.notes === 'string'
+      ? raw.notes.trim()
+      : typeof (raw as any).content === 'string'
+      ? (raw as any).content.trim()
+      : '';
     const file = raw.file && raw.file.base64Data && raw.file.type ? raw.file : null;
     let label = source.label;
     let provenance = '';

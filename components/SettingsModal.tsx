@@ -263,6 +263,8 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud,
                     />
                     <datalist id="gemini-models-list">
                       <option value="gemini-3.7-flash" />
+                      <option value="gemini-3.6-flash" />
+                      <option value="gemini-3.5-flash" />
                       <option value="gemini-2.5-flash" />
                       <option value="gemini-2.5-pro" />
                       <option value="gemini-1.5-pro" />

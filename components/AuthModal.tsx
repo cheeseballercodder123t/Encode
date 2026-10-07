@@ -102,6 +102,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 {/* User card */}
                 <div className="p-4 bg-deck border border-edge flex items-center gap-3">
                   {user.photoURL ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img 
                       src={user.photoURL} 
                       alt={user.displayName || 'User'} 

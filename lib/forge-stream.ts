@@ -56,7 +56,10 @@ export async function readForgeResponse(
 
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      carry += decoder.decode();
+      break;
+    }
     carry += decoder.decode(value, { stream: true });
 
     let newline = carry.indexOf('\n');
@@ -87,6 +90,16 @@ export async function readForgeResponse(
         });
       } else if (event.type === 'done') payload = event.payload;
       else if (event.type === 'error') failure = event.message || 'The forge failed. Try again.';
+    }
+  }
+
+  if (carry.trim()) {
+    try {
+      const event: any = JSON.parse(carry.trim());
+      if (event.type === 'done') payload = event.payload;
+      else if (event.type === 'error') failure = event.message || 'The forge failed. Try again.';
+    } catch {
+      // Ignored: incomplete line at EOF
     }
   }
 

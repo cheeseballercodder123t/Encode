@@ -16,7 +16,7 @@ import {
   TeachScope,
   UploadedFileAsset,
 } from '@/lib/types';
-import { buildFallbackLesson, sanitizeLesson } from '@/lib/services/teachLesson';
+import { sanitizeLesson } from '@/lib/services/teachLesson';
 import {
   SavedTeachLesson,
   deleteSavedTeachLesson,
@@ -259,18 +259,11 @@ export function TeachMeModal(props: TeachMeModalProps) {
       } else {
         throw new Error('Lesson came back empty');
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('TeachMe error', err);
-      const fallback = buildFallbackLesson(topicSummary, mode, targetActivity || undefined);
-      setLesson(fallback);
-      setSegmentIndex(0);
-      setTotalXpEarned(0);
-      setStreak(0);
-      setBestStreak(0);
-      setParkedAt(null);
-      setPhase('playing');
-      setErrorMsg('AI unavailable. Taught you from your schema instead.');
-      playSound('beep');
+      setPhase('options');
+      setErrorMsg(err?.message || 'Failed to generate lesson. Please check your AI settings.');
+      playSound('error');
     }
   };
 

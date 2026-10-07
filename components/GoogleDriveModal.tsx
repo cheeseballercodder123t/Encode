@@ -295,6 +295,7 @@ export function GoogleDriveModal({ isOpen, onClose, onFileImported }: GoogleDriv
                       >
                         <div className="w-9 h-9 bg-inset/10 border border-edge/20 flex items-center justify-center text-bone shrink-0 group-hover:bg-inset/20 group-hover:text-bone transition-none">
                           {file.thumbnailLink ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
                             <img src={file.thumbnailLink} alt={file.name} className="w-9 h-9 object-cover" />
                           ) : isPdf ? (
                             <span className="text-amber font-bold font-mono">[ FILE ]</span>

@@ -29,6 +29,7 @@ export function GuidedPathRoadmap({
   const sheetRef = useModalA11y(showCheckpointModal, () => setShowCheckpointModal(false));
   const [checkpointAnswer, setCheckpointAnswer] = useState('');
   const [evaluating, setEvaluating] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
   const [evaluationResult, setEvaluationResult] = useState<{
     passed: boolean;
     score: number;
@@ -54,6 +55,7 @@ export function GuidedPathRoadmap({
     } else {
       setEvaluationResult(null);
     }
+    setEvalError(null);
     setCheckpointAnswer(targetModule.feynmanCheckpoint.userAnswer || '');
     setShowCheckpointModal(true);
   };
@@ -62,6 +64,7 @@ export function GuidedPathRoadmap({
     if (!checkpointAnswer.trim()) return;
 
     setEvaluating(true);
+    setEvalError(null);
     try {
       const res = await fetch('/api/checkpoint', {
         method: 'POST',
@@ -75,7 +78,10 @@ export function GuidedPathRoadmap({
         })
       });
 
-      if (!res.ok) throw new Error('Checkpoint evaluation failed');
+      if (!res.ok) {
+        const failure = await res.json().catch(() => null);
+        throw new Error(failure?.error || 'Checkpoint evaluation failed');
+      }
       const data = await res.json();
       setEvaluationResult(data);
 
@@ -85,8 +91,10 @@ export function GuidedPathRoadmap({
       } else {
         playSound('error');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setEvalError(e?.message || 'Checkpoint evaluation failed. Check your settings.');
+      playSound('error');
     } finally {
       setEvaluating(false);
     }
@@ -353,6 +361,12 @@ export function GuidedPathRoadmap({
                   <p className="text-xs leading-relaxed">
                     {evaluationResult.feedback}
                   </p>
+                </div>
+              )}
+
+              {evalError && (
+                <div className="p-3 bg-hazard-500/10 border border-hazard-500/40 text-xs text-hazard-300 font-mono">
+                  {evalError}
                 </div>
               )}
 

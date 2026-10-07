@@ -64,16 +64,20 @@ test.describe('YouTube flow', () => {
 });
 
 test.describe('Offline resilience', () => {
-  test('going offline after load falls back to the local generator', async ({ page, context }) => {
+  test('going offline after load informs the user with an alert', async ({ page, context }) => {
     await page.goto('/');
 
-    // Kill the network after the app has loaded : generation must still work
+    // Kill the network after the app has loaded
     await context.setOffline(true);
+    let dialogMessage = '';
+    page.on('dialog', async (dialog) => {
+      dialogMessage = dialog.message();
+      await dialog.accept();
+    });
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
     await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
 
-    await confirmReadiness(page);
-    // The offline generator produced a workout entirely client-side
-    await expectStage(page, 1);
+    expect(dialogMessage).toBeTruthy();
+    await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();
   });
 });

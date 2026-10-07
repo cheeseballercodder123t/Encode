@@ -118,6 +118,7 @@ export function FileUploader({ onFileLoaded, selectedFile, compact = false }: Fi
         <div className="p-3 bg-deck border border-edge/70 rounded-xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {selectedFile.previewUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={selectedFile.previewUrl}
                 alt={selectedFile.name}

@@ -95,9 +95,24 @@ describe('requestEncodedSchema', () => {
     await expect(requestEncodedSchema({ body: {} })).rejects.toThrow('No API key found.');
   });
 
-  it('rejects when the stream ended without ever delivering a schema', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ndjson([{ type: 'title', title: 'Half a response' }])));
-    await expect(requestEncodedSchema({ body: {} })).rejects.toThrow('Failed to generate schema');
+  it('correctly resolves schema even when the final stream chunk has no trailing newline', async () => {
+    const payload = { topicSummary: 'Trailing', activities: [{ id: 'a1' }] };
+    const raw =
+      JSON.stringify({ type: 'phase', phase: 'Parsing…' }) +
+      '\n' +
+      JSON.stringify({ type: 'result', data: payload }); // no trailing \n
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(raw, {
+          status: 200,
+          headers: { 'content-type': 'application/x-ndjson; charset=utf-8' },
+        })
+      )
+    );
+
+    const data = await requestEncodedSchema({ body: {} });
+    expect(data).toEqual(payload);
   });
 });
 

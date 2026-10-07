@@ -112,14 +112,17 @@ test.describe('Streamed generation', () => {
       })
     );
 
+    let dialogMessage = '';
+    page.on('dialog', async (dialog) => {
+      dialogMessage = dialog.message();
+      await dialog.accept();
+    });
+
     await page.goto('/');
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
     await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
 
-    // The failure is a failure: the offline generator takes over rather than
-    // the loading view waiting on a stream that already ended.
-    await confirmReadiness(page);
-    await expectStage(page, 1);
-    await expect(page.getByText('Offline Backup').first()).toBeVisible();
+    expect(dialogMessage).toContain('Provider down');
+    await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();
   });
 });

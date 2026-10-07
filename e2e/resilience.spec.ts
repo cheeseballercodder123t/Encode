@@ -11,19 +11,23 @@ import { ENCODE_ROUTE, mockAiApis, startEncodeFromNotes, confirmReadiness, expec
  */
 
 test.describe('Generation resilience', () => {
-  test('API 500 on /api/encode falls back to the offline generator workout', async ({ page }) => {
+  test('API 500 on /api/encode alerts the user rather than producing fake cards', async ({ page }) => {
     await mockAiApis(page);
     // Override AFTER mockAiApis : the last registered matching route wins.
     await page.route(ENCODE_ROUTE, (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Provider down' }) })
     );
 
+    let dialogMessage = '';
+    page.on('dialog', async (dialog) => {
+      dialogMessage = dialog.message();
+      await dialog.accept();
+    });
+
     await startEncodeFromNotes(page, MOCK_NOTES);
 
-    // The offline fallback workout loads client-side and is usable end-to-end
-    await confirmReadiness(page);
-    await expectStage(page, 1);
-    await expect(page.getByText('Offline Backup').first()).toBeVisible();
+    expect(dialogMessage).toContain('Provider down');
+    await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();
   });
 
   test('cancel mid-generation aborts the request and returns to the input view', async ({ page }) => {

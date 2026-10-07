@@ -24,6 +24,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
 }) => {
   const [blurtText, setBlurtText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [evaluation, setEvaluation] = useState<BlurtingEvaluation | null>(null);
 
 
@@ -34,6 +35,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
   const handleAnalyzeBlurt = async () => {
     if (!blurtText.trim() || isAnalyzing) return;
     setIsAnalyzing(true);
+    setErrorMessage(null);
     playSound('click');
 
     try {
@@ -50,14 +52,17 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
       });
 
       if (!res.ok) {
-        throw new Error('Failed to analyze blurt retrieval.');
+        const failure = await res.json().catch(() => null);
+        throw new Error(failure?.error || 'Failed to analyze blurt retrieval.');
       }
 
       const data = await res.json();
       setEvaluation(data);
       playSound('success');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setErrorMessage(err?.message || 'Failed to analyze blurt retrieval. Please check your AI settings.');
+      playSound('wrong');
     } finally {
       setIsAnalyzing(false);
     }
@@ -66,6 +71,7 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
   const handleReset = () => {
     setEvaluation(null);
     setBlurtText('');
+    setErrorMessage(null);
   };
 
   return (
@@ -129,6 +135,12 @@ export const BlurtingModal: React.FC<BlurtingModalProps> = ({
                 <span>Active Recall Protocol</span>
               </div>
             </div>
+
+            {errorMessage && (
+              <div className="p-3 bg-hazard-500/10 border border-hazard-500/40 text-xs text-hazard-300 font-mono">
+                {errorMessage}
+              </div>
+            )}
 
             <div className="pt-4 border-t border-edge flex justify-end gap-3">
               <button

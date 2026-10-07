@@ -68,7 +68,10 @@ export async function requestEncodedSchema({ body, signal, handlers }: EncodeStr
 
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      carry += decoder.decode();
+      break;
+    }
     carry += decoder.decode(value, { stream: true });
 
     let newline = carry.indexOf('\n');
@@ -92,6 +95,16 @@ export async function requestEncodedSchema({ body, signal, handlers }: EncodeStr
         handlers?.onOutline?.([...outlines], event.expected || outlines.length);
       } else if (event.type === 'result') result = event.data;
       else if (event.type === 'error') failure = event.message || 'Failed to generate schema';
+    }
+  }
+
+  if (carry.trim()) {
+    try {
+      const event: StreamEvent = JSON.parse(carry.trim());
+      if (event.type === 'result') result = event.data;
+      else if (event.type === 'error') failure = event.message || 'Failed to generate schema';
+    } catch {
+      // Ignored: incomplete line at EOF
     }
   }
 
