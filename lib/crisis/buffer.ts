@@ -492,3 +492,211 @@ export function runwayAction(plan: TriagePlan): string {
     : '';
   return `${plan.runwayMinutes} minutes, one task, everything else hidden: ${focus.title}.${due}`;
 }
+
+// ─── The resume record ──────────────────────────────────────────────────────
+//
+// The plan and the runway used to live only in React state, which meant that
+// closing the sheet — or a reload forty-five minutes into the ninety — destroyed
+// both: the learner came back to an empty textarea and had to re-paste the whole
+// backlog and re-run triage while the night was still burning.
+//
+// The record below is the minimum needed to resume: the dump as typed, the plan
+// as built, and the runway's START epoch rather than a countdown. The epoch is
+// the load-bearing choice — the runway is wall-clock, so an hour away from the
+// tab is an hour of the runway, and a resumed countdown that pretended otherwise
+// would hand back time that had already been spent.
+
+/** Where the sheet keeps its state between visits. */
+export const TRIAGE_RESUME_KEY = 'deepencode_triage_resume_v1';
+
+export interface TriageResumeState {
+  /** The dump exactly as it was typed, so "edit the dump" is not a re-paste. */
+  dump: string;
+  plan: TriagePlan;
+  /** Epoch ms the runway was started, or 0 when it was never started. */
+  runwayStartedAt: number;
+  /** The runway's own length in ms (the plan's minutes, not a second constant). */
+  runwayDurationMs: number;
+  /** Epoch ms this record was written. */
+  savedAt: number;
+}
+
+/**
+ * The plan, re-read field by field.
+ *
+ * Rebuilt rather than trusted: a record on disk is untrusted input, and a plan
+ * that came back half-shaped is worse than no plan at all, because the sheet
+ * would render a focus task that is not a task. Anything that cannot be read
+ * back exactly returns null and the learner gets the honest empty sheet.
+ */
+function coerceResumeTask(value: unknown): CrisisTask | null {
+  if (!value || typeof value !== 'object') return null;
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.id !== 'string' || !entry.id) return null;
+  if (typeof entry.title !== 'string' || !entry.title) return null;
+  const weightPct =
+    typeof entry.weightPct === 'number' &&
+    Number.isFinite(entry.weightPct) &&
+    entry.weightPct > 0 &&
+    entry.weightPct <= 100
+      ? entry.weightPct
+      : null;
+  return {
+    id: entry.id,
+    title: entry.title,
+    dueAt:
+      typeof entry.dueAt === 'number' && Number.isFinite(entry.dueAt) ? entry.dueAt : null,
+    dueLabel: typeof entry.dueLabel === 'string' ? entry.dueLabel : '',
+    weightPct,
+    ungraded: entry.ungraded === true,
+  };
+}
+
+function coerceResumePlan(value: unknown): TriagePlan | null {
+  if (!value || typeof value !== 'object') return null;
+  const entry = value as Record<string, unknown>;
+  if (
+    !Array.isArray(entry.tasks) ||
+    !Array.isArray(entry.frozen) ||
+    !Array.isArray(entry.panicLines) ||
+    !Array.isArray(entry.withheld)
+  ) {
+    return null;
+  }
+
+  const tasks: CrisisTask[] = [];
+  for (const raw of entry.tasks) {
+    const task = coerceResumeTask(raw);
+    if (!task) return null;
+    tasks.push(task);
+  }
+
+  const frozen: FrozenTask[] = [];
+  for (const raw of entry.frozen) {
+    if (!raw || typeof raw !== 'object') return null;
+    const frozenEntry = raw as Record<string, unknown>;
+    const task = coerceResumeTask(frozenEntry.task);
+    if (!task || typeof frozenEntry.line !== 'string') return null;
+    frozen.push({
+      task,
+      riskPct:
+        typeof frozenEntry.riskPct === 'number' && Number.isFinite(frozenEntry.riskPct)
+          ? frozenEntry.riskPct
+          : 0,
+      line: frozenEntry.line,
+    });
+  }
+
+  const withheld: { task: CrisisTask; reason: string }[] = [];
+  for (const raw of entry.withheld) {
+    if (!raw || typeof raw !== 'object') return null;
+    const withheldEntry = raw as Record<string, unknown>;
+    const task = coerceResumeTask(withheldEntry.task);
+    if (!task || typeof withheldEntry.reason !== 'string') return null;
+    withheld.push({ task, reason: withheldEntry.reason });
+  }
+
+  const focus = entry.focus == null ? null : coerceResumeTask(entry.focus);
+  if (entry.focus != null && !focus) return null;
+
+  return {
+    tasks,
+    frozen,
+    focus,
+    panicLines: entry.panicLines.filter((line): line is string => typeof line === 'string'),
+    withheld,
+    runwayMinutes:
+      typeof entry.runwayMinutes === 'number' &&
+      Number.isFinite(entry.runwayMinutes) &&
+      entry.runwayMinutes > 0
+        ? entry.runwayMinutes
+        : RUNWAY_MINUTES,
+  };
+}
+
+/**
+ * Serialises a resume record, or returns null when the plan could not be read
+ * back — the same refusal as {@link decodeTriageResume}, so a record is only
+ * ever written if it can be restored.
+ */
+export function encodeTriageResume(state: TriageResumeState): string | null {
+  const plan = coerceResumePlan(state?.plan);
+  if (!plan) return null;
+  if (typeof state.dump !== 'string') return null;
+  const runwayStartedAt =
+    typeof state.runwayStartedAt === 'number' && Number.isFinite(state.runwayStartedAt)
+      ? state.runwayStartedAt
+      : 0;
+  const runwayDurationMs =
+    typeof state.runwayDurationMs === 'number' &&
+    Number.isFinite(state.runwayDurationMs) &&
+    state.runwayDurationMs > 0
+      ? state.runwayDurationMs
+      : RUNWAY_MINUTES * 60 * 1000;
+  const savedAt =
+    typeof state.savedAt === 'number' && Number.isFinite(state.savedAt) ? state.savedAt : Date.now();
+
+  const record: TriageResumeState = {
+    dump: state.dump,
+    plan,
+    runwayStartedAt,
+    runwayDurationMs,
+    savedAt,
+  };
+  try {
+    return JSON.stringify(record);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads a resume record. Total: absent, non-JSON, wrong-shaped and implausible
+ * records all come back as null rather than throwing, because the sheet must
+ * open on a corrupt record the same way it opens on a first visit.
+ */
+export function decodeTriageResume(raw: string | null | undefined): TriageResumeState | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const entry = parsed as Record<string, unknown>;
+
+  const plan = coerceResumePlan(entry.plan);
+  if (!plan) return null;
+  if (typeof entry.dump !== 'string') return null;
+
+  const start = entry.runwayStartedAt;
+  if (start !== 0 && !(typeof start === 'number' && Number.isFinite(start))) return null;
+
+  const duration = entry.runwayDurationMs;
+  if (!(typeof duration === 'number' && Number.isFinite(duration) && duration > 0)) return null;
+
+  const savedAt = entry.savedAt;
+  if (!(typeof savedAt === 'number' && Number.isFinite(savedAt))) return null;
+
+  return {
+    dump: entry.dump,
+    plan,
+    runwayStartedAt: start === 0 ? 0 : (start as number),
+    runwayDurationMs: duration,
+    savedAt,
+  };
+}
+
+/**
+ * What is left of a resumed runway, counting the time already spent.
+ *
+ * Returns 0 both when the runway has expired and when it was never started, so
+ * the caller distinguishes the two with `runwayStartedAt` — an expired runway is
+ * reported as spent, never silently replaced with a fresh ninety minutes.
+ */
+export function resumeRemainingMs(state: TriageResumeState, now: number): number {
+  if (!state || !state.runwayStartedAt) return 0;
+  const elapsed = now - state.runwayStartedAt;
+  return Math.max(0, state.runwayDurationMs - elapsed);
+}

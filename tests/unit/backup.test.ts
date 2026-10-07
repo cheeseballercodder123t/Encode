@@ -146,6 +146,44 @@ describe('restoreBackup', () => {
     expect(store.has('malicious_key')).toBe(false);
   });
 
+  it('round-trips the engineering patch registry and the friction log', () => {
+    // Both stores are accumulated over weeks by feature modules, and neither is
+    // derivable from anything else in the file: a restore that drops them hands
+    // back the learner's material while forgetting their own defect history and
+    // their clean-win streak. They are named here rather than only inside
+    // EXTRA_KEYS so a rename in either feature module breaks this test.
+    const patches = [
+      {
+        id: 'p1',
+        topic: 'Thermochemistry',
+        kind: 'SIGN_FLIP',
+        statement: 'anchor the convention before the arithmetic',
+        arithmeticReveal: '0.0336 ÷ −0.0336 = −1.00',
+        hits: 3,
+        firstSeenAt: 1,
+        lastSeenAt: 2,
+        learnerValue: 0.0336,
+        expectedValue: -0.0336,
+      },
+    ];
+    const friction = [{ topic: 'Thermochemistry', secured: false, rungsUsed: 2, at: 3 }];
+    store.set('deepencode_mr_m_patches_v1', JSON.stringify(patches));
+    store.set('deepencode_friction_log_v1', JSON.stringify(friction));
+
+    const backup = buildBackup();
+    expect(backup.extras['deepencode_mr_m_patches_v1']).toEqual(patches);
+    expect(backup.extras['deepencode_friction_log_v1']).toEqual(friction);
+
+    store.clear();
+    expect(store.has('deepencode_mr_m_patches_v1')).toBe(false);
+    expect(store.has('deepencode_friction_log_v1')).toBe(false);
+
+    const report = restoreBackup(backup);
+    expect(report.extrasRestored).toBeGreaterThanOrEqual(2);
+    expect(JSON.parse(store.get('deepencode_mr_m_patches_v1')!)).toEqual(patches);
+    expect(JSON.parse(store.get('deepencode_friction_log_v1')!)).toEqual(friction);
+  });
+
   it('returns an empty report for non-object input', () => {
     expect(restoreBackup(null).schemasRestored).toBe(0);
     expect(restoreBackup('nope').schemasRestored).toBe(0);

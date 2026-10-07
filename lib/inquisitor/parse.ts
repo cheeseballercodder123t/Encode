@@ -69,6 +69,16 @@ export function coerceVerdict(raw: unknown): InquisitorVerdict | null {
 // So fidelity is checked mechanically: the interrogated sentence has to carry
 // the learner's own content words. A restatement that only ADDS detail passes;
 // one that swaps the subject, the quantity or the direction does not.
+//
+// The comparison is on STEMS rather than on spellings, and that is a correctness
+// fix rather than a convenience: a model writing an echo of "bonds release
+// energy when broken" as "bond breakage requires energy input" has restated the
+// learner's own sentence, and a gate that reads `bonds` and `bond`, or `broken`
+// and `breakage`, as different words refuses a read that drifted nowhere. The
+// stems are deliberately crude — suffix stripping plus the common irregular
+// verbs — because the gate's job is to catch a swapped subject, not to grade
+// morphology: a stemmer that over-reaches would start folding DISTINCT claims
+// together, which is the one failure this gate must not have.
 
 const FIDELITY_STOP_WORDS = new Set([
   'the', 'a', 'an', 'of', 'to', 'in', 'is', 'are', 'was', 'were', 'and', 'or',
@@ -85,16 +95,115 @@ function contentTokens(text: string): string[] {
 }
 
 /**
- * True when two sentences say the same thing — the shorter one's content words
- * being at least 80% contained in the longer one's.
+ * The irregular verbs a causal claim actually uses, inflected form -> stem.
+ *
+ * Small and closed on purpose. These are the forms suffix rules cannot reach
+ * (`broken` has no `-en` rule that would not also mangle `oxygen`, `proven`,
+ * `electron`), and they are exactly the words a mechanism sentence turns on
+ * (breaks/broke/broken, binds/bound). Anything not in the table goes through
+ * the suffix rules below, and anything neither rule reaches is returned as
+ * written.
+ */
+const IRREGULAR_STEMS: Record<string, string> = {
+  break: 'break', breaks: 'break', broke: 'break', broken: 'break', breaking: 'break',
+  speak: 'speak', speaks: 'speak', spoke: 'speak', spoken: 'speak', speaking: 'speak',
+  know: 'know', knows: 'know', knew: 'know', known: 'know', knowing: 'know',
+  grow: 'grow', grows: 'grow', grew: 'grow', grown: 'grow', growing: 'grow',
+  write: 'write', writes: 'write', wrote: 'write', written: 'write', writing: 'write',
+  take: 'take', takes: 'take', took: 'take', taken: 'take', taking: 'take',
+  draw: 'draw', draws: 'draw', drew: 'draw', drawn: 'draw', drawing: 'draw',
+  choose: 'choose', chooses: 'choose', chose: 'choose', chosen: 'choose', choosing: 'choose',
+  begin: 'begin', begins: 'begin', began: 'begin', begun: 'begin', beginning: 'begin',
+  give: 'give', gives: 'give', gave: 'give', given: 'give', giving: 'give',
+  rise: 'rise', rises: 'rise', rose: 'rise', risen: 'rise', rising: 'rise',
+  drive: 'drive', drives: 'drive', drove: 'drive', driven: 'drive', driving: 'drive',
+  fall: 'fall', falls: 'fall', fell: 'fall', fallen: 'fall', falling: 'fall',
+  see: 'see', sees: 'see', saw: 'see', seen: 'see', seeing: 'see',
+  hold: 'hold', holds: 'hold', held: 'hold', holding: 'hold',
+  lose: 'lose', loses: 'lose', lost: 'lose', losing: 'lose',
+  find: 'find', finds: 'find', found: 'find', finding: 'find',
+  bind: 'bind', binds: 'bind', bound: 'bind', binding: 'bind',
+  lead: 'lead', leads: 'lead', led: 'lead', leading: 'lead',
+  meet: 'meet', meets: 'meet', met: 'meet', meeting: 'meet',
+  run: 'run', runs: 'run', ran: 'run', running: 'run',
+  come: 'come', comes: 'come', came: 'come', coming: 'come',
+  become: 'become', becomes: 'become', became: 'become', becoming: 'become',
+};
+
+/**
+ * Suffixes stripped when there is no irregular form, longest first so `-ings`
+ * beats `-ing` and `-ion` beats a bare `-s`.
+ *
+ * A strip only happens when at least 4 characters remain, which is what keeps
+ * `gas` from becoming `ga` and `mass` from becoming `mas` — the remainder rule
+ * is the whole reason this pass cannot invent a collision between two words
+ * that were never the same word.
+ */
+const STEM_SUFFIXES = [
+  'ings', 'ing', 'ions', 'ion', 'ers', 'er', 'ed', 'es', 's', 'ly', 'age', 'ance', 'ence', 'ness',
+];
+
+/**
+ * The stem of one word: lowercase, irregular form, else one stripped suffix,
+ * else the word itself. Never throws, never returns a partial word for a word
+ * shorter than the rules need.
+ *
+ * Deliberately ONE suffix per word. Iterating (`suppressions` -> `suppress`)
+ * is where a stemmer starts folding distinct claims together, and a fidelity
+ * gate that over-reaches refuses good reads instead of bad ones.
+ */
+export function stemOf(word: string): string {
+  const text = collapse(word).toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+  if (!text) return '';
+  const irregular = IRREGULAR_STEMS[text];
+  if (irregular) return irregular;
+
+  let stem = text;
+  for (const suffix of STEM_SUFFIXES) {
+    if (!text.endsWith(suffix)) continue;
+    // A bare `-s` must not cut a word whose own ending is `ss`/`us`: `suppress`
+    // and `suppresses` have to land on the same stem, and stripping one of them
+    // to `suppres` while the `-es` rule handles the other to `suppress` is
+    // exactly the drift between a plural and its singular this gate is for.
+    if (suffix === 's' && /[su]s$/.test(text)) continue;
+    const remainder = text.slice(0, text.length - suffix.length);
+    if (remainder.length < 4) continue;
+    stem = remainder;
+    break;
+  }
+
+  // `release` and `releasing` agree only if the silent `e` goes: `releasing`
+  // strips to `releas`, and `release` has to arrive at the same place.
+  if (stem.length >= 5 && stem.endsWith('e')) stem = stem.slice(0, -1);
+  return stem;
+}
+
+/** The distinct stems one sentence carries, which is what the gate compares. */
+function stemTokens(text: string): Set<string> {
+  const stems = new Set<string>();
+  for (const token of contentTokens(text)) {
+    const stem = stemOf(token);
+    if (stem) stems.add(stem);
+  }
+  return stems;
+}
+
+/**
+ * True when two sentences say the same thing — the shorter one's content-word
+ * STEMS being at least 80% contained in the longer one's.
  *
  * Deliberately one-directional rather than a symmetric overlap: a restatement
  * that adds the subject, the units or the regime is still the learner's claim,
  * while a restatement that drops or replaces those is not.
+ *
+ * The threshold is unchanged and still counted against the smaller side; what
+ * changed is that `bonds` and `bond`, `broken` and `breakage`, `dilutes` and
+ * `dilution` are now the same word. That is the difference between refusing a
+ * restatement that drifted and refusing one that only changed its spelling.
  */
 export function claimsMatch(a: string, b: string): boolean {
-  const first = new Set(contentTokens(a));
-  const second = new Set(contentTokens(b));
+  const first = stemTokens(a);
+  const second = stemTokens(b);
   if (first.size === 0 || second.size === 0) return false;
   const [smaller, larger] = first.size <= second.size ? [first, second] : [second, first];
   let hits = 0;

@@ -16,9 +16,22 @@
 //   relations:  [{ lhs: 'q', rhs: 'm_water * c_water * dT' }, ...]
 //
 // and every relation is then evaluated HERE, symbol by symbol, with a small
-// recursive-descent evaluator that knows + - * / ^ and parentheses and nothing
-// else. `eval` is not used and would not be acceptable: a model-supplied string
-// is untrusted input, and a "sandbox" that runs it is not a sandbox.
+// recursive-descent evaluator that knows + - * / ^ and parentheses, a closed set
+// of unary FUNCTIONS, and two constants. `eval` is not used and would not be
+// acceptable: a model-supplied string is untrusted input, and a "sandbox" that
+// runs it is not a sandbox.
+//
+// The function set is closed and small on purpose (see FUNCTIONS below): the
+// first version of this evaluator knew only the four operators, so a completely
+// correct Arrhenius rate law (`k = A * exp(-Ea / (R * T))`), a Nernst potential
+// or a Henderson–Hasselbalch line read as an UNDECLARED SYMBOL — `ln` was not a
+// number the ledger had, so the relation could not be evaluated and an honest
+// problem was refused as inconsistent. Refusing correct physics is the worst
+// failure this gate can have: it is invisible in the prose, it looks like rigor,
+// and it teaches the learner that the clock is untrustworthy. So the vocabulary
+// covers what the plan's own subjects actually write — logarithms and
+// exponentials, roots, the trigonometric ratios the mechanics work needs — while
+// staying a fixed list no model string can extend.
 //
 // Two kinds of check come out of that, and they answer different questions:
 //
@@ -92,6 +105,41 @@ const SYMBOL = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** Anything that is not `+ - * / ^ ( )` and not a number or a symbol is rejected. */
 const ILLEGAL = /[^0-9A-Za-z_.+\-*/^()\s]/;
 
+/**
+ * The unary functions a declared relation may call, and nothing else.
+ *
+ * All of them are arity 1, and each returns NaN outside its real domain rather
+ * than a made-up value, so `ln(0)` and `sqrt(-1)` are refused as "this relation
+ * cannot be evaluated" instead of closing on an infinity. `log` is base 10 —
+ * the chemistry this gate serves writes `pH = pKa + log([A-]/[HA])` — with
+ * `log10` as an explicit alias; the natural logarithm is `ln`. Angles are
+ * radians, which is what a mechanics law states even when the problem quotes
+ * degrees in its prose.
+ *
+ * Names are matched case-insensitively so a model that writes `Ln` or `SIN` is
+ * understood; a name that is not in this table is NOT a function, and a symbol
+ * followed by `(` that is not one of these returns null.
+ */
+const FUNCTIONS: Record<string, (value: number) => number> = {
+  ln: (x) => (x > 0 ? Math.log(x) : NaN),
+  log: (x) => (x > 0 ? Math.log10(x) : NaN),
+  log10: (x) => (x > 0 ? Math.log10(x) : NaN),
+  exp: (x) => Math.exp(x),
+  sqrt: (x) => (x >= 0 ? Math.sqrt(x) : NaN),
+  abs: (x) => Math.abs(x),
+  sin: (x) => Math.sin(x),
+  cos: (x) => Math.cos(x),
+  tan: (x) => Math.tan(x),
+};
+
+/**
+ * The constants a relation may use without declaring them.
+ *
+ * A declared quantity of the same name WINS (see `parsePrimary`): a ledger that
+ * declares `e` as a measured number means its own number, not Euler's.
+ */
+const CONSTANTS: Record<string, number> = { pi: Math.PI, e: Math.E };
+
 // ─── The evaluator ──────────────────────────────────────────────────────────
 
 type Token = { kind: 'number'; value: number } | { kind: 'symbol'; name: string } | { kind: '+' | '-' | '*' | '/' | '^' | '(' | ')' };
@@ -144,6 +192,14 @@ function tokenize(expression: string): Token[] | null {
  * an unknown shape returns null rather than a made-up value. `null` propagates:
  * the caller reports it as "this relation could not be evaluated", which is a
  * failure of the payload, not a zero.
+ *
+ * Beyond numbers, declared symbols, parentheses and the four operators, a
+ * relation may call one of the {@link FUNCTIONS} — written `ln(x)`, `exp(x)`,
+ * `sqrt(x)`, `sin(x)` — and use the constants `pi` and `e`. Grouping inside a
+ * function argument or an exponent is the model's job: `exp(-Ea / (R * T))` is
+ * unambiguous, while `e^-Ea/(R*T)` follows the ordinary precedence and means
+ * `(e^-Ea)/(R*T)`. An unknown function name returns null rather than being
+ * ignored, so a relation that calls one is refused rather than mis-evaluated.
  */
 export function evaluateExpression(
   expression: string,
@@ -223,7 +279,7 @@ export function evaluateExpression(
     return parsePrimary();
   };
 
-  /** primary := number | symbol | '(' expr ')' */
+  /** primary := number | symbol | function '(' expr ')' | '(' expr ')' */
   const parsePrimary = (): number | null => {
     const token = peek();
     if (!token) return null;
@@ -233,8 +289,24 @@ export function evaluateExpression(
     }
     if (token.kind === 'symbol') {
       position += 1;
-      const value = values[token.name];
-      return Number.isFinite(value) ? value : null;
+      // A name immediately followed by `(` is a CALL, and only a name in the
+      // closed table is callable: `ln(2)` evaluates, `q(2)` does not become a
+      // multiplication by accident.
+      if (peek()?.kind === '(') {
+        const fn = FUNCTIONS[token.name.toLowerCase()];
+        if (!fn) return null;
+        position += 1; // consume '('
+        const argument = parseExpr();
+        if (argument === null) return null;
+        if (!eat(')')) return null;
+        const called = fn(argument);
+        return Number.isFinite(called) ? called : null;
+      }
+      // A declared quantity outranks a constant of the same name.
+      const declared = values[token.name];
+      if (Number.isFinite(declared)) return declared;
+      const constant = CONSTANTS[token.name];
+      return Number.isFinite(constant) ? constant : null;
     }
     if (eat('(')) {
       const inner = parseExpr();

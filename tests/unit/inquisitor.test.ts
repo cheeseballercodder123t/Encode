@@ -14,6 +14,7 @@ import {
   hasContrastingAxis,
   normalizeInquisitorRead,
   paradoxDraftFor,
+  stemOf,
 } from '../../lib/inquisitor/parse';
 import { validateInquisitorRead } from '../../lib/ai-output-validation';
 import { clearParadoxes, openParadoxesFor, raiseParadox } from '../../lib/mr-m/ledger';
@@ -438,6 +439,67 @@ describe('claim fidelity — the verdict is about the learner’s sentence', () 
     expect(claimsMatch('Cortisol suppresses immunity.', 'Insulin drives glucose uptake.')).toBe(false);
     expect(claimsMatch('', 'anything')).toBe(false);
     expect(claimsMatch('   ', 'anything')).toBe(false);
+  });
+
+  it('stems a word rather than comparing its spelling', () => {
+    expect(stemOf('bonds')).toBe('bond');
+    expect(stemOf('bond')).toBe('bond');
+    expect(stemOf('breaks')).toBe('break');
+    expect(stemOf('breaking')).toBe('break');
+    expect(stemOf('broken')).toBe('break');
+    expect(stemOf('breakage')).toBe('break');
+    expect(stemOf('dilutes')).toBe('dilut');
+    expect(stemOf('dilution')).toBe('dilut');
+    expect(stemOf('release')).toBe('releas');
+    expect(stemOf('releasing')).toBe('releas');
+    expect(stemOf('suppress')).toBe('suppress');
+    expect(stemOf('suppresses')).toBe('suppress');
+    // A word no rule reaches comes back as written, never as a fragment: the
+    // remainder rule is what keeps the pass from inventing a collision.
+    expect(stemOf('gas')).toBe('gas');
+    expect(stemOf('mass')).toBe('mass');
+    expect(stemOf('cortisol')).toBe('cortisol');
+    expect(stemOf('')).toBe('');
+    expect(stemOf('   ')).toBe('');
+  });
+
+  it('matches an echo that only changed the spelling of the learner’s words', () => {
+    expect(claimsMatch('The enzyme breaks the bond.', 'Enzymes break bonds.')).toBe(true);
+    // The reported false refusal: `bonds`/`bond` and `broken`/`breakage` are the
+    // same words, and a short claim has no room for four misses.
+    expect(
+      claimsMatch(
+        'Bonds release energy when broken',
+        'Chemical bond breakage requires energy input rather than releasing energy'
+      )
+    ).toBe(true);
+  });
+
+  it('serves a read whose echo stems to the learner’s own sentence', () => {
+    const result = normalizeInquisitorRead(
+      {
+        verdict: 'FALSE',
+        claim: 'Chemical bond breakage requires energy input rather than releasing energy',
+        proof: ['Bond dissociation enthalpies are positive by definition.'],
+        correction: 'Breaking a bond costs energy; forming one releases it.',
+      },
+      'Bonds release energy when broken'
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Faithful, and still labelled: the learner sees which sentence was tested.
+    expect(result.claimRestated).toBe(true);
+  });
+
+  it('still refuses a claim whose subject actually changed', () => {
+    expect(
+      claimsMatch('Bonds release energy when broken', 'Enzymes lower activation energy by binding substrates')
+    ).toBe(false);
+  });
+
+  it('still refuses a short claim that only one word echoes', () => {
+    expect(claimsMatch('Bonds release energy when broken', 'The bond between two atoms')).toBe(false);
   });
 });
 

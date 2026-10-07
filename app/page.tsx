@@ -2400,8 +2400,13 @@ export default function DeepEncodeApp() {
         sourceContext={rawNotes}
       />
 
-      {/* Emergency triage: freeze what can prove it is low-leverage, then run */}
-      <EmergencyTriageModal isOpen={isTriageOpen} onClose={() => setIsTriageOpen(false)} />
+      {/* Emergency triage: freeze what can prove it is low-leverage, then run.
+          Mounted only while it is open, so the sheet reads its resume record in
+          a lazy initializer on the click that opens it rather than from an
+          effect (and never during a server render). */}
+      {isTriageOpen && (
+        <EmergencyTriageModal isOpen onClose={() => setIsTriageOpen(false)} />
+      )}
 
       {/* Course-level Prerequisite Skill Tree */}
       <SkillTreeModal

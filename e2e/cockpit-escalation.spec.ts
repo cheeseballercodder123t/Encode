@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { CRUCIBLE_RESPONSE, TRIAGE_DUMP } from './helpers/fixtures';
+import { CRISIS_RESPONSE, CRUCIBLE_RESPONSE, TRIAGE_DUMP } from './helpers/fixtures';
 import { mockAiApis } from './helpers/mocks';
 
 /**
@@ -19,6 +19,14 @@ import { mockAiApis } from './helpers/mocks';
  *  - **a repeated fracture gets in the way BEFORE the sprint**, drawn from the
  *    same persistent patch ledger the workbench records into. One hit is a slip
  *    and must stay silent, which is why the seed carries three;
+ *  - **the boss banner promises only the collision the material can carry.**
+ *    The topic matches a fusion row, but the material carries one chapter of
+ *    it, so the route re-aims the escalation deeper inside that chapter — and
+ *    the banner has to say that instead of promising a three-chapter sprint;
+ *  - **the arithmetic gate reports what it actually did.** The summary shows how
+ *    many served problems had their declared relations closed by a machine,
+ *    which problem was dropped before the sprint was paced, and the escalation
+ *    the problems were written for;
  *  - **the triage freeze is stated as arithmetic**, and an item whose weight
  *    cannot be shown is listed as withheld rather than frozen;
  *  - **the runway hides everything else**, renders one task, and counts down
@@ -52,6 +60,15 @@ const SEEDED_PATCHES = [
     learnerValue: 0.0168,
     expectedValue: 0.0336,
   },
+];
+
+/**
+ * Two clean wins in a row: the friction governor escalates to boss level, which
+ * is what puts the escalation banner on the setup screen at all.
+ */
+const SEEDED_CLEAN_WINS = [
+  { id: 'friction-e2e-2', topic: 'Thermochemistry', at: 2, secured: true, rungsUsed: 0, elapsedMs: 0, expectedMs: 0 },
+  { id: 'friction-e2e-1', topic: 'Thermochemistry', at: 1, secured: true, rungsUsed: 0, elapsedMs: 0, expectedMs: 0 },
 ];
 
 async function openCrucible(page: Page) {
@@ -101,6 +118,45 @@ test.describe('timed crucible', () => {
     // And recovery is measured separately from pacing.
     await expect(page.getByTestId('crucible-stress')).toContainText('Nothing overran its budget');
     await expect(summary).toContainText('0.0m / 1.3m');
+
+    // The gate's report, which the route returned and no surface read: how much
+    // of the sprint's arithmetic a machine closed, what the check removed before
+    // the sprint was paced, and the escalation the problems were written for.
+    await expect(page.getByTestId('crucible-receipt')).toBeVisible();
+    await expect(page.getByTestId('crucible-receipt-ledger')).toContainText(
+      'numbers machine-checked: 2 of 3'
+    );
+    // 2 of 3 closed: the third arrived with no declared arithmetic, which is a
+    // different finding from a problem that failed the check, and the receipt
+    // says which one it is.
+    await expect(page.getByTestId('crucible-receipt-ledger')).toContainText('served unchecked');
+    await expect(page.getByTestId('crucible-receipt-dropped')).toContainText('Unequal titration');
+    await expect(page.getByTestId('crucible-receipt-escalation')).toContainText('escalation: depth');
+  });
+
+  test('the boss banner promises only the collision the material can carry', async ({ page }) => {
+    await mockAiApis(page);
+    // Seeded before the app boots: the sheet reads the friction log on open.
+    await page.addInitScript((history) => {
+      window.localStorage.setItem('deepencode_friction_log_v1', JSON.stringify(history));
+    }, SEEDED_CLEAN_WINS);
+    await page.goto('/');
+
+    await page.getByTestId('open-crucible').click();
+    // Two clean wins in a row, so the sheet opens at boss level.
+    await expect(page.getByTestId('crucible-governor')).toBeVisible();
+
+    await page.getByTestId('crucible-topic').fill('Thermochemistry');
+
+    // Thermochemistry belongs to a fusion row, but this material carries one of
+    // that row's chapters, so the route re-aims the sprint deeper inside it. The
+    // banner used to run the UNGATED row match and promise all three chapters —
+    // a cross-chapter collision the paced problems are not built to contain.
+    const banner = page.getByTestId('crucible-escalation');
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('goes DEEPER');
+    await expect(banner).toContainText('instead of colliding it with');
+    await expect(page.getByTestId('crucible-governor')).not.toContainText('This sprint collides');
   });
 
   test('a repeated fracture is warned about before the clock starts, and a slip is not', async ({
@@ -236,6 +292,55 @@ test.describe('emergency triage buffer', () => {
     // Done closes the sheet, which is the whole point of a runway.
     await page.getByTestId('triage-runway-done').click();
     await expect(page.getByRole('dialog', { name: 'Emergency triage' })).toBeHidden();
+  });
+
+  test('reopening the sheet resumes the plan and the runway instead of re-triaging', async ({
+    page,
+  }) => {
+    // The regression this pins: the plan and the ninety-minute runway used to
+    // live only in React state, so closing the sheet — or a reload forty-five
+    // minutes in — destroyed both and the learner re-pasted the whole backlog.
+    // A mocked route counts how many times the model is actually asked.
+    let triageCalls = 0;
+    await mockAiApis(page);
+    // Replace the shared mock with the same payload plus a counter: `continue()`
+    // would go to the network rather than falling through to the mock, so the
+    // mock's own route is removed first and this is then the only handler.
+    await page.unroute('**/api/crisis');
+    await page.route('**/api/crisis', (route) => {
+      triageCalls += 1;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(CRISIS_RESPONSE),
+      });
+    });
+    await page.goto('/');
+    await page.getByTestId('open-triage').click();
+    await expect(page.getByRole('dialog', { name: 'Emergency triage' })).toBeVisible();
+
+    await page.getByTestId('triage-dump').fill(TRIAGE_DUMP);
+    await page.getByTestId('triage-run').click();
+    await expect(page.getByTestId('triage-plan')).toBeVisible();
+    await page.getByTestId('triage-runway-start').click();
+    await expect(page.getByTestId('triage-runway')).toBeVisible();
+    expect(triageCalls).toBe(1);
+
+    // Out of the sheet without finishing it: the night is still owed.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Emergency triage' })).toBeHidden();
+
+    await page.getByTestId('open-triage').click();
+
+    // Straight back onto the running runway: the plan came back and the clock
+    // is the one that was started, not a fresh ninety minutes.
+    await expect(page.getByTestId('triage-runway')).toBeVisible();
+    await expect(page.getByTestId('triage-runway')).toContainText('Care of Athletes quiz');
+    await expect(page.getByTestId('triage-runway-clock')).toContainText(/\d{2}:\d{2}/);
+    // Not the raw dump: a resumed night is not a re-paste.
+    await expect(page.getByTestId('triage-dump')).toHaveCount(0);
+    // And the model was never asked a second time.
+    expect(triageCalls).toBe(1);
   });
 
   test('the sheet closes on Escape like every other one', async ({ page }) => {

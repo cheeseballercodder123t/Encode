@@ -560,3 +560,203 @@ sheets in the browser: the state-by-state time budget, the pacing read, the
 pre-flight tripwire drawn from a real patch ledger (with a single-hit slip
 staying silent), a sprint that is not a state machine refused instead of
 rendered, and the freeze → arithmetic → ninety-minute runway flow.
+
+## 9. Eight things the first two passes said and did not do
+
+Each pass so far ended by naming what it had left open. These eight are drawn
+from those lists, read against the code rather than against the prose, and every
+one of them is a place where the app said something the server did not do, knew
+something it never said, or threw away a decision it had already made.
+
+### 9.1 The consistency gate refused correct physics
+
+**What was wrong.** The evaluator knew only `+ - * / ^`, parentheses, numbers and
+declared symbols. `ln`, `log`, `exp`, `sqrt` and the trigonometric ratios were
+read as UNDECLARED SYMBOLS, so a completely correct Arrhenius rate law
+(`k = A · exp(-Ea / (R · T))`), a Nernst potential or a Henderson–Hasselbalch line
+made its relation unevaluable, the closure check failed, and `/api/mutation` and
+`/api/crucible` refused an honest problem with `inconsistent-numbers`. Refusing
+correct physics is the worst failure this gate can have: it is invisible in the
+prose, it looks like rigor, and it teaches the learner that the clock is not
+trustworthy.
+
+**What this pass does.** The evaluator gains a closed function table — `ln`,
+`log` (base 10, with `log10` as an alias), `exp`, `sqrt`, `abs`, `sin`, `cos`,
+`tan` in radians — and two constants, `pi` and `e`. Every function is arity 1 and
+returns a non-finite value outside its real domain, which the evaluator already
+treats as “could not be evaluated”, so `ln(0)`, `sqrt(-1)` and `1 / ln(1)` are
+refused rather than closing on an infinity. A name outside the table is not
+callable, so `q(2)` does not quietly become a multiplication, and a declared
+quantity outranks a constant of the same name. Both ledger prompts now name the
+vocabulary and ask for `exp(-Ea / (R * T))` rather than `e^-Ea/(R*T)`, because
+grouping inside a function or an exponent is the model’s job to state.
+
+**What it does not solve.** This is still not a solver and not a general CAS. It
+evaluates what the model DECLARED, so an exponent the material never wrote down
+stays invisible. The function set is a fixed list: a subject that needs `log2`,
+`arcsin` or a two-argument `log` is refused rather than mis-evaluated. Angles are
+radians, so a mechanics problem that quotes degrees has to convert them itself.
+
+### 9.2 A backup did not contain the patch registry, or the friction log
+
+**What was wrong.** `buildBackup()` collects a named list of feature stores and
+`restoreBackup()` writes back exactly that list. Two live stores were not on it:
+the engineering patch registry (`deepencode_mr_m_patches_v1`, the standing faults
+the pre-flight warning is drawn from) and the ZPD friction log
+(`deepencode_friction_log_v1`, the clean-win streak the boss level is decided
+by). BACKUP EVERYTHING therefore restored an empty registry and a zeroed streak
+on another device — the same silent loss the feature exists to prevent.
+
+**What this pass does.** Both keys join the list, which is the fix in both
+directions by construction: collect and restore read the same constant. A unit
+test seeds both stores, builds the backup, clears storage, restores, and asserts
+both came back — naming the two key strings literally, so renaming a store
+anywhere breaks the test rather than the backup.
+
+**What it does not solve.** The entries are stored verbatim, including a
+`statement` the learner has rewritten — which is the point, and also the reason
+there is nothing minor-versioned here to migrate if a record’s shape changes
+later. An older backup only restores what its own version knew about.
+
+### 9.3 The claim-fidelity gate refused restatements
+
+**What was wrong.** `claimsMatch` compared raw content words, so `bond` did not
+match `bonds`, `breaks` did not match `breaking`, `dilutes` did not match
+`dilution`. On a short claim the overlap fell under the 0.8 threshold and a
+legitimate echo of the learner’s own sentence was refused as `claimDrift` — the
+gate firing on spelling rather than on drift.
+
+**What this pass does.** The comparison is made on stems: a small documented
+irregular table (`break`/`broke`/`broken`/`breaking`, `lead`/`led`,
+`bind`/`bound`, …), then one suffix stripped longest-first with a four-character
+floor, then a trailing silent `e` dropped. The threshold, the direction of the
+containment test and every exported signature are unchanged; the revealed pair
+from the report now matches, and two honesty tests keep the gate real — a claim
+whose echo answers a different question is still refused, and a short claim still
+needs 80% of its own stems echoed.
+
+**What it does not solve.** Clipping is not lemmatising. A synonym (`break`
+against `fracture`) is not a match, and the reported pair passes at exactly 0.8 —
+the floor, not a comfortable margin. The rule is deliberately conservative in
+that direction: a gate that accepts a paraphrase will accept an answer that
+replaced the claim.
+
+### 9.4 The triage plan and the runway died with the sheet
+
+**What was wrong.** The parsed plan and the ninety-minute runway lived only in
+React state, so closing the sheet, pressing Escape or reloading forty-five
+minutes in destroyed both: the learner re-pasted the whole backlog and re-ran
+triage from scratch.
+
+**What this pass does.** `lib/crisis/buffer.ts` encodes a record — the dump as
+typed, the plan rebuilt field by field, the runway’s START epoch, its own
+duration and a `savedAt` stamp — and decodes it totally: absent, non-JSON,
+wrong-shaped and implausible records all come back `null` and the sheet opens as
+a first visit. The runway stores a start epoch rather than a countdown because
+the runway is wall-clock: an hour away from the tab is an hour of it either way,
+and a resumed countdown would be a lie about time already spent. A record whose
+ninety minutes are gone returns as the PLAN with an explicit expired note and the
+offer of a fresh runway — never as a silently renewed clock. It is read in a lazy
+initializer on the mount that the opening click causes (the sheet is mounted only
+while it is open), so nothing touches storage during a server render and no empty
+sheet is painted before the resumed one.
+
+**What it does not solve.** The record is modal-local and device-local: it is not
+synced, so another browser is still a fresh night. The plan is trusted only as
+far as the codec that rebuilt it, so a record written by an older shape is
+discarded rather than migrated.
+
+### 9.5 Pre-flight warnings only existed under a clock
+
+**What was wrong.** `preflightWarnings` had exactly one caller: the timed
+crucible’s setup screen. The standing faults the registry had recorded for a
+topic were therefore invisible in the workbench — where most of the work happens
+— unless the learner happened to start a sprint on that exact topic.
+
+**What this pass does.** The workbench draws the same list through the same rule
+the registry exposes to a panel it already handed its patches to (`warningsFrom`:
+a fracture must have fired at least twice, newest-first, capped), renders it above
+the answer fields, and recomputes it from the state a recorded patch already
+updates — so a fracture recorded in the session appears without a reload.
+
+**What it does not solve.** It is the same vocabulary-overlap match the crucible
+uses, and it is a warning rather than a gate: it never blocks a stage.
+
+### 9.6 Interactive templates could not record a patch
+
+**What was wrong.** The registry was fed only from the examiner block in
+`app/page.tsx`, which needs numbers typed into `field1`/`field2`/`field3` and Mr M
+mode on. The Parsons drill types nothing, so a wrong chain — the one case where
+the app knows the canonical order and the learner’s own order exactly — produced
+no record at all.
+
+**What this pass does.** `diagnoseSequence` in `lib/mr-m/autopsy.ts` turns a
+positional grade into the same `DiscrepancyReading` the numeric path returns
+(`ORDER_INVERSION`, trap `reversed_order`, origin `structural`, terms empty),
+reusing the drill’s own fix line through `describeParsonsFix` so the moved link
+is named by one implementation rather than two. `CausalSequence` reports its
+grade through a new optional callback, and the workbench records it exactly where
+the examiner does — topic, scaffold statement, reveal, and `null` learner and
+expected values, because nothing numeric was measured — then re-reads the
+registry so the armory and the new strip see it.
+
+**What it does not solve.** Only the ordering drill has a canonical structure to
+grade against. A discrimination-gate miss keeps its own, richer record (the
+learner’s own rule, saved as a trap card) rather than a patch kind invented to
+fill the gap, and a perturbation slider has no wrong position to diagnose; those
+surfaces stay silent on purpose, and the comment beside the handler says so.
+
+### 9.7 The boss banner promised a collision the sprint did not contain
+
+**What was wrong.** The setup screen set its fusion state from `matchFusion` —
+the ungated row lookup — and never read the source context, so with one chapter
+present it promised a three-chapter collision while the route had already
+re-aimed the escalation deeper inside that chapter.
+
+**What this pass does.** The banner is decided by `fusionReadiness` for the same
+topic and context the route is sent, and once a sprint has been served it prefers
+the route’s own `escalation.reason`. It renders the readiness `reason`, which the
+module documents as the one line meant for the learner — deliberately NOT
+`soloDepthBrief`, which is the generator’s prompt, and pasting an instruction to
+the model onto a setup screen would be a new lie in the other direction.
+
+**What it does not solve.** Presence is still vocabulary overlap (§6.2, §9.5),
+and the banner can only be as honest as the client’s own context, which is the
+notes text rather than the whole library.
+
+### 9.8 The gate results were computed, returned, and thrown away
+
+**What was wrong.** Both routes returned the ledger verification, the problems
+they dropped and the escalation mode with its reason, and no client read any of
+it. §6.3’s promise that the learner could see why a problem was refused was, on
+screen, false: the only trace was a boolean in a JSON body nobody opened.
+
+**What this pass does.** The crucible summary renders a receipt — how many served
+problems had their declared relations closed by a machine, which problem was
+dropped and by which relation, and the escalation the problems were written for —
+and renders NOTHING when the response carries no numeric ledger, because “0 of N”
+would be a claim about a check that never reported. The browser suite pins all
+three lines.
+
+**What it does not solve.** The receipt reports the verdict, not the defect
+report: the repair prompt’s detail still lives in the route. And the same fields
+on `/api/mutation` are still unread, because the crucible is the only caller
+wired in this pass — named here rather than papered over with a surface that does
+not exist.
+
+### Verification (§9)
+
+Unit: `tests/unit/escalation-consistency.test.ts` (the closed function
+vocabulary, its domains and its limits), `tests/unit/inquisitor.test.ts` (the
+stemmer, the reported pair, and the two honesty tests that keep the gate real),
+`tests/unit/crisis-buffer.test.ts` (round trip, eight rejections,
+before/at/past expiry), `tests/unit/mr-m-autopsy.test.ts` (`diagnoseSequence`:
+in-order → null, a swap, a full reversal, empty and length-mismatched input) and
+`tests/unit/backup.test.ts` (the two restored stores).
+
+Browser: `e2e/cockpit-escalation.spec.ts` (the readiness-gated banner, the
+receipt’s checked/dropped/escalation lines, and the triage sheet closing on
+Escape), `e2e/mr-m-mode.spec.ts` (the workbench pre-flight strip, with the
+single-hit slip still silent) and `e2e/sequence.spec.ts` (a wrong chain recorded
+as `ORDER_INVERSION` with `hits: 1` and no numeric value claimed, and still too
+rare to warn).

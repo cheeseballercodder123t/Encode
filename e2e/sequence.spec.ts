@@ -58,6 +58,38 @@ test.describe('Scrambled causal order', () => {
     );
   });
 
+  test('a wrong chain becomes an engineering patch, and a single hit stays silent', async ({
+    page,
+  }) => {
+    await openDrill(page);
+
+    // The same deliberate swap: every step is right, the ORDER is not.
+    await tapTile(page, canonical[0]);
+    await tapTile(page, canonical[1]);
+    await tapTile(page, canonical[3]);
+    await tapTile(page, canonical[2]);
+    await page.getByTestId('sequence-check').click();
+    await expect(page.getByTestId('sequence-verdict')).toContainText('must come after');
+
+    // The drill types nothing into field1/field2/field3, so the numeric diff has
+    // no signal at all here — but the order is something the app knows exactly,
+    // so a wrong chain is a RECORDED order inversion rather than silence. This is
+    // the patch the registry previously could not receive from any drill.
+    const patches = await page.evaluate(() =>
+      JSON.parse(window.localStorage.getItem('deepencode_mr_m_patches_v1') || '[]')
+    );
+    expect(patches).toHaveLength(1);
+    expect(patches[0].kind).toBe('ORDER_INVERSION');
+    expect(patches[0].hits).toBe(1);
+    expect(patches[0].statement).toContain('order was reversed');
+    // Nothing numeric was measured, so nothing numeric is claimed.
+    expect(patches[0].learnerValue).toBeNull();
+    expect(patches[0].expectedValue).toBeNull();
+
+    // One hit is a slip: it must NOT get in front of the next attempt.
+    await expect(page.getByTestId('workbench-preflight')).toHaveCount(0);
+  });
+
   test('locks a correct chain onto the card', async ({ page }) => {
     await openDrill(page);
 

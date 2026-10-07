@@ -16,9 +16,9 @@ import {
   type StatePacing,
 } from '@/lib/crucible/budget';
 import { governorDecision } from '@/lib/escalation/governor';
-import { matchFusion } from '@/lib/escalation/fusion';
+import { fusionReadiness, type FusionReadiness } from '@/lib/escalation/fusion';
 import { preflightWarnings, type PreflightWarning } from '@/lib/mr-m/ledger';
-import type { FusionRow, GovernorDecision } from '@/lib/escalation/types';
+import type { GovernorDecision } from '@/lib/escalation/types';
 
 // ─── The timed crucible ─────────────────────────────────────────────────────
 //
@@ -126,7 +126,42 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
 
   const [governor, setGovernor] = useState<GovernorDecision | null>(null);
   const [warnings, setWarnings] = useState<PreflightWarning[]>([]);
-  const [fusion, setFusion] = useState<FusionRow | null>(null);
+
+  /**
+   * What the material is ready for, decided by the SAME gate the route uses.
+   *
+   * This was the ungated row match (`matchFusion`), which promises a collision
+   * whenever the topic belongs to a fusion row — including when the material
+   * carries only one of that row's chapters. The route decides with
+   * `fusionReadiness` and, with one chapter present, re-aims the escalation
+   * deeper inside that chapter instead of colliding it, so the old banner was
+   * promising a cross-chapter sprint that the problems it paced deliberately did
+   * not contain. The banner now reads the gated verdict.
+   */
+  const [readiness, setReadiness] = useState<FusionReadiness | null>(null);
+
+  /**
+   * The escalation the ROUTE used for the sprint that was served.
+   *
+   * Once a sprint is running the server's own reason is authoritative — it is
+   * the one attached to the problems the learner is working — so the banner
+   * prefers it over the client's pre-flight guess.
+   */
+  const [escalation, setEscalation] = useState<{ mode: string; reason: string } | null>(null);
+
+  /**
+   * What the arithmetic gate did to the sprint, as the route reported it.
+   *
+   * The route has always returned this and nothing read it: how many problems'
+   * numbers a machine actually closed, and which problems were dropped before
+   * the sprint was paced. A gate whose result is invisible is a claim, not a
+   * check, so the summary reports it.
+   */
+  const [gateReceipt, setGateReceipt] = useState<{
+    verified: number;
+    checked: number;
+    dropped: string[];
+  } | null>(null);
 
   /**
    * The ledgers are read in an effect, never during render.
@@ -156,13 +191,16 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
    * assembled from one chapter while the sprint is timed against another is
    * worse than no warning, and the route matches the fusion against the drafted
    * topic too, so the banner has to be reading the same string it will send.
+   * The source context is part of that read, not a decoration: the route passes
+   * it to `fusionReadiness`, and a chapter present in the material is a chapter
+   * the collision can legitimately use, so the banner must see the same text.
    */
   useEffect(() => {
     if (!isOpen) return;
     const clean = topicDraft.trim();
     setWarnings(clean ? preflightWarnings(clean) : []);
-    setFusion(clean ? matchFusion(clean) : null);
-  }, [isOpen, topicDraft]);
+    setReadiness(clean ? fusionReadiness(clean, sourceContext || '') : null);
+  }, [isOpen, topicDraft, sourceContext]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /**
@@ -225,6 +263,10 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
 
     setIsLoading(true);
     setError(null);
+    // A new sprint's receipt is the new sprint's: the previous one must not sit
+    // under a summary that belongs to different problems.
+    setGateReceipt(null);
+    setEscalation(null);
     playSound('click');
 
     try {
@@ -255,6 +297,39 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
         );
       }
 
+      // The gate's own numbers, read off the response rather than re-derived:
+      // `verifiedProblems` counts the problems whose declared relations a
+      // checker closed, `checkedProblems` the problems the sprint actually
+      // carries. A problem that failed the check was dropped server-side, so a
+      // lower verified count with a full problem list means it arrived with no
+      // declared arithmetic rather than that the sprint lost one.
+      const ledger = data?.ledger;
+      setGateReceipt(
+        ledger &&
+          Number.isFinite(Number(ledger.verifiedProblems)) &&
+          Number.isFinite(Number(ledger.checkedProblems))
+          ? {
+              verified: Number(ledger.verifiedProblems),
+              checked: Number(ledger.checkedProblems),
+              dropped: Array.isArray(data?.rejectedProblems)
+                ? data.rejectedProblems.filter(
+                    (line: unknown): line is string => typeof line === 'string'
+                  )
+                : [],
+            }
+          : // A response with no ledger gets no receipt: "0 checked" would be a
+            // claim about a check that never reported, not a finding.
+            null
+      );
+      setEscalation(
+        data?.escalation && typeof data.escalation.reason === 'string'
+          ? {
+              mode: typeof data.escalation.mode === 'string' ? data.escalation.mode : '',
+              reason: data.escalation.reason,
+            }
+          : null
+      );
+
       setPlan(loaded);
       setProblemIndex(0);
       setStateIndex(0);
@@ -268,6 +343,8 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
       playSound('success');
     } catch (e: any) {
       setError(e?.message || 'The sprint could not be started. Check your AI settings.');
+      setGateReceipt(null);
+      setEscalation(null);
       setPhase('failed');
       playSound('wrong');
     } finally {
@@ -383,11 +460,26 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                     [ BOSS LEVEL ] the friction governor has escalated
                   </span>
                   <p className="text-[11px] text-bone leading-relaxed">{governor.reason}</p>
-                  {fusion && (
-                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                      This sprint collides: {fusion.topics.join(' + ')}.
+                  {/*
+                    The escalation, in the route's own words once a sprint has
+                    been served and in the gated pre-flight's words before that.
+                    `fusionReadiness().reason` is the learner-facing line and it
+                    is correct in both branches: a collision when the material
+                    carries two chapters, and a deeper pass inside the one it
+                    does carry when it carries only one. What it replaced was an
+                    ungated promise of every chapter in the row — a collision the
+                    sprint is not built to contain. (`soloDepthBrief` is the
+                    generator's brief for that branch, i.e. a prompt rather than
+                    a sentence to put in front of a person.)
+                  */}
+                  {(escalation?.reason || readiness?.reason) ? (
+                    <p
+                      data-testid="crucible-escalation"
+                      className="text-[11px] text-amber-200/90 leading-relaxed"
+                    >
+                      {escalation?.reason || readiness?.reason}
                     </p>
-                  )}
+                  ) : null}
                 </div>
               )}
 
@@ -675,6 +767,64 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
                   </p>
                 )}
               </div>
+
+              {/*
+                The gate's own report. The route has always returned how much of
+                the sprint's arithmetic a checker closed, which problems it
+                dropped, and which escalation it chose; nothing read any of it,
+                so "a problem whose relations do not close is rejected before
+                the learner ever sees it" was a claim with no receipt. This is
+                that receipt: the numbers that were machine-checked, the problems
+                that did not survive, and the escalation the problems were
+                actually written for.
+              */}
+              {(gateReceipt || escalation) && (
+                <div
+                  data-testid="crucible-receipt"
+                  className="rounded-md border border-edge bg-inset p-3 space-y-1.5"
+                >
+                  <span className="block font-mono text-[10px] uppercase tracking-widest text-solder">
+                    arithmetic gate
+                  </span>
+                  {gateReceipt && (
+                    <p
+                      data-testid="crucible-receipt-ledger"
+                      className="font-mono text-[11px] text-bone leading-relaxed"
+                    >
+                      numbers machine-checked: {gateReceipt.verified} of {gateReceipt.checked}
+                      {gateReceipt.verified < gateReceipt.checked
+                        ? ' · the rest arrived with no declared arithmetic, so they were served unchecked'
+                        : ' · every declared relation closed'}
+                    </p>
+                  )}
+                  {gateReceipt && gateReceipt.dropped.length > 0 && (
+                    <div
+                      data-testid="crucible-receipt-dropped"
+                      className="space-y-1 border-t border-edge/70 pt-1.5"
+                    >
+                      <span className="block font-mono text-[10px] uppercase tracking-widest text-hazard-300">
+                        dropped from the sprint ({gateReceipt.dropped.length})
+                      </span>
+                      {gateReceipt.dropped.map((line, index) => (
+                        <p
+                          key={index}
+                          className="font-mono text-[11px] text-hazard-200 leading-relaxed"
+                        >
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {escalation && (
+                    <p
+                      data-testid="crucible-receipt-escalation"
+                      className="text-[11px] text-solder leading-relaxed"
+                    >
+                      escalation: {escalation.mode} — {escalation.reason}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <ul className="space-y-1">
                 {summaryTable.map((entry, index) => (

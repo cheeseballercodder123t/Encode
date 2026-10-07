@@ -47,7 +47,63 @@ async function checkWithWrongAnswer(page: Page) {
   await page.getByRole('button', { name: /CHECK/ }).click();
 }
 
+/**
+ * A standing fault and a slip on the topic the mocked session encodes, so the
+ * workbench cannot tell the two apart without applying the registry's own rule.
+ * The topic is the fixture's `topicSummary` — this is what `patchesFor` matches
+ * against.
+ */
+const SEEDED_PATCHES = [
+  {
+    id: 'patch-e2e-workbench',
+    topic: 'Calorimetry',
+    kind: 'SIGN_FLIP',
+    statement: 'Calorimetry — anchor the sign convention before the arithmetic.',
+    arithmeticReveal: '0.0336 ÷ -0.0336 = -1.00',
+    hits: 3,
+    firstSeenAt: 1,
+    lastSeenAt: 2,
+    learnerValue: -0.0336,
+    expectedValue: 0.0336,
+  },
+  {
+    id: 'patch-e2e-workbench-slip',
+    topic: 'Calorimetry',
+    kind: 'FACTOR_OF_TWO',
+    statement: 'Calorimetry — a factor of two was dropped.',
+    arithmeticReveal: '0.0336 ÷ 0.0168 = 2.00',
+    hits: 1,
+    firstSeenAt: 1,
+    lastSeenAt: 2,
+    learnerValue: 0.0168,
+    expectedValue: 0.0336,
+  },
+];
+
 test.describe('Mr M mode', () => {
+  test('stands the pre-flight tripwire in front of the fields, where the work happens', async ({
+    page,
+  }) => {
+    // Seeded before the app boots: the workbench reads the ledger on mount.
+    await page.addInitScript((patches) => {
+      window.localStorage.setItem('deepencode_mr_m_patches_v1', JSON.stringify(patches));
+    }, SEEDED_PATCHES);
+
+    await openMrMStage(page);
+
+    // The same registry the timed crucible draws from, in the surface where most
+    // of the work actually happens — a repeated fracture has to get in the way
+    // of a new attempt here too, not only under a clock.
+    const strip = page.getByTestId('workbench-preflight');
+    await expect(strip).toBeVisible();
+    await expect(strip).toContainText('Pre-flight tripwire');
+    await expect(strip).toContainText('SIGN_FLIP has fired 3 times on Calorimetry');
+    await expect(strip).toContainText('anchor the sign convention before the arithmetic');
+
+    // One hit is a slip and stays out of the way.
+    await expect(strip).not.toContainText('FACTOR_OF_TWO');
+  });
+
   test('is on by default and paints every preparation surface above the fields', async ({ page }) => {
     await openMrMStage(page);
 

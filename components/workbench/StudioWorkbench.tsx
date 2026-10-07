@@ -33,10 +33,14 @@ import {
   patchNumbers,
   patchesFor,
   raiseParadox,
+  recordPatch,
   resolveParadox,
   updatePatchStatement,
+  warningsFrom,
 } from '@/lib/mr-m/ledger';
 import type { ParadoxEntry, PatchEntry } from '@/lib/mr-m/types';
+import { diagnoseSequence, patchStatementFor } from '@/lib/mr-m/autopsy';
+import type { ParsonsTile } from '@/lib/parsons';
 import { buildAutopsyTrapCard } from '@/lib/mr-m/trap-card';
 import { saveInterferenceTrap, type ConfidenceTier } from '@/lib/interference-traps';
 
@@ -410,6 +414,19 @@ export function StudioWorkbench({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /**
+   * The standing faults this topic has already shown, drawn where the work
+   * actually happens.
+   *
+   * These warnings used to exist only behind the timed crucible's setup screen,
+   * so a learner who never launched a sprint — most days — never saw the
+   * fracture their own registry had recorded. What counts as standing is not
+   * restated here: `warningsFrom` applies the crucible's own rule (fired at
+   * least twice, newest first, capped) to the patches this panel already read,
+   * so the two screens cannot disagree about what is worth warning about.
+   */
+  const workbenchWarnings = useMemo(() => warningsFrom(patches), [patches]);
+
+  /**
    * Rewrites one patch line. The learner's sentence is stored verbatim; nothing
    * else in the record moves, so editing a patch can never be mistaken for
    * clearing it.
@@ -421,6 +438,50 @@ export function StudioWorkbench({
       setPatchIndex(patchNumbers(loadPatches()));
     },
     [topicSummary]
+  );
+
+  /**
+   * A wrong order in the causal-sequence drill becomes an engineering patch.
+   *
+   * This is the one interactive template that can state its own fracture:
+   * every step is on the screen and only the order is wrong, so the reading is
+   * measured from the two orders rather than guessed at from prose. The
+   * discrimination gate deliberately records nothing here — it already keeps a
+   * richer record of the same moment (the learner's own rule, saved as a trap
+   * card) — and the perturbation sliders have no failure semantics at all: a
+   * slider has no wrong position to diagnose. Silence on those surfaces is a
+   * decision, not an omission; a patch invented to fill the gap would be the
+   * verdict this registry exists to replace.
+   */
+  const handleOrderChecked = useCallback(
+    (result: { correct: boolean; submitted: ParsonsTile[]; canonical: ParsonsTile[] }) => {
+      if (!mrMMode || result.correct) return;
+      try {
+        const reading = diagnoseSequence({
+          submitted: result.submitted.map((tile) => tile.id),
+          canonical: result.canonical.map((tile) => tile.id),
+          labels: result.canonical.map((tile) => tile.text),
+        });
+        if (!reading) return;
+        recordPatch({
+          topic: topicSummary,
+          kind: reading.kind,
+          statement: patchStatementFor(reading, topicSummary),
+          arithmeticReveal: reading.arithmeticReveal,
+          learnerValue: null,
+          expectedValue: null,
+        });
+        // Re-read rather than splice: the registry owns the numbering and the
+        // hit count, so the armory and the strip above the fields show exactly
+        // what is stored — including the RE-OPEN of a fracture that has fired
+        // before, which is what turns one slip into a standing fault.
+        setPatches(patchesFor(topicSummary));
+        setPatchIndex(patchNumbers(loadPatches()));
+      } catch {
+        /* the patch registry is best-effort: no clean signal, no record */
+      }
+    },
+    [mrMMode, topicSummary]
   );
 
   const handleRaiseParadox = useCallback(
@@ -1137,6 +1198,7 @@ export function StudioWorkbench({
                 onAdopt={(text) =>
                   setField2((prev: string) => (prev.trim() ? `${prev.trim()} ${text}` : text))
                 }
+                onOrderChecked={handleOrderChecked}
               />
             )}
 
@@ -1198,6 +1260,25 @@ export function StudioWorkbench({
                 {scaffoldMode === 'sentence' ? 'Sentence scaffold' : 'Separate boxes'}
               </ToolToggle>
             </div>
+
+            {/* Pre-flight tripwire, in the place the work happens. The timed
+                crucible draws the same list from the same registry; this one
+                is above the fields, before a word is written. */}
+            {workbenchWarnings.length > 0 && (
+              <div
+                data-testid="workbench-preflight"
+                className="rounded-md border border-hazard-500/40 bg-hazard-950/25 p-3 space-y-1.5"
+              >
+                <span className="block font-mono text-[10px] uppercase tracking-widest text-hazard-300">
+                  ⚠ Pre-flight tripwire
+                </span>
+                {workbenchWarnings.map((warning) => (
+                  <p key={warning.patch.id} className="text-[11px] text-bone leading-relaxed">
+                    {warning.headline} {warning.line}
+                  </p>
+                ))}
+              </div>
+            )}
 
             {scaffoldMode === 'sentence' && causalFrame && (
               <>

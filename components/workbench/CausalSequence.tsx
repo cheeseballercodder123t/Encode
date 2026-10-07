@@ -4,7 +4,13 @@ import React, { useMemo, useState } from 'react';
 import { Activity, ParsonsResult } from '@/lib/types';
 import { loadAISettings } from '@/lib/storage';
 import { playSound } from '@/lib/audio';
-import { scrambleParsons, gradeParsons, describeParsonsFix, formatParsonsChain } from '@/lib/parsons';
+import {
+  scrambleParsons,
+  gradeParsons,
+  describeParsonsFix,
+  formatParsonsChain,
+  type ParsonsTile,
+} from '@/lib/parsons';
 
 /**
  * Scrambled causal ordering (Parsons problem).
@@ -26,9 +32,28 @@ interface CausalSequenceProps {
   topicSummary?: string;
   /** The locked chain (or the pivot rule) lands in the stage answer. */
   onAdopt: (text: string) => void;
+  /**
+   * Fired once per order check, carrying both orders as the drill knew them.
+   *
+   * The check is the only moment the learner's order and the canonical one are
+   * in hand at the same time, so it is the only moment a structural reading of
+   * the mistake can be taken. The drill itself records nothing: what to do with
+   * the pair — for this app, one engineering patch measuring the inversion —
+   * belongs to the caller, which is where the registry lives.
+   */
+  onOrderChecked?: (result: {
+    correct: boolean;
+    submitted: ParsonsTile[];
+    canonical: ParsonsTile[];
+  }) => void;
 }
 
-export function CausalSequence({ activity, topicSummary, onAdopt }: CausalSequenceProps) {
+export function CausalSequence({
+  activity,
+  topicSummary,
+  onAdopt,
+  onOrderChecked,
+}: CausalSequenceProps) {
   const [drill, setDrill] = useState<ParsonsResult | null>(null);
   const [placed, setPlaced] = useState<string[]>([]);
   const [checked, setChecked] = useState(false);
@@ -98,6 +123,15 @@ export function CausalSequence({ activity, topicSummary, onAdopt }: CausalSequen
     if (!drill || placed.length === 0) return;
     setChecked(true);
     playSound(grade?.correct ? 'success' : 'wrong');
+    // The submitted order is reported as TILES rather than ids so the caller
+    // never has to look a step up to say which link is wrong.
+    onOrderChecked?.({
+      correct: grade?.correct === true,
+      submitted: placed
+        .map((id) => byId.get(id))
+        .filter((tile): tile is ParsonsTile => Boolean(tile)),
+      canonical: drill.steps,
+    });
   };
 
   const adopted = checked && grade?.correct;

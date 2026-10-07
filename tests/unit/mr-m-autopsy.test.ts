@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   crossedTerms,
   diagnoseDiscrepancy,
+  diagnoseSequence,
   exponentsIn,
   foldRatio,
   hasPowerLawEvidence,
@@ -255,5 +256,66 @@ describe('patchStatementFor — a scaffold the learner is meant to edit', () => 
       expect(statement.length).toBeGreaterThan(20);
       expect(statement).toContain('Optics');
     }
+  });
+});
+
+/**
+ * The ordering drills hand this layer both orders, so the fracture is measured
+ * rather than inferred — and the two ways it can go wrong (saying nothing about
+ * a real inversion, or naming one from a payload that cannot describe one) are
+ * both failures worth pinning.
+ */
+describe('diagnoseSequence — the chain is right but the order is wrong', () => {
+  const canonical = ['rest', 'depolarize', 'repolarize'];
+  const labels = [
+    'the membrane sits at rest',
+    'voltage-gated channels open',
+    'the channels inactivate',
+  ];
+
+  it('says nothing when the chain is in the order the physics forces', () => {
+    expect(diagnoseSequence({ submitted: ['rest', 'depolarize', 'repolarize'], canonical, labels })).toBeNull();
+  });
+
+  it('names an inversion for one swapped pair, not a missing fact', () => {
+    // The last two links are swapped: the misplaced step is named, together
+    // with the step it must follow.
+    const reading = diagnoseSequence({ submitted: ['rest', 'repolarize', 'depolarize'], canonical, labels });
+    expect(reading?.kind).toBe('ORDER_INVERSION');
+    expect(reading?.trapId).toBe('reversed_order');
+    expect(reading?.origin).toBe('structural');
+    // The reveal quotes the two steps the swap moved, which is what makes it a
+    // correction rather than "try again".
+    expect(reading?.arithmeticReveal).toContain('the channels inactivate');
+    expect(reading?.arithmeticReveal).toContain('voltage-gated channels open');
+    expect(reading?.arithmeticReveal).toContain('must come after');
+    expect(reading?.structuralReason).toMatch(/ordering failure/);
+    expect(reading?.whereItBreaks).toBe('the causal order, not any single step');
+    // A structural reading carries no numbers and must not pretend to any.
+    expect(reading?.terms).toEqual([]);
+  });
+
+  it('reads a fully reversed chain as the same fracture', () => {
+    const reading = diagnoseSequence({ submitted: ['repolarize', 'depolarize', 'rest'], canonical, labels });
+    expect(reading?.kind).toBe('ORDER_INVERSION');
+    expect(reading?.arithmeticReveal.length).toBeGreaterThan(0);
+  });
+
+  it('refuses to name a fracture from a payload that cannot describe one', () => {
+    expect(diagnoseSequence({ submitted: [], canonical, labels })).toBeNull();
+    expect(diagnoseSequence({ submitted: ['rest'], canonical, labels })).toBeNull();
+    // A length mismatch is a payload problem, not a fracture.
+    expect(diagnoseSequence({ submitted: ['rest', 'depolarize'], canonical, labels })).toBeNull();
+    expect(diagnoseSequence({ submitted: ['rest', 'depolarize', 'repolarize'], canonical: [], labels: [] })).toBeNull();
+  });
+
+  it('still names the inversion when the payload carries no display text', () => {
+    const reading = diagnoseSequence({
+      submitted: ['depolarize', 'rest', 'repolarize'],
+      canonical,
+      labels: [],
+    });
+    expect(reading?.kind).toBe('ORDER_INVERSION');
+    expect(reading?.arithmeticReveal.length).toBeGreaterThan(0);
   });
 });
