@@ -26,7 +26,6 @@ import { StemPreview } from './StemPreview';
 import { buildCausalFrame, frameToSentence, type CausalFieldKey } from '@/lib/causal-frame';
 import { resetRungsRevealed } from '@/lib/clue-ladder';
 import { MisterMSurface } from '@/components/mr-m/MisterMSurface';
-import { classifyTrap } from '@/lib/mr-m/diagnostics';
 import {
   loadPatches,
   openParadoxesFor,
@@ -39,7 +38,7 @@ import {
   warningsFrom,
 } from '@/lib/mr-m/ledger';
 import type { ParadoxEntry, PatchEntry } from '@/lib/mr-m/types';
-import { diagnoseSequence, patchStatementFor } from '@/lib/mr-m/autopsy';
+import { diagnoseDiscrepancy, diagnoseSequence, patchStatementFor } from '@/lib/mr-m/autopsy';
 import type { ParsonsTile } from '@/lib/parsons';
 import { buildAutopsyTrapCard } from '@/lib/mr-m/trap-card';
 import { saveInterferenceTrap, type ConfidenceTier } from '@/lib/interference-traps';
@@ -408,9 +407,25 @@ export function StudioWorkbench({
   /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
   useEffect(() => {
     setParadoxes(openParadoxesFor(topicSummary));
+  }, [topicSummary]);
+
+  /**
+   * The armory is re-read when a CHECK RESULT lands, not only when the topic
+   * changes.
+   *
+   * `page.tsx` writes the patch after the examiner's response arrives, so a read
+   * keyed on `topicSummary` alone kept showing the registry as it stood BEFORE
+   * the check the learner is looking at: the standing-faults panel and the
+   * tripwire above the fields stayed a check behind for the rest of the session,
+   * and a fracture recorded in this session only appeared after a topic change.
+   * `feynmanResult` is a fresh object per check, which is exactly the signal —
+   * the contradictions are left on the topic alone, because this panel is their
+   * only writer and it re-reads after every write.
+   */
+  useEffect(() => {
     setPatches(patchesFor(topicSummary));
     setPatchIndex(patchNumbers(loadPatches()));
-  }, [topicSummary]);
+  }, [topicSummary, feynmanResult]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /**
@@ -548,9 +563,22 @@ export function StudioWorkbench({
       '',
     [currentActivity]
   );
+  /**
+   * The deterministic read the panel and the trap card both use.
+   *
+   * This is the SAME reader `page.tsx` records the engineering patch with
+   * (`diagnoseDiscrepancy`), not the structural classifier alone. That
+   * classifier is still the first layer inside it, so every structural reading
+   * is unchanged; what the workbench gains is the numeric diff behind it — the
+   * reciprocal fold, the whole factors, the powers, the logarithm constants and
+   * the crossed pairs — so an arithmetic fracture is named and revealed in the
+   * place the learner is looking rather than only in the patch registry. Two
+   * implementations of "what shape is this mistake" is how two surfaces end up
+   * naming the same answer differently, so there is one.
+   */
   const trapDiagnosis = useMemo(() => {
     if (!mrMMode || feynmanResult?.secured !== false) return null;
-    return classifyTrap({
+    return diagnoseDiscrepancy({
       learnerText: checkedAnswer.text,
       expectedText: expectedAnswerText,
       sourceText: `${currentActivity?.prompt || ''}\n${currentActivity?.contextSnippet || ''}`,

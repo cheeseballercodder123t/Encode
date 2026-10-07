@@ -4,7 +4,8 @@ import React, { Component, Suspense, useState, type ErrorInfo, type ReactNode } 
 import type { Activity, StageResponse } from '@/lib/types';
 import type { ConfidenceTier } from '@/lib/interference-traps';
 import { resolveInterventions, type InterventionProps } from '@/lib/mr-m/registry';
-import type { ParadoxEntry, PatchEntry, TrapAutopsy, TrapDiagnosis } from '@/lib/mr-m/types';
+import type { AutopsyDiagnosis } from '@/lib/mr-m/trap-card';
+import type { ParadoxEntry, PatchEntry, TrapAutopsy } from '@/lib/mr-m/types';
 
 // ─── Mr M mode: the one surface that resolves them ──────────────────────────
 //
@@ -73,8 +74,8 @@ export interface MisterMSurfaceProps {
   /** Mr M mode. Off ⇒ the resolver returns nothing and this renders null. */
   enabled: boolean;
   feynmanResult?: StageResponse['feynmanReview'] | null;
-  /** Deterministic trap read from `classifyTrap`. */
-  trapDiagnosis?: TrapDiagnosis | null;
+  /** Deterministic autopsy read: `classifyTrap`'s diagnosis, or `diagnoseDiscrepancy`'s wider reading. */
+  trapDiagnosis?: AutopsyDiagnosis | null;
   /** The model's narrative half of the autopsy. */
   autopsy?: TrapAutopsy | null;
   openParadoxes?: ParadoxEntry[];

@@ -1,7 +1,8 @@
 import React, { lazy } from 'react';
 import type { Activity, StageResponse } from '@/lib/types';
 import type { ConfidenceTier } from '@/lib/interference-traps';
-import type { MrMPayload, ParadoxEntry, PatchEntry, TrapAutopsy, TrapDiagnosis } from './types';
+import type { MrMPayload, ParadoxEntry, PatchEntry, TrapAutopsy } from './types';
+import type { AutopsyDiagnosis } from './trap-card';
 import { mrMOf } from './payloads';
 
 // ─── Mr M mode: the intervention registry ───────────────────────────────────
@@ -35,10 +36,12 @@ export interface InterventionProps {
   /** The examiner's read on this stage, once a check has run. */
   feynmanResult?: StageResponse['feynmanReview'] | null;
   /**
-   * The deterministic trap read. Present only when `classifyTrap` found a
-   * structural failure — null means "no clean signal", never "no mistake".
+   * The deterministic autopsy read. The structural classifier's diagnosis, or
+   * the wider reading from `diagnoseDiscrepancy` — the same shape plus the
+   * numeric diff's kind and crossed pairs. Present only when a layer named
+   * something; null means "no clean signal", never "no mistake".
    */
-  trapDiagnosis?: TrapDiagnosis | null;
+  trapDiagnosis?: AutopsyDiagnosis | null;
   /** The model's narrative half of the autopsy, when it wrote one. */
   autopsy?: TrapAutopsy | null;
   /** Unresolved contradictions for this topic, newest first. */
@@ -98,7 +101,7 @@ export interface InterventionContext {
   /** Mr M mode is on. Chosen off ⇒ `resolveInterventions` returns nothing. */
   enabled: boolean;
   feynmanResult?: StageResponse['feynmanReview'] | null;
-  trapDiagnosis?: TrapDiagnosis | null;
+  trapDiagnosis?: AutopsyDiagnosis | null;
   autopsy?: TrapAutopsy | null;
   /** True when this topic has at least one contradiction still open. */
   hasOpenParadox?: boolean;

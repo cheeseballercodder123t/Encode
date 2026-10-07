@@ -101,6 +101,89 @@ function providerCacheKey(
   return hashKey(`${provider}|${model}|${systemPrompt}|${userPrompt}|${fileFingerprint}`);
 }
 
+// ─── Model availability memory ───────────────────────────────────────────────
+//
+// The Gemini branch walks a ladder (the configured target, then 3.6, 3.5, 2.5).
+// On a key or tier where the configured target does not exist, that ladder had
+// two costs, and the second was worse than the first:
+//
+//   1. a NOT-FOUND error is not a quota error, so it was classified as a
+//      structural failure and thrown — the request died on a model the learner
+//      never chose, without ever reaching the rung that would have answered; and
+//   2. nothing was remembered between calls, so even a user whose KEY is fine
+//      paid the same dead round trip on every generation for the session.
+//
+// One piece of state fixes both: a model the API says does not exist is
+// remembered HERE for the session, and a remembered model is skipped when the
+// ladder is built. The memory is only for errors that are about the MODEL — a
+// 429, a quota cap, a deadline or a credential problem keeps its existing
+// retry-and-fall-through behavior and is never remembered, because those are
+// transient or about the key, and mislabeling one would move the learner onto a
+// model that cannot help either.
+
+const unsupportedModels = new Set<string>();
+
+/**
+ * Transient / credential markers, checked BEFORE the model markers.
+ *
+ * A message that mentions a quota, a rate limit, a deadline or a badge is not
+ * evidence about the model, however else it reads.
+ */
+const TRANSIENT_MODEL_MARKERS = [
+  '429',
+  'quota',
+  'resource_exhausted',
+  'rate limit',
+  'rate_limit',
+  'overloaded',
+  'timeout',
+  'timed out',
+  'api key',
+  'api_key',
+  'unauthorized',
+  'permission denied',
+];
+
+/**
+ * True when an error says the MODEL itself is unusable on this key, rather than
+ * that the call failed for a transient reason.
+ *
+ * Message-shaped rather than "any 404": the SDK raises plain Errors whose text
+ * carries the signal, and a 404 through a proxy is not evidence about a model.
+ * A numeric status is respected when it is present, and only 404 counts as
+ * availability — 429, 401 and 5xx are the provider's mood, not the model's
+ * existence.
+ */
+export function isUnsupportedModelError(error: unknown): boolean {
+  const message = String((error as any)?.message || error || '').toLowerCase();
+  if (!message) return false;
+
+  const status = (error as any)?.status ?? (error as any)?.code;
+  if (typeof status === 'number' && status !== 404) return false;
+  if (TRANSIENT_MODEL_MARKERS.some((marker) => message.includes(marker))) return false;
+
+  return (
+    message.includes('not found') ||
+    message.includes('does not exist') ||
+    message.includes('unknown model') ||
+    message.includes('no such model') ||
+    message.includes('unsupported model') ||
+    message.includes('not supported') ||
+    message.includes('invalid model') ||
+    message.includes('model_not_found')
+  );
+}
+
+/** How many models this session has learned do not exist (exposed for tests). */
+export function unsupportedModelCount(): number {
+  return unsupportedModels.size;
+}
+
+/** Forgets the session's availability memory (tests / a key or tier change). */
+export function clearUnsupportedModels(): void {
+  unsupportedModels.clear();
+}
+
 export async function generateJSONWithProvider({
   systemPrompt,
   userPrompt,
@@ -178,13 +261,21 @@ export async function generateJSONWithProvider({
     }
 
     // Try primary target model with fallback chain: targetModel -> gemini-3.6-flash -> gemini-3.5-flash -> gemini-2.5-flash
-    const modelsToTry = [targetModel];
+    const modelChain = [targetModel];
     const fallbackChain = ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
     for (const fb of fallbackChain) {
-      if (!modelsToTry.includes(fb)) {
-        modelsToTry.push(fb);
+      if (!modelChain.includes(fb)) {
+        modelChain.push(fb);
       }
     }
+    // Skip the names this session has already been told do not exist, so the
+    // dead round trip is paid once rather than on every generation. Which model
+    // is tried FIRST on a fresh session is unchanged — this only removes rungs
+    // the API has already rejected. If every rung is known dead we keep the full
+    // chain rather than throwing a new kind of error: the caller still gets the
+    // provider's own failure.
+    const liveModels = modelChain.filter((name) => !unsupportedModels.has(name));
+    const modelsToTry = liveModels.length > 0 ? liveModels : modelChain;
 
     let lastError: any = null;
     for (const mName of modelsToTry) {
@@ -231,6 +322,22 @@ export async function generateJSONWithProvider({
           aiMetrics.recordTimeout();
           captureAiError(err, { provider: 'gemini', model: mName, reason: 'timeout' });
           console.warn(`Gemini model ${mName} timed out, falling back to next model...`);
+          continue;
+        }
+        // A model the API says does not exist is not a failure of the REQUEST:
+        // this is precisely the case the chain exists for. Remember it for the
+        // session and move to the next rung — which is also what removes the
+        // dead round trip from every later call.
+        if (isUnsupportedModelError(err)) {
+          const isNew = !unsupportedModels.has(mName);
+          unsupportedModels.add(mName);
+          if (isNew) {
+            // Reported once per model, not once per call: the second attempt is
+            // already known and silent by construction.
+            captureAiError(err, { provider: 'gemini', model: mName, reason: 'unsupported-model' });
+          }
+          aiMetrics.recordModelFallback();
+          console.warn(`Gemini model ${mName} is not available on this key, falling back to the next model...`);
           continue;
         }
         const errStr = String(err?.message || err).toLowerCase();

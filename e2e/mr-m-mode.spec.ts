@@ -155,6 +155,36 @@ test.describe('Mr M mode', () => {
     );
   });
 
+  test('names a whole-factor error and re-reads the armory when the check lands', async ({
+    page,
+  }) => {
+    await openMrMStage(page);
+
+    // Three times the exemplar's 0.0336 kJ, stated with no formula and no
+    // reversed operand order, so the numeric diff behind the structural
+    // classifier is the layer that has to name it.
+    await page.getByPlaceholder(P1_FIELD1).fill('The heat released is 0.0112 kJ.');
+    await page.getByPlaceholder(P1_FIELD2).fill('I scaled the two numbers I was given.');
+    await page.getByRole('button', { name: /CHECK/ }).click();
+
+    // The panel beside the examiner's read is drawn from the SAME reader the
+    // patch registry records with, so the two surfaces cannot name one answer
+    // two ways: the arithmetic is the diff's own crossing of the learner's
+    // number against the exemplar's.
+    await expect(page.getByTestId('mr-m-autopsy')).toBeVisible();
+    await expect(page.getByTestId('mr-m-autopsy-trap')).toBeVisible();
+    const arithmetic = page.getByTestId('mr-m-autopsy-arithmetic');
+    await expect(arithmetic).toContainText('0.0336');
+    await expect(arithmetic).toContainText('3.00');
+
+    // And the registry this panel holds was re-read when the check landed.
+    // `page.tsx` writes the patch after the examiner's response, so a read keyed
+    // on the topic alone would leave the armory — and the tripwire above the
+    // fields — a whole check behind until the learner changed topic.
+    await expect(page.getByTestId('mr-m-patch-registry')).toBeVisible();
+    await expect(page.getByTestId('mr-m-patch-list')).toContainText('0.0336');
+  });
+
   test('the autopsy can become a real trap card, with the learner declaring the confidence', async ({ page }) => {
     await openMrMStage(page);
     await checkWithWrongAnswer(page);

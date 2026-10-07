@@ -15,7 +15,7 @@ import {
   type CruciblePlan,
   type StatePacing,
 } from '@/lib/crucible/budget';
-import { governorDecision } from '@/lib/escalation/governor';
+import { governorDecision, loadFrictionHistory } from '@/lib/escalation/governor';
 import { fusionReadiness, type FusionReadiness } from '@/lib/escalation/fusion';
 import { preflightWarnings, type PreflightWarning } from '@/lib/mr-m/ledger';
 import type { GovernorDecision } from '@/lib/escalation/types';
@@ -176,7 +176,6 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
   /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
   useEffect(() => {
     if (!isOpen) return;
-    setGovernor(governorDecision());
     // A sprint opened mid-session inherits the session's topic as a starting
     // point, but never overwrites a topic the learner has typed themselves.
     const incoming = (topic || '').trim();
@@ -200,6 +199,13 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
     const clean = topicDraft.trim();
     setWarnings(clean ? preflightWarnings(clean) : []);
     setReadiness(clean ? fusionReadiness(clean, sourceContext || '') : null);
+    // The escalation is read against the SAME drafted topic, and re-read when it
+    // changes. The governor's streak is scoped to one chapter (`cleanWinStreak`
+    // takes the topic), so a sprint timed against Thermochemistry cannot be
+    // escalated by clean wins logged on Genetics — which is what a global read
+    // used to do: the boss banner appeared on a chapter the log had never said
+    // anything about, and the `boss` flag sent to the route went with it.
+    setGovernor(governorDecision(loadFrictionHistory(), clean));
   }, [isOpen, topicDraft, sourceContext]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -352,7 +358,21 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
     }
   };
 
-  /** Stamps the state that just finished and moves to the next one. */
+  /**
+   * Stamps the state that just finished and moves to the next one.
+   *
+   * Finishing the sprint records NOTHING back into the friction governor, and
+   * that is a decision rather than an omission. The governor's trigger is a
+   * LADDER-based mastery signal — "solved with no clue rung requested" — while a
+   * sprint has no correctness read at all: nothing under the clock is graded,
+   * the summary reports where the time went and how much of an overrun was
+   * recovered, and it deliberately refuses to treat speed as a verdict on the
+   * person. Logging a paced sprint as a clean win would therefore invent the
+   * mastery reading this mode never took, and would raise the level on the
+   * strength of it. That signal has to come from a surface where the answer is
+   * actually graded — the workbench's examiner check — so a sprint's own
+   * contribution stays where the learner can see it: the pacing table.
+   */
   const completeState = () => {
     if (!plan) return;
     playSound('click');
@@ -379,6 +399,10 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
    * Cut the problem short. The state in progress is banked at what it has cost
    * so far and the untouched states are banked at zero — reported honestly as
    * "not started" rather than as a budget the learner never spent.
+   *
+   * Cutting a problem short is a pacing read like finishing one, so it records
+   * nothing into the friction governor either — the reasoning is in
+   * `completeState` above, and it is the same reasoning here.
    */
   const skipProblem = () => {
     if (!plan) return;

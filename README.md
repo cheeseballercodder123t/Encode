@@ -110,6 +110,8 @@ Shared primitives (Button, Badge, Card, Modal, Input, Textarea, Slider, Tooltip)
   - Run: `bun run test:e2e` (boots `next dev` on port 4310 automatically)
   - On this filesystem, run with `--workers=3`: full parallelism races Playwright's trace-file writes and produces bogus ENOENT failures. On a small box (2 CPUs / 4 GB) three browser processes can also be OOM-killed mid-run, which surfaces as `page.goto: Page crashed` or `ERR_CONNECTION_REFUSED` on whichever tests are still starting — `--workers=2` is the safe ceiling there, and a test that fails that way passes in isolation.
   - Debug a failure: `npx playwright show-trace test-results/<failing-test>/trace.zip`
+  - One sheet at a time: `bun run test:e2e:cockpit`, `bun run test:e2e:mrm`, `bun run test:e2e:sequence`, `bun run test:e2e:inquisitor` — a spec run on its own skips the cold-compile contention that makes a whole-suite run flake on a small box.
+  - A full 30-spec sweep is faster and steadier against a PRODUCTION build than against `next dev`, because every route is already compiled and page loads drop from ~10s to ~100ms: `bun run build`, then `bun run start -- -p 3000`, then `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 bun run test:e2e --workers=2`. `playwright.config.ts` reads `PLAYWRIGHT_BASE_URL` and, when it is set, does not launch its own server.
 - **CI** — `.github/workflows/nextjs.yml` runs typecheck, lint, unit tests and the production build in one job, then the Playwright chromium suite (with the same `--workers=3` guard) in another.
 
 

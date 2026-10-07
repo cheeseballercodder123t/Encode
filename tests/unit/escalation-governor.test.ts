@@ -113,6 +113,32 @@ describe('cleanWinStreak — the only signal that says the mechanism is held', (
   it('counts nothing from an empty log', () => {
     expect(cleanWinStreak([])).toBe(0);
   });
+
+  it('scopes the count to one topic when asked about one', () => {
+    // One win here, one win somewhere else: no streak on either chapter. Both
+    // entries are newer-first, so the other topic's win sits between them.
+    const log = [
+      attempt({ topic: 'Genetics' }),
+      attempt({ topic: 'Thermochemistry' }),
+    ];
+    expect(cleanWinStreak(log)).toBe(2);
+    expect(cleanWinStreak(log, 'Thermochemistry')).toBe(1);
+    expect(cleanWinStreak(log, 'Genetics')).toBe(1);
+    expect(cleanWinStreak(log, 'Optics')).toBe(0);
+  });
+
+  it('matches the topic forgivingly, the way every other scope in this app does', () => {
+    const log = [attempt({ topic: '  Thermochemistry  ' }), attempt({ topic: 'thermochemistry' })];
+    expect(cleanWinStreak(log, 'THERMOCHEMISTRY')).toBe(2);
+    expect(cleanWinStreak(log, 'Thermo chemistry')).toBe(0);
+  });
+
+  it('still breaks on a miss and on a rung within a scoped count', () => {
+    const miss = [attempt({ topic: 'Optics' }), attempt({ topic: 'Optics', secured: false })];
+    expect(cleanWinStreak(miss, 'Optics')).toBe(0);
+    const rung = [attempt({ topic: 'Optics' }), attempt({ topic: 'Optics', rungsUsed: 2 })];
+    expect(cleanWinStreak(rung, 'Optics')).toBe(1);
+  });
 });
 
 describe('governorDecision — escalation, stated where the learner can see it', () => {
@@ -150,6 +176,53 @@ describe('governorDecision — escalation, stated where the learner can see it',
     expect(decision.level).toBe('siloed');
     expect(decision.streak).toBe(0);
     expect(decision.topic).toBe('');
+  });
+
+  it('does not escalate a chapter on the strength of wins scored elsewhere', () => {
+    // The defect this pins: one clean win in Genetics plus one in
+    // Thermochemistry used to make a streak of two, and the next sprint on
+    // EITHER chapter escalated to boss level on a claim the log never made.
+    const log = [attempt({ topic: 'Genetics' }), attempt({ topic: 'Thermochemistry' })];
+
+    const thermo = governorDecision(log, 'Thermochemistry');
+    expect(thermo.level).toBe('siloed');
+    expect(thermo.streak).toBe(1);
+    expect(thermo.topic).toBe('Thermochemistry');
+    expect(thermo.reason).toContain('One more');
+
+    // A chapter with nothing logged at all is not escalated either.
+    const optics = governorDecision(log, 'Optics');
+    expect(optics.level).toBe('siloed');
+    expect(optics.streak).toBe(0);
+    expect(optics.topic).toBe('Optics');
+  });
+
+  it('still escalates a chapter that has earned it', () => {
+    const log = [
+      attempt({ topic: 'Thermochemistry' }),
+      attempt({ topic: 'Genetics' }),
+      attempt({ topic: 'Thermochemistry' }),
+    ];
+    const decision = governorDecision(log, 'Thermochemistry');
+    expect(decision.level).toBe('boss');
+    expect(decision.streak).toBe(2);
+    expect(decision.topic).toBe('Thermochemistry');
+  });
+
+  it('names the topic the way the learner\u2019s own record spells it', () => {
+    const decision = governorDecision([attempt({ topic: 'Calorimetry' })], 'calorimetry ');
+    expect(decision.topic).toBe('Calorimetry');
+  });
+
+  it('claims the load, never a collision the governor cannot measure', () => {
+    // The fusion table is hand-written, so for most chapters the escalation is a
+    // re-aimed, single-chapter one. The governor reads no material, so its
+    // sentence must not promise a two-chapter collision; the crucible renders
+    // the measured readiness reason beside it.
+    const decision = governorDecision([attempt(), attempt()]);
+    expect(decision.reason).toContain('written harder');
+    expect(decision.reason).not.toContain('collides two chapters');
+    expect(decision.reason).not.toContain('cross-chapter');
   });
 });
 

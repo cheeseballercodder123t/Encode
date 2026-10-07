@@ -159,11 +159,26 @@ function tokenize(expression: string): Token[] | null {
     if (/[0-9.]/.test(char)) {
       let end = index;
       while (end < text.length && /[0-9.]/.test(text[end])) end += 1;
-      const value = Number(text.slice(index, end));
+      // Scientific notation (`1.5e-3`, `6.022E23`, `2e5`) is ONE number. The
+      // exponent marker only counts when a digit follows the optional sign, so
+      // `2Ea` stays a number followed by the declared symbol `Ea` — an
+      // unevaluable relation — rather than silently becoming `2 * E * a`, and a
+      // bare `2e` is refused for the same reason: `e` there could be Euler's
+      // constant or a quantity, and this evaluator does not guess between them.
+      let cursor = end;
+      if (text[cursor] === 'e' || text[cursor] === 'E') {
+        let exponent = cursor + 1;
+        if (text[exponent] === '+' || text[exponent] === '-') exponent += 1;
+        if (/[0-9]/.test(text[exponent] || '')) {
+          while (exponent < text.length && /[0-9]/.test(text[exponent])) exponent += 1;
+          cursor = exponent;
+        }
+      }
+      const value = Number(text.slice(index, cursor));
       // `1.2.3` is not a number this evaluator should guess at.
       if (!Number.isFinite(value)) return null;
       tokens.push({ kind: 'number', value });
-      index = end;
+      index = cursor;
       continue;
     }
     if (/[A-Za-z_]/.test(char)) {
@@ -195,11 +210,15 @@ function tokenize(expression: string): Token[] | null {
  *
  * Beyond numbers, declared symbols, parentheses and the four operators, a
  * relation may call one of the {@link FUNCTIONS} — written `ln(x)`, `exp(x)`,
- * `sqrt(x)`, `sin(x)` — and use the constants `pi` and `e`. Grouping inside a
- * function argument or an exponent is the model's job: `exp(-Ea / (R * T))` is
- * unambiguous, while `e^-Ea/(R*T)` follows the ordinary precedence and means
- * `(e^-Ea)/(R*T)`. An unknown function name returns null rather than being
- * ignored, so a relation that calls one is refused rather than mis-evaluated.
+ * `sqrt(x)`, `sin(x)` — use the constants `pi` and `e`, write a number in
+ * scientific notation (`1.5e-3`), and multiply implicitly against a GROUP
+ * (`2(x + 1)`). Grouping inside a function argument or an exponent is the
+ * model's job: `exp(-Ea / (R * T))` is unambiguous, while `e^-Ea/(R*T)` follows
+ * the ordinary precedence and means `(e^-Ea)/(R*T)`. An unknown function name
+ * returns null rather than being ignored, so a relation that calls one is
+ * refused rather than mis-evaluated, and so is `2 x` — a coefficient flush
+ * against a symbol is how a quantity and its unit are written, and this
+ * evaluator will not guess which product was meant.
  */
 export function evaluateExpression(
   expression: string,
@@ -237,7 +256,7 @@ export function evaluateExpression(
     }
   };
 
-  /** term := power (('*' | '/') power)* */
+  /** term := power (('*' | '/') power | group)* — the last branch is an implicit product. */
   const parseTerm = (): number | null => {
     let left = parsePower();
     if (left === null) return null;
@@ -250,6 +269,19 @@ export function evaluateExpression(
         const right = parsePower();
         if (right === null || right === 0) return null;
         left /= right;
+      } else if (peek()?.kind === '(') {
+        // `2(x + 1)` is a product, and the reading is unambiguous because only
+        // a GROUP can follow a term this way. `2x` deliberately does NOT get
+        // the same treatment: a coefficient flush against a symbol is also how
+        // a quantity and its unit are written (`2 m`, `5 g`), and a relation
+        // that closed on the wrong product would be worse than one refused.
+        //
+        // The group is parsed as a POWER, so `2(3)^2` is 2·9 = 18 rather than
+        // (2·3)^2 — implicit multiplication carries the ordinary precedence of
+        // multiplication, and the exponent binds to the group.
+        const right = parsePower();
+        if (right === null) return null;
+        left *= right;
       } else {
         return left;
       }
