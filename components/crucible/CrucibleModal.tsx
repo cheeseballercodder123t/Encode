@@ -15,7 +15,7 @@ import {
   type CruciblePlan,
   type StatePacing,
 } from '@/lib/crucible/budget';
-import { governorDecision, loadFrictionHistory } from '@/lib/escalation/governor';
+import { governorDecision, loadFrictionHistory, recordAttempt } from '@/lib/escalation/governor';
 import { fusionReadiness, type FusionReadiness } from '@/lib/escalation/fusion';
 import { preflightWarnings, type PreflightWarning } from '@/lib/mr-m/ledger';
 import type { GovernorDecision } from '@/lib/escalation/types';
@@ -361,17 +361,27 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
   /**
    * Stamps the state that just finished and moves to the next one.
    *
-   * Finishing the sprint records NOTHING back into the friction governor, and
-   * that is a decision rather than an omission. The governor's trigger is a
-   * LADDER-based mastery signal — "solved with no clue rung requested" — while a
-   * sprint has no correctness read at all: nothing under the clock is graded,
-   * the summary reports where the time went and how much of an overrun was
-   * recovered, and it deliberately refuses to treat speed as a verdict on the
-   * person. Logging a paced sprint as a clean win would therefore invent the
-   * mastery reading this mode never took, and would raise the level on the
-   * strength of it. That signal has to come from a surface where the answer is
-   * actually graded — the workbench's examiner check — so a sprint's own
-   * contribution stays where the learner can see it: the pacing table.
+   * Running EVERY state of every problem is the one completion this surface can
+   * observe, and it is recorded into the friction governor as a rep under load.
+   * A mode whose reps leave no trace cannot inform the difficulty of the next
+   * one: the learner finishes a whole sprint and the governor still reads the
+   * chapter as untried, so the escalation the sprint earned never arrives. The
+   * record is scoped to the topic the sprint was timed against, and it carries
+   * the two numbers this mode really measured — `rungsUsed: 0` is true by
+   * construction (there is no clue ladder under a clock, so nothing could have
+   * been asked for), and `expectedMs` is the sprint's OWN declared budget
+   * (`plan.minutes`), so the pacing ratio it feeds is a real measurement rather
+   * than a missing one.
+   *
+   * The honest limit is unchanged, and it stays written here because it is what
+   * `secured: true` does NOT claim: nothing under the clock is GRADED. The
+   * summary reports where the time went and how much of an overrun was
+   * recovered, and it deliberately refuses to read speed as a verdict on the
+   * person — so at this call site `secured` means "the rep was run to the end",
+   * the strongest read this mode takes and a weaker one than the workbench's
+   * examiner check, where the answer is actually graded. Completion is the
+   * signal, not attendance: a sprint that is cut short records nothing at all
+   * (see `skipProblem`).
    */
   const completeState = () => {
     if (!plan) return;
@@ -391,6 +401,23 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
     }
     setElapsedPerState(nextElapsed);
     setSummaryTable(tableAtFinish(plan, nextElapsed, 0));
+
+    // The completion rep. `elapsedMs` is read off the wall clock rather than off
+    // the last tick, so the record is the sprint's true cost and not up to a
+    // tick short of it.
+    const scoped = topicDraft.trim() || topic || 'Untitled';
+    recordAttempt({
+      topic: scoped,
+      secured: true,
+      rungsUsed: 0,
+      elapsedMs: Math.max(0, Date.now() - startedAt),
+      expectedMs: Math.max(0, Math.floor(plan.minutes)) * 60_000,
+    });
+    // Re-read the governor, so the escalation this rep just earned is visible
+    // without closing the sheet: the banner is on the running screen, and a
+    // difficulty knob the learner cannot see is indistinguishable from a bug.
+    setGovernor(governorDecision(loadFrictionHistory(), scoped));
+
     setPhase('summary');
     playSound('pop');
   };
@@ -400,9 +427,12 @@ export function CrucibleModal({ isOpen, onClose, topic, sourceContext }: Crucibl
    * so far and the untouched states are banked at zero — reported honestly as
    * "not started" rather than as a budget the learner never spent.
    *
-   * Cutting a problem short is a pacing read like finishing one, so it records
-   * nothing into the friction governor either — the reasoning is in
-   * `completeState` above, and it is the same reasoning here.
+   * A sprint that finishes this way records NOTHING into the friction governor:
+   * `completeState` logs a completion, and cutting the last problem short is the
+   * absence of one. That is a read of the clock rather than a verdict on the
+   * learner — abandoning a rep mid-way is the honest response to a bad day, and
+   * the one thing it must never cost them is a difficulty step earned by a
+   * sprint they did not run.
    */
   const skipProblem = () => {
     if (!plan) return;

@@ -485,7 +485,11 @@ flag that disagrees with the arithmetic it prints is worse than no flag. The
 summary reports where the clock went and, separately, how much of an overrun was
 recovered, because recovering under load is the skill the rep trains. It never
 reports speed as a grade. The client re-runs the same coercion the route does, so
-a payload that is not a state machine is refused rather than paced.
+a payload that is not a state machine is refused rather than paced. A sprint that
+is run to the END of every state of every problem is recorded as one friction
+attempt — scoped to the topic it was timed against, no rungs (there are none
+under a clock), and the sprint’s own declared minutes as the expectation — so the
+rep feeds the governor; a sprint that is cut short records nothing.
 
 ### The ZPD Governor, Concept Fusion and the Emergency Triage Buffer (Phase 5)
 
@@ -493,7 +497,11 @@ a payload that is not a state machine is refused rather than paced.
 with no clue rung requested — and a miss zeroes the streak rather than pausing
 it, because a failure is direct evidence that the difficulty is not too low.
 The decision is returned with its reason and rendered, since a difficulty knob
-the learner cannot see is indistinguishable from a bug.
+the learner cannot see is indistinguishable from a bug. Two surfaces feed it, and
+they are not equals: the workbench’s examiner check, where the answer is graded
+and the rung count is real, and a crucible sprint run to completion, which
+reports a completed rep and what it cost against the sprint’s own budget rather
+than a correctness read.
 `lib/escalation/fusion.ts` supplies the cross-chapter collision the boss level
 is briefed with. `lib/crisis/buffer.ts` and
 `components/crisis/EmergencyTriageModal.tsx` are the night everything is due at
@@ -855,11 +863,22 @@ load is raised — leaving the collision claim to the line that can measure it.
 
 **What it does not solve.** The fusion table is still hand-written, so most
 topics get a re-aimed single-chapter escalation rather than a collision; the copy
-now says so instead of implying otherwise. And the crucible still records nothing
-into the governor, deliberately: a sprint is PACED, not graded, while the
-governor’s trigger is a ladder-based mastery signal, so logging a sprint as a
-clean win would invent a reading it never took. That reason is written at the
-crucible’s completion path so the next reader finds a decision, not an omission.
+now says so instead of implying otherwise.
+
+**The crucible’s rep (revised).** An earlier pass left the crucible recording
+nothing into the governor, on the grounds that a sprint is PACED rather than
+graded and that logging one as a clean win would invent a mastery reading the
+mode never took. The first half of that still holds and is still written at the
+call site; the second half was wrong about the consequence. A mode whose reps
+leave no trace cannot inform the difficulty of the next one — the learner runs a
+full sprint and the governor still reads the chapter as untried — so a sprint
+that is run to the END of every state of every problem is now recorded, scoped to
+the topic it was timed against. What is recorded is exactly what the mode
+measured: `rungsUsed: 0` (there is no clue ladder under a clock, so nothing could
+have been asked for) and `expectedMs` set to the sprint’s own declared budget, so
+the pacing ratio is a real number. `secured: true` there means “the rep was run
+to the end” — the strongest read this surface takes and a weaker one than the
+workbench’s graded check — and a sprint that is cut short still records nothing.
 
 ### 10.6 A model the key does not have killed the whole request
 

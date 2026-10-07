@@ -132,6 +132,24 @@ test.describe('timed crucible', () => {
     await expect(page.getByTestId('crucible-receipt-ledger')).toContainText('served unchecked');
     await expect(page.getByTestId('crucible-receipt-dropped')).toContainText('Unequal titration');
     await expect(page.getByTestId('crucible-receipt-escalation')).toContainText('escalation: depth');
+
+    // ─── The completion rep reaches the friction governor ───────────────────
+    // A sprint run to the end of every state is the one completion this surface
+    // can observe, and it is logged against the topic it was timed against. What
+    // it records is what the mode measured: no rung (there is no clue ladder
+    // under a clock) and the sprint's OWN declared budget as the expectation, so
+    // the pacing ratio it feeds is a real number rather than a missing one.
+    const logged = await page.evaluate(() =>
+      JSON.parse(window.localStorage.getItem('deepencode_friction_log_v1') || '[]')
+    );
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({
+      topic: 'Thermochemistry',
+      secured: true,
+      rungsUsed: 0,
+      expectedMs: 12 * 60_000,
+    });
+    expect(logged[0].elapsedMs).toBeGreaterThanOrEqual(0);
   });
 
   test('the boss banner promises only the collision the material can carry', async ({ page }) => {

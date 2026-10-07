@@ -160,6 +160,34 @@ describe('evaluateExpression — the closed function vocabulary', () => {
     expect(verification.failures).toEqual([]);
   });
 
+  it('closes a pressure times a volume difference, and a coefficient against a group', () => {
+    // The two shapes the mutation and crucible routes are handed most often:
+    // boundary work `w = P_ext(V2 - V1)` and a coefficient across a bracket.
+    const work = verifyLedger(
+      [
+        { symbol: 'P_ext', value: 101.3, unit: 'kPa' },
+        { symbol: 'V1', value: 2, unit: 'L' },
+        { symbol: 'V2', value: 5, unit: 'L' },
+        { symbol: 'w', value: -101.3 * 3, unit: 'J' },
+      ],
+      [{ lhs: 'w', rhs: '-P_ext * (V2 - V1)', note: 'boundary work by an expanding gas' }]
+    );
+    expect(work.failures).toEqual([]);
+    expect(work.verified).toBe(true);
+
+    // Doubling, written as `2(x + b)`, against the doubled value.
+    const doubled = verifyLedger(
+      [
+        { symbol: 'x', value: 4, unit: '' },
+        { symbol: 'b', value: 1, unit: '' },
+        { symbol: 'y', value: 10, unit: '' },
+      ],
+      [{ lhs: 'y', rhs: '2(x + b)', note: 'twice the sum' }]
+    );
+    expect(doubled.failures).toEqual([]);
+    expect(doubled.verified).toBe(true);
+  });
+
   it('reads scientific notation as one number, not a product with a symbol in it', () => {
     // The generators write measured quantities this way, and reading `1.5e-3`
     // as `1.5 * e - 3` would either refuse an honest relation or, worse, close
@@ -171,17 +199,25 @@ describe('evaluateExpression — the closed function vocabulary', () => {
     expect(evaluateExpression('2 * 1.5e-3', {})).toBe(0.003);
   });
 
-  it('refuses a coefficient flush against a symbol, and a bare exponent marker', () => {
-    // `2x` is ambiguous in exactly the way this module refuses to guess about: a
-    // coefficient times a symbol, or a quantity with a unit. `2Ea` and `2e` are
-    // the same ambiguity wearing an exponent's clothes.
-    expect(evaluateExpression('2x', { x: 3 })).toBeNull();
-    expect(evaluateExpression('2e', {})).toBeNull();
-    expect(evaluateExpression('2Ea', { Ea: 5 })).toBeNull();
-    // A declared `e` is still usable where it cannot be mistaken for an
-    // exponent marker, and a declared quantity still outranks the constant.
+  it('multiplies a coefficient flush against a symbol, and refuses the spaced form', () => {
+    // A number TOUCHING its symbol is a coefficient, which is how every law
+    // these generators write carries a stoichiometric factor: `2x` is 2·x.
+    expect(evaluateExpression('2x', { x: 3 })).toBe(6);
+    expect(evaluateExpression('2Ea', { Ea: 5 })).toBe(10);
+    expect(evaluateExpression('1.5e-3*x', { x: 2 })).toBe(0.003);
+    // The exponent binds to the symbol, not to the coefficient: 2·(3²) = 18.
+    expect(evaluateExpression('2x^2', { x: 3 })).toBe(18);
+    // A function call is a symbol too, so `2sin(x)` is a product.
+    expect(evaluateExpression('2sin(0)', {})).toBe(0);
+    // A SPACE is the other reading — a quantity and its unit — and that one is
+    // refused rather than guessed at, because `250 g` closing on 250·g would be
+    // an equation the generator never stated.
+    expect(evaluateExpression('2 x', { x: 3 })).toBeNull();
+    expect(evaluateExpression('250 g', { g: 9.81 })).toBeNull();
+    // A bare `2e` is two times Euler's constant — the name is one token, so
+    // there is no exponent left to misread — and a declared `e` outranks it.
+    expect(evaluateExpression('2e', {})).toBeCloseTo(2 * Math.E, 10);
     expect(evaluateExpression('2 * e', { e: 3 })).toBe(6);
-    expect(evaluateExpression('2 * e', {})).toBeCloseTo(2 * Math.E, 10);
   });
 
   it('multiplies implicitly against a group, and the exponent binds to the group', () => {
