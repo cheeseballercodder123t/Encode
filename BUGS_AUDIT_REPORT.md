@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36) and 17 in `e3c21a6` (PR #37) — every defect this report records is on `main`.** Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37) and 18 in PR #39 (round 5, §7) — every defect this report records is on `main`.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -228,7 +228,7 @@ The failing tests in CI are exactly the AnkiConnect-dependent ones: `e2e/flashca
 ### 5.3 Found this round, reported, deliberately not repaired
 
 - ~~**The deck-memory key cap discards the local device's fingerprints.**~~ **Repaired this round as defect 16** — the policy, its implications and the two failed designs behind it are in **§5.5**. Recorded here from the round that found it: `MAX_KEYS_PER_TOPIC` is 600 and the union was remote-first before `slice(0, 600)`. Measured: 5000 local plus 5000 remote keys gives 600 kept, **5000 local dropped and 4400 remote dropped**, every surviving key remote (`R0,R1,R2,...`). The module's own header says the memory exists so a device does not 'export a whole deck a second time', so dropping local fingerprints resurrects exactly those cards as new. This round's hesitation was that remote-first ordering is what makes two devices *converge*; §5.5 shows it is not the only way, and that ordering was a bug in its own right.
-- **`sourceLedgersEqual` has the same index-sensitivity**, and `mergeSourceLedgers` resolves equal-`at` ties remote-first, so a mirror write can still be triggered by tie order alone when two devices record the same source in the same millisecond. Narrower trigger, same family as defect 15; reported but not measured.
+- ~~**`sourceLedgersEqual` has the same index-sensitivity**, and `mergeSourceLedgers` resolves equal-`at` ties remote-first, so a mirror write can still be triggered by tie order alone when two devices record the same source in the same millisecond.~~ **Repaired in round 5 as defect 18.** This round measured it and the tie half turned out to be the worse half: a same-millisecond tie let the **first argument's** card count win, so the two devices' merged ledgers disagreed about a number the panel displays, and the old comparison - which read only `key` and `at` - reported ledgers that disagreed about that number as **equal**, so neither device ever adopted the other's. The measurement, the fix and the three mutations are in **§7**; the trigger was wider than 'narrower trigger' suggested, because it does not need two devices at all: any store whose ledger is not newest-first (an older build's, or one the merge itself re-sorted) read as a change on every sync.
 - **A partly-unicode title collapses to a misleading filename.** `remnoteDocumentFilename` strips non-alphanumerics, so `'delta-E plus emoji'` reduces to a single ASCII letter, and two different topics reducing to the same residue produce identically named RemNote documents. The empty case has a fallback (`'DeepEncode'`), the nearly-empty case does not. Path traversal is correctly impossible (`'../../etc/passwd'` becomes `'etc_passwd'`).
 
 ### 5.4 Probed clean this round
@@ -319,3 +319,52 @@ Both contradict the module's stated doctrine ('a defect that fires once is a sli
 ### 6.4 Method note
 
 Round 4's first probe used `UNIT_SLIP` as a patch kind. That is a **trap id**; `DISCREPANCY_KINDS` is deliberately a separate vocabulary (`lib/mr-m/types.ts` says why), so `recordPatch` correctly refused all sixty records and the probe measured nothing until it was corrected - a false alarm of mine, not a defect. The broad ripgrep sweeps were also too loose to be useful (they matched whole documentation files); the round's real progress came from reading the cap-bearing modules directly.
+
+---
+
+## 7. Round 5 - defect 18, the source ledger compared by index (§5.3's last open finding, closed)
+
+Round 5 took the one bullet §5.3 left open from round 3 - 'same family as defect 15; reported but not measured' - and measured it before changing anything. The order half was as expected; the tie half was worse than the bullet described, because the comparison could not see the disagreement the tie created.
+
+### 7.1 Defect 18 - the source ledger is a set of sightings, not a sequence
+
+The source ledger (`DeckMemoryRecord.sources`) answers the other half of the memory's question: not 'have I already shipped this card' but 'have I already cut this lecture'. One level up, the fingerprint list had exactly this defect (defect 15) and it was fixed by comparing membership; the ledger was left comparing position.
+
+| Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|
+| Cross-device state: false 'changed' signal, non-commutative merge, and a shared number the two devices disagree about | `lib/deck-memory.ts` (`sourceLedgersEqual`, `mergeSourceLedgers`) | `sourceLedgersEqual` compared `left[index].key`/`.at` **by index**, but `mergeSourceLedgers` rebuilds the ledger from both sides on every run, so its order is an artifact of who merged and in which direction. `mergeSourceLedgers` also kept the entry iterated **last**, over an array built remote-first - i.e. on an equal `at` the *local* device's card count won, remotely-first for a merge that named this device remote - while the comparison read only `key` and `at` and so could not see the disagreement. | Reproduced on the unfixed code, five ways, all red before the fix: (a) two ledgers holding `[url:lecture 4 @900, file:slides.pdf @400]` and the reverse read as **different**; (b) at same-millisecond ties, `[url @900, slides @900]` against `[slides @900, url @900]` read as different in both directions, so a merge that re-sorted and added nothing reported a change - the trigger does not need two devices, only a ledger the merge re-orders; (c) through the real mirror sequence (write, `loadDeckMemory`, `mergeDeckMemoryStores`, `deckMemoryStoresEqual`) a store whose ledger is not newest-first reads as changed on every sync; (d) the same-millisecond case kept the **first argument's** counts: `merge(mine, theirs)` produced `url:lecture 4` = 12 cards and `slides.pdf` = 20 while `merge(theirs, mine)` produced 14 and 18 - different card counts for the same sighting; (e) 80 sources all sighted in one millisecond against the 60-entry cap: both directions kept 60, but the retained **sets differed by 20**. The old comparison's blindness to (d) is measured directly - a ledger recording 13 cards for a source read as **equal** to the same ledger recording 12 (the guard test asserting the opposite failed with `expected true to be false`). |
+
+What makes the failure matter is the caller: `lib/deck-memory-cloud.ts` computes `changed = !deckMemoryStoresEqual(local, merged)`, writes the store back when it is true and tells the learner 'Merged with your account's deck memory' - so an order-only difference is a permanent false report and a permanent re-save, exactly the loop defect 15 caused one level up.
+
+**Fixed**, in three pieces in `lib/deck-memory.ts`:
+
+| Piece | What it does |
+|---|---|
+| `bySighting(a, b)` | The ledger's total order: freshest `at` first, then by `key` for sightings stamped in the same millisecond. Sightings are deduplicated by key before it is applied, so it is total - the array becomes a function of the entries rather than of the order they arrived in |
+| `betterSighting(candidate, incumbent)` | The union's value function: newer `at`, then the fuller cut (`cards`), then the label. A total order, so the merged ledger is the maximum of the two under it and neither the argument order nor which device is merging can change the answer |
+| `sourceLedgersEqual(a, b)` | Compares a canonical ordering of the entries **whole** (`key`, `at`, `cards`, `label`) instead of by position. Reading only `key`/`at` would have left the disagreeing count that the merge now resolves invisible to the device holding the smaller one, so its local copy would never be saved and it would keep showing its own number while the account held the other's |
+
+`recordDeckSources` and `forgedSourceLedger` use the same two helpers, so the order stops depending on arrival anywhere the ledger is built or read - `forgedSourceLedger`'s cross-topic tie used to go to whichever topic the store happened to list first.
+
+**Verified** - 7 new tests in `tests/unit/deck-memory-merge-hardening.test.ts`, six of them written first and red on the unfixed code, the seventh (the real-path walk) added afterwards and then measured red against the restored pre-fix comparison:
+
+| Check | Result |
+|---|---|
+| `bun tsc -b --noEmit` | **exit 0** |
+| `bunx vitest run` | **exit 0** - 75 files, **1277 passed** (was 1270) |
+| `bunx eslint lib/deck-memory.ts tests/unit/deck-memory-merge-hardening.test.ts` | **exit 0** |
+| Mutation - `bySighting` tie-break returns `0` (arrival order) | **2 fail** (either-direction merge, over-cap retention); the 5 membership tests pass |
+| Mutation - `betterSighting` ignores `cards` | **2 fail** (tie resolves the same either way, adopt-then-hold); the 5 others pass |
+| Mutation - restore the pre-fix positional comparison | **5 of 7 fail**, including the real-path walk |
+
+Not run: the Playwright specs (no UI path is touched - this is a library-level comparison whose caller was read, not driven) and Firestore itself (no credentials here; the merge the mirror calls is exercised directly, which is how this module's tests are written).
+
+**Total: 18 distinct defects in 10 files** (defect 18 is the third in `lib/deck-memory.ts`, after 15 and 16).
+
+### 7.2 Reported, not repaired: the account copy of the source ledger is written and never read
+
+`lib/deck-memory-cloud.ts` writes the merged records, `sources` included, with `setDoc` - but `readRemoteRecords` maps only `topic`, `keys`, `updatedAt`, `exports` and `lastSurface`, so `sources` is dropped on the way in. Consequences, both read off that single reader rather than inferred: (a) `mergeSourceLedgers(a.sources, b.sources)` always receives `undefined` for the account side, so the cross-device half of the ledger union is inert - a lecture forged on the laptop is offered again on the desktop, which is the opposite of the comment above that merge ('forging this topic on a second device is still material already cut'); (b) the divergence fixed above is therefore, in the deployed path, latent rather than live: it is reachable through the exported `mergeDeckMemoryStores` (which is what its tests and this report exercise) and becomes live the moment the reader carries the field. Not repaired here because carrying it is a behaviour change - the ingest panel would begin offering to skip sources cut on another device - that needs its own sanitising and its own verification, not a line added to a fix about comparison order.
+
+### 7.3 Method note
+
+The §5.3 bullet was written from reading and called the trigger 'narrower'; the measurement is what corrected it. Two of the three mutations were chosen to isolate the *halves* of the fix rather than to re-prove the whole: the order mutation kills only the order tests, the `cards` mutation only the content tests, and restoring the old comparison kills five of the seven - which is the evidence that each piece carries its own weight rather than one test standing in for all of them.
