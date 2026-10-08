@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-rounds-7-11` (rebased onto `main`, opened as PR #41). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-25 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11) are committed on that branch and in review, not yet merged.** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-rounds-7-11` (rebased onto `main`, opened as PR #41). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) are committed on that branch and in review, not yet merged.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -701,8 +701,8 @@ right" but "what does this do under a corrupt disk, an unmount, two tabs, a sock
 | # | Priority | Finding | Location | Evidence |
 |---|---|---|---|---|
 | **25** | **P0 - critical. FIXED in this round (§13.2-13.5)** | One corrupt or legacy record in the learner's own saved history takes the **entire app** down: the history drawer dereferences `topicSummary` during render, nothing defines an error boundary above it, and the resulting screen is Next's *"Application error: a client-side exception has occurred"*. It is not recoverable from the UI - *clear all data* lives inside the drawer that crashed - so the only exit is clearing site data, and the learner cannot see their work at all. | crash site `components/HistoryDrawer.tsx:49`; root cause `lib/storage.ts` (`loadSavedSchemas`) and `lib/db.ts` (the v1 -> IndexedDB migration, the IndexedDB reads, the fallback parse); blast radius: no `app/error.tsx` exists | Reproduced in the browser: seed `deepencode_saved_schemas_v2` with `[{id,timestamp,mode,activities,userResponses}]` (no `topicSummary` - the shape an older release wrote), load the app, click the history button. Before the fix the browser reported `Application error: a client-side exception has occurred while loading 127.0.0.1` and the drawer never mounted; after the fix the drawer opens and lists the record as `Untitled topic`. |
-| 26 | P1 - high. **Open** | The workbench's speech recognition is never stopped when the component unmounts: `recognitionRef.current` is only stopped by the toggle itself, there is no cleanup effect, and `continuous = true`. Leaving the stage view (or finishing a session) therefore keeps the recogniser - and the browser's mic indicator - live, and its `onresult` keeps appending into the unmounted component's state. | `components/workbench/StudioWorkbench.tsx:697` (the only `stop()`), `:740` (the ref is assigned, never released); `recognitionRef` appears nowhere else | Read from the code: `recognitionRef` occurs at exactly three places (declare, stop-in-toggle, assign). Nothing can stop it on unmount because nothing is registered to. Not reproduced against a live microphone in this workspace. |
-| 27 | P2 - medium. **Open** | No root error boundary, so *any* unexpected throw in the composition root is a blank app rather than a contained message with a way back. It is the reason defect 25 was fatal instead of cosmetic. Only the stage-template renderer and the M-r-M surface have boundaries. | no `app/error.tsx` or `app/global-error.tsx`; boundaries exist only in `components/stage-templates/TemplateErrorBoundary.tsx` and `components/mr-m/MisterMSurface.tsx` | The defect-25 reproduction: a single throw inside a panel unmounted the whole tree and the page offered no recovery control. |
+| 26 | P1 - high. **FIXED in round 12 (§14)** | The workbench's speech recognition is never stopped when the component unmounts: `recognitionRef.current` is only stopped by the toggle itself, there is no cleanup effect, and `continuous = true`. Leaving the stage view (or finishing a session) therefore keeps the recogniser - and the browser's mic indicator - live, and its `onresult` keeps appending into the unmounted component's state. | `components/workbench/StudioWorkbench.tsx:697` (the only `stop()`), `:740` (the ref is assigned, never released); `recognitionRef` appears nowhere else | Read from the code: `recognitionRef` occurs at exactly three places (declare, stop-in-toggle, assign). Nothing could stop it on unmount because nothing was registered to. Round 12 reproduced it with a stub recogniser and closed it. |
+| 27 | P2 - medium. **FIXED in round 12 (§14)** | No root error boundary, so *any* unexpected throw in the composition root is a blank app rather than a contained message with a way back. It is the reason defect 25 was fatal instead of cosmetic. Only the stage-template renderer and the M-r-M surface have boundaries. | no `app/error.tsx` or `app/global-error.tsx`; boundaries exist only in `components/stage-templates/TemplateErrorBoundary.tsx` and `components/mr-m/MisterMSurface.tsx` | The defect-25 reproduction: a single throw inside a panel unmounted the whole tree and the page offered no recovery control. Round 12 added the boundary and proved it with an injected render throw. |
 | 28 | P2 - medium. **Open** | The schema list is memoized in a module-level cache that is **never invalidated**: `invalidateSchemaCache()` is exported and has zero callers, and nothing listens for the `storage` event. Two tabs open on the app therefore diverge - and because `saveSchemaToHistory` writes `[...current-from-cache, schema]`, the second tab's save can persist a list that is missing a schema the first tab just saved. | `lib/storage.ts:288` (`invalidateSchemaCache`, no callers), `:125-155` (`loadSavedSchemas` + `saveSchemaToHistory`), no `window.addEventListener('storage', ...)` anywhere | Grepped: one definition, no call sites; no `storage` listener in `lib/`, `components/`, `hooks/` or `app/`. The write-on-stale-read path is read from the code, not reproduced with two live tabs. |
 | 29 | P3 - medium, frequency unmeasured. **Open** | The stateless share link has no size guard. It is a query parameter on a page served by Node, so past the platform's header limit the *server rejects the request outright* - the learner's shared link is a dead end with no warning at copy time. | `lib/url-share.ts` (`generateStatelessShareUrl`, no length check); consumed by `components/StatelessShareModal.tsx` | **Measured against the running preview server**: `GET /?share=<N bytes>` returns `200` at 4 KB, 8 KB and 12 KB and **`431` (Request Header Fields Too Large)** at 16, 20 and 32 KB. **Measured** compression: the URL runs ≈0.7 x the schema JSON (4 points on a real fixture shape). What is *not* measured: how often a genuinely large session crosses it - no real generated schema is available in this workspace (the e2e fixture is a stub: 5 stages compress to 2 KB), so the crossing frequency is a model, not an observation. |
 | 30 | P4 - low. **Open** | Dead import found while checking consumers: `classifyCardQuality`/`classifyDeckQuality` are imported in a test file that never uses them. | `tests/unit/anki-exporter.test.ts` | Grep of consumers during round 10. No behaviour; left alone so this round's diff stays about the crash. |
@@ -762,7 +762,7 @@ own data. It is pinned instead.
 - **The coercion is not a migration.** Records already inside IndexedDB are normalized on the way *out*, not rewritten in place, so storage keeps the old shape until each schema is next saved. That is deliberate: a write-back migration would need a version bump and a failure path, and re-reading is enough to make the app correct.
 - **`topicSummary` is not the only unvalidated field** - it is the one that crashed. A record whose `activities` array holds non-activities still reaches the stage renderer, where `TemplateErrorBoundary` contains it. Closing that properly means per-field validation of `Activity`, which is a larger change than this defect justifies; the container boundary is the honest backstop for now.
 - **The unit tests cannot reach the IndexedDB path** - happy-dom has no IndexedDB, so the `getAllSchemasFromIDB` and migration coercions are verified by review and by the browser spec (which exercises a real IDB), not by a unit test.
-- **Findings 26-30 are listed, not fixed.** The request asked for the most critical one to be resolved; 26 (the microphone) and 27 (the missing root boundary) are the next two, and 27 is what makes any remaining finding fatal rather than cosmetic.
+- **Findings 26-30 were listed here, and 26-27 are now closed in round 12 (§14)** - the microphone release and the missing root boundary, which is the one that made any remaining finding fatal rather than cosmetic. **28-30 stay open**: the never-invalidated schema cache (two tabs can lose each other's saves), the unguarded share-link size, and the dead test import.
 
 ### 13.6 Method note
 
@@ -777,3 +777,57 @@ defensive `try/catch` audit of the writers says nothing about the readers, and "
 must name *which* direction it looked in.
 
 **Total: 25 distinct defects in 18 files** (25 is the first in `components/HistoryDrawer.tsx`, the first in `lib/storage.ts`, and the first in `lib/db.ts`; the crash site is the drawer, the cause is the read boundary in both storage modules).
+
+---
+
+## 14. Round 12 - the two findings round 11 left open (26-27), closed
+
+Round 11 ended with a prioritized list and one fix. Round 12 closed the next two on that list -
+the P1 and the P2 that decides whether the third is survivable - and left the rest documented.
+
+### 14.1 Defect 26 - the microphone outlived the stage
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 26 | A device resource held by a component that no longer exists - **privacy and correctness in one** (the tab keeps recording, and the transcript lands in the wrong stage) | `components/workbench/StudioWorkbench.tsx` (the toggle's `stop()` and the `recognitionRef` assignment) | `SpeechRecognition` is a browser object holding the microphone, not a DOM node, so unmounting the component that started it changes nothing. `continuous = true` meant it kept transcribing after the learner moved on, and every `onresult` appended to `field2` - which by the time it fired belonged to the NEXT stage. Nothing was registered to stop it: `recognitionRef` appeared in exactly three places (declared, stopped inside the toggle, assigned). | A stub recogniser installed before the app boots counts what the app does to it. Against the pre-fix code both specs fail with `Expected: > 0, Received: 0` - `stop()` was never called on a stage change or on unmount. With the fix: `stop()` fires on both, and the control stops claiming `Listening`. |
+
+**The fix** is one effect keyed on the activity id, whose cleanup releases the recogniser (and clears
+`isListening`) so that a stage change and an unmount are the same path. The first draft of it returned
+early when no recogniser existed yet - which would have registered *no cleanup at all* for a session
+started afterwards, i.e. the bug again with a comment on it. The cleanup is now unconditional and reads
+the ref when it runs.
+
+### 14.2 Defect 27 - no boundary above the composition root
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 27 | A missing last line of defence - every throw in the app became a dead screen | new `app/error.tsx` (none existed; only `app/not-found.js`) | Next's App Router needs `app/error.tsx` to contain a render error below the layout; without it the framework's own client-error page is the response. That is what turned defect 25 from "a panel failed" into "the app is gone", with the recovery control inside the crashed surface. | Verified with an injected render throw (`throw new Error(...)` at the top of the drawer's body): the app then renders `[ ERROR ] Something in this screen failed to render.` with a retry, `Application error` is absent from the body, and **clicking Try again returns to the launchpad with the library intact**. The throw was reverted; `tests/unit/error-boundary.test.ts` pins the contract that remains (client component, `{error, reset}`, a retry wired to `reset`, a hard-reload escape, and - the part that would rot - that the fallback reads no persisted data and imports no app modules, so it cannot fail for the same reason the screen it rescues did). |
+
+The escape is a real navigation (`<a href="/">`) rather than `next/link`: client-side routing would keep
+the React tree that just threw, which is the one thing the screen exists to get away from. That is a
+justified lint exception, annotated in the file.
+
+### 14.3 Verified
+
+| Check | Result |
+|---|---|
+| `bunx vitest run` | exit 0 - 77 files, **1316 passed** (1312 before this round) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint` on the four changed files | exit 0 |
+| `e2e/speech-release.spec.ts` (new, 2 tests) | exit 0 - the stage change and the end-of-workout unmount both release the recogniser |
+| the same spec against the pre-fix behaviour (mutation: the cleanup does nothing) | **exit 1**, both tests - `Expected: > 0, Received: 0` |
+| the root boundary against an injected render throw | the fallback renders instead of `Application error`, and `Try again` recovers to the launchpad (probe removed after the run) |
+| `e2e/speech-release` + `history-drawer-legacy` + `share-history` + `modal-a11y` + `bracket-tokens` | exit 0 - **15 passed** |
+
+### 14.4 Residuals
+
+- **`app/global-error.tsx` is still absent**, so a throw inside the root layout itself (the three-line
+  provider tree) is not covered. The layout holds `AuthProvider` and a monitoring stub; adding a second
+  copy of the fallback for them is cheap, but it is a different failure surface and it is stated rather
+  than assumed.
+- **The recogniser is not stopped when the tab is hidden.** A learner who switches tabs mid-dictation
+  keeps the mic; that is arguably deliberate (dictation continues) and the `onresult` still writes to the
+  stage that is open, so it is left as it is, noted here.
+- **Findings 28-30 remain open** (see §13.1).
+
+**Total: 27 distinct defects in 20 files** (26 is the first in `components/workbench/StudioWorkbench.tsx` and 27 the first in `app/error.tsx`).
