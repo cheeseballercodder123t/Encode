@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { clueRungs, MAX_CLUE_RUNGS } from '../../lib/clue-ladder';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  clueRungs,
+  MAX_CLUE_RUNGS,
+  markRungRevealed,
+  resetRungsRevealed,
+  rungsRevealed,
+} from '../../lib/clue-ladder';
 import { validateEncodedSchema } from '../../lib/ai-output-validation';
 
 /**
@@ -139,5 +145,75 @@ describe('the rungs survive validation on their way to the stage', () => {
     expect(visual.generationChallenge?.clues).toEqual(['rung one', 'rung two']);
     // And the rungs still resolve as a ladder downstream, legacy hint included.
     expect(clueRungs(visual.generationChallenge?.clue, visual.generationChallenge?.clues)).toHaveLength(3);
+  });
+});
+
+/**
+ * The reveal counter the friction governor reads.
+ *
+ * `rungsRevealed()` is module-level state on purpose: the ladder is rendered
+ * inside fifteen stage templates, so no component can pass the count up the
+ * tree. That makes the RESET the load-bearing half. If the count survives an
+ * attempt boundary, a clean solve is recorded as scaffolded, and "solved with
+ * no rung" — the one reading that says the mechanism is held, and the signal
+ * the escalation governor runs on — never arrives.
+ */
+describe('the reveal counter the friction governor reads', () => {
+  beforeEach(() => resetRungsRevealed());
+
+  it('starts an attempt at zero', () => {
+    expect(rungsRevealed()).toBe(0);
+  });
+
+  it('counts one rung per hand-over', () => {
+    markRungRevealed();
+    expect(rungsRevealed()).toBe(1);
+    markRungRevealed();
+    markRungRevealed();
+    expect(rungsRevealed()).toBe(3);
+  });
+
+  it('drops the whole attempt on reset rather than decrementing it', () => {
+    markRungRevealed();
+    markRungRevealed();
+    resetRungsRevealed();
+    expect(rungsRevealed()).toBe(0);
+  });
+
+  it('is idempotent: a second reset cannot go below zero', () => {
+    resetRungsRevealed();
+    resetRungsRevealed();
+    expect(rungsRevealed()).toBe(0);
+  });
+});
+
+/**
+ * The boundary that counter is reset on.
+ *
+ * The bug this pins: the reset effect depended on the activity INDEX alone, so
+ * a Guided Path module switch — which swaps the activities and lands back on
+ * index 0 while `appState` stays `'encoding'`, leaving the workbench mounted —
+ * never reset the count. The new module's opening stage then inherited the
+ * previous module's rungs.
+ *
+ * A source scan rather than a rendered assertion because the repo has no
+ * @testing-library/react: the wiring is pinned here, and the browser behaviour
+ * belongs in `e2e/stage-templates.spec.ts`.
+ */
+describe('the workbench resets the counter on the whole attempt boundary', () => {
+  const source = readFileSync(join('components', 'workbench', 'StudioWorkbench.tsx'), 'utf8');
+
+  it('resets on the stage set as well as the activity index', () => {
+    const effect = source.match(/useEffect\(\(\) => \{\s*resetRungsRevealed\(\);\s*\}, \[([^\]]*)\]\)/);
+    expect(effect).not.toBeNull();
+    const deps = effect![1];
+    expect(deps).toContain('currentActivityIndex');
+    // The stage SET is the other half of an attempt's identity: an index-only
+    // dependency cannot see a module switch that lands back on index 0.
+    expect(deps).toContain('activities');
+  });
+
+  it('still resets at all, so the assertion above can never pass vacuously', () => {
+    expect(source).toContain('resetRungsRevealed();');
   });
 });

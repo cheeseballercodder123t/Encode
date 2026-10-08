@@ -33,6 +33,50 @@ describe('scrambleParsons', () => {
     expect(scrambleParsons([chain[0]], 'x')).toEqual([chain[0]]);
     expect(scrambleParsons([], 'x')).toEqual([]);
   });
+
+  // A scramble is a claim that the causal chain has been broken. Two
+  // arrangements quietly falsify that claim: a tile left in its own slot
+  // ("this link is already right") and a ROTATION of the chain, which keeps
+  // every adjacency but the wrap-around and so hands over most of the answer.
+  const five: ParsonsTile[] = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, text: id }));
+  const canonicalFive = five.map((t) => t.id);
+
+  it('never leaves a tile in its own slot, across many seeds', () => {
+    let pinned = 0;
+    for (let i = 0; i < 300; i++) {
+      const ids = scrambleParsons(five, `topic-${i}`).map((t) => t.id);
+      if (ids.some((id, position) => id === canonicalFive[position])) pinned++;
+    }
+    expect(pinned).toBe(0);
+  });
+
+  it('never returns a rotation of the chain, which keeps every adjacency but one', () => {
+    const rotations = five.map((_, k) => [...canonicalFive.slice(k), ...canonicalFive.slice(0, k)].join(''));
+    for (let i = 0; i < 300; i++) {
+      const ids = scrambleParsons(five, `topic-${i}`).map((t) => t.id).join('');
+      expect(rotations).not.toContain(ids);
+    }
+  });
+
+  it('still varies the order it presents instead of recycling a handful', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      seen.add(scrambleParsons(five, `topic-${i}`).map((t) => t.id).join(''));
+    }
+    expect(seen.size).toBeGreaterThan(20);
+  });
+
+  it('moves every tile even on a three-link chain, where the derangements are rotations', () => {
+    // The only fixed-point-free orders of three tiles ARE the two rotations, so
+    // the rotation penalty has to yield here rather than leave nothing to show.
+    const three = five.slice(0, 3);
+    for (const seed of ['x', 'y', 'Action Potentials', 'Krebs', '7']) {
+      const ids = scrambleParsons(three, seed).map((t) => t.id);
+      expect(ids).not.toEqual(three.map((t) => t.id));
+      expect(ids.some((id, position) => id === three[position].id)).toBe(false);
+      expect(new Set(ids).size).toBe(3);
+    }
+  });
 });
 
 describe('gradeParsons', () => {

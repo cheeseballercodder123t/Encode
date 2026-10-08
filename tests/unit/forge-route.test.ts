@@ -111,6 +111,49 @@ describe('/api/forge Route Handlers', () => {
     expect(data.sources[0].status).toBe('ok');
   });
 
+  /**
+   * A text upload has to reach the model as the text the learner wrote.
+   *
+   * Decoding base64 with `atob` reads the bytes as Latin-1, so every byte at or
+   * above 0x80 turns into two mojibake characters: "é" arrives as "Ã©", and an
+   * emoji as four unrelated glyphs. A deck cut from that garbage is unusable,
+   * and nothing else in this file would catch it — the ASCII case decodes
+   * identically under either reading. The route decodes with Buffer's UTF-8.
+   */
+  it('decodes a non-ASCII text upload as UTF-8, not mojibake', async () => {
+    const original = 'Café — naïve résumé. 光合成：葉緑体。🧪 ΔG = ΔH − TΔS';
+    const req = new NextRequest('http://localhost:3000/api/forge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sources: [
+          {
+            id: 'src_utf8',
+            kind: 'file',
+            label: 'bio.txt',
+            file: {
+              name: 'bio.txt',
+              type: 'text/plain',
+              size: Buffer.byteLength(original, 'utf-8'),
+              base64Data: Buffer.from(original, 'utf-8').toString('base64'),
+            },
+          },
+        ],
+        include: ['facts'],
+      }),
+    });
+
+    const res = await forgeRoute(req);
+    expect(res.status).toBe(200);
+
+    // The exact bytes the model is asked to cut cards from.
+    const prompt = mockGenerateJSON.mock.calls[0][0].userPrompt as string;
+    expect(prompt).toContain(original);
+    // The Latin-1 reading of those same bytes — what an atob() decode produced.
+    expect(prompt).not.toContain('Ã©');
+    expect(prompt).not.toContain('â€');
+  });
+
   it('reports empty source honestly when truly empty', async () => {
     const req = new NextRequest('http://localhost:3000/api/forge', {
       method: 'POST',

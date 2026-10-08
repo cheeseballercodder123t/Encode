@@ -61,23 +61,60 @@ function mulberry32(seed: number): () => number {
 export function scrambleParsons(tiles: ParsonsTile[], seed: string): ParsonsTile[] {
   if (tiles.length <= 1) return [...tiles];
   const rand = mulberry32(hashSeed(seed));
-  const out = [...tiles];
-  for (let attempt = 0; attempt < 8; attempt++) {
-    for (let i = out.length - 1; i > 0; i--) {
+  const n = tiles.length;
+
+  const draw = (): number[] => {
+    const order = tiles.map((_, index) => index);
+    for (let i = n - 1; i > 0; i--) {
       const j = Math.floor(rand() * (i + 1));
-      [out[i], out[j]] = [out[j], out[i]];
+      [order[i], order[j]] = [order[j], order[i]];
     }
-    const identical = out.every((t, i) => t.id === tiles[i].id);
-    if (!identical) break;
+    return order;
+  };
+
+  // A scramble claims the causal chain has been broken, and one arrangement
+  // quietly falsifies the claim: a tile still sitting in its own slot, which
+  // tells the learner that link is already right. (A ROTATION is the other
+  // weak case — `b c d a` keeps every adjacency but the wrap-around — but it
+  // cannot be excluded outright, since on a three-tile chain the ONLY
+  // derangements are the two rotations. So it is preferred against, not
+  // forbidden, and the preference is a single pass rather than a minimisation:
+  // minimising kept adjacencies collapses every chain onto a handful of
+  // orders, which costs the drill more variety than the hint is worth.)
+  const rotationKeys = new Set(
+    tiles.map((_, k) => [...tiles.keys()].map((i) => (i + k) % n).join(','))
+  );
+
+  const pinned = (order: number[]) => order.some((index, position) => index === position);
+
+  // Draw until a derangement turns up, preferring one that is not a rotation.
+  // A derangement is roughly 37% of draws whatever the chain length, so forty
+  // draws without one do not happen — and the first draw still stands in as a
+  // fallback, so a pathological chain renders something rather than throwing.
+  const ATTEMPTS = 40;
+  let best = draw();
+  let bestCost = rotationKeys.has(best.join(',')) ? 1 : 0;
+  for (let attempt = 1; attempt < ATTEMPTS; attempt++) {
+    const candidate = draw();
+    // Never trade a derangement away for a pinned order, however tempting its
+    // rotation status: the fixed tile is the hint the learner actually reads.
+    if (pinned(best) && !pinned(candidate)) {
+      best = candidate;
+      bestCost = rotationKeys.has(candidate.join(',')) ? 1 : 0;
+    } else if (!pinned(best) && !pinned(candidate) && bestCost > 0) {
+      bestCost = rotationKeys.has(candidate.join(',')) ? 1 : 0;
+      if (bestCost === 0) best = candidate;
+    }
+    if (!pinned(best) && bestCost === 0) break;
   }
-  // Second pass: pull any tile that landed in its own slot somewhere else.
-  for (let i = 0; i < out.length; i++) {
-    if (out[i].id !== tiles[i].id) continue;
-    const swapWith = (i + 1) % out.length;
-    if (out[swapWith].id === tiles[swapWith].id && out.length > 2) continue;
-    [out[i], out[swapWith]] = [out[swapWith], out[i]];
+
+  // Every draw landed on the answer key: swap the first two links, which is
+  // never the canonical order once there are at least two tiles.
+  if (best.every((index, position) => index === position)) {
+    [best[0], best[1]] = [best[1], best[0]];
   }
-  return out;
+
+  return best.map((index) => tiles[index]);
 }
 
 /** Positional grade: which links are right, and where the chain first breaks. */

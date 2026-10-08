@@ -34,31 +34,61 @@ export interface AnkiCardItem {
  * @param previousState Previous SM2 state
  */
 export function calculateSM2(grade: number, previousState?: SM2State): SM2State {
-  const reps = previousState?.repetitions || 0;
-  let ease = previousState?.easeFactor || 2.5;
-  let interval = previousState?.interval || 1;
+  // A stored SM-2 state is untrusted input: it comes back out of IndexedDB, the
+  // Firestore mirror, an exported deck, or a hand-edited record. One corrupt
+  // field used to poison every review that followed, because `Infinity * 2.5`
+  // is still Infinity and `JSON.stringify` writes Infinity as `null` — the card
+  // then has no due date at all, and nothing downstream can tell that from a
+  // deliberate empty. So every field is read through a finite check, and every
+  // result is checked again before it is returned.
+  const MIN_EASE = 1.3;
+  const DEFAULT_EASE = 2.5;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const finiteOr = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+  // 0 and NaN keep falling back to the defaults, exactly as `|| 0` / `|| 1` /
+  // `|| 2.5` did. Infinity now falls back as well instead of propagating.
+  const reps = Math.max(0, finiteOr(previousState?.repetitions, 0) || 0);
+  let ease = finiteOr(previousState?.easeFactor, DEFAULT_EASE) || DEFAULT_EASE;
+  let interval = finiteOr(previousState?.interval, 1) || 1;
 
   // Grade must be clamped between 0 and 5
   const clampedGrade = Math.max(0, Math.min(5, grade));
 
   if (clampedGrade >= 3) {
+    // The multiplication uses the FLOORED ease. Multiplying by a stored ease
+    // below the floor — a negative one, say — produced a NEGATIVE interval: a
+    // card scheduled in the past, due before it was ever answered.
+    const usableEase = Math.max(MIN_EASE, ease);
     if (reps === 0) {
       interval = 1;
     } else if (reps === 1) {
       interval = 6;
     } else {
-      interval = Math.round(interval * ease);
+      interval = Math.round(interval * usableEase);
     }
     // Update Ease Factor: EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-    ease = ease + (0.1 - (5 - clampedGrade) * (0.08 + (5 - clampedGrade) * 0.02));
-    if (ease < 1.3) ease = 1.3;
+    ease = usableEase + (0.1 - (5 - clampedGrade) * (0.08 + (5 - clampedGrade) * 0.02));
+    if (ease < MIN_EASE) ease = MIN_EASE;
   } else {
     // Reset if failed
     interval = 1;
-    ease = Math.max(1.3, ease - 0.2);
+    ease = Math.max(MIN_EASE, ease - 0.2);
   }
 
-  const nextReviewTimestamp = Date.now() + interval * 24 * 60 * 60 * 1000;
+  // An interval below a day is not a schedule, and `interval * DAY_MS` leaves
+  // the finite range even when the interval itself did not (1e308 days overflows
+  // the timestamp while 1e308 itself is finite). One day is the honest fallback:
+  // a card that comes due tomorrow is recoverable, a card that can never come
+  // due again is not.
+  if (!Number.isFinite(interval) || interval < 1) interval = 1;
+  if (!Number.isFinite(ease)) ease = MIN_EASE;
+  let nextReviewTimestamp = Date.now() + interval * DAY_MS;
+  if (!Number.isFinite(nextReviewTimestamp)) {
+    interval = 1;
+    nextReviewTimestamp = Date.now() + DAY_MS;
+  }
 
   return {
     repetitions: clampedGrade >= 3 ? reps + 1 : 0,

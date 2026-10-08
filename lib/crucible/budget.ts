@@ -77,14 +77,25 @@ export interface CruciblePlan {
  * parts sum to exactly the whole.
  */
 export function allocateSeconds(totalSeconds: number, weights: number[]): number[] {
-  const total = Math.max(0, Math.floor(totalSeconds));
+  // A clock that is not a finite number is not a clock. `Math.max(0, NaN)` is
+  // NaN, so an unusable reading used to flow through the arithmetic below and
+  // come out as a `[NaN, NaN]` allocation.
+  const total = Number.isFinite(totalSeconds)
+    ? Math.max(0, Math.floor(totalSeconds))
+    : 0;
   const clean = weights.map((weight) =>
     Number.isFinite(weight) && weight > 0 ? weight : 1
   );
-  const sum = clean.reduce((acc, weight) => acc + weight, 0);
+  const rawSum = clean.reduce((acc, weight) => acc + weight, 0);
+  // Weights big enough to overflow (two 1e308s) sum to Infinity, which makes
+  // every `weight / sum` zero: the largest-remainder pass below can then only
+  // hand out one second per state, and a 720-second sprint is published as
+  // `[1, 1]`. Fall back to equal shares, so the parts still sum to the whole.
+  const evenly = !Number.isFinite(rawSum);
+  const sum = evenly ? clean.length : rawSum;
   if (sum <= 0) return clean.map(() => 0);
 
-  const exact = clean.map((weight) => (weight / sum) * total);
+  const exact = clean.map((weight) => ((evenly ? 1 : weight) / sum) * total);
   const floors = exact.map((value) => Math.floor(value));
   let remaining = total - floors.reduce((acc, value) => acc + value, 0);
 
@@ -210,7 +221,10 @@ export function summarizeSprint(table: StatePacing[]): SprintSummary {
 
 /** `11:59` — clock face, always two digits, never a negative sign. */
 export function formatClock(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
+  // The face is two digits, so a reading that is not a finite number has none
+  // to print: `Infinity` used to print `Infinity:NaN`, and `NaN` printed
+  // `NaN:NaN`, which is not a clock face at all.
+  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
   const minutes = Math.floor(total / 60);
   const rest = total % 60;
   return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
@@ -218,7 +232,8 @@ export function formatClock(seconds: number): string {
 
 /** `1.4m` — the pacing readout's own unit, one decimal place. */
 export function formatMinutes(seconds: number): string {
-  return `${(Math.max(0, seconds) / 60).toFixed(1)}m`;
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  return `${(safe / 60).toFixed(1)}m`;
 }
 
 // ─── Coercion ───────────────────────────────────────────────────────────────

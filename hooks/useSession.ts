@@ -383,11 +383,35 @@ export function useSession() {
   const canRedo = state.fieldRedoStack.length > 0;
 
   // Award XP helper
+  //
+  // The XP pip is on a timer of its own, and the handle has to outlive the call
+  // that started it. Discarding it meant two awards inside the same 1.8s window
+  // left two live timers, and the FIRST one nulled the animation the second
+  // award had just started — so a fast combo flashed its second gain and lost
+  // it. One ref, one timer at a time.
+  const xpAnimationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const addXP = useCallback((amount: number) => {
     dispatch({ type: 'add_xp', amount });
     setXpGainAnimation(amount);
-    setTimeout(() => setXpGainAnimation(null), 1800);
+    if (xpAnimationTimerRef.current) clearTimeout(xpAnimationTimerRef.current);
+    xpAnimationTimerRef.current = setTimeout(() => {
+      xpAnimationTimerRef.current = null;
+      setXpGainAnimation(null);
+    }, 1800);
   }, []);
+
+  // Leaving the workbench mid-animation must not leave a timer behind that sets
+  // state on a tree that is gone (and a reset must not cancel someone else's).
+  useEffect(
+    () => () => {
+      if (xpAnimationTimerRef.current) {
+        clearTimeout(xpAnimationTimerRef.current);
+        xpAnimationTimerRef.current = null;
+      }
+    },
+    []
+  );
 
   /**
    * Load stage inputs for the given activity index.
