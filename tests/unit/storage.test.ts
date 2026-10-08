@@ -16,6 +16,7 @@ import {
   loadTopicStruggles,
   recordTopicResult,
   clearTopicStruggles,
+  invalidateSchemaCache,
 } from '@/lib/storage';
 import { makeSchema } from './fixtures';
 
@@ -25,6 +26,9 @@ vi.spyOn(console, 'warn').mockImplementation(() => {});
 
 beforeEach(() => {
   localStorage.clear();
+  // The schema list is memoized in a module-level cache, so clearing storage is
+  // not enough: a test that seeds a raw value has to reset the cache too.
+  invalidateSchemaCache();
 });
 
 describe('AI settings', () => {
@@ -70,6 +74,74 @@ describe('schema history', () => {
       saveSchemaToHistory(makeSchema({ timestamp: i }));
     }
     expect(loadSavedSchemas()).toHaveLength(50);
+  });
+});
+
+describe('persisted records are re-read, not trusted', () => {
+  // A record written by an older release reaches the history drawer through two
+  // unvalidated paths (the localStorage migration and a raw `JSON.parse`), and
+  // the drawer used to filter on `s.topicSummary.toLowerCase()`. One legacy
+  // record therefore threw during render with no error boundary above it: the
+  // app answered with "Application error: a client-side exception has occurred"
+  // and the learner could not clear the bad data, because "clear all" lives in
+  // the drawer that crashed. `e2e/history-drawer-legacy.spec.ts` pins the crash
+  // in the browser; these pin the contract that stops it.
+  it('gives a legacy record with no topic a usable name instead of undefined', () => {
+    localStorage.setItem(
+      'deepencode_saved_schemas_v2',
+      JSON.stringify([{ id: 'legacy', timestamp: 1, mode: 'conceptual', activities: [] }])
+    );
+    const list = loadSavedSchemas();
+    expect(list).toHaveLength(1);
+    expect(list[0].topicSummary).toBe('Untitled topic');
+    // And every other dereferenced field is the right type.
+    expect(typeof list[0].topicSummary.toLowerCase()).toBe('string');
+    expect(list[0].activities).toEqual([]);
+    expect(list[0].userResponses).toEqual({});
+    expect(list[0].xpEarned).toBe(0);
+    expect(list[0].mode).toBe('conceptual');
+  });
+
+  it('keeps a real record byte-identical', () => {
+    const s = makeSchema();
+    saveSchemaToHistory(s);
+    expect(loadSavedSchemas()[0]).toEqual(s);
+  });
+
+  it('drops entries that are not records at all', () => {
+    localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify([null, 'nope', 42, { timestamp: 1 }]));
+    expect(loadSavedSchemas()).toEqual([]);
+  });
+
+  it('coerces a wrong-typed record field by field', () => {
+    const raw = {
+      id: 'partial',
+      timestamp: 'yesterday',
+      topicSummary: '   ',
+      mode: 'mnemonic',
+      xpEarned: null,
+      activities: 'none',
+      userResponses: [1, 2],
+      youtubeData: 'a string, not an object',
+    };
+    localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify([raw]));
+    const list = loadSavedSchemas();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({
+      id: 'partial',
+      timestamp: 0,
+      topicSummary: 'Untitled topic',
+      mode: 'conceptual',
+      xpEarned: 0,
+      activities: [],
+      userResponses: {},
+      youtubeData: undefined,
+    });
+  });
+
+  it('returns an empty list for a non-array history', () => {
+    localStorage.setItem('deepencode_saved_schemas_v2', '{"not":"a list"}');
+    expect(loadSavedSchemas()).toEqual([]);
   });
 });
 

@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { SavedSchema, SegregationReport, ProceduralMCQArchetype, StageResponse, Activity } from './types';
 import { buildAnkiCollectionSqlite, deterministicAnkiGuid, AnkiNoteRow } from './anki-sqlite-writer';
-import { countWords, stripHtml, classifyDeckQuality } from './fsrs-audit';
+import { countWords, stripHtml, classifyDeckQuality, isLeechDense } from './fsrs-audit';
 import { sanitizeForWozniak, tagOverflowCard, type WozniakHeldCard } from './wozniak';
 import { loadInterferenceTraps } from './interference-traps';
 import { toyBoundaryCard, toyDuelCard } from './toy-models/progress';
@@ -114,9 +114,17 @@ export function buildHierarchicalDeckName(topicSummary?: string): string {
   return topic ? `DeepEncode::${topic}` : 'DeepEncode';
 }
 
-/** Adds LeechCandidate when FSRS would punish the card's density. */
+/**
+ * Adds LeechCandidate when FSRS would punish the card's density.
+ *
+ * `isLeechDense` is the ONE definition of that rule (`lib/fsrs-audit.ts`), and
+ * the completion screen counts cards with the same function — so its "Dense
+ * (tagged)" number and this tag cannot drift apart. Idempotent: a deck can pass
+ * through the funnel twice (reopening the export sheet, force-including the
+ * withheld fragments), and a duplicated tag is noise in Anki's filter.
+ */
 function appendLeechTag(card: AnkiCardItem): void {
-  if (countWords(`${card.front} ${card.back}`) > 15) card.tags.push('LeechCandidate');
+  if (isLeechDense(card) && !card.tags.includes('LeechCandidate')) card.tags.push('LeechCandidate');
 }
 
 /** Export tag set for one activity + response (Unfinished gate lives here). */
@@ -872,8 +880,20 @@ export function sanitizeExtracted(
   // Traps and conflict cards always pass through the pass untouched, wherever a
   // deck is built.
   const result = sanitizeForWozniak(cards, { ...opts, protectTag: PROTECTED_CARD_TAGS });
+  // The dense tag is applied HERE, to the deck that ships, because every export
+  // path goes through this funnel (the segregate flow's declarative facts, the
+  // forge's merged deck, the workbench's handoff, the export sheet's re-runs).
+  // It used to be applied only by `buildUserWordingCards`, so a deck built from
+  // a segregation report carried no LeechCandidate tag at all while the
+  // completion screen told the learner to filter on exactly that tag. Tagging
+  // copies rather than the caller's cards: this stays a pure function.
+  const shipped = result.cards.map((card) =>
+    isLeechDense(card) && !card.tags.includes('LeechCandidate')
+      ? { ...card, tags: [...card.tags, 'LeechCandidate'] }
+      : card
+  );
   return {
-    cards: result.cards,
+    cards: shipped,
     heldBack: result.heldBack,
     addedSymmetric: result.addedSymmetric,
     before: cards.length,

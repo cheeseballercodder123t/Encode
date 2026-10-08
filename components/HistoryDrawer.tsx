@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { motion, AnimatePresence } from 'motion/react';
 import { SavedSchema } from '@/lib/types';
+import { coerceSavedSchemas } from '@/lib/storage';
 import { sound } from '@/lib/audio';
 import { useAuth } from '@/lib/auth-context';
 import { useModalA11y } from '@/hooks/useModalA11y';
@@ -43,7 +44,11 @@ export function HistoryDrawer({
   if (!isOpen) return null;
 
   // Merge cloud schemas and local schemas by id
-  const displaySchemas = user && cloudSchemas.length > 0 ? cloudSchemas : schemas;
+  //
+  // Re-read on the way in: the cloud list is remote data and the local list is
+  // whatever was on disk, and this filter is where a record with no
+  // `topicSummary` used to take the whole app down (see `coerceSavedSchema`).
+  const displaySchemas = coerceSavedSchemas(user && cloudSchemas.length > 0 ? cloudSchemas : schemas);
 
   const filteredSchemas = displaySchemas.filter(s => {
     const matchesSearch = s.topicSummary.toLowerCase().includes(searchQuery.toLowerCase());
