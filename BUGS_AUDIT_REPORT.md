@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37) and 18 in PR #39 (round 5, §7) — every defect this report records is on `main`.** Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect this report records is on `main`.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -361,10 +361,59 @@ Not run: the Playwright specs (no UI path is touched - this is a library-level c
 
 **Total: 18 distinct defects in 10 files** (defect 18 is the third in `lib/deck-memory.ts`, after 15 and 16).
 
-### 7.2 Reported, not repaired: the account copy of the source ledger is written and never read
+### 7.2 The account copy of the source ledger was written and never read — **repaired in round 6 as defect 19 (§8)**
+
+The finding as it stood after round 5, kept here as the record of what was open then:
 
 `lib/deck-memory-cloud.ts` writes the merged records, `sources` included, with `setDoc` - but `readRemoteRecords` maps only `topic`, `keys`, `updatedAt`, `exports` and `lastSurface`, so `sources` is dropped on the way in. Consequences, both read off that single reader rather than inferred: (a) `mergeSourceLedgers(a.sources, b.sources)` always receives `undefined` for the account side, so the cross-device half of the ledger union is inert - a lecture forged on the laptop is offered again on the desktop, which is the opposite of the comment above that merge ('forging this topic on a second device is still material already cut'); (b) the divergence fixed above is therefore, in the deployed path, latent rather than live: it is reachable through the exported `mergeDeckMemoryStores` (which is what its tests and this report exercise) and becomes live the moment the reader carries the field. Not repaired here because carrying it is a behaviour change - the ingest panel would begin offering to skip sources cut on another device - that needs its own sanitising and its own verification, not a line added to a fix about comparison order.
 
 ### 7.3 Method note
 
 The §5.3 bullet was written from reading and called the trigger 'narrower'; the measurement is what corrected it. Two of the three mutations were chosen to isolate the *halves* of the fix rather than to re-prove the whole: the order mutation kills only the order tests, the `cards` mutation only the content tests, and restoring the old comparison kills five of the seven - which is the evidence that each piece carries its own weight rather than one test standing in for all of them.
+
+---
+
+## 8. Round 6 - defect 19, the account's source ledger was written and never read
+
+Round 5 ended by recording one finding of its own in §7.2 and leaving it open. Round 6 closed it, and most of the work was in deciding what "trust this document" has to mean.
+
+### 8.1 Defect 19 - the ledger union had one side
+
+| Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|
+| Cross-device memory: half the ledger union was inert | `lib/deck-memory-cloud.ts`, `readRemoteRecords` | The push has always stored the merged records whole - `mergeDeckMemoryStores` carries `sources` for a local-only record and unions it otherwise - but the reader mapped only `topic`, `keys`, `updatedAt`, `exports` and `lastSurface`. So `mergeSourceLedgers(a.sources, b.sources)` always received `undefined` for the account side, and `forgedSourceLedger()` - the function the forge's setup panel asks - could only answer for the device in hand: a lecture cut on the laptop was offered as new material on the desktop, which is the opposite of what the ledger exists for. | Reproduced on the unfixed reader: an account document carrying a ledger produced a local store with no `sources` at all and `forgedSourceLedger().get(deckSourceKey(source))` returned `undefined`, i.e. no `[ FORGED × n ]` chip and no skip offer on the second device. Restoring the pre-fix reader turns **5 of the 13** new tests red; the 4 structural guards (a legacy record, an unreadable ledger, the fingerprints of such a record, and the not-signed-in path) stay green. |
+
+The fix is `readRemoteSources(value)` plus one mapped field, and the interesting part is what it refuses to do. This is the only place in the memory where a document this app did not write (another device's, an older build's, a hand-edited one) enters:
+
+- **`at` is required, not defaulted.** It is the recency the union ranks by and the value the two devices are compared on. A default of `Date.now()` would invent a sighting newer than everything on both devices; a default of `0` would let a stale account copy evict a fresh local one. A sighting without a usable `at` is therefore dropped. **Mutation-proven:** defaulting it to `0` instead of dropping the entry turns exactly the two `at`-handling tests red.
+- **`key` is required.** It is the source's own fingerprint; without it the entry cannot match anything, so there is nothing to keep.
+- **The display fields degrade instead.** A missing `label` falls back to the key and a non-numeric `cards` to `0`, so a ledger written by a build that did not store them still reads rather than being thrown away.
+- **`undefined`, never `[]`.** The merge reads "no ledger here" as "leave this device's ledger alone"; an empty array would be the claim that the account knows about no sources at all - which is why an empty or unreadable ledger leaves the local fingerprints and the local ledger untouched (both pinned by tests).
+- **A record with an unreadable ledger is still read.** Its fingerprints answer "have I shipped this card"; discarding them because the optional ledger was malformed would re-offer cards the learner already has.
+
+**The one consequence a learner can observe, stated rather than implied.** The 60-sighting cap is now a cap on the union, trimmed by sighting time. That is the recency rule `recordDeckSources` already applies to a single device's own list, so the union inherits it rather than inventing a second policy - but it means a source older than the newest 60 sightings across the account reads as new again, on the device that had it and on the one that did not. Pinned in both directions: with 40 local sightings newer than 40 remote ones, all 40 local survive and the remote's 20 newest give way; reversed, the local device's 20 oldest are what give way, and the surviving set is the same either way round - the trim is by `at`, not by which device wrote first.
+
+**The ingest panel, examined rather than assumed.**
+
+- `forgedBefore` iterates **this setup's own** sources and asks `ledger.get(deckSourceKey(source))`, so a source the learner never attached can never be listed, and a different lecture in the same topic cannot inherit the chip - the lookup is by fingerprint, which is pinned by a test.
+- The topic the chip names comes from the record the sighting sits in and is rendered as text in a tooltip. Nothing navigates to, or looks up, the remote topic, so a ledger entry from another device cannot point at a deck this device does not have.
+- The skip stays a single explicit, reversible click ("skip n already-forged sources" / "use them again"), and the row says where it landed and how many cards - never a silent drop.
+- A ledger-only difference can now set `changed` on a sync where nothing else did, which calls `refreshMemory(deck, 'keep')`. That recomputes the **card** diff from fingerprints, which the ledger does not feed, so the effect is a recompute of a number that is already right; and the next sync is the fixed point, so it cannot become a re-report loop (both pinned by tests).
+- **Nothing new leaves the device.** The account copy already held the ledger - the push was never the bug - so this fix stops the second device from ignoring it rather than adding a field to what is mirrored. Said plainly because "now mirrored" would read as a new exposure.
+
+| Check | Result |
+|---|---|
+| `bun tsc -b --noEmit` | **exit 0** |
+| `bunx vitest run` | **exit 0** - 76 files, **1290 passed** (was 1277) |
+| `bunx eslint lib/deck-memory-cloud.ts tests/unit/deck-memory-cloud.test.ts` | **exit 0** |
+| Mutation - restore the pre-fix reader (no `sources` mapped) | **5 of 13 fail**; the 4 structural guards pass |
+| Mutation - default a missing `at` to `0` instead of dropping the entry | **2 fail** (both `at` tests) |
+| `bunx playwright test e2e/flashcard-forge.spec.ts -g "already forged\|re-forge says what is already in the deck"` against the managed preview | **2 passed** (18.8s) - the panel's own regression tests for the memory-aware ingest chip, skip, unskip and the deck diff |
+
+Not run: Firestore itself (no credentials in this environment - the SDK boundary is mocked, which is the honest line to draw for a reader whose whole job is the shape of a document), and the rest of the Playwright suite (the AnkiConnect-dependent failures of §5.2 are unrelated and pre-existing; neither spec run here touches AnkiConnect, which is mocked offline).
+
+**Total: 19 distinct defects in 11 files** (defect 19 is the first in `lib/deck-memory-cloud.ts`).
+
+### 8.2 Method note
+
+This is the first test file in the repo to mock a cloud module's SDK boundary (`vi.mock('firebase/firestore')` plus the app's `lib/firebase`), which is what made a reader that only touches a `data` object testable at all; the alternative - trusting the real SDK against a real project - would have made the unit suite depend on credentials. The reader is exported for tests for the same reason `aiCacheSize` is: the wire shape is the whole of its job, and it is the one place untrusted document data enters the memory. The panel question was answered in two ways rather than one: by reading what the panel does with a ledger entry, and by running the two Playwright tests that already existed for that path.

@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import {
   DeckMemoryRecord,
+  DeckMemorySource,
   deckMemoryStoresEqual,
   loadDeckMemory,
   mergeDeckMemoryStores,
@@ -45,7 +46,59 @@ function memoryDocRef(uid: string) {
   return doc(db, 'users', uid, 'memory', 'decks');
 }
 
-function readRemoteRecords(data: any): Record<string, DeckMemoryRecord> {
+/**
+ * The account's copy of one topic's source ledger, or `undefined` when it holds
+ * nothing usable.
+ *
+ * Unlike `keys`, a sighting cannot be repaired: `at` is the recency the union
+ * ranks by and the value the two devices are compared on, so an entry without a
+ * usable `at` is dropped rather than defaulted to `Date.now()` (which would
+ * invent a sighting newer than everything on both devices) or to `0` (which
+ * would let a stale account copy evict a fresh local one). `key` is the source's
+ * own fingerprint and has to be there for the entry to mean anything; the two
+ * display fields degrade instead of dropping the entry, so a ledger written by a
+ * build that did not store them still reads.
+ *
+ * `undefined` rather than `[]` on purpose: the merge reads "no ledger here" as
+ * "leave this device's ledger alone", while an empty array would be the claim
+ * that the account knows about no sources at all.
+ */
+function readRemoteSources(value: unknown): DeckMemorySource[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: DeckMemorySource[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const source = raw as Partial<DeckMemorySource>;
+    if (typeof source.key !== 'string' || source.key.length === 0) continue;
+    if (typeof source.at !== 'number' || !Number.isFinite(source.at)) continue;
+    out.push({
+      key: source.key,
+      label: typeof source.label === 'string' ? source.label : source.key,
+      cards: typeof source.cards === 'number' && Number.isFinite(source.cards) ? source.cards : 0,
+      at: source.at,
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/**
+ * Reads the account's records into the shape the merge expects. Exported for
+ * tests - the wire shape is the whole of this function's job, and it is the one
+ * place a document this app did not write (an older build's, another device's,
+ * a hand-edited one) enters the memory.
+ *
+ * `sources` is read back through {@link readRemoteSources}. It always was
+ * *written* - the push stores the merged records whole, ledger included - but it
+ * was never read, so the ledger union had one side: a lecture forged on the
+ * laptop was offered as new material on the desktop, which is the opposite of
+ * what the ledger exists for. Reading it back also makes the fingerprint half of
+ * the flow honest, since both now describe the same account copy.
+ *
+ * A record with an unreadable ledger is still read: its fingerprints are what
+ * answer "have I shipped this card", and losing them because the optional
+ * ledger was malformed would re-offer cards the learner already has.
+ */
+export function readRemoteRecords(data: any): Record<string, DeckMemoryRecord> {
   const records = data?.records;
   if (!records || typeof records !== 'object') return {};
   const out: Record<string, DeckMemoryRecord> = {};
@@ -58,6 +111,7 @@ function readRemoteRecords(data: any): Record<string, DeckMemoryRecord> {
       updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : 0,
       exports: typeof record.exports === 'number' ? record.exports : 0,
       lastSurface: typeof record.lastSurface === 'string' ? record.lastSurface : undefined,
+      sources: readRemoteSources(record.sources),
     };
   }
   return out;
