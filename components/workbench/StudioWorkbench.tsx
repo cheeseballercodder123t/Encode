@@ -543,10 +543,23 @@ export function StudioWorkbench({
    * stage templates, so no component can pass it up the tree) and the governor
    * reads it at check time — resetting on the stage boundary is what keeps
    * "solved with no rung" meaning THIS problem rather than the whole session.
+   *
+   * `activities` is a dependency as well as the index, because the stage SET is
+   * part of the attempt's identity. A Guided Path module switch swaps the
+   * activities and lands back on index 0 (`hooks/useSession.ts`, the
+   * select-module action), and switching modules never leaves
+   * `appState === 'encoding'` — so the workbench stays mounted across it. An
+   * index-only dependency therefore never fired on that boundary, the previous
+   * module's rung count stood, and the governor read the new module's first
+   * clean solve as a scaffolded one: the clean-win streak that drives
+   * escalation could not advance on any module's opening stage.
+   *
+   * (A fresh encode does not need this: it passes back through the launchpad, so
+   * the workbench unmounts and this effect runs again on mount.)
    */
   useEffect(() => {
     resetRungsRevealed();
-  }, [currentActivityIndex]);
+  }, [currentActivityIndex, activities]);
 
   /**
    * The deterministic half of the trap-aware autopsy. Computed only when a

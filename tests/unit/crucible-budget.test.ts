@@ -45,6 +45,25 @@ describe('allocateSeconds — the clock splits exactly, in whole seconds', () =>
     const split = allocateSeconds(60, [0, 1]);
     expect(split).toEqual([30, 30]);
   });
+
+  it('still sums to the whole when the weights are large enough to overflow', () => {
+    // Two 1e308 weights sum to Infinity, so every `weight / sum` is 0. The
+    // largest-remainder pass can then only hand out ONE second per state, and
+    // a 720-second sprint is published as [1, 1] — a HUD whose states do not
+    // add up to the clock.
+    const split = allocateSeconds(720, [1e308, 1e308]);
+    expect(split.reduce((a, b) => a + b, 0)).toBe(720);
+    expect(split).toEqual([360, 360]);
+  });
+
+  it('never publishes a share that is not a number', () => {
+    // `Math.max(0, NaN)` is NaN, so an unusable clock used to flow straight
+    // through the arithmetic and out as `[NaN, NaN]` — which then prints as
+    // the clock face `NaN:NaN`.
+    expect(allocateSeconds(NaN, [1, 1])).toEqual([0, 0]);
+    expect(allocateSeconds(Infinity, [1, 1])).toEqual([0, 0]);
+    expect(allocateSeconds(-Infinity, [1, 1])).toEqual([0, 0]);
+  });
 });
 
 describe('classifyPacing — a wide band, so the flag means something', () => {
@@ -155,6 +174,15 @@ describe('formatting', () => {
   it('prints pacing minutes at one decimal', () => {
     expect(formatMinutes(84)).toBe('1.4m');
     expect(formatMinutes(0)).toBe('0.0m');
+  });
+
+  it('prints a clock face rather than NaN when the reading is not a number', () => {
+    // The contract is a two-digit clock face. `Infinity` printed `Infinity:NaN`
+    // and `NaN` printed `NaN:NaN`; `formatMinutes` printed `NaNm`.
+    expect(formatClock(NaN)).toBe('00:00');
+    expect(formatClock(Infinity)).toBe('00:00');
+    expect(formatMinutes(NaN)).toBe('0.0m');
+    expect(formatMinutes(Infinity)).toBe('0.0m');
   });
 });
 

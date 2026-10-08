@@ -48,25 +48,67 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+/** The first finite number among the candidates, else 0. */
+function finiteFallback(...candidates: unknown[]): number {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
+  }
+  return 0;
+}
+
 /** Rolls one value for a variable spec, honoring choices / step / decimals. */
 export function rollVariable(
   spec: ProceduralMCQVariableSpec,
   rng: () => number = Math.random
 ): number {
+  // A spec that is missing, null, or not an object declares nothing to roll.
+  // This is called from card-building and validation paths that must not be
+  // taken down by one malformed entry, so it answers with a real number.
+
+  if (!spec || typeof spec !== 'object') return 0;
+
+  const min = spec.min;
+  const max = spec.max;
+  const hasFiniteMin = typeof min === 'number' && Number.isFinite(min);
+  const hasFiniteMax = typeof max === 'number' && Number.isFinite(max);
+  const choices = Array.isArray(spec.choices) ? spec.choices : null;
+
   let value: number;
-  if (spec.choices && spec.choices.length > 0) {
-    value = spec.choices[Math.floor(rng() * spec.choices.length) % spec.choices.length];
-  } else {
-    const lo = Math.min(spec.min ?? 0, spec.max ?? 0);
-    const hi = Math.max(spec.min ?? 0, spec.max ?? 0);
+  if (choices && choices.length > 0) {
+    const picked: unknown = choices[Math.floor(rng() * choices.length) % choices.length];
+    // A choice list is a list of NUMBERS. A string, a hole, or a NaN in it
+    // would reach toFixed() below and throw, so an unusable pick is treated
+    // as "no draw" and falls through to the finite fallback.
+    value = typeof picked === 'number' && Number.isFinite(picked) ? picked : NaN;
+  } else if (hasFiniteMin && hasFiniteMax) {
+    const lo = Math.min(min as number, max as number);
+    const hi = Math.max(min as number, max as number);
     let raw = lo + rng() * (hi - lo);
     if (spec.step && spec.step > 0) {
       raw = lo + Math.round((raw - lo) / spec.step) * spec.step;
     }
     value = raw;
+  } else if (hasFiniteMin) {
+    // One usable end still bounds the draw: an infinite max cannot be rolled
+    // inside, so the finite end is the only honest value.
+    value = min as number;
+  } else if (hasFiniteMax) {
+    value = max as number;
+  } else {
+    return 0;
   }
-  const decimals = typeof spec.decimals === 'number' ? spec.decimals : 2;
-  return Number(value.toFixed(decimals));
+
+  // A non-finite value leaving here poisons every formula downstream: each
+  // computed answer becomes NaN and JSON.stringify turns it into null.
+  if (!Number.isFinite(value)) return finiteFallback(min, max);
+
+  // toFixed() throws a RangeError outside 0..100, so a bad decimals value is
+  // clamped rather than allowed to crash the caller.
+  const decimals = Number.isInteger(spec.decimals)
+    ? Math.min(100, Math.max(0, spec.decimals as number))
+    : 2;
+  const rounded = Number(value.toFixed(decimals));
+  return Number.isFinite(rounded) ? rounded : 0;
 }
 
 /** Rolls a full variable context for an archetype. */
@@ -75,6 +117,7 @@ export function rollVariables(
   rng: () => number = Math.random
 ): Record<string, number> {
   const ctx: Record<string, number> = {};
+  if (!variables || typeof variables !== 'object') return ctx;
   for (const [name, spec] of Object.entries(variables)) {
     ctx[name] = rollVariable(spec, rng);
   }
