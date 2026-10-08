@@ -50,6 +50,14 @@ export interface DeckMemoryRecord {
 
 const STORAGE_KEY = 'encode.deck-memory.v1';
 const MAX_TOPICS = 60;
+/**
+ * The cap on one topic's fingerprints — a cap on the UNION of every device's
+ * knowledge of that topic, never a per-device budget. How that union is trimmed
+ * to fit is {@link mergeKeyLists}'s job; it is the reason this is not a plain
+ * slice of a concatenation. Each device is guaranteed its newest
+ * `MAX_KEYS_PER_TOPIC / 2` fingerprints of that union (all of them, when it
+ * holds fewer), so one device's memory can never be evicted by another's.
+ */
 const MAX_KEYS_PER_TOPIC = 600;
 const MAX_KEY_LENGTH = 160;
 const MAX_SOURCES_PER_TOPIC = 60;
@@ -301,6 +309,93 @@ export function saveDeckMemoryStore(store: DeckMemoryStore): void {
 }
 
 /**
+ * The fingerprints to keep when the two devices' union overflows the cap.
+ *
+ * Policy: shares of the cap, not a race to be written first. `keys` is
+ * newest-first on EVERY device — `recordDeckExport` and `adoptDeckKeys` both
+ * prepend, "so the cap trims the oldest" — and a fingerprint carries no
+ * timestamp of its own, so its position in that list is the only recency it has.
+ * That is the signal `mergeSourceLedgers` reads from `at`, one level down: the
+ * cap trims the oldest.
+ *
+ * Each device keeps its newest half of the cap — ALL of them when it holds
+ * fewer, with the unused share flowing to the other device — and each device's
+ * fingerprints stay contiguous and in that device's own newest-first order. The
+ * cap therefore trims each device's oldest rather than its arbitrary tail, and a
+ * device whose list fits inside the cap is never evicted at all.
+ *
+ * What this replaces concatenated and sliced —
+ * `[...remote.keys, ...local.keys].slice(0, MAX_KEYS_PER_TOPIC)` — so a remote
+ * device already holding the cap pushed EVERY local fingerprint off the end. The
+ * local device then re-offered cards it had already shipped as "new" (and would
+ * ship them again), and the cloud mirror wrote that loss back over the shared
+ * copy.
+ *
+ * Why contiguous blocks and not one recency-sorted blend: a device's positions
+ * only mean anything against that device's own list. Merging the survivors into
+ * one blended, compacted list makes every key a device holds read as older than
+ * it is, and re-merging that blend with the other device then pushed the local
+ * device's fingerprints out again — measured on a 700-key local list against a
+ * 900-key remote one, the second sync dropped 100 of the 300 local keys the
+ * first sync had retained and took in 100 remote keys of the same true age. A
+ * block per device keeps the positions honest.
+ *
+ * The result is canonical — a function of the two lists, not of which device is
+ * merging or of argument order — so both devices build the same memory and
+ * neither writes a mirror the other would only call different in order
+ * (`deckMemoryStoresEqual` is membership-based either way).
+ *
+ * Known limit, stated rather than implied: with no per-key timestamp, recency
+ * can only be positional, so this is a fair share of a capped union and not a
+ * strict age ranking across devices. A per-key `at`, stamped at export time and
+ * carried through the record, is the upgrade path — see `BUGS_AUDIT_REPORT.md`
+ * §5.5 for the policy and its implications.
+ */
+function mergeKeyLists(localKeys: string[], remoteKeys: string[]): string[] {
+  const cap = MAX_KEYS_PER_TOPIC;
+  const half = Math.floor(cap / 2);
+
+  // Each device is owed half the cap; a device holding fewer keys than that
+  // hands its unused share to the other, so nothing that fits is ever dropped.
+  const share = (mine: number, theirs: number) => Math.min(mine, half + Math.max(0, half - theirs));
+
+  const kept = new Set<string>();
+  const contribute = (keys: string[], budget: number): string[] => {
+    const block: string[] = [];
+    for (const key of keys) {
+      if (block.length >= budget) break;
+      if (!key || kept.has(key)) continue;
+      kept.add(key);
+      block.push(key);
+    }
+    return block;
+  };
+
+  const localBlock = contribute(localKeys, share(localKeys.length, remoteKeys.length));
+  const remoteBlock = contribute(remoteKeys, share(remoteKeys.length, localKeys.length));
+
+  // Each device's fingerprints stay contiguous and in that device's own
+  // newest-first order, which is load-bearing twice over. It keeps the cap
+  // trimming each device's OLDEST rather than its arbitrary tail — and it keeps
+  // a surviving store's positions comparable to the device they came from, so
+  // re-merging the two devices again selects the same fingerprints instead of
+  // letting one device's keys age twice as fast as the other's (a compacted
+  // blend of two lists reads every key it holds as twice as old as it is).
+  // Which block comes first is decided by content, so both devices build the
+  // same list and neither writes a mirror the other would call changed.
+  return canPrecede(localBlock, remoteBlock)
+    ? [...localBlock, ...remoteBlock]
+    : [...remoteBlock, ...localBlock];
+}
+
+/** A total, content-decided order for the two blocks — never the argument order. */
+function canPrecede(block: string[], other: string[]): boolean {
+  if (block.length === 0) return false;
+  if (other.length === 0) return true;
+  return block[0] < other[0];
+}
+
+/**
  * Unions two memory stores topic by topic.
  *
  * This is deliberately additive rather than last-write-wins: the memory exists
@@ -308,6 +403,8 @@ export function saveDeckMemoryStore(store: DeckMemoryStore): void {
  * the other's newer timestamp would resurrect a whole deck as "new" and let it
  * be exported a second time. Fingerprints are unioned, the export counter takes
  * the larger of the two, and the receipt comes from whichever record moved last.
+ * When the union is bigger than the cap, {@link mergeKeyLists} decides which
+ * fingerprints the two devices keep.
  */
 export function mergeDeckMemoryStores(local: DeckMemoryStore, remote: DeckMemoryStore): DeckMemoryStore {
   const merged: DeckMemoryStore = {};
@@ -325,11 +422,11 @@ export function mergeDeckMemoryStores(local: DeckMemoryStore, remote: DeckMemory
       merged[id] = a;
       continue;
     }
-    const keys = [...b.keys, ...a.keys].filter((key, index, all) => all.indexOf(key) === index);
+    const keys = mergeKeyLists(a.keys, b.keys);
     const newer = (b.updatedAt || 0) > (a.updatedAt || 0) ? b : a;
     merged[id] = {
       topic: a.topic || b.topic,
-      keys: keys.slice(0, MAX_KEYS_PER_TOPIC),
+      keys,
       updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0),
       exports: Math.max(a.exports || 0, b.exports || 0),
       lastSurface: newer.lastSurface,
@@ -351,7 +448,13 @@ export function deckMemoryStoresEqual(a: DeckMemoryStore, b: DeckMemoryStore): b
     const right = b?.[id];
     if (!left || !right) return false;
     if (left.keys.length !== right.keys.length) return false;
-    if (left.keys.some((key, index) => right.keys[index] !== key)) return false;
+    // Membership, not order. The fingerprint list is a SET of cards already
+    // exported, and `mergeDeckMemoryStores` rebuilds it remote-first every time
+    // it runs — so an index comparison reported a change for a merge that added
+    // nothing at all, and `merge` was not commutative as a value. The cloud
+    // mirror writes on exactly that signal (lib/deck-memory-cloud.ts).
+    const rightKeys = new Set(right.keys);
+    if (left.keys.some((key) => !rightKeys.has(key))) return false;
     if ((left.exports || 0) !== (right.exports || 0)) return false;
     if (!sourceLedgersEqual(left.sources, right.sources)) return false;
   }

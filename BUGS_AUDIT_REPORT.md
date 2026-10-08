@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34); defects 13–14 are in the working tree.** Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34) and 13–14 in `1f67f2e` (PR #35); defects 15–16 are in the working tree.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -201,3 +201,71 @@ No new exports were added or renamed in any source file; `calculateSM2`'s signat
 `rollVariables`/`rollVariable`'s signatures and every error string in `procedural-validator.ts` are
 unchanged. The only module-private helper added is `finiteFallback` in `lib/procedural-validator.ts`
 (no name collision).
+
+---
+
+## 5. Round 3 - defects 15-16, the E2E failures finally attributed, and findings left open
+
+### 5.1 Defect 15 - the deck memory compared fingerprints by index
+
+| Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|
+| Cross-device state: false 'changed' signal, non-commutative merge | `lib/deck-memory.ts:347` | `deckMemoryStoresEqual` compared `keys` **by index**, but `mergeDeckMemoryStores` rebuilds that list remote-first (`[...b.keys, ...a.keys]`) every time it runs. Two stores holding the identical fingerprint *set* in a different order therefore read as different, `merge` was not commutative as a value, and the cloud mirror writes on exactly that signal (`lib/deck-memory-cloud.ts:81`). | Reproduced: `merge(a, b).keys` = `c,d,a,b` against `a,b,c,d` for the reversed call, with `deckMemoryStoresEqual` **false** in both directions; a merge adding nothing at all also reported a change. Fixed by comparing membership (length plus subset test) rather than position. Pinned by `tests/unit/deck-memory-merge-hardening.test.ts` (4 tests); mutation-proven - restoring the index comparison fails 3 of them with `expected false to be true`, while the guard for stores that genuinely differ keeps passing. |
+
+**Total: 16 distinct defects in 9 files** (defects 15 and 16 are both in `lib/deck-memory.ts`).
+
+### 5.2 The E2E failures are attributed - and they are not from this work
+
+This audit carried an open question from its first round: two `flashcard-forge` failures whose causality could not be established, because the managed preview serves the working tree and no clean baseline was obtainable. CI answers it. On the commit **before any of this work** (`bf2f8cc`) and on the first merged PR of this audit, the job results are identical:
+
+| Job | `bf2f8cc` (pre-existing) | `1b0ffb0` (this audit) |
+|---|---|---|
+| Typecheck, lint, unit tests & build | **success** | **success** |
+| Playwright e2e (chromium) | **failure** | **failure** |
+
+The failing tests in CI are exactly the AnkiConnect-dependent ones: `e2e/flashcard-forge.spec.ts:215` and `:233` (expect lines `:226`, `:240`), and `e2e/anki-connect.spec.ts:91`, `:114`, `:137` (expect lines `:99`, `:121`, `:158`). So the E2E job is red on `main` independently of every change in this audit, and the failures are confined to the AnkiConnect path - which is the path the commit immediately preceding this audit (`bf2f8cc`, 'remove 127.0.0.1 AnkiConnect pings on HTTPS') had just changed. That is the hypothesis recorded in the limitations section, now confirmed rather than left open. Every spec this audit touched passes locally against the managed preview (`modal-a11y` 3/3, `sequence` 3/3, `scaffold-frame` 3/3), and the typecheck/lint/unit/build job passes in CI on the pre-existing commit and on **both** merges (verified job-by-job on each run; the e2e job was still in progress on the second merge when this was written, so no claim is made about its outcome there).
+
+### 5.3 Found this round, reported, deliberately not repaired
+
+- ~~**The deck-memory key cap discards the local device's fingerprints.**~~ **Repaired this round as defect 16** — the policy, its implications and the two failed designs behind it are in **§5.5**. Recorded here from the round that found it: `MAX_KEYS_PER_TOPIC` is 600 and the union was remote-first before `slice(0, 600)`. Measured: 5000 local plus 5000 remote keys gives 600 kept, **5000 local dropped and 4400 remote dropped**, every surviving key remote (`R0,R1,R2,...`). The module's own header says the memory exists so a device does not 'export a whole deck a second time', so dropping local fingerprints resurrects exactly those cards as new. This round's hesitation was that remote-first ordering is what makes two devices *converge*; §5.5 shows it is not the only way, and that ordering was a bug in its own right.
+- **`sourceLedgersEqual` has the same index-sensitivity**, and `mergeSourceLedgers` resolves equal-`at` ties remote-first, so a mirror write can still be triggered by tie order alone when two devices record the same source in the same millisecond. Narrower trigger, same family as defect 15; reported but not measured.
+- **A partly-unicode title collapses to a misleading filename.** `remnoteDocumentFilename` strips non-alphanumerics, so `'delta-E plus emoji'` reduces to a single ASCII letter, and two different topics reducing to the same residue produce identically named RemNote documents. The empty case has a fallback (`'DeepEncode'`), the nearly-empty case does not. Path traversal is correctly impossible (`'../../etc/passwd'` becomes `'etc_passwd'`).
+
+### 5.4 Probed clean this round
+
+`lib/url-share.ts` round-trips deep-equal for ASCII, emoji plus accents, **a lone surrogate**, embedded newlines, quotes and cloze braces, and a 200 000-character payload; the empty string and garbage both decompress to `null`; an `activities: []` schema survives, so the guard is length-safe. `sanitizeClozeHint` caps at its limit and strips both brace and parenthesis content; `attachClozeHint` cannot be injected with a close-brace from a hint. Nested-deletion text (`{{c1::{{c2::x}}}}`) receives its hint inside the outer deletion, producing a malformed RemNote hint - but nested cloze is not produced anywhere in this codebase, so it stays an observation.
+
+### 5.5 Defect 16 - the 600-key cap was won by whichever device was written first
+
+| Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|
+| Cross-device memory loss: the local device's fingerprints are dropped, so its own cards come back as new | `lib/deck-memory.ts`, `mergeDeckMemoryStores` (the key union) | The union was `[...remote.keys, ...local.keys].slice(0, MAX_KEYS_PER_TOPIC)`, i.e. remote-first, so a remote device already holding the cap pushed every local fingerprint off the end. | Reproduced three ways: (a) 5000 local + 5000 remote keeps 600 keys, **all of them remote**, 5000 local dropped (measured in round 3, §5.3); (b) a local deck of 40 cards against a 5000-key remote record keeps **zero** of the 40; (c) through the real read path - `recordDeckExport` then `saveDeckMemoryStore(mergeDeckMemoryStores(loadDeckMemory(), remote))` leaves `knownKeysForTopic` without a single key the device had exported. Fixed by the shared-cap policy below. Pinned by 7 new tests in `tests/unit/deck-memory-merge-hardening.test.ts`; mutation-proven - restoring the concat-then-slice fails **6 of the 7**, including the resurrection test and the 300/300 split. |
+
+**The policy, and why this one.** A fingerprint carries no timestamp, so the only recency it has is its position in its own device's newest-first list (both `recordDeckExport` and `adoptDeckKeys` prepend, "so the cap trims the oldest"). That is the signal `mergeSourceLedgers` reads from `at`, one level down. Four rules follow, and they are what the tests assert:
+
+| Rule | Consequence |
+|---|---|
+| Each device keeps its newest `MAX_KEYS_PER_TOPIC / 2` fingerprints (300 of 600) | Two devices at the cap each keep their own newest 300; neither can empty the other |
+| A device holding fewer than 300 keeps **all** of them, and the unused share flows to the other device | A 40-card local deck against a 5000-key remote record keeps all 40, and the remote takes the other 560 |
+| Each device's fingerprints stay contiguous and in that device's own newest-first order | The cap trims each device's **oldest**, not an arbitrary tail, and the survivor still reads newest-first per device |
+| The two blocks are ordered by their content, never by which device is merging or by argument order | Both devices build the same list, so neither writes a mirror the other would call different on order alone |
+
+**Implications, stated plainly rather than buried in the fix:**
+
+- **The loss is bounded, not zero.** When both devices overflow the cap each still loses its own oldest fingerprints (300 of a 600 cap each). That is what a cap is; what is gone is the *unbounded, one-sided* loss that resurrected a whole local deck.
+- **Recency here is positional and per device.** There is no per-key age to rank across devices, so when both blocks overflow the rule divides the budget instead of guessing which device is more recent. Storing a per-key `at`, stamped at export time and carried through the record (and through `lib/deck-memory-cloud.ts`, which rebuilds records field-by-field), would upgrade the rule to the source ledger's exact one. That is a schema change to a store older app versions read and the cloud mirror writes, so it is recorded as the upgrade path rather than taken in this pass.
+- **The survivor list is no longer globally newest-first**, only per device. Every consumer reads it as a set (`knownKeysForTopic` → `Set`, `diffReportAgainstMemory` → `has`, `deckMemoryStoresEqual` → membership), so ordering was never load-bearing - but it is worth knowing before reading the list.
+- **Anki adoption inherits the guarantee.** `adoptDeckKeys` prepends like an export, so fingerprints read back out of a real Anki collection are treated as that device's newest and survive a capped merge.
+- **Verification scope.** The new tests drive the real path - `recordDeckExport` into `happy-dom`'s `localStorage`, then `loadDeckMemory` → `mergeDeckMemoryStores` → `knownKeysForTopic` - and the pure merge directly. **Not covered:** a live Firestore round trip (unit tests have no Firebase) and a two-browser e2e. The cloud mirror needs no change for this policy - it writes the merged record through and gates its local save on `deckMemoryStoresEqual`, which compares membership.
+
+**The design that failed first, recorded because my own test caught it.** The first attempt ranked the survivors into one recency-sorted blend. That is not stable: a blend compacts 600 survivors into positions 0..599 while their true ages span 0..299, so every key a device holds reads as twice as old as it is, and the next merge pushes local fingerprints back out. Measured on a 700-key local list against a 900-key remote one: the second sync dropped **100 of the 300 local keys the first sync had retained** while taking in 100 remote keys of the same true age. Hence a contiguous block per device, and hence a fixed-point test - the only assertion the blend design fails.
+
+| Check | Result |
+|---|---|
+| `npx tsc -b --noEmit` | **exit 0** |
+| `npx vitest run` | **exit 0** - 75 files, **1264 passed** (was 1257 before this round's 7 tests) |
+| `npx eslint lib/deck-memory.ts tests/unit/deck-memory-merge-hardening.test.ts` | **exit 0** |
+| Mutation A - the old concat-then-slice restored | **6 of 7 cap tests fail**, including `does not resurrect this device's cards as new` and the 300/300 split |
+| Mutation B - survivors as one recency-sorted blend | **exactly 1 fails**, the fixed point (`expected Set{l0,r0,r1,l1,…} to deeply equal Set{l0,r0,l1,r1,…}`), so that test is not vacuous |
+
+Files changed in this pass: `lib/deck-memory.ts` (the cap policy and its documentation), `tests/unit/deck-memory-merge-hardening.test.ts` (7 tests: 4 asked for by this request, 3 guarding the convergence properties the policy depends on), `BUGS_AUDIT_REPORT.md`. No export was added, renamed or removed.
