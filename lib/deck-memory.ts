@@ -238,20 +238,55 @@ export function loadDeckMemory(): DeckMemoryStore {
 }
 
 /**
+ * The ledger's order: freshest sighting first, and for sightings stamped in the
+ * same millisecond — where neither is fresher than the other — by key.
+ * Sightings of one source are deduplicated before this runs, so a key is unique
+ * inside a ledger and this is a total order on it: the array becomes a function
+ * of the entries rather than of the order they arrived in, which is what lets
+ * two devices build the same ledger out of the same two stores.
+ */
+function bySighting(a: DeckMemorySource, b: DeckMemorySource): number {
+  if (b.at !== a.at) return b.at - a.at;
+  return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+}
+
+/**
+ * Which of two sightings of one source the ledger keeps: the newer one, or —
+ * when both devices recorded that source in the same millisecond — the fuller
+ * cut, and then the later label. A total order, so the union is the maximum of
+ * the two under it and neither the argument order nor which device is merging
+ * can change the answer.
+ *
+ * The old rule was that the entry iterated last overwrote the one before it,
+ * over an array built remote-first. On a tie that meant *the local device's
+ * card count wins* — remotely-first for a merge that named this device remote.
+ * So the two devices' merged ledgers held different counts for the same
+ * sighting, and `sourceLedgersEqual` (which read only `key` and `at`) could not
+ * see the disagreement, so neither device ever adopted the other's number.
+ */
+function betterSighting(candidate: DeckMemorySource, incumbent: DeckMemorySource): boolean {
+  if (candidate.at !== incumbent.at) return candidate.at > incumbent.at;
+  if ((candidate.cards || 0) !== (incumbent.cards || 0)) return (candidate.cards || 0) > (incumbent.cards || 0);
+  return (candidate.label || '') > (incumbent.label || '');
+}
+
+/**
  * Every source this app has already cut into cards, keyed by its fingerprint
  * and labelled with the topic it landed in.
  *
  * Scanned ACROSS topics on purpose: at setup time the forge does not know what
  * the deck will be called yet (the topic comes out of the merge), so "have I
  * already forged this lecture?" can only be answered by looking everywhere. The
- * freshest entry per key wins.
+ * freshest entry per key wins, and where two topics recorded the source in the
+ * same millisecond the fuller cut wins ({@link betterSighting}) rather than
+ * whichever topic the store happened to list first.
  */
 export function forgedSourceLedger(): Map<string, DeckMemorySource & { topic: string }> {
   const ledger = new Map<string, DeckMemorySource & { topic: string }>();
   for (const record of Object.values(readStore())) {
     for (const source of record.sources || []) {
       const existing = ledger.get(source.key);
-      if (existing && existing.at >= source.at) continue;
+      if (existing && !betterSighting(source, existing)) continue;
       ledger.set(source.key, { ...source, topic: record.topic });
     }
   }
@@ -292,7 +327,7 @@ export function recordDeckSources(args: {
       at,
     });
   }
-  const sources = [...byKey.values()].sort((a, b) => b.at - a.at).slice(0, MAX_SOURCES_PER_TOPIC);
+  const sources = [...byKey.values()].sort(bySighting).slice(0, MAX_SOURCES_PER_TOPIC);
   store[id] = { ...existing, topic: existing.topic || topic, sources };
   writeStore(store);
   return sources;
@@ -469,18 +504,48 @@ function mergeSourceLedgers(
   const byKey = new Map<string, DeckMemorySource>();
   for (const source of [...(b || []), ...(a || [])]) {
     const existing = byKey.get(source.key);
-    if (existing && existing.at > source.at) continue;
+    if (existing && !betterSighting(source, existing)) continue;
     byKey.set(source.key, source);
   }
   if (byKey.size === 0) return undefined;
-  return [...byKey.values()].sort((x, y) => y.at - x.at).slice(0, MAX_SOURCES_PER_TOPIC);
+  return [...byKey.values()].sort(bySighting).slice(0, MAX_SOURCES_PER_TOPIC);
 }
 
+/**
+ * Whether two topics hold the same sightings of the same sources.
+ *
+ * The ledger is a SET of sightings, not a sequence: it is a union that
+ * `mergeDeckMemoryStores` rebuilds from both sides on every run, so its order is
+ * an artifact of who merged and in which direction — and this function used to
+ * read it by index. Two devices holding the identical sightings of a lecture
+ * therefore read as different memories whenever the arrays were ordered
+ * differently, and the cloud mirror acts on exactly that comparison:
+ * `changed = !deckMemoryStoresEqual(local, merged)` in `lib/deck-memory-cloud.ts`,
+ * which writes the store back and reports a merge to the learner. Same defect,
+ * same family as the fingerprint list one level up; the fix is the same shape —
+ * compare a canonical ordering of the entries instead of a positional one.
+ *
+ * Compared whole, not just `key` and `at`: two sightings of one source in the
+ * same millisecond can still disagree about how many cards it cut, and that is
+ * both the number the panel shows and the disagreement {@link betterSighting}
+ * resolves. Reading only `key` and `at` left the device with the smaller count
+ * permanently unaware of the merged one — its local copy was never saved, so it
+ * kept displaying its own number while the account held the other's.
+ */
 function sourceLedgersEqual(a: DeckMemorySource[] | undefined, b: DeckMemorySource[] | undefined): boolean {
-  const left = a || [];
-  const right = b || [];
+  const sorted = (ledger: DeckMemorySource[]) => [...ledger].sort((x, y) => (x.key < y.key ? -1 : x.key > y.key ? 1 : 0));
+  const left = sorted(a || []);
+  const right = sorted(b || []);
   if (left.length !== right.length) return false;
-  return left.every((source, index) => source.key === right[index]?.key && source.at === right[index]?.at);
+  return left.every((source, index) => {
+    const other = right[index];
+    return (
+      source.key === other.key &&
+      source.at === other.at &&
+      (source.cards || 0) === (other.cards || 0) &&
+      (source.label || '') === (other.label || '')
+    );
+  });
 }
 
 /**
