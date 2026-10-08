@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-rounds-7-11` (rebased onto `main`, opened as PR #41). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) are committed on that branch and in review, not yet merged.** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-rounds-7-11` (rebased onto `main`, opened as PR #41). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) are committed on that branch and in review, not yet merged; defects 28-30 (§15-§17, rounds 13-15) are verified in the working tree on the same branch.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -703,9 +703,9 @@ right" but "what does this do under a corrupt disk, an unmount, two tabs, a sock
 | **25** | **P0 - critical. FIXED in this round (§13.2-13.5)** | One corrupt or legacy record in the learner's own saved history takes the **entire app** down: the history drawer dereferences `topicSummary` during render, nothing defines an error boundary above it, and the resulting screen is Next's *"Application error: a client-side exception has occurred"*. It is not recoverable from the UI - *clear all data* lives inside the drawer that crashed - so the only exit is clearing site data, and the learner cannot see their work at all. | crash site `components/HistoryDrawer.tsx:49`; root cause `lib/storage.ts` (`loadSavedSchemas`) and `lib/db.ts` (the v1 -> IndexedDB migration, the IndexedDB reads, the fallback parse); blast radius: no `app/error.tsx` exists | Reproduced in the browser: seed `deepencode_saved_schemas_v2` with `[{id,timestamp,mode,activities,userResponses}]` (no `topicSummary` - the shape an older release wrote), load the app, click the history button. Before the fix the browser reported `Application error: a client-side exception has occurred while loading 127.0.0.1` and the drawer never mounted; after the fix the drawer opens and lists the record as `Untitled topic`. |
 | 26 | P1 - high. **FIXED in round 12 (§14)** | The workbench's speech recognition is never stopped when the component unmounts: `recognitionRef.current` is only stopped by the toggle itself, there is no cleanup effect, and `continuous = true`. Leaving the stage view (or finishing a session) therefore keeps the recogniser - and the browser's mic indicator - live, and its `onresult` keeps appending into the unmounted component's state. | `components/workbench/StudioWorkbench.tsx:697` (the only `stop()`), `:740` (the ref is assigned, never released); `recognitionRef` appears nowhere else | Read from the code: `recognitionRef` occurs at exactly three places (declare, stop-in-toggle, assign). Nothing could stop it on unmount because nothing was registered to. Round 12 reproduced it with a stub recogniser and closed it. |
 | 27 | P2 - medium. **FIXED in round 12 (§14)** | No root error boundary, so *any* unexpected throw in the composition root is a blank app rather than a contained message with a way back. It is the reason defect 25 was fatal instead of cosmetic. Only the stage-template renderer and the M-r-M surface have boundaries. | no `app/error.tsx` or `app/global-error.tsx`; boundaries exist only in `components/stage-templates/TemplateErrorBoundary.tsx` and `components/mr-m/MisterMSurface.tsx` | The defect-25 reproduction: a single throw inside a panel unmounted the whole tree and the page offered no recovery control. Round 12 added the boundary and proved it with an injected render throw. |
-| 28 | P2 - medium. **Open** | The schema list is memoized in a module-level cache that is **never invalidated**: `invalidateSchemaCache()` is exported and has zero callers, and nothing listens for the `storage` event. Two tabs open on the app therefore diverge - and because `saveSchemaToHistory` writes `[...current-from-cache, schema]`, the second tab's save can persist a list that is missing a schema the first tab just saved. | `lib/storage.ts:288` (`invalidateSchemaCache`, no callers), `:125-155` (`loadSavedSchemas` + `saveSchemaToHistory`), no `window.addEventListener('storage', ...)` anywhere | Grepped: one definition, no call sites; no `storage` listener in `lib/`, `components/`, `hooks/` or `app/`. The write-on-stale-read path is read from the code, not reproduced with two live tabs. |
-| 29 | P3 - medium, frequency unmeasured. **Open** | The stateless share link has no size guard. It is a query parameter on a page served by Node, so past the platform's header limit the *server rejects the request outright* - the learner's shared link is a dead end with no warning at copy time. | `lib/url-share.ts` (`generateStatelessShareUrl`, no length check); consumed by `components/StatelessShareModal.tsx` | **Measured against the running preview server**: `GET /?share=<N bytes>` returns `200` at 4 KB, 8 KB and 12 KB and **`431` (Request Header Fields Too Large)** at 16, 20 and 32 KB. **Measured** compression: the URL runs ≈0.7 x the schema JSON (4 points on a real fixture shape). What is *not* measured: how often a genuinely large session crosses it - no real generated schema is available in this workspace (the e2e fixture is a stub: 5 stages compress to 2 KB), so the crossing frequency is a model, not an observation. |
-| 30 | P4 - low. **Open** | Dead import found while checking consumers: `classifyCardQuality`/`classifyDeckQuality` are imported in a test file that never uses them. | `tests/unit/anki-exporter.test.ts` | Grep of consumers during round 10. No behaviour; left alone so this round's diff stays about the crash. |
+| 28 | P2 - medium. **FIXED in this round (§15)** | The schema list is memoized in a module-level cache that was **never invalidated**: `invalidateSchemaCache()` is exported and had zero callers, and nothing listened for the `storage` event. Two tabs open on the app therefore diverged - and because `saveSchemaToHistory` wrote `[...current-from-cache, schema]`, the second tab's save could persist a list that was missing a schema the first tab just saved. | `lib/storage.ts:288` (`invalidateSchemaCache`, no callers), `:125-155` (`loadSavedSchemas` + `saveSchemaToHistory`), no `window.addEventListener('storage', ...)` anywhere | Round 13 **reproduced it with two live tabs** (Playwright, one browser context): before the fix the first tab's drawer never showed the second tab's schema, and the same spec fails on the pre-fix code with `getByRole('dialog', { name: 'Saved schemas' }).getByText('Saltatory Conduction')` not found. |
+| 29 | P3 - medium, frequency unmeasured. **FIXED in round 14 (§16)** | The stateless share link had no size guard. It was a query parameter on a page served by Node, so past the platform's header limit the *server rejected the request outright* - the learner's shared link was a dead end with no warning at copy time. | `lib/url-share.ts` (`generateStatelessShareUrl`, no length check); consumed by `components/StatelessShareModal.tsx` | **Measured against the running preview server**: `GET /?share=<N bytes>` returns `200` at 4 KB, 8 KB, 12 KB and 16 KB and **`431` (Request Header Fields Too Large)** at 17 KB and above. Round 14 moved the payload into the fragment (where the same 24 KB payload is answered `200`) and proved it in the browser with a 34 KB schema. |
+| 30 | P4 - low. **FIXED in round 15 (§17)** | Dead import found while checking consumers: `classifyCardQuality`/`classifyDeckQuality` were imported in a test file that never used them. | `tests/unit/anki-exporter.test.ts:37` | Round 15 removed the import after confirming the names appear nowhere else in the file, and that both functions are covered where they belong (`tests/unit/fsrs-audit.test.ts`) rather than being a symptom of missing coverage. |
 
 **What was checked and found clean, so the absences are not mistaken for coverage:** event-listener
 balances (`addEventListener`/`removeEventListener` counts match in every file under `components/`,
@@ -828,6 +828,160 @@ justified lint exception, annotated in the file.
 - **The recogniser is not stopped when the tab is hidden.** A learner who switches tabs mid-dictation
   keeps the mic; that is arguably deliberate (dictation continues) and the `onresult` still writes to the
   stage that is open, so it is left as it is, noted here.
-- **Findings 28-30 remain open** (see §13.1).
+- Finding 28 is closed in §15, finding 29 in §16 and finding 30 in §17.
 
 **Total: 27 distinct defects in 20 files** (26 is the first in `components/workbench/StudioWorkbench.tsx` and 27 the first in `app/error.tsx`).
+
+## 15. Round 13 - defect 28, the cache no tab invalidated
+
+Round 11 listed this as the P2 the two-tab sweep could only *read* from the code. Round 13 reproduces it
+with two live tabs and closes it.
+
+### 15.1 Defect 28 - the second tab's save wrote a list the first tab's cache still believed in
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 28 | A cache with no invalidation path, plus a writer that trusted it - **silent data loss between two tabs** (D=7: the record is gone from the store, and nothing on screen says so) | `lib/storage.ts` (`schemaCache`, `invalidateSchemaCache`, `saveSchemaToHistory`, `deleteSchemaFromHistory`), `hooks/useSchemaLibrary.ts` (the only reader) | Three things had to line up, and all three did. (1) `schemaCache` memoizes the list for the document's lifetime, and `loadSavedSchemas` answered from it forever. (2) Nothing invalidated it: `invalidateSchemaCache()` had **zero callers**, and no `storage` event listener existed, so a tab that was already open could never learn that the key had changed - `storage` fires in every tab *except* the writer, which is exactly the one where the cache stays warm. (3) Every write rebuilt its replacement list with `const current = loadSavedSchemas()`, i.e. from that cache: tab B's save therefore wrote `[B, A-from-its-own-cache]` over a key that read `[A, B-just-saved]`, dropping A. The same shape made a delete reversible - tab A's delete re-wrote a list that still contained the id tab B had already removed. | **Reproduced with two live tabs** (one Playwright browser context, so they share storage exactly as two real tabs do): tab A encodes and saves `Action Potentials`, tab B encodes and saves `Saltatory Conduction`. Pre-fix: tab A's library still shows only its own schema after B's save, and a fresh tab sees whatever survived. Post-fix: tab A's drawer shows both **without a reload**, a fresh tab sees both, and the persisted list names both. |
+
+### 15.2 The fix - a fresh read on the write path, and a listener that tells the other tabs
+
+| Layer | What changed |
+|---|---|
+| `lib/storage.ts` - the write path | `readSchemasFromStorage()` reads the key on every write; `saveSchemaToHistory` and `deleteSchemaFromHistory` rebuild from **that** rather than from the cache. This is what makes the second tab's save additive instead of destructive, and it is the half that fixes the *data loss* rather than only the display. |
+| `lib/storage.ts` - the invalidation | A `storage` listener (bound once per document, on the first `loadSavedSchemas` read or `subscribeToSavedSchemas` call) invalidates the cache and notifies subscribers with `readSchemasFromStorage()` and the origin `remote`. The origin matters: a notification from *another* tab means "re-read", while this tab's own write hands over the list it just wrote, so a local save is never raced by an IndexedDB read that has not landed yet. |
+| `hooks/useSchemaLibrary.ts` | Subscribes on mount and, on a `remote` notification, re-reads both stores. `readStores()` now **merges** rather than preferring IndexedDB: IndexedDB keeps every schema but is written asynchronously, so taking its list wholesale would have hidden a schema another tab saved a moment ago. |
+| `lib/storage.ts` - deletion tombstones | The two stores disagree for one tick by design (the mirror is updated synchronously, the IndexedDB row is removed by a fire-and-forget call), so a reader inside that window used to see a deleted schema again. `deepencode_schema_deletions_v1` remembers the id (24 h TTL, newest 50), `getAllSchemasFromIDB` filters against it, and re-saving an id forgets its tombstone. |
+| `lib/db.ts` | Found while making the read path authoritative: the IndexedDB module also mirrors into the same key, and it wrote the **newest twenty** entries over a mirror the facade caps at **fifty** - silently discarding entries 21-50, and able to drop a schema another tab had saved in between. It now merges into the mirror it finds and applies the shared `LOCAL_HISTORY_LIMIT`. This was not cosmetic: `tests/unit/storage.test.ts`'s "caps local history at 50 entries" began failing (21 entries) the moment writes started reading the mirror, which is how the second writer's cap was found. |
+
+### 15.3 Verified
+
+| Check | Result |
+|---|---|
+| `bunx vitest run` | exit 0 - 77 files, **1322 passed** (1316 before this round) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint` on the four changed files + the new spec | exit 0 |
+| `e2e/schema-library-tabs.spec.ts` (new, 2 tests) | exit 0 - a save in a second tab is reflected in the first and neither schema is lost; a delete in one tab is not undone by the other tab's save |
+| the same spec against the pre-fix code (control: the three source files stashed, the dev server reloaded) | **exit 1**, both tests - the save test fails with tab A's drawer not containing `Saltatory Conduction`, which is the reported symptom verbatim |
+| `e2e/history-drawer-legacy` + `backup-restore` + `share-history` + `skill-tree` (the specs that seed or restore the library key) | exit 0 - **17 passed** |
+| `e2e/encode.spec.ts` + `e2e/toy-models.spec.ts` (the two other specs that read the saved-schema mirror) | exit 0 - **20 passed** |
+| new unit tests | 6: a save built on disk (not the warm cache) keeps the other tab's schema; a `storage` event drops the stale cache; subscribers hear this tab's writes as `local` and another tab's as `remote`; `mergeSchemaLists` keeps mirror order, appends what only IndexedDB has, and never duplicates an id |
+
+### 15.4 Residuals, stated rather than left to be rediscovered
+
+- **"Clear all" across tabs is still not atomic.** `clearAllSchemas()` empties the mirror synchronously
+  and asks IndexedDB to clear with a fire-and-forget call, so a tab that re-reads inside that window can
+  list the cleared records once more before the removal lands. This is the pre-existing window defect 28's
+  tombstones cover for a single delete; it is now reachable from an *open* tab (a `storage` event) rather
+  than only from a reload. Left as it is, noted here.
+- **The mirror is capped at 50 while IndexedDB keeps everything**, so a schema older than the fifty most
+  recent is visible only once IndexedDB hydration has run. That is the module's documented design, not a
+  new limit.
+- **`e2e/resilience.spec.ts`'s API-500 test failed once under parallel load** (empty dialog message; an
+  assertion made immediately after a click, with no wait) and passes alone and in a serial re-run. Not
+  related to this round's change - the schema library is not on that path - but it is a real flake in the
+  suite as it stands.
+
+### 15.5 Method note
+
+Two tabs of one browser context are what makes this provable: `storage` events, and the shared key, only
+exist between same-origin documents, so a second `context.newPage()` reproduces the situation exactly -
+and the second tab answers the encode call with a *different* topic, so "which schema is missing" is
+readable off the drawer instead of inferred from a count. The control is the same spec run with the three
+source files stashed, which is why the failing assertion above can be quoted: it names the topic that
+went missing. One assertion had to be scoped to the drawer dialog rather than the page, because the
+completed workout behind it names its own topic - a page-wide text match would have been satisfied by the
+session rather than by the library, and would have passed for the wrong reason.
+
+**Total: 28 distinct defects in 21 files** (28 is the second in `lib/storage.ts` after 25; repairing it also
+required `hooks/useSchemaLibrary.ts`, which had no way to hear about another tab's write).
+
+## 16. Round 14 - defect 29, the share link that was too long to exist
+
+Round 11 measured this one and left it open: a schema shared as a URL died at the server when the URL got
+long, and nothing in the app could say so. Round 14 fixes the transport rather than the message.
+
+### 16.1 Defect 29 - the payload travelled in the request line
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 29 | A stateless handover whose size ceiling is invisible to the one feature that must stay stateless - **silent data loss for a large schema, at the far end** (D=6: the sender is told the link was copied, and the recipient gets a server error page) | `lib/url-share.ts` (`generateStatelessShareUrl`, `compressSchemaForUrl`), consumed by `components/StatelessShareModal.tsx:20` and read in `app/page.tsx:318` | The compressed schema was written into a **query parameter** (`?share=`), so it travelled in the HTTP request line. Node refuses an oversized request line before any route runs, and no client-side code ever sees that request - the app therefore had no error to show, and the modal reported a successful copy of a link that could not open. Nothing anywhere compared the payload against the server's limit. **Re-measured in this round** on the preview server: `GET /?share=<16,000 b>` -> `200`, `GET /?share=<17,000 b>` -> **`431`**, `GET /#share=<24,000 b>` -> `200`. | Reproduced end to end in the browser (`e2e/share-large-link.spec.ts`): an 8-stage schema whose compressed payload is **34 KB** - `page.goto('/?share=…')` returns **`431`** and the app never mounts; the same schema through the fragment returns `200`, shows the import banner, and reaches the library with all **8 stages, 8 answer sets and the 3,000-character prompt intact**. The spec asserts the payload is over 17 KB first, so the control fails for the right reason. |
+
+### 16.2 The fix - move the payload out of the server's way, then be honest about the rest
+
+| Layer | What changed |
+|---|---|
+| The transport (`lib/url-share.ts`) | Links are built as `<origin><path>#share=<payload>`. A fragment is never sent to the server, so the payload size stops being a server question - the same schema that was refused with a 431 now loads normally. `readSharedPayload(search, hash)` reads the fragment first and the query string second, so every `?share=` / `?data=` link already in the wild still works, and it re-encodes `+` before form-decoding (LZString's URL-safe alphabet contains `+`, which `URLSearchParams` would otherwise turn into a space - a latent corruption in the old path, found by a unit test that compared the payload byte for byte). |
+| The guard (`buildShareLink`) | One function returns the URL, its byte length, the byte length of the payload, and two verdicts: **over the comfort tier** (`SHARE_URL_COMFORT_BYTES` = 2 KB - longer than one chat message, so it may be split when pasted) and **over the limit** (`SHARE_URL_LIMIT_BYTES` = 8 KB - past what a URL should carry at all, with the server's own 16 KB request line as the hard ceiling). It also builds the **slim** link (`userResponses` dropped) and reports whether that one fits. |
+| The sheet (`components/StatelessShareModal.tsx`) | States the size it measured, and past the tiers stops selling a link it cannot deliver. Over the comfort tier: an amber `[ LONG LINK ]` note and a `[ SLIM ]` toggle. Over the limit: a red `[ TOO LONG ]` panel, the slim link when that fits, and the file. Past even the slim link: **no link is offered at all** - no copy target exists - and the only action is `[ FILE ]`, a schema file the recipient restores through Analytics' existing `[ RESTORE BACKUP ]`. |
+| The file (`lib/backup.ts`) | `buildShareSchemaFile` wraps one schema in the restore format the app already validates, **omitting** settings, prefs, stats and extras deliberately: an empty object there would make the receiver's own settings be overwritten with nothing (pinned by a unit test that seeds a receiver's key and asserts it survives). |
+
+### 16.3 Verified
+
+| Check | Result |
+|---|---|
+| `bunx vitest run` | exit 0 - 77 files, **1333 passed** (1322 before this round) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint` on the seven changed files + the new spec | exit 0 |
+| `e2e/share-large-link.spec.ts` (new, 3 tests) | exit 0 - the 431 control and the fragment link arriving whole; the sheet refusing an over-long link and downloading the restorable file instead; bulky answers becoming a slim link that keeps every exercise and no answers |
+| the same spec against the pre-fix code (control: the four source files stashed, the dev server reloaded) | **exit 1**, all three - the fragment test fails on `Classmate Shared Schema Loaded` never appearing, because pre-fix the fragment was not read at all |
+| `e2e/share-history.spec.ts` | exit 0 - **6 passed**, including the legacy `?share=` import, so old links still work |
+| `e2e/backup-restore.spec.ts` | exit 0 - **2 passed** (the backup download/restore path the share file rides on) |
+| `e2e/history-drawer-legacy.spec.ts` | exit 0 - **2 passed** |
+
+### 16.4 Residuals, stated rather than left to be rediscovered
+
+- **A link is still not a transport for an arbitrarily large deck.** The fragment removes the *server's*
+  ceiling, not the practical one: 34 KB of URL works in a browser and fails to paste anywhere useful, which
+  is exactly why the sheet refuses it and offers the file. What is measured: the byte thresholds above and
+  the two the sheet acts on. What is not: how often a real generated schema crosses 8 KB (the compressible
+  fixture shapes used here run 0.5-5 KB, while the incompressible ones used to force the limit run 10-500 KB).
+- **`navigator.share` is offered below the comfort tier only through the same URL.** A platform share sheet
+  that itself truncates long text is outside this app's control; the fragment is what protects the payload
+  from the *server*, not from a chat client's message limit - which is what the advisory is for.
+- **The reply-channel is one-way.** Nothing verifies that a link the learner copied actually opened on the
+  other side, so a truncated paste is only discoverable by the recipient. Stated, not solved.
+- Finding 30 (the dead import in `tests/unit/anki-exporter.test.ts`) is closed in §17.
+
+### 16.5 Method note
+
+The control for this round is the server itself: the measured 16,000 -> `200` / 17,000 -> `431` boundary is
+asserted in the spec before the fix is exercised, so the test cannot pass by accident on a server whose
+limits have moved. The heavy client (the fixture is generated, not shipped) is what makes the payload
+incompressible enough to cross that boundary: repetitive filler text compresses ~40x and would have hidden
+the bug - the first fixture drafted for this round was a 90 KB schema that compressed to 2.1 KB, which is
+the reason the spec builds its own `noise()` text from a deterministic sequence instead.
+
+**Total: 29 distinct defects in 22 files** (29 is the first in `lib/url-share.ts`).
+
+## 17. Round 15 - defect 30, the import nothing used
+
+Round 11 recorded this one while auditing consumers and deliberately left it out of that round's diff. It is
+a one-line cleanup, kept separate so the audit's last finding closes on its own evidence rather than being
+folded into a fix for something else.
+
+### 17.1 Defect 30 - a test importing two functions it never calls
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 30 | Dead code that misleads the next reader - **a false coverage signal** (the import is exactly what an unfinished test looks like, so the file reads as if the classifier's contract were being asserted here) | `tests/unit/anki-exporter.test.ts:37` (`import { classifyCardQuality, classifyDeckQuality } from '@/lib/fsrs-audit'`) | The import arrived with an earlier edit and no test ever referenced either name. It shipped undetected because **neither check this repository runs can see an unused import**: the resolved ESLint config enables no unused-variable rule for that file (`eslint --print-config tests/unit/anki-exporter.test.ts` resolves zero `*unused*` rules beyond `reportUnusedDisableDirectives`) and `tsconfig.json` sets `strict` without `noUnusedLocals` - both checked, not assumed, which is why `bunx eslint` and `bun tsc -b --noEmit` were green with the import present. | Grep for both names across `tests/`, `e2e/`, `lib/`, `components/` and `app/`: the only hit in that file was the import itself (line 37). Removing it leaves no reference to the module in the file. |
+
+**The import was removed, not replaced.** Both functions are already covered where they belong: `tests/unit/fsrs-audit.test.ts` exercises `classifyCardQuality` (leech candidate, Unfinished tag, FSRS-ready, cue-vs-density flags, one definition per flag) and `classifyDeckQuality` (the deck-level count of LeechCandidate cards). So this was a redundant import rather than the visible edge of a missing test, which is the question worth asking of any dead import in a test file.
+
+### 17.2 Verified
+
+| Check | Result |
+|---|---|
+| `bunx vitest run tests/unit/anki-exporter.test.ts` | exit 0 - **46 passed** |
+| `bunx vitest run` | exit 0 - 77 files, **1333 passed** (unchanged count: the removal deletes no assertion) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint tests/unit/anki-exporter.test.ts` | exit 0 - and the resolved config above is why that was never the check that could catch it |
+| `grep fsrs-audit tests/unit/anki-exporter.test.ts` | no match |
+
+### 17.3 Residuals
+
+The only thing left from the round-11 prioritized list is the **unused-import class of finding itself**: the
+lint config here cannot see one, so nothing prevents the next dead import in a test file. Enabling the rule
+would be a repository-wide change (and would surface pre-existing warnings across the suite), so it is stated
+rather than smuggled into a one-line fix.
+
+**Total: 30 distinct defects in 23 files** (30 is the first in `tests/unit/anki-exporter.test.ts`).

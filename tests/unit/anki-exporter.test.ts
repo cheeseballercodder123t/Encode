@@ -34,7 +34,6 @@ import {
 import { SavedSchema, SegregationReport, Activity } from '@/lib/types';
 import { raiseParadox, resolveParadox } from '@/lib/mr-m/ledger';
 import { saveInterferenceTrap } from '@/lib/interference-traps';
-import { classifyCardQuality, classifyDeckQuality } from '@/lib/fsrs-audit';
 
 describe('calculateSM2', () => {
   it('starts a 1-day interval on the first successful rep', () => {
