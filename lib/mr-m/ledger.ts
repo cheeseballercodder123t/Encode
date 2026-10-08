@@ -31,7 +31,13 @@ const MAX_ENTRIES = 40;
 
 const PATCH_STORAGE_KEY = 'deepencode_mr_m_patches_v1';
 
-/** Patches that fall off the list, oldest first. */
+/**
+ * What falls off the list when it overflows: the LEAST significant records —
+ * fewest hits, then the oldest sighting (see `trimPatches`). Deliberately not
+ * array position: a repeat keeps its first-seen slot (so `patchNumbers` never
+ * renumbers), which makes position neither age nor importance, and evicting by
+ * it destroyed a five-hit standing fault in favour of sixty one-off slips.
+ */
 const MAX_PATCHES = 60;
 
 /** Hits at which a fracture stops being a slip and becomes a standing fault. */
@@ -188,13 +194,55 @@ export function loadPatches(): PatchEntry[] {
   }
 }
 
+/** Hits, read defensively: a hand-edited or older store cannot be vouched for. */
+function hitCount(patch: PatchEntry): number {
+  const hits = (patch as { hits?: unknown }).hits;
+  return typeof hits === 'number' && Number.isFinite(hits) ? Math.max(0, hits) : 0;
+}
+
+/** The sighting that orders two equally-repeated faults, defended the same way. */
+function lastSighting(patch: PatchEntry): number {
+  return Number.isFinite(patch.lastSeenAt) ? patch.lastSeenAt : 0;
+}
+
+/**
+ * The registry's own value function: a fracture that keeps firing outranks one
+ * that fired once — that is exactly what makes it a standing fault rather than
+ * a slip — and between equals the more recent sighting wins.
+ *
+ * It has to be applied EXPLICITLY, because the stored array is in first-seen
+ * order: `recordPatch` re-opens a repeat in place, which is also what keeps
+ * `patchNumbers` stable ("a number a learner has already seen does not move").
+ * Array position is therefore neither an age nor an importance, and both readers
+ * below used to treat it as one.
+ *
+ * The sort is stable, so a genuine tie on both numbers keeps first-seen order.
+ */
+function bySignificance(a: PatchEntry, b: PatchEntry): number {
+  const hits = hitCount(b) - hitCount(a);
+  return hits !== 0 ? hits : lastSighting(b) - lastSighting(a);
+}
+
+/**
+ * The records to keep when the registry overflows, written back in the order
+ * they arrived in.
+ *
+ * The survivors are chosen by significance, so the cap can never destroy a
+ * standing fault in favour of one-off slips — the failure the pre-flight exists
+ * to prevent — while the first-seen order is preserved for the armory's numbers.
+ */
+function trimPatches(entries: PatchEntry[]): PatchEntry[] {
+  if (entries.length <= MAX_PATCHES) return entries;
+  const survivors = new Set(
+    [...entries].sort(bySignificance).slice(0, MAX_PATCHES).map((entry) => entry.id)
+  );
+  return entries.filter((entry) => survivors.has(entry.id));
+}
+
 function savePatches(entries: PatchEntry[]): void {
   if (!canUseStorage()) return;
   try {
-    window.localStorage.setItem(
-      PATCH_STORAGE_KEY,
-      JSON.stringify(entries.slice(0, MAX_PATCHES))
-    );
+    window.localStorage.setItem(PATCH_STORAGE_KEY, JSON.stringify(trimPatches(entries)));
   } catch {
     /* best-effort: a full quota must never block the stage */
   }
@@ -319,8 +367,9 @@ export interface PreflightWarning {
  *
  * Only a REPEATED fracture warns: one hit is a slip and a wall of slips read as
  * noise, so a fracture has to have fired at least twice before it is allowed to
- * get in the way of a new attempt. Newest-first, capped — a warning you scroll
- * past is not a warning.
+ * get in the way of a new attempt. Ranked by significance — most-fired first,
+ * then the most recent sighting — and capped, because a warning you scroll past
+ * is not a warning and the LIVE fault must not lose its slot to a staler one.
  */
 export function preflightWarnings(
   topic: string,
@@ -337,10 +386,16 @@ export function preflightWarnings(
  * the warnings a caller reading storage would get. Two implementations of "what
  * counts as standing" would eventually disagree, and the disagreement would
  * show up as a warning on one screen and not the other.
+ *
+ * The ranking is {@link bySignificance}, never array position: the list it is
+ * handed is in first-seen order (see `patchesFor`), so its position says nothing
+ * about how often, or how recently, the fracture actually fired. `filter` hands
+ * this function its own array, so sorting it cannot reorder the caller's ledger.
  */
 export function warningsFrom(patches: PatchEntry[]): PreflightWarning[] {
   return patches
-    .filter((patch) => patch.hits >= REPEAT_HITS)
+    .filter((patch) => hitCount(patch) >= REPEAT_HITS)
+    .sort(bySignificance)
     .slice(0, MAX_PREFLIGHT)
     .map((patch) => ({
       patch,

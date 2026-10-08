@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34) and 13–14 in `1f67f2e` (PR #35); defects 15–16 are in the working tree.** Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35) and 15–16 in `c324989` (PR #36); defect 17 is in the working tree.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -212,7 +212,7 @@ unchanged. The only module-private helper added is `finiteFallback` in `lib/proc
 |---|---|---|---|
 | Cross-device state: false 'changed' signal, non-commutative merge | `lib/deck-memory.ts:347` | `deckMemoryStoresEqual` compared `keys` **by index**, but `mergeDeckMemoryStores` rebuilds that list remote-first (`[...b.keys, ...a.keys]`) every time it runs. Two stores holding the identical fingerprint *set* in a different order therefore read as different, `merge` was not commutative as a value, and the cloud mirror writes on exactly that signal (`lib/deck-memory-cloud.ts:81`). | Reproduced: `merge(a, b).keys` = `c,d,a,b` against `a,b,c,d` for the reversed call, with `deckMemoryStoresEqual` **false** in both directions; a merge adding nothing at all also reported a change. Fixed by comparing membership (length plus subset test) rather than position. Pinned by `tests/unit/deck-memory-merge-hardening.test.ts` (4 tests); mutation-proven - restoring the index comparison fails 3 of them with `expected false to be true`, while the guard for stores that genuinely differ keeps passing. |
 
-**Total: 16 distinct defects in 9 files** (defects 15 and 16 are both in `lib/deck-memory.ts`).
+**Total: 17 distinct defects in 10 files** (defects 15–16 are both in `lib/deck-memory.ts`; defect 17 is the first in `lib/mr-m/ledger.ts`).
 
 ### 5.2 The E2E failures are attributed - and they are not from this work
 
@@ -269,3 +269,53 @@ The failing tests in CI are exactly the AnkiConnect-dependent ones: `e2e/flashca
 | Mutation B - survivors as one recency-sorted blend | **exactly 1 fails**, the fixed point (`expected Set{l0,r0,r1,l1,…} to deeply equal Set{l0,r0,l1,r1,…}`), so that test is not vacuous |
 
 Files changed in this pass: `lib/deck-memory.ts` (the cap policy and its documentation), `tests/unit/deck-memory-merge-hardening.test.ts` (7 tests: 4 asked for by this request, 3 guarding the convergence properties the policy depends on), `BUGS_AUDIT_REPORT.md`. No export was added, renamed or removed.
+
+---
+
+## 6. Round 4 - defect 17, the patch registry ranked by array position
+
+Round 4 went at the two families that have already paid off in this audit: a cap that drops the wrong thing, and state whose order is assumed rather than measured. It found one defect, measured it, and fixed it.
+
+### 6.1 Defect 17 - the patch registry's cap and its pre-flight disagree about what matters
+
+`lib/mr-m/ledger.ts` stores patches newest-first **by first sighting**: `recordPatch` re-opens a repeat in place (`next[index] = reopened`, incrementing `hits` and moving `lastSeenAt` forward) and only a brand-new fracture is prepended. Both readers then treat that array as if it were ordered by recency or importance:
+
+- **The pre-flight selection.** `preflightWarnings` / `warningsFrom` document themselves as 'Newest-first, capped' and slice the first `MAX_PREFLIGHT` (3) of the `hits >= REPEAT_HITS` (2) records in array order. **Measured:** with four standing faults on one topic, the fault that fired most recently (`SIGN_FLIP`, 3 hits, `lastSeenAt` 90 000 - the newest sighting in the registry) was **excluded**, while two faults last seen at 5 001 and 5 003 were shown. The warning surface shows the stalest faults and hides the one being repeated right now.
+- **The cap.** `savePatches` trims with `slice(0, MAX_PATCHES)` over the same first-seen order, so the eviction ignores `hits` entirely. **Measured:** a 5-hit standing fault was evicted by 60 one-off slips, leaving `max_hits_kept = 1` and `preflightWarnings('Thermochemistry') = 0` - the tripwire permanently blind to the fault it exists for, with the registry's own record of it destroyed.
+
+Both contradict the module's stated doctrine ('a defect that fires once is a slip while the same one firing three times is a standing fault worth a pre-flight warning'), and the array order itself cannot be re-sorted to fix it: `patchNumbers` deliberately numbers by first-seen order so 'a number a learner has already seen does not move'.
+
+**Fixed**, in three ordered pieces in `lib/mr-m/ledger.ts`:
+
+| Piece | What it does |
+|---|---|
+| `bySignificance(a, b)` | The registry's own value function, applied explicitly: highest `hits` first, then the most recent `lastSeenAt`. The sort is stable, so a genuine tie on both keeps first-seen order |
+| `trimPatches` | Chooses the cap's survivors by `bySignificance` — so a standing fault can no longer be destroyed by a flush of slips — and writes them back in first-seen order, so `patchNumbers` still never renumbers |
+| `warningsFrom` | Ranks by `bySignificance` before `slice(0, MAX_PREFLIGHT)`: the live fault keeps its slot and the stalest one gives way. `filter` hands it its own array, so sorting cannot reorder the caller's ledger |
+
+`hitCount` and `lastSighting` read their fields defensively (a non-finite `hits` counts as zero rather than poisoning the comparator with `NaN`), because `loadPatches` cannot vouch for a hand-edited or older store.
+
+**Verified** — 6 new tests in `tests/unit/mr-m-ledger.test.ts`, written first and red on the unfixed code: the four-fault ordering case (the 3-hit fault that fired most recently is warned first, the stalest fault gives up its slot), the over-cap case (a 5-hit fault survives 60 slips, `preflightWarnings` still returns its warning, and 59 slips are kept so the cap still holds), numbering through a cap overflow, plus guards that a registry of pure one-off slips behaves exactly as it always did, that a complete tie resolves deterministically, and that a handed-in list is not mutated. **Mutation-proven:** making `bySignificance` return `0` — the old array-position behaviour — fails exactly the first three and leaves the three guards passing.
+
+| Check | Result |
+|---|---|
+| `npx tsc -b --noEmit` | **exit 0** |
+| `npx vitest run` | **exit 0** — 75 files, **1270 passed** (was 1264) |
+| `npx eslint lib/mr-m/ledger.ts tests/unit/mr-m-ledger.test.ts` | **exit 0** |
+| Mutation — `bySignificance` returns `0` | **3 fail** (ordering, cap, numbering); the 3 guards pass |
+
+### 6.2 Probed clean this round, so the absence of findings is not read as coverage
+
+- **The AI cache's L2 is bounded.** `lib/db.ts` enforces `AI_CACHE_MAX = 200` plus a 7-day TTL and prunes on every write, so the suspicion that the capped L1 (`CACHE_MAX = 60` in `lib/ai-client.ts`) sits on an unbounded IndexedDB layer is disproved.
+- **The other short ordered ledgers are fed newest-first by every writer** - `save([entry, ...existing])` in `lib/mr-m/ledger.ts`, `save([entry, ...loadFrictionHistory()])` in `lib/escalation/governor.ts` - so the 'cap keeps the oldest' failure mode does not exist there (that was this round's hypothesis, and it is disproved rather than left untested).
+- **The lab-snapshot mirror is sound.** `mergeToyProgressStores` merges per key by `updatedAt` with a stated tie rule and a by-value equality, and `progress-cloud.ts` trims to the cloud cap before comparing, so no false 'changed' loop and no loss.
+
+### 6.3 Observations reported, not repaired
+
+- `lib/ai-client.ts` calls itself a 'Small LRU response cache', but `cacheGet` never refreshes recency, so it is FIFO by write order: a frequently *read* generation can be evicted while a never-read one survives. A comment/behaviour mismatch with a cache-effectiveness cost, not a correctness bug.
+- The same file's `hashKey` reduces provider + model + prompt to a 32-bit djb2 hash plus a length suffix, and L2 keeps results for 7 days: a collision would silently serve a different prompt's generation. Worth measuring at realistic cache sizes before it is called a defect.
+- `lib/toy-models/progress-cloud.ts` and the README line that summarises it claim snapshots it evicts 'return on the next sign-in'. The merge does bring them back into the union, but `saveToyProgressStore(merged)` re-trims to the 500-entry device cap and `loadToyProgress` reads only the local store, so a snapshot older than the device's newest 500 stays unreachable **on that device** (a fresh device does receive the newest 500). No data is lost - the account copy is capped at 2 000 and still holds it - but the restore promise is overstated.
+
+### 6.4 Method note
+
+Round 4's first probe used `UNIT_SLIP` as a patch kind. That is a **trap id**; `DISCREPANCY_KINDS` is deliberately a separate vocabulary (`lib/mr-m/types.ts` says why), so `recordPatch` correctly refused all sixty records and the probe measured nothing until it was corrected - a false alarm of mine, not a defect. The broad ripgrep sweeps were also too loose to be useful (they matched whole documentation files); the round's real progress came from reading the cap-bearing modules directly.

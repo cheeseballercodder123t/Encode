@@ -17,6 +17,7 @@ import {
   updatePatchStatement,
   warningsFrom,
 } from '../../lib/mr-m/ledger';
+import type { DiscrepancyKind } from '../../lib/mr-m/types';
 
 /**
  * The ledger is the one piece of Mr M state that has to survive a reload. For
@@ -341,5 +342,115 @@ describe('Mr M engineering patch registry', () => {
     record({ topic: 'Optics' });
     clearPatches();
     expect(loadPatches()).toEqual([]);
+  });
+});
+
+/**
+ * The registry's doctrine ranks a standing fault above a slip, and the
+ * pre-flight is the only surface that acts on it. But `recordPatch` re-opens a
+ * repeat IN PLACE, so the stored array is first-seen order — which is also the
+ * order `patchNumbers` depends on ("a number a learner has already seen does
+ * not move"), so the array cannot simply be re-sorted. Both the warning
+ * selection and the cap therefore have to rank explicitly: highest hit count
+ * first, then the most recent sighting.
+ */
+describe('Mr M patch registry — ranked by significance, not by array position', () => {
+  beforeEach(() => {
+    store.clear();
+    mockStorage();
+    clearPatches();
+  });
+
+  const record = (topic: string, kind: DiscrepancyKind, at: number) =>
+    recordPatch({ topic, kind, statement: `${kind} on ${topic}` }, at)!;
+
+  it('warns about the fault that fired most recently, not the stalest one', () => {
+    // Four standing faults on one topic, each recorded at its own first sighting.
+    const kinds: DiscrepancyKind[] = ['SIGN_FLIP', 'DIMENSIONAL_CONVERSION_ERROR', 'POWER_LAW', 'LOG_SCALE'];
+    kinds.forEach((kind, index) => {
+      record('Kinetics', kind, 5_000 + index);
+      record('Kinetics', kind, 5_000 + index);
+    });
+    // The FIRST-recorded fault (SIGN_FLIP) fires again, later than every other
+    // sighting in the registry. It keeps its array slot, as it must.
+    record('Kinetics', 'SIGN_FLIP', 90_000);
+
+    const warnings = preflightWarnings('Kinetics');
+    expect(warnings.length).toBe(3); // MAX_PREFLIGHT
+    // Most-fired first, then the most recent sighting: SIGN_FLIP has 3 hits.
+    expect(warnings[0].patch.kind).toBe('SIGN_FLIP');
+    expect(warnings[0].patch.hits).toBe(3);
+    expect(warnings[0].headline).toContain('3 times');
+    expect(warnings.slice(1).map((w) => w.patch.kind)).toEqual(['LOG_SCALE', 'POWER_LAW']);
+    // The stale one is the record that gives up its slot, not the live fault.
+    expect(warnings.map((w) => w.patch.kind)).not.toContain('DIMENSIONAL_CONVERSION_ERROR');
+  });
+
+  it('keeps a repeated fault when a flush of one-off slips overflows the cap', () => {
+    for (let i = 0; i < 5; i += 1) {
+      record('Thermochemistry', 'SIGN_FLIP', 1_000 + i); // one fault, five sightings
+    }
+    for (let i = 0; i < 60; i += 1) {
+      record(`Topic ${i}`, 'DIMENSIONAL_CONVERSION_ERROR', 2_000 + i); // sixty slips
+    }
+
+    const stored = loadPatches();
+    expect(stored.length).toBe(60); // the cap still holds
+    expect(stored.find((p) => p.topic === 'Thermochemistry')?.hits).toBe(5); // the fault survived
+    expect(stored.filter((p) => p.hits === 1).length).toBe(59); // a slip made room
+    // ...so the tripwire can still see the fault it exists for.
+    expect(preflightWarnings('Thermochemistry').length).toBe(1);
+  });
+
+  it('numbers the armory from first sighting, capped or not', () => {
+    const first = record('A', 'SIGN_FLIP', 100);
+    record('A', 'SIGN_FLIP', 200); // hits = 2, still the same record
+    for (let i = 0; i < 60; i += 1) {
+      record(`T${i}`, 'LOG_SCALE', 300 + i);
+    }
+
+    const stored = loadPatches();
+    expect(stored.length).toBe(60);
+    expect(stored[stored.length - 1].id).toBe(first.id); // the oldest entry is still last
+    expect(patchNumbers()[first.id]).toBe(1); // so its number never moved
+  });
+
+  it('still keeps the newest sixty when every record is a one-off slip', () => {
+    for (let i = 0; i < 65; i += 1) {
+      record(`t${i}`, 'SIGN_FLIP', 1_000 + i);
+    }
+    const stored = loadPatches();
+    expect(stored.length).toBe(60);
+    // No repeated fracture: the policy is exactly what it always was.
+    expect(stored.map((p) => p.topic)).toEqual(
+      Array.from({ length: 60 }, (_, i) => `t${64 - i}`)
+    );
+  });
+
+  it('breaks a complete tie deterministically, by first-seen order', () => {
+    // Identical hits AND identical lastSeenAt: the stable sort has to fall back
+    // to the order the records were first seen in, which is array order.
+    for (let i = 0; i < 61; i += 1) {
+      record(`tie${i}`, 'SIGN_FLIP', 7_000);
+    }
+    const stored = loadPatches();
+    expect(stored.length).toBe(60);
+    expect(stored.map((p) => p.topic)).toEqual(
+      Array.from({ length: 60 }, (_, i) => `tie${60 - i}`)
+    );
+  });
+
+  it('ranks a handed-in list without mutating it', () => {
+    const older = record('Kinetics', 'LOG_SCALE', 10);
+    record('Kinetics', 'LOG_SCALE', 11);
+    const live = record('Kinetics', 'SIGN_FLIP', 20);
+    record('Kinetics', 'SIGN_FLIP', 21);
+    const handed = patchesFor('Kinetics');
+    const before = handed.map((p) => p.id);
+
+    const warnings = warningsFrom(handed);
+
+    expect(warnings.map((w) => w.patch.id)).toEqual([live.id, older.id]);
+    expect(handed.map((p) => p.id)).toEqual(before); // the caller's list is untouched
   });
 });
