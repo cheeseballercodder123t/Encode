@@ -53,13 +53,25 @@ export function gradeCompletion(typed: string, answer: string): boolean {
   const t = normalizeAnswer(typed);
   if (!t || !a) return false;
   if (t === a) return true;
-  if (a.length >= 6 && (t.includes(a) || a.includes(t))) return true;
 
   const tokens = (s: string) => s.split(' ').filter((w) => w.length > 2 && !STOP_WORDS.has(w));
   const wanted = tokens(a);
   if (wanted.length === 0) return false;
   const got = new Set(tokens(t));
-  const hits = wanted.filter((w) => got.has(w) || [...got].some((g) => g.length > 3 && w.startsWith(g))).length;
+  // Matched from either side, so a word the learner inflected longer still
+  // meets the answer's own word (`depolarisations` against `depolarisation`).
+  const carries = (word: string) =>
+    got.has(word) || [...got].some((g) => g.length > 3 && (word.startsWith(g) || g.startsWith(word)));
+  const hits = wanted.filter(carries).length;
+
+  // Containment used to be enough on its own, and `a.includes(t)` is true for
+  // almost anything short: `"t"`, `"a"` and `"s4"` were all graded as the
+  // mechanism, written onto the card, and shipped. The hint is only evidence
+  // when the typed side carries at least one of the answer's content words —
+  // `"segments"` was already accepted and still is, but a string made only of
+  // function words is not an answer at all.
+  if (a.length >= 6 && (t.includes(a) || a.includes(t)) && wanted.some(carries)) return true;
+
   return hits / wanted.length >= 0.6;
 }
 
