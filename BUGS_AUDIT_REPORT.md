@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35) and 15–16 in `c324989` (PR #36); defect 17 is in the working tree.** Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36) and 17 in `e3c21a6` (PR #37) — every defect this report records is on `main`.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
