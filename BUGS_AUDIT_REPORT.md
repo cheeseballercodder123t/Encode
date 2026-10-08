@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect this report records is on `main`.** Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-25 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11) are fixed in the working tree and not yet committed.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -118,6 +118,15 @@ A passing test proves nothing unless it can fail, so each fix was tested against
    - **Event-listener leaks: none.** `addEventListener`/`removeEventListener` counts match in every
      file under `components/`, `hooks/` and `app/`. All seven hooks clean up their intervals and
      subscriptions (`useGenerationProgress`, `useModalA11y`, `useSchemaLibrary`, `useSettings`, `use-mobile`).
+   - **Local-first storage: no crash path found — CORRECTED by round 11 (§13, defect 25).** The claim below
+     is about the *writers*, and it holds for them (every write is wrapped, with in-memory fallbacks and
+     `.catch()` on the IndexedDB calls). What it missed is the other half of the boundary: the **readers**.
+     Every persisted record is taken with an unvalidated `JSON.parse(...) as SavedSchema[]` and then
+     dereferenced, so the crash was not in `lib/storage.ts` throwing — it was in `HistoryDrawer` filtering
+     on `s.topicSummary.toLowerCase()` of a record that had no topic. One legacy record left the app
+     answering `Application error: a client-side exception has occurred`, with no way back from the UI.
+     "No crash path found" was true of the code I read in round 1 and false of the code that reads it.
+     The original text, kept so the correction is visible:
    - **Local-first storage: no crash path found.** `lib/storage.ts` and `lib/db.ts` are comprehensively
      wrapped in `try/catch` with in-memory fallbacks; IndexedDB writes are fire-and-forget with
      `.catch()` handlers. I did not find a failing-IndexedDB crash — but I also did not *force*
@@ -417,3 +426,354 @@ Not run: Firestore itself (no credentials in this environment - the SDK boundary
 ### 8.2 Method note
 
 This is the first test file in the repo to mock a cloud module's SDK boundary (`vi.mock('firebase/firestore')` plus the app's `lib/firebase`), which is what made a reader that only touches a `data` object testable at all; the alternative - trusting the real SDK against a real project - would have made the unit suite depend on credentials. The reader is exported for tests for the same reason `aiCacheSize` is: the wire shape is the whole of its job, and it is the one place untrusted document data enters the memory. The panel question was answered in two ways rather than one: by reading what the panel does with a ledger entry, and by running the two Playwright tests that already existed for that path.
+---
+
+## 9. Round 7 - defect 20, the near-duplicate guard was fed the wrong list
+
+Round 7 went back to the module that builds the deck, `lib/services/forge.ts`, because the last three rounds each found a defect in a place where two functions disagreed about what an argument means (a ledger compared by index, a cap ranked by array position, a reader that dropped a field). This module has the same shape: one guard, two callers, and only one of them obeying the guard's own documented requirement.
+
+### 9.1 Defect 20 - a re-worded repeat shipped because the index was seeded with fingerprints
+
+| Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|
+| Silence that ships a duplicate card | `lib/services/forge.ts` (`mergeAdditionalCards`) | `dropKnownCards` documents the requirement in its own body - "Callers pass RAW fronts: the near-duplicate guard reads the original wording, and a pre-normalized key has already thrown that away (which would make it fall back to exact matching, i.e. to the behaviour this replaced)" - and the route obeys it (`known = new Set(existingFronts)`, raw). `mergeAdditionalCards` - the path the modal's "generate more", re-forge and auto-grow loop actually take - seeded the same index with `deckCardKeys(base)`, whose entries are `dedupeKey` fingerprints: lowercased, punctuation collapsed to spaces. The guard it feeds compares two signals that a fingerprint has already destroyed - `protectedTokens` (the mid-sentence capitals that mark named entities, plus digit-bearing tokens) and the normalized-length band. `protectedTokens(seed)` therefore reads FEWER entities than `protectedTokens(candidate)` reads off raw text, the mismatch branch returns false, and the re-worded repeat is appended as a new card. | Measured five ways. (a) The guard's own verdict flips with the seed: `isNearDuplicate(raw, raw)` is **true** for `'The loop of Henle reabsorbs salt and water along the ascending limb'` vs `'…along the entire ascending limb'` (similarity 0.901), for the re-ordered `1,200 mOsm at the papillary tip of the medulla` pair (0.938) and for `'Water leaves the descending limb through aquaporin-1 channels'` vs `'…through the aquaporin-1 channels'` (0.952) - and **false** for `isNearDuplicate(dedupeKey(raw), raw)` on all three, which is what the merge was doing. (b) Through `mergeAdditionalCards` with a one-fact deck, all three pairs came back `added 1 / dropped 0`; after the fix, `dropped 1`. (c) A 401-card deck repeating its **last** card (the card past the route's 400-front window): `dropped 0` before, `dropped 1` after. (d) A re-forged worked example (same title, re-worded problem): `added 1 / dropped 0` before, `added 0 / dropped 1` after. (e) Backwards compatibility: a card whose **number** changed (1,200 -> 600 mOsm) and a card naming a **different entity** are still kept in both states, so the fix cannot collapse two genuinely different cards. |
+
+**The two ways this reaches a learner.** The route runs the same guard first, seeded with the raw fronts the client sends, so for a small deck it usually catches the repeat before the client merge ever sees it - which is exactly why this stayed hidden. It stops covering the case in two measured ways:
+
+- **A deck larger than the prompt window.** `MAX_EXISTING_FRONTS = 400` truncates `body.existing` for the prompt *and* for the route's seed (`app/api/forge/route.ts:296`) - one list, two uses. On a 500-card deck the last 100 fronts are unknown to the server, so a repeat of card #450 is the client merge's problem alone, and the client merge did not drop it.
+- **A re-forged worked example.** A worked example's card text is `` `${title} ${problem}` `` (see `deckCardKeys`, and the addition side of `dropKnownCards`), but the prompt's front list names only the title (`collectCardFronts`). The server's seed is the title, so its exact key can never equal the composite and its near-duplicate pass misses on the length band (a 45-character title against a 125-character composite is rejected by `Math.abs(ka.length - kb.length) > Math.max(16, ka.length * 0.25)`). The client merge is the only guard for that pair, and it was seeded wrong.
+
+**Fixed**, in two pieces in `lib/services/forge.ts`:
+
+| Piece | What it does |
+|---|---|
+| `collectDeckCardTexts(report)` | New: the raw wording of exactly the cards `deckCardKeys` fingerprints (facts, mechanisms, questions, `` `${title} ${problem}` ``, cascades, tripwires). One list of cards, two projections: this is what a duplicate index needs, `deckCardKeys` is what set arithmetic needs |
+| `deckCardKeys` / `dropKnownCards` / `mergeAdditionalCards` | `deckCardKeys` now derives from the same collector, so the two can never drift apart in *which* cards they cover. `dropKnownCards` takes `Iterable<string>` (was `Set<string>`) and its doc now states the raw-text requirement at the parameter, not only in the body. `mergeAdditionalCards` seeds with `collectDeckCardTexts(base)` |
+
+**Verified** - 5 new tests in `tests/unit/forge.test.ts`, three of them red on the unfixed seeding and two of them guards that must pass in both states:
+
+| Check | Result |
+|---|---|
+| `bun tsc -b --noEmit` | **exit 0** |
+| `bunx vitest run` | **exit 0** - 76 files, **1295 passed** (was 1290) |
+| `bunx eslint lib/services/forge.ts tests/unit/forge.test.ts` | **exit 0** |
+| `bunx vitest run tests/unit/forge.test.ts` | **exit 0** - 49 passed |
+| Mutation - restore `dropKnownCards(addition, deckCardKeys(base))` | **exit 1**, `3 failed / 46 passed` - exactly the three new duplicate tests (`expected +0 to be 1` on the drop count); the two protection guards stay green |
+| E2E forge spec vs the managed preview (`:39246`) | **exit 0** - **20/20** (2.2m), including *growing the deck keeps going on its own until the target, then stops*, which drives the loop this change feeds |
+
+Files changed in this pass: `lib/services/forge.ts` (the collector, the derivation and the seed), `tests/unit/forge.test.ts` (5 tests), `BUGS_AUDIT_REPORT.md`. **One new export** (`collectDeckCardTexts`) - the first in this audit; the parameter type of `dropKnownCards` was widened, so every existing caller still compiles.
+
+**Total: 20 distinct defects in 12 files** (defect 20 is the first in `lib/services/forge.ts`).
+
+### 9.2 Probed clean this round, so the absence of findings is not read as coverage
+
+- **The declared-ledger evaluator.** `evaluateExpression` was probed against 22 hand-checked shapes - precedence (`2x^2` = 2·(x^2) = 18, `2(3)^2` = 18, `2^3^2` = 512 right-associative), the documented refusal of the spaced implicit product (`x y` -> `null`) against the accepted coefficient (`2x`), unary minus (`-2x` = -6), a negative exponent, division by zero (`x/(y-y)` -> `null`), the closed function table (`ln`/`log`/`sqrt`/`sin`), an unknown call name (`q(2)` -> `null`), scientific notation (`1.5e-3`), the constants, and malformed input (`x+`, `()`, `3 2`). Every result matched the hand-computed value; no mismatch. Its unary-minus-versus-exponent reading is a convention choice, not a defect.
+- **`sanitizeForWozniak`'s ceiling invariant.** Every card in `cards` and every card in `heldBack` was recounted: nothing that was *shipped* exceeded the 20-word ceiling (the withheld ones are listed as withheld, which is what `heldBack` is for).
+- **`sourceYield` and `buildCoverageReport`.** Read and probed: the thin/silent/unknown branches are ordered so an unjudgeable source cannot be called thin, and a gap names only sources that were actually cut (`status === 'ok'`).
+- **The governor's streak.** `cleanWinStreak` scopes by topic, zeroes on a miss and *ends* (rather than zeroes) on a rung - which is what its own comment claims, so the reading matches the doctrine.
+- **The interference-trap store.** Cap 60 newest-first with a case-insensitive front dedupe: the eviction can only drop the oldest, and the duplicate it replaces is the one it replaced. No wrong-end-of-the-cap problem here.
+
+### 9.3 Observation reported, not repaired
+
+`splitDenseCloze` (`lib/fsrs-audit.ts`) says it returns "two atomic cloze sentences, **each at or under the word limit**", and its own test already allows slack (`toBeLessThanOrEqual(TOO_LONG_WORD_LIMIT + 2)`), which is how the claim stayed unchallenged. Measured on five realistic dense cloze sentences, the halves came back at 17-22 words against a 15-word limit, and one half of a sentence whose deletion carries most of the words returned at **22**. Neither caller is harmed: `enforceCeiling` re-checks each half against the 20-word Wozniak ceiling and withholds what is still too long, and the modal's manual auto-split simply leaves the audit flag on the card it split. What is wrong is the sentence, not the split - a "split" cannot always make two ≤15-word halves out of a 38-word sentence, and the honest contract is "best effort, each half shorter". Recorded rather than re-worded in this pass because the fix nobody asked for (recursive splitting, or an extra blank inserted mid-clause) changes the cards that ship, and the ceiling that actually gates an export is Wozniak's. **Round 9 (§11) closed this observation: the request then asked for exactly this audit, and the measurement above became defect 23.**
+
+### 9.4 Method note
+
+The finding came from asking what each argument *means* at a call site rather than whether the call type-checks: `dropKnownCards(addition, known)` accepts any string collection, and the two callers passed collections with different semantics - one raw, one normalized - so the type system could not tell them apart and the tests only covered whichever style each test happened to use. The sibling test that pins the raw path ("The route seeds this with the deck's raw fronts (not normalized keys)") and the rewrite that is only reachable through the *other* path are what made the gap invisible. The mutation was chosen to isolate the seeding rather than the guard: restoring `deckCardKeys(base)` leaves the guard itself untouched, so the three failures are evidence about the seed and nothing else.
+
+---
+
+## 10. Round 8 - defects 21-22, the route's duplicate path on a 500-card deck
+
+Round 7 left one limitation explicitly open: *"the route's own >400-front path is demonstrated at module level, not over a real HTTP request."* Round 8 closed it by driving `POST` in `app/api/forge/route.ts` with a 500-card deck, and the end-to-end run found two defects in the same line of that handler - the one that hands the deck's fronts to the model **and** to the dedupe.
+
+### 10.1 The route used one 400-front window for two different jobs
+
+| # | Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|---|
+| 21 | Silence that ships a duplicate card, server side | `app/api/forge/route.ts:296`, `:576` | `existingFronts` was `body.existing.filter(...).slice(0, MAX_EXISTING_FRONTS)`, and that one value was then used twice: as the model's do-not-repeat list (where the 400 is a TOKEN budget - each line costs prompt) and as the seed for `dropKnownCards` (where the list is matched locally and costs nothing). On a deck of 500 fronts the last 100 cards were therefore invisible on both sides: the model was not told about card #450, and the drop had never seen it, so a re-worded repeat of it was returned as new and appended to the deck. | Driven through the real handler: `POST { mode: 'more', existing: <500 fronts with card #450 = 'The vasa recta carry blood away from the loop of Henle in the medulla'>, sources: [one text source] }` with the model mocked to return `['The vasa recta carry blood away from the loop of Henle, deep in the medulla', <one genuinely new card>]`. Pre-fix: **200 with the repeat inside `report.declarativeFacts`**, `dropped: 0`, `total: 2`. Post-fix: `dropped: 1`, `total: 1`, the repeat absent - and the same on the streamed NDJSON path the modal actually reads (`done.payload`). |
+| 22 | One over-long entry switches the whole pass off | `app/api/forge/route.ts:210` (the body schema) | `existing: z.array(z.string().max(400))` enforced a per-entry *content* bound whose failure mode is to reject the entire request: a single front longer than 400 characters returned `400 Invalid request - existing.<i>: Too big` for a pass whose whole job is to add cards. The module's own doctrine (`lib/api-validation.ts`) is that these schemas "enforce *type and boundary* ... but not content", and the route's handler already filters junk entries itself. | Driven through the real handler: the same 500-card deck with **one** front at 401 characters. Pre-fix: **HTTP 400**, no cards and no dedupe. Post-fix: 200, `dropped: 1`, `total: 1`. |
+
+**Fixed**, in three pieces in `app/api/forge/route.ts`:
+
+| Piece | What it does |
+|---|---|
+| `MAX_EXISTING_FRONTS` | Docstring now says what it is: a TOKEN budget that bounds the prompt only, and points at the site that explains the split |
+| `existingFronts` / `promptFronts` | The handler now keeps the whole validated list (`existingFronts`, raw, in the order the deck ships) and derives the model's window from it (`promptFronts = existingFronts.slice(0, MAX_EXISTING_FRONTS)`). The prompt line uses the window; the drop seeds with the whole list |
+| the body schema | The per-entry bound on `existing` (and on `known`, which is validated but never read - see 10.4) goes 400 -> 20,000, the same order as the answer fields in the other route schemas. The *list* bound (5,000 entries) is what keeps a request small; the per-entry bound is a sanity check, not a rule that can fail a learner's extension pass |
+
+**Why the prompt window was left at 400 and the first 400.** The window is spent on tokens, so it has to stay bounded; the alternative considered was to sample it across the deck (`every ceil(n/400)`-th front) so a 500-card deck's do-not-repeat list covers its tail. That changes what the model is told, which is a prompt decision rather than a defect fix, so it is recorded here instead of taken. The consequence of leaving it is stated plainly: the model can still offer a tail card, and the drop now removes it, so a batch consisting only of tail repeats counts as an empty batch for the grow loop's stop rule - which is the correct reading (the model offered nothing new) and the loop's own message says exactly that ("two batches came back with nothing new").
+
+### 10.2 Boundary probes, so the new bounds are measured rather than assumed
+
+Run through the handler after the fix, with the model mocked:
+
+| Request | Result |
+|---|---|
+| 500 fronts | **200**, 26 ms |
+| 5,000 fronts (the schema's list bound) | **200**, 59 ms - seeding the drop with the whole list costs nothing measurable |
+| 5,001 fronts | **400** `existing: Too big: expected array to have <=5000 items` - residual, see 10.4 |
+| one 20,001-character front | **400** `existing.3: Too big: expected string to have <=20000 characters` - residual, see 10.4 |
+
+The 5,000-front case is the reason the list bound was left alone: it is 8x the largest deck the grow loop's own target input allows (`components/FlashcardForgeModal.tsx` caps it at 600), and a request carrying one now returns in 59 ms.
+
+### 10.3 Verified
+
+| Check | Result |
+|---|---|
+| `bun tsc -b --noEmit` | **exit 0** |
+| `bunx vitest run` | **exit 0** - 76 files, **1301 passed** (was 1295) |
+| `bunx eslint app/api/forge/route.ts tests/unit/forge-route.test.ts` | **exit 0** |
+| `bunx vitest run tests/unit/forge-route.test.ts` | **exit 0** - 11 passed (6 new) |
+| Mutation A - seed the drop with `promptFronts` (the pre-fix cap) | **exit 1**, `4 failed / 7 passed`: the tail repeat on the JSON path, on the streamed path and on the retry path, plus the over-long-front case; the in-window drop and the prompt-window guard stayed green |
+| Mutation B - restore the schema's `.max(400)` per entry | **exit 1**, exactly `1 failed` (`expected 400 to be 200`) |
+| E2E forge spec vs the managed preview (`:39246`) | **exit 0** - **20/20** (2.2m), including the auto-grow loop the server seed feeds |
+
+The new tests are in `tests/unit/forge-route.test.ts`: the 500-card tail repeat on both extension paths (JSON + streamed for `more`, and `retry`), the over-long front, and two guards - the prompt still shows the model exactly 400 lines (and not `Finding 450`), and a repeat of a card *inside* the window is still dropped. Files changed this round: `app/api/forge/route.ts`, `tests/unit/forge-route.test.ts`, `BUGS_AUDIT_REPORT.md`. No export was added, renamed or removed.
+
+**Total: 22 distinct defects in 13 files** (21-22 are the first two in `app/api/forge/route.ts`).
+
+### 10.4 Residuals and one observation, stated rather than left to be rediscovered
+
+- **A list longer than 5,000 fronts still fails loudly** (`400`, measured above). It is a request-size boundary, not a duplicate-protection window: the drop now covers every card of any deck the app can build (the grow loop's target caps at 600, and 5,000 is 8x that). It fails rather than silently protecting only part of the list, which is the failure mode this round removed.
+- **A single front longer than 20,000 characters still fails loudly** (measured above). That is 50x the bound that was tripped by a normal sentence, and 10% of the largest source text the schema accepts for a whole set of notes, so no card this app produces reaches it.
+- **The `known` body field is validated and never read.** `app/api/forge/route.ts:212` accepts `known: string[]` and no caller sends it (`main` gets the seed from `existing`); its per-entry bound was widened with `existing` so the two cannot disagree, but the field itself is dead and worth deleting in a change that is allowed to touch the client payload contract.
+
+### 10.5 Method note
+
+Round 7's finding was a call site that passed the wrong list to a guard; this round's was the same mistake one layer out: a route that derived one value for two jobs with different budgets. The lesson that generalises: when a bound is introduced, name the *resource* it protects (tokens vs request size vs memory) at the definition, or the next reader will reuse it for a job it was never sized for. Both defects were found only by driving the real handler with a deck bigger than the boundary, which is why the round-7 limitation was worth closing rather than leaving as a note.
+
+---
+
+## 11. Round 9 - defect 23, the auto-split could not honour the word limit it enforced
+
+Round 9 answered a direct request: *"Audit `splitDenseCloze` to ensure it always returns halves at or under the word limit, as its docstring claims. Identify the cause of the discrepancy, fix it, and prove the fix with new tests."* §9.3 had already recorded the discrepancy as an observation; this round closes it.
+
+### 11.1 Defect 23 - two halves cannot cover a sentence longer than twice the limit
+
+| # | Bug Category | File & Line | Root Cause | How It Was Verified |
+|---|---|---|---|---|
+| 23 | A guard that cannot honour its own contract - the audit's auto-split returns pieces over the very limit it flags (D=10 leeches, the thing the flag exists to prevent) | `lib/fsrs-audit.ts:158` (the old `splitDenseCloze`, whose docstring reads "two atomic cloze sentences, **each at or under the word limit**"); consumers `lib/wozniak.ts:148` (`enforceCeiling`) and `components/AnkiExportModal.tsx:510` (`handleAutoSplit`) | The function declared its return type as exactly two cards (`[AnkiCardItem, AnkiCardItem] | null`) and split at one midpoint, so it could never make more than two pieces. Two halves can only cover `2 x TOO_LONG_WORD_LIMIT` = 30 words: for **any** sentence over 30 words a piece is over the limit *by arithmetic*, not by accident - a 38-word sentence yields 19-word halves. Nothing ever measured the pieces before returning them, so the claim was never checked, and the function's own test had already been written to allow it (`toBeLessThanOrEqual(TOO_LONG_WORD_LIMIT + 2)`) - the slack IS the defect, spelled out. | Measured three layers deep, on six realistic dense cloze sentences, by running the pre-fix splitter (transcribed from the previous revision) and the fixed one on the same cards. **Splitter:** 3 of 6 cards came back with a piece over the 15-word limit before, **0 of 6** after (`+clause` 34 words: `[19,15]` -> `[11,8,15]`; `shock` 23 words: `[6,17]` -> `[6,13,4]`; `long` 37 words: `[20,17]` -> `[7,15,15]`). **The flag the button exists to clear:** `auditDeck` still called 3 of the 6 cards too-long *after* the old split - so a click could leave the card exactly as flagged as it was, with the button still offering the same split again; **0 of 6** now. (In the shipped modal that needs a front over 30 words, and the Wozniak ceiling withholds one before it can reach the sheet - which is why no spec had ever pressed this button. §11.3's new `e2e/fsrs-audit-split.spec.ts` reaches it with a curated card and proves one click now clears it.) **The deck:** through the same ceiling stage (`enforceCeiling`, front+back <= 20), the old splitter shipped 9 fragments and held 2 back reading "21 words even after auto-split" and "22 words even after auto-split"; the fixed one shipped 14 and held **0**, largest shipped front+back **20**. |
+
+**Fixed**, in `lib/fsrs-audit.ts`:
+
+| Piece | What it does |
+|---|---|
+| the piece count | Derived from the sentence instead of asserted: the loop runs while the remainder is over the limit and takes `ceil(remaining / limit)` pieces at each step, so a 34-word sentence comes back as 3 pieces and no piece can exceed the limit |
+| the cut | Each cut is chosen only from token boundaries that keep THIS piece at or under the limit (`hi = min(start + limit, maxCut)`) and leave the remainder splittable (`lo` from the piece budget). The preference order is unchanged and now applied to a window instead of a midpoint: a sentence end wins, then a clause connector, then the safe boundary nearest the balanced target; the furthest safe boundary is the fallback |
+| the impossible case | When no safe boundary exists within the limit - a single deletion body carries more than the limit on its own - it returns `null` instead of a piece that breaks the contract. Its callers already handle that: `enforceCeiling` holds the card back with "`N` words - chunk it into smaller cards" |
+| the return type | `[AnkiCardItem, AnkiCardItem] | null` -> `AnkiCardItem[] | null` (both call sites re-checked: `enforceCeiling` iterates, `handleAutoSplit` splices with a spread, which a tuple could not express) |
+| the front text | A piece that already ends a sentence keeps its own punctuation instead of getting a second full stop; the old code appended `.` to the left half unconditionally, so a midpoint that landed on a sentence end produced "sentence.." in Anki |
+| the modal control | `components/AnkiExportModal.tsx` now computes `splittable = tooLong && splitDenseCloze(c) !== null` per row: on a card that cannot be split the button is disabled with the reason in its title, instead of being enabled and silently doing nothing (pressed end to end by `e2e/fsrs-audit-split.spec.ts`) |
+
+### 11.2 The measurement, per card (pre-fix splitter vs fixed)
+
+| Card | Words | Old halves | New pieces | Old split still flagged too-long | New split still flagged |
+|---|---|---|---|---|---|
+| e2e fixture (19) | 19 | `[10,9]` | `[10,9]` | 0 | 0 |
+| `+clause` | 34 | `[19,15]` | `[11,8,15]` | **1** | 0 |
+| `limb` | 18 | `[7,11]` | `[7,11]` | 0 | 0 |
+| `shock` | 23 | `[6,17]` | `[6,13,4]` | **1** | 0 |
+| `long` | 37 | `[20,17]` | `[7,15,15]` | **2** | 0 |
+| `deletion-first` | 29 | `[15,14]` | `[15,14]` | 0 | 0 |
+
+Two facts that matter as much as the three fixes: the e2e fixture's card is **byte-identical** before and after (`[10,9]`, same text), which is why the audit's Playwright expectations still hold; and the `deletion-first` card, whose 13-word deletion body has to ride whole, already came back balanced and under the limit - the fix does not need more pieces to be safe, it only needs the option of taking them.
+
+### 11.3 Verified
+
+| Check | Result |
+|---|---|
+| `bun tsc -b --noEmit` | **exit 0** |
+| `bunx vitest run` | **exit 0** - 76 files, **1304 passed** (was 1301; the `splitDenseCloze` block went from 6 tests to 9) |
+| `bunx vitest run tests/unit/fsrs-audit.test.ts tests/unit/wozniak.test.ts` | **exit 0** - 47 passed (31 + 16) |
+| `bunx eslint lib/fsrs-audit.ts lib/wozniak.ts components/AnkiExportModal.tsx tests/unit/fsrs-audit.test.ts` | **exit 0** |
+| Mutation A - cap the loop at one cut (the old two-piece behaviour: `while (total - start > limit && cuts.length < 1)`) | **exit 1**, `4 failed / 27 passed`: *uses as many pieces as the arithmetic needs*, *keeps a deletion whole*, *returns null when a deletion body is over the limit*, and the 400-sentence property test - all four failing on `expected 19 to be less than or equal to 15`, i.e. exactly the pre-fix defect. The 19-word card still passes, which is why it never caught this |
+| Mutation B - drop the per-piece limit guard (`hi = maxCut`) | **exit 1**, `4 failed / 27 passed`, same four tests, reporting pieces of 19, 19 and 46 words against the limit |
+| Both mutations restored, then `diff` against the pre-mutation file | **identical** (compared byte for byte, then the suite re-run green) |
+| E2E vs the managed preview (`:39246`) | **exit 0** - `fsrs-audit.spec.ts` + `bracket-tokens.spec.ts` + the new `fsrs-audit-split.spec.ts`: **5 passed** (the existing fixture still counts `3 raw . 2 atomic`, `2 card fragments held back`, `1 need audit`, no enabled Split button, so the fix did not change what ships) |
+| Mutation A **against the running app** (the dev server recompiles the reverted splitter) | **exit 1** on `fsrs-audit-split.spec.ts`: `Expected "5 Flashcards", Received "4 Flashcards"` - the pre-fix build returns two halves where the fixed one returns three pieces, in the real sheet |
+| Both mutations reverted, then `diff` against the pre-mutation file | **identical**, and the suite/specs re-run green afterwards |
+
+New tests: 3 added plus 3 rewritten in `tests/unit/fsrs-audit.test.ts` (around `splitDenseCloze`, plus a shared assertion helper), and one new UI spec:
+
+| Test | What it pins |
+|---|---|
+| *splits a long cloze into pieces that are each at or under the word limit* | The docstring's own claim - no `+2` slack - plus the marker, id and word-sum invariants |
+| *uses as many pieces as the arithmetic needs, not always two* | The piece count is `ceil(words / limit)`, and the tail of the sentence is in the last piece (reading order) |
+| *never splits inside a multi-word deletion or leaves an empty piece* | No dangling `{{c1::`, no empty card, whole sentence covered |
+| *keeps a deletion whose body carries most of the words whole* | The 13-word deletion appears in exactly one piece, intact |
+| *returns null when a single deletion body is itself over the limit* | The impossible case is reported, not faked |
+| *holds the limit for every piece across 400 generated dense sentences* | A seeded LCG builds 400 sentences of 16-60 words with 1-5-word deletions and asserts, for every piece: at or under the limit, non-empty, cloze, braces balanced, and that the pieces' word counts and marker count add up to the original - nothing invented, nothing dropped. Asserts it saw sentences needing 3+ pieces, so the limit assertion is not vacuous |
+| `e2e/fsrs-audit-split.spec.ts` (new, 1 test) | The control itself: a curated (protected-tag) 33-word cloze rides through the Wozniak ceiling into the shipped deck, its Split button is enabled, and **one click** replaces it with three pieces - the card count goes up by 2, `This card is too dense` disappears and no enabled Split is left. It also closes a real coverage hole: the existing fixture's card is always *held back* by the ceiling, so its Split button is permanently disabled, and nothing in the suite had ever pressed it |
+
+The helper (`assertPiecesAreAtomic`) is the point: the old test compared two named halves and accepted slack; this one takes the whole list and checks it as a list, which is the shape the bug hid in.
+
+Files changed this round: `lib/fsrs-audit.ts` (the splitter, its contract and the two hoisted punctuation constants), `lib/wozniak.ts` (the caller now iterates pieces), `components/AnkiExportModal.tsx` (the control reports that a card cannot be split), `tests/unit/fsrs-audit.test.ts`, `e2e/fsrs-audit-split.spec.ts` (new), `BUGS_AUDIT_REPORT.md`. **One signature changed** (`splitDenseCloze`'s return type, `[X, X] | null` -> `X[] | null`); both call sites were re-checked and no other module imports it.
+
+**Total: 23 distinct defects in 14 files** (23 is the first in `lib/fsrs-audit.ts`).
+
+### 11.4 E2E against the managed preview (`:39246`)
+
+| Spec | Result |
+|---|---|
+| `e2e/fsrs-audit.spec.ts` | **2 passed** - the fixture still counts `3 raw . 2 atomic`, `2 card fragments held back`, `1 need audit`, and offers no enabled Split button |
+| `e2e/bracket-tokens.spec.ts` (renders the same sheet at 390/1280 px) | **2 passed** |
+| `e2e/fsrs-audit-split.spec.ts` (new) | **1 passed** (6.3 s) |
+
+Why the existing spec matters here even though the splitter has unit coverage: those fixture counts are produced *through* `splitDenseCloze` and `enforceCeiling`, and this round changed both the piece count and the appended punctuation. The fixture's card is the 19-word one, whose pieces are byte-identical before and after (measured in §11.2), so the counts must not move - and they did not.
+
+The new spec is the one that presses the button. Its fixture is a curated card (`tag: 'InterferenceTrap'`, i.e. one of `PROTECTED_CARD_TAGS`) precisely because the ceiling would otherwise withhold a 33-word front before the learner could ever split it, which is why no existing spec exercised the control. Against the reverted splitter (Mutation A, recompiled by the dev server) it fails with `Expected "5 Flashcards", Received "4 Flashcards"`: two halves where the fix returns three pieces. The fix therefore changes what the learner gets from a click, so the spec is worth keeping rather than deleting as a probe.
+
+### 11.5 Residuals and two observations, stated rather than left to be rediscovered
+
+- **A deletion body longer than the limit cannot be split** and now returns `null` (measured: a 19-body-word deletion on a 29-word sentence). The caller already handles it (`enforceCeiling` withholds it as "`N` words - chunk it into smaller cards"); the modal's button is now disabled on exactly that card, with the reason in its title. Splitting inside a deletion would change the answer the card asks for, so the honest answer is "cannot be split" - which is what it now says.
+- **The back still travels with every piece** (unchanged from the two-way splitter, and the reason the Wozniak funnel can still hold a piece back: that ceiling measures front+back). Recorded, not changed - which part of a cloze card is the "answer" is a card-model decision, not a splitter one.
+- **Observation (closed by round 10, §12): three surfaces measured two different word counts.** The modal's `auditAnkiCard` measures a cloze's **front** (`lib/fsrs-audit.ts:96`), while `lib/wozniak.ts`'s ceiling and `classifyCardQuality` measured **front+back**. A card could therefore be audit-clean and still held back, or be flagged and still ship. That is why this round's deck-level numbers differ from the audit-level ones above (14 of 15 pieces ≤15 front words but one at 20 front+back). **Round 10 found that this was not only an observation: the completed screen's number was labelled "Dense (tagged)" and its advice was to filter on that tag, while the tag itself was applied on one export path out of four — defect 24.**
+
+### 11.6 Method note
+
+The defect was found by taking a docstring literally and doing its arithmetic (`2 x 15 = 30 < 34`) instead of reading the code for mistakes - the code did exactly what it said it did, and only the claim was false. The signature that hid it was in the test file: an assertion written with `+ 2` slack around the limit the function names. When a test needs slack around a documented bound, the bound is the thing to check. Two mutations were run rather than one because the fix has two independent halves (how many pieces, and how long each may be), and the mutation that isolates each had to fail for the right reason.
+
+---
+
+## 12. Round 10 - defect 24, the completion screen counted cards the file never tagged
+
+Round 9 ended by leaving a falsifiable claim in a docstring and an observation beside it (§11.5). Round 10 took the claim literally: `classifyCardQuality` states *"matches the audit thresholds used in the Anki export modal so both surfaces agree"*. Measured on the same deck, the export sheet and the completed-screen trophy disagreed on **2 of 7** realistic cards - a 6-word cue with a 26-word back read "clean" in the sheet and "leech" on the trophy. Repairing that disagreement then exposed the larger defect underneath it: the trophy's number is labelled **"Dense (tagged)"** and the line under it advises *"build a filtered deck from those tags"*, but the tag it names was applied by exactly one of the four export paths.
+
+### 12.1 Defect 24 - a number labelled "tagged" that is not the tag set
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 24 | A count that promises an action it cannot support: the chip says "Dense (**tagged**)" and the advice is "filter on `LeechCandidate`", while the number comes from one rule and the tag from another - and on the main flow the tag is never applied at all (D=5: a returned learner who follows the advice gets an empty filtered deck) | `lib/fsrs-audit.ts` (`classifyCardQuality`), `components/CompletedSessionView.tsx:165` (the chip) and `:224` (the advice), `lib/anki-exporter.ts:118-128` (`appendLeechTag`) and `:876-901` (`sanitizeExtracted`) | **Three** rules for the word "dense": **the tag** (`front+back > 15`, every card type, applied only by `buildUserWordingCards`), **the trophy's number** (`card.isCloze && front+back > 15`), and **the sheet's verdict** (a cloze's *front* > 15, the only one a control can act on). The chip's number came from the second, its label and its advice from the first - and the first was never applied on the main flow (segregation report -> declarative facts -> `extractSanitizedCardsFromSchema` -> `.apkg`), because the fact path does not call `appendLeechTag`. | Two measurements. **The two surfaces:** 7 realistic cards classified by both, **2 disagreed** (6-word cue + 26-word back: sheet "clean", trophy "leech"; the reverse for a long-fronted basic card the sheet still audits). **The tag itself:** a mixed deck pushed through the real funnel shipped **0** `LeechCandidate` tags while the trophy counted **3** dense cards - so the screen's advice, followed literally, returned nothing. |
+
+### 12.2 The fix - one definition, and every number is a set a chip can name
+
+| Piece | What changed |
+|---|---|
+| `isLeechDense` (`lib/fsrs-audit.ts`) | The **one** exported definition of the tag rule (`front+back > TOO_LONG_WORD_LIMIT`), used by the tagger, the trophy and the tests - it cannot be restated wrongly elsewhere |
+| `appendLeechTag` (`lib/anki-exporter.ts`) | Calls that function, and is idempotent (force-including the withheld fragments passes a deck through the funnel twice) |
+| `sanitizeExtracted` | Tags the deck that **ships**, on *copies* rather than the caller's cards, so the funnel stays pure. It is the single funnel all four export paths go through, which is why this is where the tag belongs |
+| `classifyCardQuality` | `isLeechCandidate` is now the tag rule; `isAmbiguous` stays the sheet's verdict; the docstring says which question each answers and no longer claims they are one rule |
+| `classifyDeckQuality` | One bucket per card - unfinished -> dense (tagged) -> ambiguous (flagged, not tagged) -> ready - plus a new `ambiguousCues` count, so the tagged number **is** the tag set and the buckets still sum to the deck |
+| `components/CompletedSessionView.tsx` | Renders the ambiguous count as its own `[ AMB ]` chip and names both facts in the advice line, instead of presenting every flagged card as tagged |
+
+Why the two rules stay different, stated rather than conflated: the sheet's cue rule is a **front-only** test because that is what its Split button can fix; the tag's rule weighs the whole card because that is what FSRS is punished by. The defect was never that two thresholds exist - it was that one number was labelled as the other, and that the tag the label promised was absent from most of the cards it counted.
+
+### 12.3 Tests added, and the mutations that prove they bite
+
+| Check | Result |
+|---|---|
+| `bunx vitest run` | exit 0 - 76 files, **1307 passed** (1304 at the start of the round) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint` on the four changed source files | exit 0 |
+| e2e against the managed preview (`:39246`) | exit 0 - **16 passed** (`encode` 5, `share-history` 6 - the two specs that render the completed screen - `bracket-tokens` 2, `fsrs-audit` 2, `fsrs-audit-split` 1) |
+| *the trophy's number is the tag set* | `classifyDeckQuality` over a mixed deck asserts `fsrsReady + unfinished + leechCandidates + ambiguousCues === totalCards`, and the funnel test asserts **card by card** that `tags.includes('LeechCandidate') === isLeechDense(card)` - including dense basic cards, where the old classifier returned `false` |
+| *the chip label is the sheet's verdict* | A card the sheet flags and the tag rule does not lands in `ambiguousCues`, not in the tagged number |
+| Mutation A: `isLeechCandidate` re-gated on `card.isCloze` | **exit 1**, 1 failed - the dense-basic case in the fuzz test |
+| Mutation B: the funnel's tagging removed, tag left on the old single path | **exit 1**, 1 failed - `"The {{c1::thick ascending limb}} reabsorbs salt" (18 words): expected false to be true` |
+| *the tag reaches the shipped deck through the real app* | `e2e/fsrs-audit-split.spec.ts` now asserts, in the export sheet of the segregate -> `.apkg + SM-2` flow, that exactly **one** card shows the `LeechCandidate` chip - that flow (declarative facts) is the one where the tag was never applied, and the sheet renders each card's tags, so the assertion reads the tag the learner would filter on |
+| Mutation B against the running app (funnel tagging removed, dev server recompiled) | **exit 1**, 1 failed: `getByText('LeechCandidate')` -> `Expected: 1, Received: 0` (33 x resolved to 0 elements). Reverted, `diff` clean, re-run **exit 0** - the assertion fails only when the tag is missing, not on the split itself |
+
+### 12.4 Residuals, stated rather than left to be rediscovered
+
+- **The tag is applied to shipped cards only.** A fragment the Wozniak ceiling withholds carries `WozniakOverflow`, not `LeechCandidate`, so the trophy's dense count and its held-back count are disjoint by construction - which is why the advice line reports them in different sentences.
+- **A card can be both dense and ambiguous**; the bucket order sends it to the dense bucket because that is the tag it ships with. The `[ AMB ]` chip is therefore a count of *the rest*, and its label is deliberately singular ("Ambiguous cue"), not a claim to cover the whole flag set.
+- **The sheet still audits a cloze's front while the ceiling weighs front+back** (the pre-existing asymmetry from §11.5). It is now *named* on both surfaces and no longer produces a wrong number; unifying the two thresholds would change what ships, so it stays as it is.
+- **Observed, not repaired:** `tests/unit/anki-exporter.test.ts` imports `classifyCardQuality`/`classifyDeckQuality` without using them (found while checking consumers). Dead import, no behaviour; left alone rather than mixed into this round.
+
+### 12.5 Method note
+
+Two rounds in a row the defect lived inside a *claim* rather than inside an algorithm: round 9's was a docstring on a function, this round's was a label in the UI ("Dense (tagged)") plus a docstring asserting that two surfaces agree. A UI label is a claim about the data, and it is checkable in exactly the same way - ask which *set* the number is, then go looking for the tag on the cards it claims to describe. The honest shape of the fix is that the rule the promise named became the rule that runs.
+
+**Total: 24 distinct defects in 15 files** (24 is the second in `lib/fsrs-audit.ts` and the first in `components/CompletedSessionView.tsx`).
+
+---
+
+## 13. Round 11 - the non-functional sweep, and defect 25: the drawer that could brick the app
+
+Rounds 7-10 audited behaviour: wrong numbers, wrong cards, wrong labels. Round 11 was asked for the
+**non-functional** class - the failures that are not wrong output but an app that stops working, gets
+slow, leaks a device, or dies. That needs different evidence than the earlier rounds: not "is this value
+right" but "what does this do under a corrupt disk, an unmount, two tabs, a socket that stalls".
+
+### 13.1 Prioritized findings
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| **25** | **P0 - critical. FIXED in this round (§13.2-13.5)** | One corrupt or legacy record in the learner's own saved history takes the **entire app** down: the history drawer dereferences `topicSummary` during render, nothing defines an error boundary above it, and the resulting screen is Next's *"Application error: a client-side exception has occurred"*. It is not recoverable from the UI - *clear all data* lives inside the drawer that crashed - so the only exit is clearing site data, and the learner cannot see their work at all. | crash site `components/HistoryDrawer.tsx:49`; root cause `lib/storage.ts` (`loadSavedSchemas`) and `lib/db.ts` (the v1 -> IndexedDB migration, the IndexedDB reads, the fallback parse); blast radius: no `app/error.tsx` exists | Reproduced in the browser: seed `deepencode_saved_schemas_v2` with `[{id,timestamp,mode,activities,userResponses}]` (no `topicSummary` - the shape an older release wrote), load the app, click the history button. Before the fix the browser reported `Application error: a client-side exception has occurred while loading 127.0.0.1` and the drawer never mounted; after the fix the drawer opens and lists the record as `Untitled topic`. |
+| 26 | P1 - high. **Open** | The workbench's speech recognition is never stopped when the component unmounts: `recognitionRef.current` is only stopped by the toggle itself, there is no cleanup effect, and `continuous = true`. Leaving the stage view (or finishing a session) therefore keeps the recogniser - and the browser's mic indicator - live, and its `onresult` keeps appending into the unmounted component's state. | `components/workbench/StudioWorkbench.tsx:697` (the only `stop()`), `:740` (the ref is assigned, never released); `recognitionRef` appears nowhere else | Read from the code: `recognitionRef` occurs at exactly three places (declare, stop-in-toggle, assign). Nothing can stop it on unmount because nothing is registered to. Not reproduced against a live microphone in this workspace. |
+| 27 | P2 - medium. **Open** | No root error boundary, so *any* unexpected throw in the composition root is a blank app rather than a contained message with a way back. It is the reason defect 25 was fatal instead of cosmetic. Only the stage-template renderer and the M-r-M surface have boundaries. | no `app/error.tsx` or `app/global-error.tsx`; boundaries exist only in `components/stage-templates/TemplateErrorBoundary.tsx` and `components/mr-m/MisterMSurface.tsx` | The defect-25 reproduction: a single throw inside a panel unmounted the whole tree and the page offered no recovery control. |
+| 28 | P2 - medium. **Open** | The schema list is memoized in a module-level cache that is **never invalidated**: `invalidateSchemaCache()` is exported and has zero callers, and nothing listens for the `storage` event. Two tabs open on the app therefore diverge - and because `saveSchemaToHistory` writes `[...current-from-cache, schema]`, the second tab's save can persist a list that is missing a schema the first tab just saved. | `lib/storage.ts:288` (`invalidateSchemaCache`, no callers), `:125-155` (`loadSavedSchemas` + `saveSchemaToHistory`), no `window.addEventListener('storage', ...)` anywhere | Grepped: one definition, no call sites; no `storage` listener in `lib/`, `components/`, `hooks/` or `app/`. The write-on-stale-read path is read from the code, not reproduced with two live tabs. |
+| 29 | P3 - medium, frequency unmeasured. **Open** | The stateless share link has no size guard. It is a query parameter on a page served by Node, so past the platform's header limit the *server rejects the request outright* - the learner's shared link is a dead end with no warning at copy time. | `lib/url-share.ts` (`generateStatelessShareUrl`, no length check); consumed by `components/StatelessShareModal.tsx` | **Measured against the running preview server**: `GET /?share=<N bytes>` returns `200` at 4 KB, 8 KB and 12 KB and **`431` (Request Header Fields Too Large)** at 16, 20 and 32 KB. **Measured** compression: the URL runs ≈0.7 x the schema JSON (4 points on a real fixture shape). What is *not* measured: how often a genuinely large session crosses it - no real generated schema is available in this workspace (the e2e fixture is a stub: 5 stages compress to 2 KB), so the crossing frequency is a model, not an observation. |
+| 30 | P4 - low. **Open** | Dead import found while checking consumers: `classifyCardQuality`/`classifyDeckQuality` are imported in a test file that never uses them. | `tests/unit/anki-exporter.test.ts` | Grep of consumers during round 10. No behaviour; left alone so this round's diff stays about the crash. |
+
+**What was checked and found clean, so the absences are not mistaken for coverage:** event-listener
+balances (`addEventListener`/`removeEventListener` counts match in every file under `components/`,
+`hooks/`, `lib/`, `app/`); interval/timer cleanup (all eight `setInterval` sites return a
+`clearInterval`, including the ones that stop themselves mid-callback); object-URL lifetime (all eight
+`URL.createObjectURL` sites revoke on the next line, in a `finally`-shaped block); `JSON.parse` on
+persisted data (every reader is inside a `try`, checked one by one); upload size caps (15 MB enforced in
+both `FileUploader` and the forge); stream abort/cancel (the client holds an `AbortController` and the
+route closes quietly on it); Firestore subscriptions (`onAuthStateChanged` and `onSnapshot` both return
+their `unsubscribe`); timers/loops that could block the main thread (none found - the heavy document
+work is server-side, and the canvases/animations run off a single interval or a media query).
+
+### 13.2 Defect 25 - how one record took the whole app down
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 25 | A persisted record read as trusted data, then dereferenced during render with no error boundary above it - a **total, self-inflicted, UI-unrecoverable app failure** (D=9: the learner cannot reach their own library, and the recovery control is inside the surface that crashes) | `components/HistoryDrawer.tsx:49` (`s.topicSummary.toLowerCase().includes(...)`); `lib/storage.ts` `loadSavedSchemas`; `lib/db.ts` (migration, `getAllSchemasFromIDB`, the localStorage fallback) | `SavedSchema.topicSummary` is declared **required**, but a TypeScript type is not a validator and every path into the app does `JSON.parse(...) as SavedSchema[]`: the one-time migration copies the legacy v1 store into IndexedDB verbatim, the IndexedDB read trusts what it finds, and the Firestore list arrives over the wire. A record written by an older release (no `topicSummary`) is therefore a legal runtime value that the drawer dereferences in its filter. The throw happens in render, `app/` has no `error.tsx`, and the only boundaries are around stage templates and the M-r-M surface - so React unmounted the entire tree and Next rendered its own error page. The learner could not fix it because *clear all data* lives inside the drawer. | Browser reproduction (before the fix): the launchpad's server-rendered DOM is present until hydration, then the body reads `Application error: a client-side exception has occurred while loading 127.0.0.1 (see the browser console for more information)`; clicking the history button yields no dialog at all, and the console shows the filter's `TypeError`. After the fix: the drawer opens, lists the record as **`Untitled topic`**, searching over it works, and no `pageerror` fires. |
+
+### 13.3 The fix - re-read persisted records at the boundary, and guard the dereference
+
+| Layer | What changed |
+|---|---|
+| `coerceSavedSchema` / `coerceSavedSchemas` (`lib/storage.ts`) | New exported contract, in the same shape the codebase already uses for resume records (`lib/crisis/buffer.ts`) and lab snapshots: rebuild, do not trust. A record with no usable `id` is dropped; `timestamp`, `mode`, `xpEarned`, `activities`, `userResponses` and the object-valued optionals get a value of the right type; an empty or missing topic becomes **`Untitled topic`** (an unnamed record is still the learner's work, so it is listed rather than dropped); every other key is carried through untouched so a field this function has never heard of is never silently lost. |
+| `loadSavedSchemas` | The one read the whole app goes through: `JSON.parse(raw)` -> `coerceSavedSchemas(JSON.parse(raw))`. |
+| `lib/db.ts` | The migration coerces **before** writing to IndexedDB (so a legacy shape dies at the door instead of living on for years), `getAllSchemasFromIDB` coerces what it reads back, and the quota-fallback parse coerces too. |
+| `components/HistoryDrawer.tsx` | Coerces the merged list (`cloudSchemas` is remote data) and so the filter can no longer dereference `undefined` - defence in depth at the exact line that crashed. |
+
+Why the boundary and not only the drawer: `topicSummary` is consumed by six other surfaces
+(`app/page.tsx:1855` the resume card, `lib/course-tree.ts:150,155` matching the topic against the
+prerequisite graph, `lib/services/sessionAnalytics.ts:191` the exported stats row,
+`components/StatelessShareModal.tsx:74,75,136` the share text and title, `components/HistoryDrawer.tsx`'s
+own rows and delete aria-labels, and `lib/anki-exporter.ts`'s deck naming). Guarding the drawer alone
+would have moved the next crash one click away. The fix is one function at the read boundary, which is
+where the untrusted data actually enters.
+
+### 13.4 Tests, and the mutation that proves the control bites
+
+| Check | Result |
+|---|---|
+| `bunx vitest run` | exit 0 - 76 files, **1312 passed** (1307 at the start of the round) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint` on the four changed files | exit 0 |
+| `e2e/history-drawer-legacy.spec.ts` (new, 2 tests) | exit 0 - the drawer opens on a record with no topic and lists it as `Untitled topic`; a record with no `activities` renders; searching over the unnamed record works; no `pageerror` and no `Application error` text |
+| the same spec against the pre-fix behaviour (mutation: `coerceSavedSchema` returns its input) | **exit 1** - `getByRole('dialog', { name: 'Saved schemas' })` -> `element(s) not found` (the click killed the app, so the drawer never mounted), while the well-formed-record test still passed: the spec fails on exactly the defect, not on the code around it |
+| `e2e/share-history.spec.ts` + `e2e/encode.spec.ts` + `e2e/modal-a11y.spec.ts` | exit 0 - **16 passed** (the drawer, resume and completion paths this change touches) |
+| `tests/unit/storage.test.ts` (+5 tests) | `makeSchema()` round-trips **byte-identical** through the coercion (so the fix cannot silently rewrite good records); a legacy record gains the name and typed fields; non-records are dropped; a wrong-typed record is coerced field by field; a non-array history reads as empty |
+
+The "keeps a real record byte-identical" test is the important one: the cheap version of this fix
+(defaulting every field unconditionally) would pass the crash tests and quietly rewrite the learner's
+own data. It is pinned instead.
+
+### 13.5 Residuals, stated rather than left to be rediscovered
+
+- **The coercion is not a migration.** Records already inside IndexedDB are normalized on the way *out*, not rewritten in place, so storage keeps the old shape until each schema is next saved. That is deliberate: a write-back migration would need a version bump and a failure path, and re-reading is enough to make the app correct.
+- **`topicSummary` is not the only unvalidated field** - it is the one that crashed. A record whose `activities` array holds non-activities still reaches the stage renderer, where `TemplateErrorBoundary` contains it. Closing that properly means per-field validation of `Activity`, which is a larger change than this defect justifies; the container boundary is the honest backstop for now.
+- **The unit tests cannot reach the IndexedDB path** - happy-dom has no IndexedDB, so the `getAllSchemasFromIDB` and migration coercions are verified by review and by the browser spec (which exercises a real IDB), not by a unit test.
+- **Findings 26-30 are listed, not fixed.** The request asked for the most critical one to be resolved; 26 (the microphone) and 27 (the missing root boundary) are the next two, and 27 is what makes any remaining finding fatal rather than cosmetic.
+
+### 13.6 Method note
+
+Every previous round read code and asked what it computes. This round asked what the code does when its
+surroundings misbehave, and the two techniques that produced the finding were not reading faster but
+setting different initial conditions: (1) a **hostile-state probe** - seed every persisted key with a
+plausible corrupt value and load the real app - which is how the crash appeared within one run, after
+an inventory of listeners, timers, object URLs and JSON parses had found nothing; and (2) a **measured
+platform limit** - `curl` against the running preview at 4, 8, 12, 16, 20 and 32 KB - which turns "the
+URL could get too long" from a worry into `431` at a stated boundary. The lesson worth keeping: a
+defensive `try/catch` audit of the writers says nothing about the readers, and "no crash path found"
+must name *which* direction it looked in.
+
+**Total: 25 distinct defects in 18 files** (25 is the first in `components/HistoryDrawer.tsx`, the first in `lib/storage.ts`, and the first in `lib/db.ts`; the crash site is the drawer, the cause is the read boundary in both storage modules).
