@@ -1,6 +1,40 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { SavedSchema, AISettings } from './types';
-import { DEFAULT_SETTINGS, coerceSavedSchemas } from './storage';
+import {
+  DEFAULT_SETTINGS,
+  LOCAL_HISTORY_LIMIT,
+  coerceSavedSchemas,
+  deletedSchemaIds,
+  mergeSchemaLists,
+} from './storage';
+
+/** The mirror key: the same one `lib/storage.ts` reads and writes synchronously. */
+const HISTORY_KEY = 'deepencode_saved_schemas_v2';
+
+/**
+ * Refresh the localStorage mirror from what IndexedDB holds.
+ *
+ * This write is asynchronous and second to the facade's own, so it must never
+ * shrink the mirror: it merges into what is already there and applies the SAME
+ * cap (see `LOCAL_HISTORY_LIMIT`) the facade uses. It used to overwrite the key
+ * with the newest twenty entries, which silently threw away entries 21-50 of a
+ * fifty-entry mirror - and, because the list had been read a moment earlier,
+ * could also drop a schema another tab had saved in between. Nothing is lost by
+ * keeping the mirror's own entries: the only thing that removes an id from the
+ * mirror is a delete, which removes it synchronously.
+ */
+function mirrorSchemasToLocalStorage(fromIDB: SavedSchema[]): void {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const mirror = raw ? coerceSavedSchemas(JSON.parse(raw)) : [];
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify(mergeSchemaLists(mirror, fromIDB).slice(0, LOCAL_HISTORY_LIMIT))
+    );
+  } catch {
+    // Ignore quota errors on localStorage
+  }
+}
 
 interface DeepEncodeDB extends DBSchema {
   schemas: {
@@ -114,7 +148,14 @@ export async function getAllSchemasFromIDB(): Promise<SavedSchema[]> {
     const all = await db.getAllFromIndex('schemas', 'by-timestamp');
     // Records already in IndexedDB are re-read too: a store written before this
     // normalization existed still holds whatever the migration put there.
-    return coerceSavedSchemas(all).reverse(); // Most recent first
+    //
+    // And recently deleted ids are dropped: this store holds everything, so a
+    // schema another tab deleted is still sitting here until that tab's own
+    // fire-and-forget removal lands. A reader inside that window must not
+    // answer with it (see `deletedSchemaIds`).
+    const deleted = deletedSchemaIds();
+    const live = coerceSavedSchemas(all);
+    return (deleted.size > 0 ? live.filter((s) => !deleted.has(s.id)) : live).reverse(); // Most recent first
   } catch (err) {
     console.error('[IndexedDB] Failed to load schemas:', err);
     // Fallback to localStorage
@@ -136,21 +177,19 @@ export async function saveSchemaToIDB(schema: SavedSchema): Promise<void> {
     const db = await getDB();
     await db.put('schemas', schema);
 
-    // Also mirror to localStorage for redundancy (up to 20 items)
-    try {
-      const all = await getAllSchemasFromIDB();
-      localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify(all.slice(0, 20)));
-    } catch {
-      // Ignore quota errors on localStorage
-    }
+    // Also mirror to localStorage for redundancy
+    mirrorSchemasToLocalStorage(await getAllSchemasFromIDB());
   } catch (err) {
     console.error('[IndexedDB] Failed to save schema:', err);
-    // Fallback
+    // Fallback: IndexedDB is unavailable, so the mirror is the only store and
+    // holds the newest `LOCAL_HISTORY_LIMIT` schemas.
     try {
-      const raw = localStorage.getItem('deepencode_saved_schemas_v2');
+      const raw = localStorage.getItem(HISTORY_KEY);
       const list = raw ? coerceSavedSchemas(JSON.parse(raw)) : [];
-      const updated = [schema, ...list.filter((s: SavedSchema) => s.id !== schema.id)].slice(0, 20);
-      localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify(updated));
+      localStorage.setItem(
+        HISTORY_KEY,
+        JSON.stringify(mergeSchemaLists([schema], list).slice(0, LOCAL_HISTORY_LIMIT))
+      );
     } catch {}
   }
 }
@@ -163,10 +202,7 @@ export async function deleteSchemaFromIDB(id: string): Promise<void> {
   try {
     const db = await getDB();
     await db.delete('schemas', id);
-    try {
-      const all = await getAllSchemasFromIDB();
-      localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify(all.slice(0, 20)));
-    } catch {}
+    mirrorSchemasToLocalStorage(await getAllSchemasFromIDB());
   } catch (err) {
     console.error('[IndexedDB] Failed to delete schema:', err);
   }
@@ -180,7 +216,7 @@ export async function clearAllSchemasFromIDB(): Promise<void> {
   try {
     const db = await getDB();
     await db.clear('schemas');
-    localStorage.removeItem('deepencode_saved_schemas_v2');
+    localStorage.removeItem(HISTORY_KEY);
   } catch (err) {
     console.error('[IndexedDB] Failed to clear all schemas:', err);
   }
