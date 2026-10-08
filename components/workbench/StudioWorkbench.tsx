@@ -745,6 +745,38 @@ export function StudioWorkbench({
     }
   };
 
+  /**
+   * The recogniser is released when the stage changes and when the workbench
+   * unmounts.
+   *
+   * `SpeechRecognition` is a browser object holding the microphone, not a DOM
+   * node: it does not stop because the component that started it went away, and
+   * with `continuous = true` it kept transcribing after the learner had moved on.
+   * Two things were wrong with that, and only the first is cosmetic - the tab's
+   * recording indicator stayed lit with nothing on screen saying so, and every
+   * `onresult` after that appended its transcript to `field2`, which by then
+   * belonged to the NEXT stage: the learner's speech landed in a stage they had
+   * already finished, one stage behind their voice. Stopping is the only way to
+   * release it, so it happens on the activity change and on unmount alike (the
+   * effect's key is the activity, so a stage change runs the cleanup first).
+   */
+  const speechActivityId = currentActivity?.id ?? null;
+  useEffect(() => {
+    // The cleanup is registered unconditionally and reads the ref when it runs:
+    // bailing out here when no recogniser exists *yet* would mean a session
+    // started afterwards had no cleanup at all, which is the bug this fixes.
+    return () => {
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+      setIsListening(false);
+      try {
+        recognition?.stop();
+      } catch {
+        // Already stopped, or the browser refused: nothing left to release.
+      }
+    };
+  }, [speechActivityId]);
+
   // Live compiled RemNote Markdown for Zone 3
   const liveRemNote = useMemo(() => {
     try {
