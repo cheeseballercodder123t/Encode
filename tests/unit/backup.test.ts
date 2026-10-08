@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { buildBackup, parseBackupFile, restoreBackup, type BackupFile } from '../../lib/backup';
+import {
+  buildBackup,
+  buildShareSchemaFile,
+  parseBackupFile,
+  restoreBackup,
+  shareFileSlug,
+  type BackupFile,
+} from '../../lib/backup';
 import { invalidateSchemaCache } from '../../lib/storage';
 import type { SavedSchema } from '../../lib/types';
 
@@ -91,6 +98,35 @@ describe('restoreBackup', () => {
     // loadSavedSchemas memoizes; each test seeds a fresh store, so the cache
     // must be dropped or the first test's snapshot leaks into the next.
     invalidateSchemaCache();
+  });
+
+  it('a single-schema share file restores the deck and leaves the receiver alone', () => {
+    // The fallback for a schema whose link would be too long to paste: it has to
+    // arrive through this same restore path, and it must not carry - or clobber -
+    // anything of the receiver's own.
+    store.set(SETTINGS_KEY, JSON.stringify({ provider: 'openai', openaiApiKey: 'receiver-key' }));
+    store.set('deepencode_study_prefs_v1', JSON.stringify({ activeTab: 'youtube' }));
+
+    const shared = schema('shared-from-a-classmate');
+    const file = buildShareSchemaFile(shared);
+    expect(file.app).toBe('deepencode');
+    expect(file.schemas).toEqual([shared]);
+    // Deliberately absent, not empty: an empty object here would overwrite the
+    // receiver's settings with nothing.
+    expect('settings' in file).toBe(false);
+    expect('extras' in file).toBe(false);
+
+    const parsed = parseBackupFile(JSON.stringify(file));
+    const report = restoreBackup(parsed);
+    expect(report.schemasRestored).toBe(1);
+    expect(report.settingsRestored).toBe(false);
+    expect(report.prefsRestored).toBe(false);
+    expect(report.extrasRestored).toBe(0);
+
+    const after = JSON.parse(store.get('deepencode_saved_schemas_v2') || '[]');
+    expect(after.map((s: SavedSchema) => s.id)).toEqual([shared.id]);
+    expect(JSON.parse(store.get(SETTINGS_KEY)!).openaiApiKey).toBe('receiver-key');
+    expect(JSON.parse(store.get('deepencode_study_prefs_v1')!).activeTab).toBe('youtube');
   });
 
   it('restores schemas that are not already present', () => {

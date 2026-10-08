@@ -1,6 +1,15 @@
 import { AISettings, EncodingGear, EncodingMode, SavedSchema } from './types';
 import { saveSchemaToIDB, deleteSchemaFromIDB, clearAllSchemasFromIDB, getAllSchemasFromIDB } from './db';
 
+/**
+ * How many schemas the localStorage mirror keeps. The mirror is the synchronous
+ * half of the library (and the whole of it where IndexedDB is unavailable), so
+ * this cap is shared with the IndexedDB module that also mirrors into the same
+ * key - two writers disagreeing about the cap is how entries 21-50 were being
+ * thrown away by an asynchronous write that thought it knew better.
+ */
+export const LOCAL_HISTORY_LIMIT = 50;
+
 const STORAGE_KEYS = {
   SETTINGS: 'deepencode_ai_settings_v2',
   HISTORY: 'deepencode_saved_schemas_v2',
@@ -182,35 +191,138 @@ export function coerceSavedSchemas(value: unknown): SavedSchema[] {
   return out;
 }
 
+/**
+ * The list exactly as it is on disk, bypassing the in-memory cache.
+ *
+ * The cache exists for synchronous read performance, but it is a snapshot of
+ * ONE tab's view: another tab writes the same key without this module knowing.
+ * Every writer therefore rebuilds from this function rather than from
+ * {@link loadSavedSchemas}, because a writer that trusts its own cache writes a
+ * *stale* list - which is how one tab's save dropped another tab's schema, and
+ * how a delete could resurrect a schema the other tab had already removed.
+ */
+function readSchemasFromStorage(): SavedSchema[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
+    return raw ? coerceSavedSchemas(JSON.parse(raw)) : [];
+  } catch (e) {
+    console.error('Failed to read schemas history', e);
+    return [];
+  }
+}
+
+/**
+ * Which side of a change a notification came from.
+ *
+ * `local` means THIS tab wrote the library, and the list handed over is the
+ * state to render. `remote` means another tab did, so this one has to re-read
+ * the stores instead of trusting the list it was already holding.
+ */
+export type SavedSchemasChangeOrigin = 'local' | 'remote';
+
+/**
+ * Everyone who wants to know when the library changes.
+ *
+ * The app's reader (`hooks/useSchemaLibrary`) subscribes, so a schema saved in
+ * another tab appears in this tab's drawer without a reload - and, more
+ * importantly, so this tab's next write is built on a list it knows is current.
+ */
+type SavedSchemasListener = (schemas: SavedSchema[], origin: SavedSchemasChangeOrigin) => void;
+const savedSchemaListeners = new Set<SavedSchemasListener>();
+let crossTabListenerBound = false;
+
+function notifySavedSchemaListeners(schemas: SavedSchema[], origin: SavedSchemasChangeOrigin): void {
+  for (const listener of [...savedSchemaListeners]) listener(schemas, origin);
+}
+
+/**
+ * Binds the cross-tab `storage` listener once per document.
+ *
+ * `storage` fires in every OTHER tab that shares the origin, never in the tab
+ * that wrote - which is exactly the signal this module needs, and why the event
+ * is not just belt-and-braces: without it the cache of a tab that is already
+ * open stays stale forever, because nothing else tells it the key changed.
+ */
+function ensureCrossTabListener(): void {
+  if (crossTabListenerBound) return;
+  // A `window` with no `addEventListener` is not a document that can deliver
+  // events - non-DOM callers and unit harnesses stub a partial one - so this is
+  // a capability check, not a swallowed failure: there is nothing to subscribe
+  // on, and the flag stays unset so a real document still binds later.
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  crossTabListenerBound = true;
+  window.addEventListener('storage', (event) => {
+    // `key === null` is a whole-store clear; anything else outside the library
+    // key is a different module's business.
+    if (event.key !== null && event.key !== STORAGE_KEYS.HISTORY) return;
+    invalidateSchemaCache();
+    notifySavedSchemaListeners(readSchemasFromStorage(), 'remote');
+  });
+}
+
+/**
+ * Subscribes to the saved-schema list; returns the unsubscribe.
+ *
+ * Fires on a write from another tab (the list as it now stands on disk) and on
+ * this tab's own writes (the list as written), so a subscriber never has to
+ * guess which side of the change it is on.
+ */
+export function subscribeToSavedSchemas(listener: SavedSchemasListener): () => void {
+  ensureCrossTabListener();
+  savedSchemaListeners.add(listener);
+  return () => {
+    savedSchemaListeners.delete(listener);
+  };
+}
+
+/**
+ * The library as both stores hold it: the localStorage mirror, topped up by the
+ * schemas only IndexedDB still has.
+ *
+ * IndexedDB keeps every schema while the mirror is capped at fifty, so the
+ * fuller store is the one that can answer with a record the mirror has dropped.
+ * It cannot simply win, though: it is written asynchronously AFTER the mirror,
+ * so its list lags a save by a moment - whichever tab made it. Merging keeps
+ * both properties: nothing the mirror holds is ever traded away for a
+ * momentarily-shorter IndexedDB list, and nothing the mirror dropped is lost.
+ */
+export function mergeSchemaLists(
+  local: SavedSchema[],
+  fromIndexedDB: SavedSchema[]
+): SavedSchema[] {
+  if (fromIndexedDB.length === 0) return local;
+  const known = new Set(local.map((s) => s.id));
+  const extra = fromIndexedDB.filter((s) => !known.has(s.id));
+  return extra.length === 0 ? local : [...local, ...extra];
+}
+
 export function loadSavedSchemas(): SavedSchema[] {
   if (typeof window === 'undefined') return [];
-  
+
+  // The first read in this document is what installs the cross-tab listener: a
+  // tab that is holding the library in memory (or in this cache) is exactly the
+  // one that has to hear about another tab's write.
+  ensureCrossTabListener();
+
   // Return from cache if available and initialized
   if (cacheInitialized && schemaCache.has('schemas')) {
     return schemaCache.get('schemas') || [];
   }
   
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
-    if (!raw) {
-      schemaCache.set('schemas', []);
-      cacheInitialized = true;
-      return [];
-    }
-    const parsed = coerceSavedSchemas(JSON.parse(raw));
-    schemaCache.set('schemas', parsed);
-    cacheInitialized = true;
-    return parsed;
-  } catch (e) {
-    console.error('Failed to load schemas history', e);
-    return [];
-  }
+  const parsed = readSchemasFromStorage();
+  schemaCache.set('schemas', parsed);
+  cacheInitialized = true;
+  return parsed;
 }
 
 export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
   if (typeof window === 'undefined') return [];
   try {
-    const current = loadSavedSchemas();
+    // Read from disk, not from the cache: another tab may have saved since this
+    // one last looked, and rebuilding the list from a stale cache is what
+    // dropped its schema.
+    const current = readSchemasFromStorage();
     // Replace if existing with same id, else prepend
     const existingIndex = current.findIndex(s => s.id === schema.id);
     let updated: SavedSchema[];
@@ -221,11 +333,17 @@ export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
       updated = [schema, ...current];
     }
     // Cap local localStorage history at 50, but IndexedDB stores all
-    const capped = updated.slice(0, 50);
+    const capped = updated.slice(0, LOCAL_HISTORY_LIMIT);
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(capped));
     
-    // Update cache
+    // The id is alive again: drop any deletion tombstone standing against it.
+    forgetSchemaDeletion(schema.id);
+
+    // Update cache and tell everyone else in this tab (the `storage` event only
+    // reaches other tabs).
     schemaCache.set('schemas', capped);
+    cacheInitialized = true;
+    notifySavedSchemaListeners(capped, 'local');
     
     // Asynchronously persist to IndexedDB
     saveSchemaToIDB(schema).catch(e => console.warn('IDB write failed:', e));
@@ -254,12 +372,22 @@ export function debouncedSaveSchema(schema: SavedSchema, delay: number = 1000): 
 export function deleteSchemaFromHistory(id: string): SavedSchema[] {
   if (typeof window === 'undefined') return [];
   try {
-    const current = loadSavedSchemas();
+    // Fresh read for the same reason as the save: a delete computed from a
+    // stale cache re-writes the schemas the cache believes in, resurrecting a
+    // schema another tab already removed.
+    const current = readSchemasFromStorage();
     const updated = current.filter(s => s.id !== id);
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(updated));
+
+    // Remember the deletion before the async IndexedDB removal is attempted:
+    // until that lands, the row is still there for anyone who reads the fuller
+    // store, and without this it would be shown again as if nothing happened.
+    rememberSchemaDeletion(id);
     
     // Update cache
     schemaCache.set('schemas', updated);
+    cacheInitialized = true;
+    notifySavedSchemaListeners(updated, 'local');
     
     deleteSchemaFromIDB(id).catch(e => console.warn('IDB delete failed:', e));
     return updated;
@@ -273,10 +401,14 @@ export function clearAllSchemas(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(STORAGE_KEYS.HISTORY);
+    // Everything is gone, so there is nothing left for a tombstone to protect
+    // against: keeping them would only hide an id that is later re-imported.
+    localStorage.removeItem(DELETIONS_KEY);
     
     // Clear cache
     schemaCache.delete('schemas');
     cacheInitialized = false;
+    notifySavedSchemaListeners([], 'local');
     
     clearAllSchemasFromIDB().catch(e => console.warn('IDB clear failed:', e));
   } catch (e) {
@@ -288,6 +420,83 @@ export function clearAllSchemas(): void {
 export function invalidateSchemaCache(): void {
   schemaCache.delete('schemas');
   cacheInitialized = false;
+}
+
+// ─── Recent deletions, so IndexedDB cannot resurrect them ───────────────────
+//
+// The two stores disagree for a moment by design: the localStorage mirror is
+// updated synchronously by the tab that deleted, while the IndexedDB row is
+// removed by a fire-and-forget call. A reader that arrives inside that window -
+// another tab, or a fresh page load - used to see the deleted schema again,
+// because IndexedDB is the fuller store and any reader that consults it answers
+// from the row that has not gone away yet.
+//
+// A tombstone is one id and one timestamp: it makes "deleted" survive the gap,
+// and it expires so the ledger cannot grow without bound.
+
+const DELETIONS_KEY = 'deepencode_schema_deletions_v1';
+/** A deletion is remembered for a day: long enough for any pending IDB write. */
+const DELETION_TTL_MS = 24 * 60 * 60 * 1000;
+/** And only the newest few are kept, so the key stays tiny. */
+const MAX_DELETIONS = 50;
+
+type DeletionLedger = Record<string, number>;
+
+function readDeletions(): DeletionLedger {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(DELETIONS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: DeletionLedger = {};
+    for (const [id, at] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof at === 'number' && Number.isFinite(at)) out[id] = at;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeDeletions(ledger: DeletionLedger): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const now = Date.now();
+    const entries = Object.entries(ledger)
+      .filter(([, at]) => now - at < DELETION_TTL_MS)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_DELETIONS);
+    if (entries.length === 0) localStorage.removeItem(DELETIONS_KEY);
+    else localStorage.setItem(DELETIONS_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch {
+    // Best-effort: a full quota must not break the delete itself.
+  }
+}
+
+/**
+ * The ids deleted recently enough that a stale copy of them must not be shown.
+ *
+ * Read by the IndexedDB path, which is the one place a deleted schema can come
+ * back from.
+ */
+export function deletedSchemaIds(now: number = Date.now()): Set<string> {
+  const ledger = readDeletions();
+  return new Set(Object.entries(ledger).filter(([, at]) => now - at < DELETION_TTL_MS).map(([id]) => id));
+}
+
+function rememberSchemaDeletion(id: string): void {
+  const ledger = readDeletions();
+  ledger[id] = Date.now();
+  writeDeletions(ledger);
+}
+
+/** Re-saving an id that was deleted in another tab makes it alive again. */
+function forgetSchemaDeletion(id: string): void {
+  const ledger = readDeletions();
+  if (!(id in ledger)) return;
+  delete ledger[id];
+  writeDeletions(ledger);
 }
 
 // ─── "What's hard for me": per-topic struggle ledger ─────────────────────────

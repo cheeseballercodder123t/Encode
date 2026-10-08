@@ -104,20 +104,59 @@ export function buildBackup(): BackupFile {
 
 const JSON_MIME = 'application/json';
 
-/** Downloads the backup as a timestamped file. Returns the filename. */
-export function downloadBackup(backup: BackupFile): string {
+/**
+ * One schema, in a file the restore path already understands.
+ *
+ * This is the handover for a schema whose link would be too long to paste: the
+ * classmate opens the app, uses `[ RESTORE BACKUP ]` in the analytics sheet, and
+ * gets the deck in their library. Deliberately NOT a full `BackupFile`: every
+ * other field is omitted so `restoreBackup` skips it and the receiver's own
+ * settings, prefs, stats and ledger are left exactly as they are.
+ */
+export interface ShareSchemaFile {
+  app: 'deepencode';
+  version: number;
+  exportedAt: string;
+  schemas: SavedSchema[];
+}
+
+/** Wraps one schema in the restorable share format. */
+export function buildShareSchemaFile(schema: SavedSchema): ShareSchemaFile {
+  return {
+    app: 'deepencode',
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    schemas: [schema],
+  };
+}
+
+/** A filename-safe label for the file a share produces. */
+export function shareFileSlug(schema: SavedSchema): string {
+  const slug = (schema.topicSummary || 'schema')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return slug || 'schema';
+}
+
+/**
+ * Downloads a backup (or a single-schema share) as a file. Returns the
+ * filename used.
+ */
+export function downloadBackup(backup: BackupFile | ShareSchemaFile, filename?: string): string {
   const stamp = new Date().toISOString().slice(0, 10);
-  const filename = `deepencode-backup-${stamp}.json`;
+  const name = filename || `deepencode-backup-${stamp}.json`;
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: JSON_MIME });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  return filename;
+  return name;
 }
 
 export interface RestoreReport {
@@ -212,7 +251,14 @@ function writeRawKey(key: string, value: unknown): void {
   }
 }
 
-/** Parses a user-selected backup file. Throws a user-safe Error when unreadable. */
+/**
+ * Parses a user-selected backup or share file. Throws a user-safe Error when
+ * unreadable.
+ *
+ * Returns the parsed document as a `BackupFile` for the caller's convenience,
+ * with the note that a single-schema share omits the optional halves by design
+ * - `restoreBackup` reads each field defensively and restores what is there.
+ */
 export function parseBackupFile(text: string): BackupFile {
   let parsed: unknown;
   try {

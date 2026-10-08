@@ -17,7 +17,10 @@ import {
   recordTopicResult,
   clearTopicStruggles,
   invalidateSchemaCache,
+  subscribeToSavedSchemas,
+  mergeSchemaLists,
 } from '@/lib/storage';
+import type { SavedSchema } from '@/lib/types';
 import { makeSchema } from './fixtures';
 
 // happy-dom has no IndexedDB; silence the expected fallback warnings from lib/db.ts
@@ -142,6 +145,81 @@ describe('persisted records are re-read, not trusted', () => {
   it('returns an empty list for a non-array history', () => {
     localStorage.setItem('deepencode_saved_schemas_v2', '{"not":"a list"}');
     expect(loadSavedSchemas()).toEqual([]);
+  });
+});
+
+describe('the cache is invalidated, so a second tab cannot lose the first tab\u2019s schema', () => {
+  // The module-level cache is a snapshot of ONE tab's view of the library, and
+  // `storage` never fires in the tab that wrote. So a writer that rebuilt its
+  // replacement list from that cache wrote a stale list: this tab's save
+  // dropped whatever the other tab had saved in between.
+  it('builds a save on what is actually on disk, not on the warm cache', () => {
+    const mine = makeSchema({ id: 'a', timestamp: 1 });
+    saveSchemaToHistory(mine); // warm this tab's cache
+
+    // Another tab prepends its schema to the same key. The reading tab knows
+    // nothing about it yet: no event has arrived in its own document.
+    const theirs = { ...makeSchema({ id: 'b', timestamp: 2 }), topicSummary: 'Saltatory Conduction' };
+    localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify([theirs, mine]));
+
+    // Now this tab saves its own new schema. Theirs must survive the write.
+    saveSchemaToHistory(makeSchema({ id: 'c', timestamp: 3 }));
+    const stored = JSON.parse(localStorage.getItem('deepencode_saved_schemas_v2') || '[]');
+    expect(stored.map((s: SavedSchema) => s.id)).toEqual(['c', 'b', 'a']);
+  });
+
+  it('drops the stale cache when another tab writes the key', () => {
+    saveSchemaToHistory(makeSchema({ id: 'a' }));
+    expect(loadSavedSchemas().map((s) => s.id)).toEqual(['a']);
+
+    const theirs = { ...makeSchema({ id: 'b' }), topicSummary: 'Saltatory Conduction' };
+    const raw = JSON.stringify([theirs]);
+    localStorage.setItem('deepencode_saved_schemas_v2', raw);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'deepencode_saved_schemas_v2', newValue: raw }));
+
+    expect(loadSavedSchemas().map((s) => s.id)).toEqual(['b']);
+  });
+
+  it('tells subscribers about this tab\u2019s own writes, marked local', () => {
+    const seen: Array<{ ids: string[]; origin: string }> = [];
+    const unsubscribe = subscribeToSavedSchemas((schemas, origin) => {
+      seen.push({ ids: schemas.map((s) => s.id), origin });
+    });
+    saveSchemaToHistory(makeSchema({ id: 'mine' }));
+    unsubscribe();
+
+    expect(seen).toEqual([{ ids: ['mine'], origin: 'local' }]);
+  });
+
+  it('tells subscribers about another tab\u2019s write, marked remote', () => {
+    const seen: Array<{ ids: string[]; origin: string }> = [];
+    const unsubscribe = subscribeToSavedSchemas((schemas, origin) => {
+      seen.push({ ids: schemas.map((s) => s.id), origin });
+    });
+
+    const raw = JSON.stringify([{ ...makeSchema({ id: 'theirs' }), topicSummary: 'Theirs' }]);
+    localStorage.setItem('deepencode_saved_schemas_v2', raw);
+    window.dispatchEvent(new StorageEvent('storage', { key: 'deepencode_saved_schemas_v2', newValue: raw }));
+    unsubscribe();
+
+    expect(seen).toEqual([{ ids: ['theirs'], origin: 'remote' }]);
+  });
+});
+
+describe('mergeSchemaLists', () => {
+  // IndexedDB keeps every schema; the mirror is capped at fifty. Merging rather
+  // than preferring either one is what makes a just-saved schema (which the
+  // async IndexedDB write has not landed for yet) impossible to hide.
+  it('keeps the mirror order and appends the schemas only IndexedDB has', () => {
+    const local = [makeSchema({ id: 'new' }), makeSchema({ id: 'old' })];
+    const fromIDB = [makeSchema({ id: 'new' }), makeSchema({ id: 'dropped-by-cap' })];
+    expect(mergeSchemaLists(local, fromIDB).map((s) => s.id)).toEqual(['new', 'old', 'dropped-by-cap']);
+  });
+
+  it('returns the mirror untouched when IndexedDB has nothing to add', () => {
+    const local = [makeSchema({ id: 'only' })];
+    expect(mergeSchemaLists(local, [])).toEqual(local);
+    expect(mergeSchemaLists(local, [makeSchema({ id: 'only' })])).toEqual(local);
   });
 });
 

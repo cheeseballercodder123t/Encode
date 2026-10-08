@@ -16,7 +16,7 @@ import {
   TeachScope
 } from '@/lib/types';
 import { incrementModelCall, saveGenerationInProgress, clearGenerationInProgress, loadGenerationInProgress, loadStudyPrefs, saveStudyPrefs, recordTopicResult, loadTopicStruggles } from '@/lib/storage';
-import { decompressSchemaFromUrl } from '@/lib/url-share';
+import { decompressSchemaFromUrl, readSharedPayload } from '@/lib/url-share';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { AuthModal } from '@/components/AuthModal';
@@ -315,7 +315,10 @@ export default function DeepEncodeApp() {
           }
         }
 
-        const shareParam = searchParams.get('share') || searchParams.get('data');
+        // The payload rides in the fragment for a new link (so the server never
+        // sees it and cannot reject an oversized request line with a 431) and in
+        // the query string for one already in the wild. Both are read here.
+        const shareParam = readSharedPayload(window.location.search, window.location.hash);
         if (shareParam) {
           const decoded = decompressSchemaFromUrl(shareParam);
           if (decoded && (decoded.activities?.length > 0 || decoded.guidedModules?.length)) {
