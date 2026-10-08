@@ -109,7 +109,14 @@ export function scoreDiscrimination(
 
 /** Milliseconds left on the clock (never negative). */
 export function remainingMs(startedAt: number, now: number, seconds: number = DISCRIMINATION_SECONDS): number {
-  return Math.max(0, seconds * 1000 - (now - startedAt));
+  const limit = Number.isFinite(seconds) ? Math.max(0, seconds) * 1000 : 0;
+  const elapsed = now - startedAt;
+  // `Math.max(0, …)` clamps the floor but not the ceiling: a `startedAt` sitting
+  // in the future (clock skew, a persisted timestamp) made the 10-second gate
+  // read 19 seconds, and a non-finite one made it read `NaN`. A clock face
+  // cannot hold more time than the clock holds.
+  if (!Number.isFinite(elapsed)) return 0;
+  return Math.min(limit, Math.max(0, limit - elapsed));
 }
 
 /**

@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). Scope: the attack vectors in the request —
+Branch `freebuff/changes-7h8fxpxe` (based on `bf2f8cc`). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34); defects 13–14 are in the working tree.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -23,7 +23,10 @@ pinned by a test that was then **proven able to fail**.
 | 11 | Crucible clock — a reading that is not a clock face | `lib/crucible/budget.ts:222` | `formatClock` and `formatMinutes` guarded only against negatives (`Math.max(0, …)`), which does not catch `NaN` or `Infinity`, against a documented contract of "clock face, always two digits, never a negative sign". | Reproduced: `formatClock(NaN)` → `'NaN:NaN'`, `formatClock(Infinity)` → `'Infinity:NaN'`, `formatMinutes(NaN)` → `'NaNm'` — and the NaN case is reachable from defect 10, because the plan's own `targetSec` is what the HUD renders. Fixed by falling back to `00:00` / `0.0m` on a non-finite reading. Pinned in the same test file; against the unfixed code the assertion fails with `expected 'NaN:NaN' to be '00:00'`. |
 | 12 | Parsons drill — the scramble hands over the chain | `lib/parsons.ts:61` | The scramble's "second pass" says in its own comment that it exists to "pull any tile that landed in its own slot somewhere else", but its guard `continue`d whenever the swap partner was *also* in its own slot — so the pass silently defeated its stated purpose — and the shuffle loop above it accepted any ordering that was merely not identical. | Measured over 3000 seeds before the fix: **369 scrambles (12.3%) left a tile in its correct slot** (a direct "this link is already right" hint) and **1293 (43%) were cyclic rotations** of the true chain, which keep every adjacency but the wrap-around. After: **0 and 0**, with `DISTINCT` 6 of 24 orderings (see §3b for the variety trade-off). Fixed by drawing until a derangement appears — never trading one away for a pinned order — and preferring a non-rotation, with the first draw as fallback so nothing can throw. Pinned by 4 new tests in `tests/unit/parsons.test.ts`, all three assertions mutation-proven able to fail. |
 
-**Total: 12 distinct defects in 6 files** (3 SM-2, 1 hook lifecycle, 4 formula-pipeline, 1 cross-session state carry-over, 2 crucible clock, 1 Parsons scramble — defects 9, 10–11, 12 detailed in §3a and §3b).
+| 13 | Diagram-completion grading — a single letter counts as the answer | `lib/visual-completion.ts:51` | The containment shortcut `a.length >= 6 && (t.includes(a) \|\| a.includes(t))` guarded the **answer's** length, never the typed input's, and `a.includes(t)` is trivially true for any short string that occurs inside the answer. Reached from `components/stage-templates/DiagramBlank.tsx:47`, where the verdict also decides what is written into the mechanism field the exporter ships. | Reproduced: `gradeCompletion('t', 'S4 segments swing outward')` → **`true`**, likewise `'a'`, `'the'`, `'s4'`, `'an'`, `'is'`. Fixed by requiring the containment hint to carry at least one of the answer's own content words (the drill's stated rule is "a strong overlap of the answer's content words"); the matcher now also compares from either side, so an inflected word the learner typed longer still meets the answer's shorter one. Pinned by 5 new tests in `tests/unit/completion-and-clock-hardening.test.ts`; mutation-proven — removing the guard fails with `"t" carries none of the answer's content words: expected true to be false`. |
+| 14 | Discrimination clock can gain time (**hardening** — see the reachability note) | `lib/discrimination.ts:111` | `remainingMs` clamped only the floor (`Math.max(0, …)`), so anything making `now - startedAt` negative was reported as **more time than the clock holds**, and a non-finite reading passed straight through as `NaN`. | Reproduced at the function boundary: `remainingMs(10_000, 1_000, 10)` → **19000 ms on a 10-second gate**, and `remainingMs(NaN, 1_000, 10)` → `NaN`. Fixed by clamping the ceiling to the clock's own length and returning 0 for a non-finite reading. Pinned in the same new test file; mutation-proven — restoring the un-clamped body fails with `expected 19000 to be 10000` and `expected NaN to be +0`. **Reachability, stated honestly:** the only call site is `components/DiscriminationGate.tsx:69`, where `startedAt` is either the component's own `Date.now()` or a recorded `Date.now()` (`record` writes `endedAt: Date.now()`, an absolute time — that wiring was checked and is **correct**). So the only way in is a backward system-clock step between ticks (NTP correction, a clock stepped after resume). Not a persisted timestamp and not a corrupt stored value — **my first draft of this row claimed both, and both were wrong.** Kept because the reading drives a HUD bar (`(leftMs / limitMs) * 100` → a 190%-wide bar) as well as a countdown, so an impossible value is visible twice; this is the one entry in the table whose trigger is not reachable from a live caller in normal operation. |
+
+**Total: 14 distinct defects in 8 files** (3 SM-2, 1 hook lifecycle, 4 formula-pipeline, 1 cross-session state carry-over, 2 crucible clock, 1 Parsons scramble, 1 diagram-completion grading, 1 discrimination clock — defects 9, 10–11, 12 and 13–14 detailed in §3a, §3b and §3c). **Thirteen are reachable from a live caller; defect 14 is hardening whose trigger requires a backward system-clock step** — its row says so.
 
 ### Tests added
 
@@ -35,6 +38,7 @@ pinned by a test that was then **proven able to fail**.
 | `tests/unit/clue-ladder.test.ts` (extended, +6 tests) | Defect 9: 4 runtime tests for the reveal counter (which had zero coverage) and 2 wiring guards for the workbench's reset boundary. |
 | `tests/unit/crucible-budget.test.ts` (extended, +3 tests) | Defects 10–11: the overflow sum invariant, the non-finite clock, and the clock face. |
 | `tests/unit/parsons.test.ts` (extended, +4 tests) | Defect 12: no tile in its own slot across 300 seeds, never a rotation across 300 seeds, order variety, and the three-link case where the only derangements *are* rotations. |
+| `tests/unit/completion-and-clock-hardening.test.ts` (new, 10 tests) | Defects 13–14: content-free answers rejected, the dressed mechanism and the inflected word still accepted, plus the clock's ceiling, floor and non-finite reading. |
 
 ## 2. Verification performed
 
@@ -43,10 +47,11 @@ Run as plain commands, with exit statuses captured:
 | Check | Command | Result |
 |---|---|---|
 | Typecheck | `npx tsc -b --noEmit` | **exit 0** |
-| Unit suite (final) | `npx vitest run` | **exit 0** — 73 files, **1243 passed** (was 70 files / 1196 tests) |
+| Unit suite (final) | `npx vitest run` | **exit 0** — 74 files, **1253 passed** (was 70 files / 1196 tests) |
 | Lint (changed files) | `npx eslint <9 files>` | **exit 0** |
 | E2E smoke | `npx playwright test e2e/modal-a11y.spec.ts --project=chromium` | **exit 0** — 3/3 |
 | E2E Parsons drill | `npx playwright test e2e/sequence.spec.ts --workers=2` against the managed preview | **exit 0** — 3/3 (this is defect 12 verified in the real drill, not just in the unit test) |
+| E2E diagram-completion drill | `npx playwright test e2e/scaffold-frame.spec.ts --workers=2` after the grading change | **exit 0** — 3/3 (defect 13 verified where it bites: the shallow answer is still rejected and the dressed one still accepted) |
 | E2E forge flow | `npx playwright test e2e/flashcard-forge.spec.ts --project=chromium` | **exit 1** — 17 passed, **2 failed** (see §3) |
 
 ### Discriminating power of the new tests (the part that matters)
@@ -130,7 +135,7 @@ A passing test proves nothing unless it can fail, so each fix was tested against
    `$$` and `\begin{}` balance are not validated in `stepByStepSolutionTemplate`;
    `clozeOrdinals('{{c999999999::x}}')` accepts an absurd ordinal; the three duplicated
    extension→MIME chains and `base64ToBytes`'s silent `Buffer`-based garbage on a `data:` prefix
-   (unreachable today, since every caller strips the prefix) all remain.
+   (unreachable today, since every caller strips the prefix) all remain. **Two more readings from this round are reported rather than repaired**, because neither is reachable to a wrong output today: `claimValues('the pH is 7.4 and 7.35')` returns `["7.4 and", "7.35"]`, the first entry swallowing the following word as if it were a unit (`replace(/[^a-z0-9µ°%/]/g, '')` keeps letters), and `formatCount(NaN)` / `formatCount(Infinity)` print `NaN` / `Infinity` rather than a count. Neither is reached by a live caller in this tree; both would be one-line guards if a caller ever can.
 
 ## 3a. Defect 9 in detail — reachability, and a correction to my own first draft
 
@@ -164,6 +169,13 @@ Two things are worth stating plainly rather than burying:
   rotation penalty rather than returning a pinned order — there is a test for exactly this case, and a
   comment in the source at the point where the rules collide.
 
+## 3c. Defects 13–14 in detail — and three ways this round could have gone wrong
+
+- **Three of the probe's throws were my own misuse, not bugs**, and are recorded here so they are not mistaken for findings: `scoreDiscrimination([])` (its signature is `(questions, answers, seconds)`), `computeJargonDeflation([], [])` (it takes a *string* first, and I passed an array), and `index.isDuplicate` (the near-duplicate index exposes `add`/`has`, not `isDuplicate`). None of these is a defect in the code.
+- **Two of my own test expectations were wrong, and the red run corrected them.** I first asserted that `"depolarisations"` alone should grade as correct — it does not, and should not: one content word of a two-word answer is 50%, under the drill's documented 60% bar. The honest expectation is the *inflected word inside a full answer*, which is what the test now pins. I also asserted that a single content word (`"segments"`) must be rejected; that is behaviour the drill has always allowed, so tightening it would have been a grading change nobody asked for. The fix is scoped to answers that carry **none** of the answer's content.
+- **A suspicion I raised and then cleared, recorded so it is not re-raised as a finding.** `startedAt` for question 2+ is `answers[index - 1].endedAt`, while `record(index, choseConcept, Date.now() - startedAt)` is *called* with an elapsed duration — which reads like a duration stored where an absolute timestamp belongs, and would have made every question after the first clock 0 seconds. It does not: `record` writes `endedAt: Date.now()`. The wiring is correct and there is no defect here.
+- **The two E2E failures on the first run of `scaffold-frame.spec.ts` were infrastructure.** `net::ERR_CONNECTION_REFUSED at http://127.0.0.1:39246/` — the managed preview had died mid-run (the first spec passed, then both later tests failed at `page.goto`). `freebuff-preview restart` brought it back and the same spec then passed **3/3** with no code change. Worth stating plainly, because "2 failed" on a screenshot of that run would look like a regression from the grading change; it was a dead server.
+
 ## 4. Files changed
 
 ```
@@ -178,8 +190,11 @@ Two things are worth stating plainly rather than burying:
  tests/unit/xp-timer-cleanup.test.ts         | new, 69 lines
  lib/crucible/budget.ts                      | non-finite clock + weights, clock face
  lib/parsons.ts                              | scramble: derangement filter, rotation preference
+ lib/visual-completion.ts                    | containment hint must carry the answer's content
+ lib/discrimination.ts                       | clock ceiling clamped to the clock's own length
  tests/unit/crucible-budget.test.ts          | +3 tests
  tests/unit/parsons.test.ts                  | +4 tests
+ tests/unit/completion-and-clock-hardening.test.ts | new, 10 tests
 ```
 
 No new exports were added or renamed in any source file; `calculateSM2`'s signature,
