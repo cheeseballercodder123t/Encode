@@ -1,6 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { SavedSchema, AISettings } from './types';
-import { DEFAULT_SETTINGS } from './storage';
+import { DEFAULT_SETTINGS, coerceSavedSchemas } from './storage';
 
 interface DeepEncodeDB extends DBSchema {
   schemas: {
@@ -80,13 +80,16 @@ export async function initIndexedDB(): Promise<void> {
       const localData = localStorage.getItem('deepencode_saved_schemas_v2') || localStorage.getItem('deepencode_saved_schemas');
       if (localData) {
         try {
-          const parsed = JSON.parse(localData) as SavedSchema[];
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          // Re-read rather than trust: this is where a record written by an
+          // older release enters the durable store, and the copy used to be
+          // verbatim (`as SavedSchema[]`), so a legacy shape reached the history
+          // drawer years later. `coerceSavedSchemas` normalizes it (and drops
+          // anything that is not a record) so the bad shape dies here instead.
+          const parsed = coerceSavedSchemas(JSON.parse(localData));
+          if (parsed.length > 0) {
             const tx = db.transaction('schemas', 'readwrite');
             for (const s of parsed) {
-              if (s && s.id) {
-                await tx.store.put(s);
-              }
+              await tx.store.put(s);
             }
             await tx.done;
             console.log(`[IndexedDB] Migrated ${parsed.length} schemas from localStorage.`);
@@ -109,13 +112,15 @@ export async function getAllSchemasFromIDB(): Promise<SavedSchema[]> {
   try {
     const db = await getDB();
     const all = await db.getAllFromIndex('schemas', 'by-timestamp');
-    return all.reverse(); // Most recent first
+    // Records already in IndexedDB are re-read too: a store written before this
+    // normalization existed still holds whatever the migration put there.
+    return coerceSavedSchemas(all).reverse(); // Most recent first
   } catch (err) {
     console.error('[IndexedDB] Failed to load schemas:', err);
     // Fallback to localStorage
     try {
       const raw = localStorage.getItem('deepencode_saved_schemas_v2');
-      return raw ? JSON.parse(raw) : [];
+      return raw ? coerceSavedSchemas(JSON.parse(raw)) : [];
     } catch {
       return [];
     }
@@ -143,7 +148,7 @@ export async function saveSchemaToIDB(schema: SavedSchema): Promise<void> {
     // Fallback
     try {
       const raw = localStorage.getItem('deepencode_saved_schemas_v2');
-      const list = raw ? JSON.parse(raw) : [];
+      const list = raw ? coerceSavedSchemas(JSON.parse(raw)) : [];
       const updated = [schema, ...list.filter((s: SavedSchema) => s.id !== schema.id)].slice(0, 20);
       localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify(updated));
     } catch {}

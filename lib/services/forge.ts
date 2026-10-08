@@ -807,12 +807,27 @@ export function collectCardFronts(report: SegregationReport): string[] {
   return lines;
 }
 
-/** Dedupe fingerprints for every card in a deck, using the merge's own key. */
-export function deckCardKeys(report: SegregationReport): Set<string> {
-  const keys = new Set<string>();
+/**
+ * Every card's own wording in a deck, one entry each, RAW.
+ *
+ * This is the right thing to seed a duplicate index with (see
+ * `dropKnownCards`) and it is deliberately separate from the fingerprints
+ * below, which are for exact set arithmetic. A normalized key has already lost
+ * the two signals the near-duplicate guard reads to tell "the same card,
+ * re-worded" from "a different card that reads alike": the mid-sentence
+ * capital that marks a named entity, and the punctuation that holds a compound
+ * token together (`aquaporin-1`). Seeding the index with keys instead of text
+ * silently degrades that guard to exact matching.
+ *
+ * A worked example's card text is its title AND its problem, because that pair
+ * is what a learner sees and what a re-forge repeats; the prompt's front list
+ * (`collectCardFronts`) names only the title, which is why the two lists are
+ * not interchangeable.
+ */
+export function collectDeckCardTexts(report: SegregationReport): string[] {
+  const texts: string[] = [];
   const add = (value: string) => {
-    const key = dedupeKey(value);
-    if (key) keys.add(key);
+    if (typeof value === 'string' && value.trim()) texts.push(value);
   };
   report.declarativeFacts.forEach((f) => add(f.factStatement));
   report.conceptualMechanisms.forEach((m) => add(m.conceptName));
@@ -822,6 +837,16 @@ export function deckCardKeys(report: SegregationReport): Set<string> {
   // second copy of a cascade or a tripwire the deck already had.
   (report.sequentialCascades || []).forEach((c) => add(c.process));
   (report.boundaryTripwires || []).forEach((t) => add(t.law));
+  return texts;
+}
+
+/** Dedupe fingerprints for every card in a deck, using the merge's own key. */
+export function deckCardKeys(report: SegregationReport): Set<string> {
+  const keys = new Set<string>();
+  for (const value of collectDeckCardTexts(report)) {
+    const key = dedupeKey(value);
+    if (key) keys.add(key);
+  }
   return keys;
 }
 
@@ -834,11 +859,16 @@ export interface AdditionalCardsResult {
 }
 
 /**
- * Drops every card a `known` key set already contains. This is what makes
- * "generate more" safe: a model that re-worded an existing card produces a
- * duplicate, and a duplicate is dropped rather than shipped twice.
+ * Drops every card the `known` texts already cover, exactly or re-worded. This
+ * is what makes "generate more" safe: a model that re-worded an existing card
+ * produces a duplicate, and a duplicate is dropped rather than shipped twice.
+ *
+ * `known` must be the cards' own wording (see `collectDeckCardTexts`), NOT
+ * their normalized keys: those have already thrown away the capitalisation and
+ * the compound punctuation the near-duplicate guard compares, which silently
+ * reduces this to exact matching — the behaviour it replaced.
  */
-export function dropKnownCards(addition: SegregationReport, known: Set<string>): AdditionalCardsResult {
+export function dropKnownCards(addition: SegregationReport, known: Iterable<string>): AdditionalCardsResult {
   let dropped = 0;
   // Seeded with the deck's card fronts, so a re-worded repeat of a card the
   // learner already has is dropped rather than appended as a "new" card.
@@ -877,7 +907,10 @@ export function dropKnownCards(addition: SegregationReport, known: Set<string>):
  * deck growing, not a second merge of disagreeing sources.
  */
 export function mergeAdditionalCards(base: SegregationReport, addition: SegregationReport): AdditionalCardsResult {
-  const { report: fresh, added, dropped } = dropKnownCards(addition, deckCardKeys(base));
+  // Seeded with the deck's own text, not its fingerprints: a key list is a
+  // subset of what the guard needs, and the cards it silently stops matching
+  // are the re-worded repeats this whole path exists to drop.
+  const { report: fresh, added, dropped } = dropKnownCards(addition, collectDeckCardTexts(base));
   if (added === 0) return { report: base, added: 0, dropped };
   return {
     report: {

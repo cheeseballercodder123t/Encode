@@ -90,6 +90,27 @@ export function isAmbiguousCloze(text: string): boolean {
   return false;
 }
 
+/**
+ * The dense-card rule the file ships: the ONE definition of `LeechCandidate`.
+ *
+ * It counts the card's total notable text (front + back), because that is what
+ * the note makes the learner read on every rep — the answer side of a dense
+ * card is what turns a review into a wall of prose. The export funnel
+ * (`sanitizeExtracted`) tags every card this asks true, and the completion
+ * screen counts cards with the same function, so its "Dense (tagged)" number
+ * IS the tag set the learner will filter on.
+ *
+ * Deliberately NOT the same question as {@link auditAnkiCard}: that one asks
+ * whether a cloze's CUE (its front alone) is atomic, which is the one a control
+ * can fix (the Split button shortens the front and nothing else). Same 15-word
+ * constant, two questions — the funnel's tag and the sheet's flag each state
+ * which one they answer, and a card can be dense-by-total-text while its cue is
+ * clean, or the reverse.
+ */
+export function isLeechDense(card: AnkiCardItem): boolean {
+  return countWords(`${card.front} ${card.back}`) > TOO_LONG_WORD_LIMIT;
+}
+
 export function auditAnkiCard(card: AnkiCardItem): CardAuditIssue[] {
   const issues: CardAuditIssue[] = [];
   const text = card.isCloze ? card.front : `${card.front} ${card.back}`;
@@ -129,66 +150,120 @@ export function auditDeck(cards: AnkiCardItem[]): AuditedCard[] {
 export interface CardQuality {
   /** Word count of front+back combined (what FSRS actually schedules). */
   wordCount: number;
-  /** Dense card: FSRS will likely turn it into a D=10 leech. */
+  /** Carries the `LeechCandidate` tag on export: {@link isLeechDense}. */
   isLeechCandidate: boolean;
   /** Stage was skipped, un-encoded, or the checker graded it needs_elaboration. */
   isUnfinished: boolean;
-  /** Ambiguous retrieval cue. */
+  /**
+   * The export sheet's own `ambiguous` verdict ({@link auditAnkiCard}). Not a
+   * tag: an ambiguous cue is a different defect and is acted on in the sheet,
+   * which is why the trophy counts it separately from the tagged cards.
+   */
   isAmbiguous: boolean;
 }
 
 /**
  * Classifies a single exported card for the handoff-quality report shown on
  * the completed screen ("N FSRS-ready cards · X leeches · Y unfinished").
- * Pure heuristic, zero network, matches the audit thresholds used in the
- * Anki export modal so both surfaces agree.
+ * Pure heuristic, zero network.
+ *
+ * Every claim the screen makes is anchored to something the learner can check:
+ *
+ *  • `isLeechCandidate` is {@link isLeechDense} — the `LeechCandidate` tag the
+ *    file actually carries, because the screen's advice is "build a filtered
+ *    deck from those tags". It used to be a *different* rule (`card.isCloze &&
+ *    front + back > 15`) while the chip beside it said "Dense (tagged)": the
+ *    number therefore missed every dense basic card, and — since the tag was
+ *    only applied to one of the two export paths — most of the cards it did
+ *    count carried no tag at all, so filtering on it returned nothing.
+ *  • `isAmbiguous` is the export sheet's own verdict, and it is *not* a tag:
+ *    the screen counts it separately rather than folding it into the tagged
+ *    number, which is what made that number unactionable.
+ *  • `wordCount` stays the whole card's count, which is what its doc says it is
+ *    and is not a threshold on its own.
  */
 export function classifyCardQuality(card: AnkiCardItem): CardQuality {
-  const text = `${card.front} ${card.back}`;
-  const wordCount = countWords(text);
-  const isLeechCandidate = card.isCloze && wordCount > TOO_LONG_WORD_LIMIT;
-  const isUnfinished = card.tags.includes('Unfinished');
-  const isAmbiguous = card.isCloze && isAmbiguousCloze(text);
-  return { wordCount, isLeechCandidate, isUnfinished, isAmbiguous };
+  const wordCount = countWords(`${card.front} ${card.back}`);
+  return {
+    wordCount,
+    isLeechCandidate: isLeechDense(card),
+    isUnfinished: card.tags.includes('Unfinished'),
+    isAmbiguous: auditAnkiCard(card).some((issue) => issue.kind === 'ambiguous'),
+  };
 }
 
-/** Aggregates quality stats for a whole deck (used by the identity trophy). */
+/**
+ * Aggregates quality stats for a whole deck (used by the identity trophy).
+ *
+ * Every card lands in exactly ONE bucket, so `fsrsReady + unfinished +
+ * leechCandidates + ambiguousCues === totalCards` always, and each number is a
+ * set of cards a chip can name:
+ *   unfinished (tagged) → dense (tagged `LeechCandidate`) → ambiguous (flagged
+ *   in the export sheet, not tagged) → FSRS-ready. A card that is both dense
+ *   and ambiguous stays in the dense bucket, because that is the tag it ships.
+ */
 export function classifyDeckQuality(cards: AnkiCardItem[]): {
   totalCards: number;
   fsrsReady: number;
   leechCandidates: number;
   unfinished: number;
+  ambiguousCues: number;
   boundaryTraps: number;
 } {
   let fsrsReady = 0;
   let leechCandidates = 0;
   let unfinished = 0;
+  let ambiguousCues = 0;
   let boundaryTraps = 0;
   for (const card of cards) {
     const q = classifyCardQuality(card);
     if (card.tags.includes('BoundaryContrast')) boundaryTraps += 1;
     if (q.isUnfinished) unfinished += 1;
-    else if (q.isLeechCandidate || q.isAmbiguous) leechCandidates += 1;
+    else if (q.isLeechCandidate) leechCandidates += 1;
+    else if (q.isAmbiguous) ambiguousCues += 1;
     else fsrsReady += 1;
   }
-  return { totalCards: cards.length, fsrsReady, leechCandidates, unfinished, boundaryTraps };
+  return { totalCards: cards.length, fsrsReady, leechCandidates, unfinished, ambiguousCues, boundaryTraps };
 }
 
-/**
- * Splits a dense cloze sentence into two atomic cloze sentences, each at or
+/** A token that opens a clause: a cut in front of one reads as a new sentence. */
+const CLAUSE_LEAD = /^(,|and|but|because|which|that|;)$/i;
+
+/** Sentence-final punctuation, so a cut after one gets no second full stop. */
+const SENTENCE_END = /[.!?]$/;
 
 /**
- * Splits a dense cloze sentence into two atomic cloze sentences, each at or
- * under the word limit. Strategy:
- *   1. Split on a sentence boundary (. ! ?) in the second half.
- *   2. Otherwise split on a clause connector near the midpoint.
- *   3. Otherwise hard-split at the midpoint word.
+ * Splits a dense cloze sentence into atomic cloze pieces, EACH at or under the
+ * word limit, or returns null when no such split exists.
  *
- * Existing cloze markers are preserved and re-numbered sequentially (c1, c2)
- * so the resulting two cards stay valid Anki clozes. Returns null when the
- * card is not a cloze or is already short enough to leave alone.
+ * The contract is arithmetic, and that is what the two-piece version got wrong.
+ * Two halves can only cover `2 x TOO_LONG_WORD_LIMIT` words, so a 34-word
+ * sentence split at its midpoint produced halves of 17 — both over the limit
+ * the docstring promised, which is how a "fix" for a D=10 leech shipped two
+ * cards that were still leeches. The number of pieces is therefore computed
+ * from the sentence: `ceil(words / limit)`, balanced, and a sentence counts as
+ * split only when every piece fits.
+ *
+ * Strategy, applied to every cut in turn:
+ *   1. Split after a sentence boundary (. ! ?) when one is available.
+ *   2. Otherwise split in front of a clause connector (and, but, because…).
+ *   3. Otherwise cut at the safe boundary nearest the balanced target.
+ * A cut is only considered when it keeps the piece at or under the limit AND
+ * leaves the rest of the sentence splittable, so the count stays minimal and no
+ * piece can come back over the limit.
+ *
+ * Existing cloze markers are preserved and re-numbered sequentially (c1, c2, …)
+ * so every piece stays a valid Anki cloze. Pieces are suffixed `-split-a`,
+ * `-split-b`, … in reading order. Returns null when the card is not a cloze,
+ * when it is already short enough to leave alone, or when a single deletion
+ * body carries more than the limit on its own — that card cannot be made
+ * atomic without splitting a deletion, which would change its answer, so the
+ * caller is expected to hold it back instead of shipping it dense.
+ *
+ * Only the front is split: the back travels with every piece, exactly as the
+ * two-piece splitter behaved.
  */
-export function splitDenseCloze(card: AnkiCardItem): [AnkiCardItem, AnkiCardItem] | null {
+export function splitDenseCloze(card: AnkiCardItem): AnkiCardItem[] | null {
   if (!card.isCloze) return null;
   const text = card.front;
   if (countWords(text) <= TOO_LONG_WORD_LIMIT) return null;
@@ -197,72 +272,95 @@ export function splitDenseCloze(card: AnkiCardItem): [AnkiCardItem, AnkiCardItem
   const tokens = stripped.split(' ').filter(Boolean);
   if (tokens.length < 2) return null;
 
+  const limit = TOO_LONG_WORD_LIMIT;
+  const total = tokens.length;
+  const maxCut = total - 1;
+
   // A `{{c1::thick ascending limb}}` is SEVERAL whitespace tokens, so a naive
   // split can land inside the deletion and leave a dangling `{{c1::` on one
-  // half — a card neither Anki nor RemNote can read. These are the token
+  // piece — a card neither Anki nor RemNote can read. These are the token
   // boundaries where no deletion is open.
   const safe = new Set<number>();
   let open = 0;
-  for (let i = 0; i < tokens.length - 1; i++) {
+  for (let i = 0; i < maxCut; i++) {
     open += (tokens[i].match(/\{\{c\d+::/g) || []).length;
     open -= (tokens[i].match(/\}\}/g) || []).length;
     if (open === 0) safe.add(i + 1);
   }
-  const maxSplit = tokens.length - 1;
-  // `countWords` counts a deletion's inner words while `tokens` keeps the
-  // deletion whole, so the word-based midpoint can land past the end of the
-  // token list. Clamp it: both halves must keep at least one token, or the
-  // "split" manufactures an empty card.
-  const target = Math.min(Math.max(1, Math.ceil(countWords(stripped) / 2)), maxSplit);
-  const accept = (candidate: number) => (candidate >= 1 && candidate <= maxSplit && safe.has(candidate) ? candidate : -1);
 
-  let splitAt = -1;
-
-  // 1. Sentence boundary in the second half (never the final token, or the
-  //    right half would be empty).
-  for (let i = target; i < maxSplit && splitAt === -1; i++) {
-    if (/[.!?]$/.test(tokens[i])) splitAt = accept(i + 1);
-  }
-
-  // 2. Clause connector near the midpoint (±2 words).
-  if (splitAt === -1) {
-    const clauseRe = /^(,|and|but|because|which|that|;)$/i;
-    for (let delta = 0; delta <= 2 && splitAt === -1; delta++) {
-      const hi = target + delta;
-      const lo = target - delta;
-      if (hi <= maxSplit && clauseRe.test(tokens[hi])) splitAt = accept(hi);
-      if (splitAt === -1 && lo >= 1 && clauseRe.test(tokens[lo])) splitAt = accept(lo);
-    }
-  }
-
-  // 3. Nearest safe split to the midpoint: keeps both halves non-empty and
-  //    every deletion whole even when a single one carries most of the words.
-  if (splitAt === -1) {
-    if (safe.has(target)) splitAt = target;
-    else {
-      for (let delta = 1; delta <= tokens.length && splitAt === -1; delta++) {
-        if (safe.has(target - delta)) splitAt = target - delta;
-        else if (safe.has(target + delta)) splitAt = target + delta;
+  /**
+   * The cut that ends the piece starting at `start`, given how many pieces the
+   * rest of the sentence is allowed to take.
+   *
+   * `furthest` is the greedy fallback: the last safe boundary this piece can
+   * reach. When a deletion spans past it there is no cut here at all, and the
+   * sentence genuinely cannot be brought under the limit — the caller is told
+   * null rather than handed a piece that breaks its own contract.
+   */
+  const cutFor = (start: number, piecesLeft: number): number => {
+    const hi = Math.min(start + limit, maxCut);
+    let furthest = -1;
+    for (let at = hi; at > start; at--) {
+      if (safe.has(at)) {
+        furthest = at;
+        break;
       }
     }
+    if (furthest === -1) return -1;
+
+    // Keep the pieces balanced, but never at the cost of the count the rest of
+    // the sentence still needs: `lo` is the earliest cut that leaves every
+    // remaining piece room to fit as well.
+    const lo = Math.max(start + 1, total - (piecesLeft - 1) * limit);
+    const ideal = start + Math.round((total - start) / piecesLeft);
+    let sentence = -1;
+    let clause = -1;
+    let nearest = -1;
+    for (let at = lo; at <= hi; at++) {
+      if (!safe.has(at)) continue;
+      const distance = Math.abs(at - ideal);
+      if (nearest === -1 || distance < Math.abs(nearest - ideal)) nearest = at;
+      if (SENTENCE_END.test(tokens[at - 1]) && (sentence === -1 || distance < Math.abs(sentence - ideal))) {
+        sentence = at;
+      }
+      if (CLAUSE_LEAD.test(tokens[at]) && (clause === -1 || distance < Math.abs(clause - ideal))) {
+        clause = at;
+      }
+    }
+    return sentence !== -1 ? sentence : clause !== -1 ? clause : nearest !== -1 ? nearest : furthest;
+  };
+
+  const cuts: number[] = [];
+  let start = 0;
+  while (total - start > limit) {
+    const piecesLeft = Math.ceil((total - start) / limit);
+    const cut = cutFor(start, piecesLeft);
+    if (cut === -1) return null;
+    cuts.push(cut);
+    start = cut;
   }
-  if (splitAt <= 0 || splitAt >= tokens.length) splitAt = target;
-
-  const leftText = tokens.slice(0, splitAt).join(' ');
-  const rightText = tokens.slice(splitAt).join(' ');
-
-  const left = renumberCloze(`${leftText}.`);
-  const right = renumberCloze(rightText);
 
   const baseSm2 = card.sm2;
-  const make = (front: string, idSuffix: string): AnkiCardItem => ({
+  const make = (front: string, index: number): AnkiCardItem => ({
     ...card,
-    id: `${card.id}-split-${idSuffix}`,
+    id: `${card.id}-split-${index < 26 ? String.fromCharCode(97 + index) : String(index + 1)}`,
     front,
     sm2: { ...baseSm2 },
   });
 
-  return [make(left, 'a'), make(right, 'b')];
+  const bounds = [...cuts, total];
+  const pieces: AnkiCardItem[] = [];
+  let from = 0;
+  bounds.forEach((to, index) => {
+    // A piece that stops mid-sentence gets the full stop the two-piece splitter
+    // has always given its left half; one that already ends a sentence keeps
+    // its own punctuation instead of becoming "sentence..".
+    const body = tokens.slice(from, to).join(' ');
+    const finished = index === bounds.length - 1 || SENTENCE_END.test(body);
+    pieces.push(make(renumberCloze(finished ? body : `${body}.`), index));
+    from = to;
+  });
+  return pieces;
 }
 
 /** Re-numbers {{cN::...}} markers sequentially starting at c1. */

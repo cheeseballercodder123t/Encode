@@ -120,6 +120,68 @@ export function saveStudyPrefs(prefs: Partial<StudyPrefs>): void {
   }
 }
 
+/**
+ * A persisted schema, re-read field by field.
+ *
+ * A record on disk is untrusted input: it may have been written by an older
+ * release (the one-time migration in `lib/db.ts` copies the legacy v1 store
+ * verbatim), by a half-finished save, or by Firestore. `SavedSchema` declares
+ * `topicSummary` as required, but a type is not a validator — every reader used
+ * to `JSON.parse(...) as SavedSchema[]`, and the history drawer then filtered on
+ * `s.topicSummary.toLowerCase()`. One legacy record therefore threw *during
+ * render*, and with no error boundary above it React unmounted the whole tree:
+ * the app answered with `Application error: a client-side exception has occurred`
+ * and the learner's only exit was clearing site data, because "clear all" lives
+ * inside the very drawer that crashed.
+ *
+ * The rule here is the one the rest of this codebase already uses for resume
+ * records and lab snapshots: rebuild, do not trust. A record with no usable id
+ * is not a record and is dropped (`null`); everything the app dereferences gets
+ * a value of the right type, and every other key is carried through untouched
+ * so a field this function has never heard of is never silently lost.
+ */
+export function coerceSavedSchema(value: unknown): SavedSchema | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.id !== 'string' || !record.id) return null;
+
+  const isObject = (v: unknown): v is Record<string, unknown> =>
+    Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+  const finite = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) ? v : null;
+
+  const topic = typeof record.topicSummary === 'string' ? record.topicSummary.trim() : '';
+
+  return {
+    ...record,
+    id: record.id,
+    timestamp: finite(record.timestamp) ?? 0,
+    // An empty name is not a name, and it is certainly not a crash: an unnamed
+    // record is still the learner's work, so it is listed under a usable label
+    // rather than dropped.
+    topicSummary: topic || 'Untitled topic',
+    mode: record.mode === 'memorization' ? 'memorization' : 'conceptual',
+    xpEarned: finite(record.xpEarned) ?? 0,
+    activities: Array.isArray(record.activities) ? record.activities : [],
+    userResponses: isObject(record.userResponses) ? record.userResponses : {},
+    sourceFileName: typeof record.sourceFileName === 'string' ? record.sourceFileName : undefined,
+    youtubeData: isObject(record.youtubeData) ? record.youtubeData : undefined,
+    prerequisites: isObject(record.prerequisites) ? record.prerequisites : undefined,
+    guidedModules: Array.isArray(record.guidedModules) ? record.guidedModules : undefined,
+  } as SavedSchema;
+}
+
+/** Normalizes a persisted list, dropping entries that are not records at all. */
+export function coerceSavedSchemas(value: unknown): SavedSchema[] {
+  if (!Array.isArray(value)) return [];
+  const out: SavedSchema[] = [];
+  for (const entry of value) {
+    const schema = coerceSavedSchema(entry);
+    if (schema) out.push(schema);
+  }
+  return out;
+}
+
 export function loadSavedSchemas(): SavedSchema[] {
   if (typeof window === 'undefined') return [];
   
@@ -135,7 +197,7 @@ export function loadSavedSchemas(): SavedSchema[] {
       cacheInitialized = true;
       return [];
     }
-    const parsed = JSON.parse(raw);
+    const parsed = coerceSavedSchemas(JSON.parse(raw));
     schemaCache.set('schemas', parsed);
     cacheInitialized = true;
     return parsed;

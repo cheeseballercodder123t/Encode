@@ -14,6 +14,7 @@ export interface HandoffStats {
   totalCards: number;
   fsrsReady: number;
   leechCandidates: number;
+  ambiguousCues: number;
   unfinished: number;
   boundaryTraps: number;
   /** Real measurements of encoding quality — this is the trophy, not XP. */
@@ -113,6 +114,7 @@ export function CompletedSessionView({
     totalCards,
     fsrsReady,
     leechCandidates,
+    ambiguousCues,
     unfinished,
     boundaryTraps,
     telemetry,
@@ -161,6 +163,10 @@ export function CompletedSessionView({
 
           {leechCandidates > 0 && (
             <StatChip token="[ LEECH ]" label="Dense (tagged):" value={leechCandidates} tone="hazard" />
+          )}
+
+          {ambiguousCues > 0 && (
+            <StatChip token="[ AMB ]" label="Ambiguous cue:" value={ambiguousCues} tone="hazard" />
           )}
 
           {hasCompression && (
@@ -214,8 +220,11 @@ export function CompletedSessionView({
             {'// '}
             {heldBackCount > 0
               ? `${heldBackCount} dense card fragment${heldBackCount === 1 ? '' : 's'} stayed out of this deck. Open the exporter to chunk or force-include them.`
-              : unfinished + leechCandidates > 0
+              : unfinished + leechCandidates + ambiguousCues > 0
                 ? `${unfinished + leechCandidates} card${unfinished + leechCandidates === 1 ? '' : 's'} tagged Unfinished/LeechCandidate : build a filtered deck from those tags on day 1.`
+                  + (ambiguousCues > 0
+                    ? ` ${ambiguousCues} more carr${ambiguousCues === 1 ? 'ies' : 'y'} an ambiguous cue and needs a context word in the exporter.`
+                    : '')
                 : 'Zero leeches, zero unfinished : textbook-clean handoff.'}
           </p>
         </div>

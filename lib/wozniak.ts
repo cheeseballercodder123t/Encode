@@ -144,15 +144,18 @@ function enforceCeiling(card: AnkiCardItem, cardsOut: AnkiCardItem[], heldBack: 
     cardsOut.push(card);
     return;
   }
-  // Try the existing dense-cloze splitter (sentence/clause-aware) first.
-  const splitPair = splitDenseCloze(card);
-  if (splitPair) {
-    for (const half of splitPair) {
-      const halfWords = countWords(`${half.front} ${half.back}`);
-      if (halfWords <= WOZNIAK_WORD_CEILING) {
-        cardsOut.push(half);
+  // Try the existing dense-cloze splitter (sentence/clause-aware) first. It
+  // returns as many pieces as the sentence needs to bring each one under the
+  // word limit, and null when no such split exists; the 20-word ceiling here is
+  // over the FRONT AND BACK, so a piece can still be held back on its back.
+  const pieces = splitDenseCloze(card);
+  if (pieces) {
+    for (const piece of pieces) {
+      const pieceWords = countWords(`${piece.front} ${piece.back}`);
+      if (pieceWords <= WOZNIAK_WORD_CEILING) {
+        cardsOut.push(piece);
       } else {
-        heldBack.push({ card: half, reason: `${halfWords} words even after auto-split` });
+        heldBack.push({ card: piece, reason: `${pieceWords} words even after auto-split` });
       }
     }
     return;

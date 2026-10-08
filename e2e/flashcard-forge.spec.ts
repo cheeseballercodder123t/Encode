@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Download, type Page } from '@playwright/test';
 import {
   FORGE_CONDENSE_RESPONSE,
   FORGE_CONFLICT_RESPONSE,
@@ -8,6 +8,7 @@ import {
   FORGE_RETRY_RESPONSE,
 } from './helpers/fixtures';
 import { forgePayloadForRequest, mockAiApis } from './helpers/mocks';
+import JSZip from 'jszip';
 
 /**
  * Flashcards Only: the path for when you do not want a workout.
@@ -19,67 +20,16 @@ import { forgePayloadForRequest, mockAiApis } from './helpers/mocks';
  *
  * The four things a REPEAT ingest needs are covered here too: a video with no
  * captions is transcribed instead of dropped, two sources that disagree become
- * one explicit conflict card, cards the topic already exported (or already in
- * Anki) are counted as such, and the whole setup can be saved and re-run as a
- * recipe.
+ * one explicit conflict card, cards this app already exported are counted as
+ * such, and the whole setup can be saved and re-run as a recipe.
+ *
+ * Direct AnkiConnect is deliberately NOT part of this flow: this app never
+ * pings a local Anki desktop, because a `127.0.0.1`/`localhost` request from an
+ * HTTPS origin is blocked as Mixed Content / Private Network Access (removed in
+ * `bf2f8cc`). The deck reaches Anki by file instead, and what these specs
+ * assert is that file: a real `.apkg` package, whose contents are read back
+ * Node-side, plus the `.txt` companion for a manual import.
  */
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-/**
- * AnkiConnect, mocked at its real address. `offline` is the default here so a
- * forge test never depends on whatever the machine running it has listening on
- * 127.0.0.1:8765; a test that wants a real deck registers this again with
- * `frontTexts` and its route wins.
- */
-async function mockAnkiConnect(page: Page, opts: { frontTexts?: string[]; offline?: boolean } = {}) {
-  await page.route(
-    (url) => url.hostname === '127.0.0.1' && url.port === '8765',
-    async (route) => {
-      if (opts.offline) {
-        await route.abort('connectionrefused');
-        return;
-      }
-      if (route.request().method() === 'OPTIONS') {
-        await route.fulfill({ status: 204, headers: CORS_HEADERS });
-        return;
-      }
-      const body = route.request().postDataJSON();
-      const fronts = opts.frontTexts || [];
-      const result = (() => {
-        switch (body.action) {
-          case 'deckNames':
-            return ['Default', 'DeepEncode::Renal Physiology'];
-          case 'findNotes':
-            return fronts.map((_, i) => 100 + i);
-          case 'notesInfo':
-            return (body.params.notes as number[]).map((noteId, i) => ({
-              noteId,
-              modelName: 'Basic',
-              tags: [],
-              cards: [noteId],
-              fields: {
-                Front: { value: fronts[i] ?? '', order: 0 },
-                Back: { value: 'forgotten', order: 1 },
-              },
-            }));
-          default:
-            return null;
-        }
-      })();
-      await route.fulfill({
-        status: 200,
-        headers: CORS_HEADERS,
-        contentType: 'application/json',
-        body: JSON.stringify({ result, error: null }),
-      });
-    }
-  );
-}
 
 async function mockForge(page: Page, payload: any = FORGE_RESPONSE) {
   await mockAiApis(page);
@@ -90,7 +40,6 @@ async function mockForge(page: Page, payload: any = FORGE_RESPONSE) {
       body: JSON.stringify(forgePayloadForRequest(payload, route.request())),
     })
   );
-  await mockAnkiConnect(page, { offline: true });
 }
 
 /**
@@ -115,7 +64,20 @@ async function mockForgeModes(page: Page) {
       body: JSON.stringify(forgePayloadForRequest(payload, route.request())),
     });
   });
-  await mockAnkiConnect(page, { offline: true });
+}
+
+/**
+ * Reads a downloaded `.apkg` back Node-side. The archive is opened rather than
+ * trusted for its name, because what these specs are about is what is INSIDE
+ * it: the sqlite collection the exporter is supposed to have written.
+ */
+async function openDownloadedApkg(download: Download) {
+  const fs = await import('fs');
+  const filePath = await download.path();
+  expect(filePath).toBeTruthy();
+  const zip = await JSZip.loadAsync(fs.readFileSync(filePath!));
+  const collection = await zip.file('collection.anki2')!.async('uint8array');
+  return { zip, collection, text: new TextDecoder().decode(collection) };
 }
 
 /** Launchpad -> Forge, ready for sources to be added. */
@@ -212,36 +174,101 @@ test.describe('Flashcards Only (the Forge)', () => {
     await expect(page.getByTestId('forge-export-primary')).toBeEnabled();
   });
 
-  test('a deck that already exists in Anki is read back and counted as already yours', async ({ page }) => {
-    // A deck built by hand in Anki: this app has never exported this topic, so
-    // only reading the real collection can know the card is already there.
+  test('the forged deck downloads as a real .apkg package', async ({ page }) => {
     await mockForge(page);
-    await mockAnkiConnect(page, { frontTexts: ['Which limb pumps salt out?'] });
-    await openForge(page);
-    await addTextSource(page, 'Loop of Henle countercurrent multiplication.');
-    await page.getByTestId('forge-run').click();
-    await expect(page.getByTestId('forge-result')).toBeVisible();
+    await forgeDeck(page);
 
-    const memory = page.getByTestId('forge-memory');
-    await expect(memory).toContainText('4 new · 1 already in your deck');
-    await expect(page.getByTestId('forge-memory-anki')).toContainText(
-      'Checked your Anki deck: 1 note in 1 deck.'
+    // The deck reaches Anki as a file now, so the file is what gets verified:
+    // the archive is read back Node-side rather than trusted for its name.
+    await page.getByTestId('forge-export-primary').click();
+    await expect(page.getByText('Anki & SM-2 Spaced Repetition Exporter')).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download .apkg Package' }).click();
+    const download: Download = await downloadPromise;
+
+    // The topic the learner just forged names the file.
+    expect(download.suggestedFilename()).toMatch(/Renal.*\.apkg$/);
+    const { zip, collection: collectionBytes, text: collectionText } =
+      await openDownloadedApkg(download);
+
+    // A real Anki package: a schema-11 sqlite collection plus the media stub.
+    expect(collectionBytes.length % 4096).toBe(0);
+    expect(Buffer.from(collectionBytes.slice(0, 15)).toString('latin1')).toBe('SQLite format 3');
+    expect(await zip.file('media')?.async('string')).toBe('{}');
+
+    // The forged cards are inside it, not an empty deck with a deck name. What
+    // ships is the Wozniak-sanitized deck, so the notes to look for are the ones
+    // the ceiling accepted.
+    expect(collectionText).toContain('DeepEncode::Renal_Physiology');
+    expect(collectionText).toContain('aquaporin-2');
+    expect(collectionText).toContain('Which limb pumps salt out?');
+
+    // The other way round, nothing is lost silently either: the 20-word ceiling
+    // held one fragment of this fixture back, the panel names it with its
+    // reason, the default file really does not carry it -- and the opt-in puts
+    // it back, tagged so the overflow is findable inside Anki.
+    expect(collectionText).not.toContain('loop of Henle');
+    await expect(page.getByText(/card fragments? held back/)).toBeVisible();
+    await expect(page.getByText(/20-word ceiling/)).toBeVisible();
+
+    await page.getByLabel(/Export them anyway/).check();
+    const overflowPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download .apkg Package' }).click();
+    const overflow = await openDownloadedApkg(await overflowPromise);
+    expect(overflow.text).toContain('loop of Henle');
+    expect(overflow.text).toContain('WozniakOverflow');
+
+    // And the scheduling sidecar the exporter promises describes the same deck.
+    const manifest = JSON.parse(
+      (await zip.file('deepencode_sm2_manifest.json')?.async('string')) || '{}'
     );
-    await expect(page.getByTestId('forge-skip-known')).toContainText('SHIPPING NEW CARDS ONLY');
+    expect(manifest.deckName).toBe('DeepEncode::Renal_Physiology');
+    expect(manifest.cardCount).toBeGreaterThan(0);
   });
 
-  test('with Anki closed the memory says so and stays this app\'s own', async ({ page }) => {
+  test('the .txt companion downloads too, for a manual import', async ({ page }) => {
     await mockForge(page);
-    await openForge(page);
-    await addTextSource(page, 'Loop of Henle countercurrent multiplication.');
-    await page.getByTestId('forge-run').click();
-    await expect(page.getByTestId('forge-result')).toBeVisible();
+    await forgeDeck(page);
 
-    await expect(page.getByTestId('forge-memory-anki')).toContainText('AnkiConnect is unreachable');
-    await expect(page.getByTestId('forge-memory')).toContainText('5 new · 0 already in your deck');
-    // Nothing is known, so there is nothing to hold back and nothing to toggle.
-    await expect(page.getByTestId('forge-skip-known')).toHaveCount(0);
-    await expect(page.getByTestId('forge-export-primary')).toBeEnabled();
+    await page.getByTestId('forge-export-primary').click();
+    await expect(page.getByText('Anki & SM-2 Spaced Repetition Exporter')).toBeVisible();
+
+    // With direct AnkiConnect gone, the tab-separated file is the fallback every
+    // learner can import by hand, whatever their browser or origin.
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download Anki .txt (Tab-Separated)' }).click();
+    const download: Download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.txt$/);
+
+    const fs = await import('fs');
+    const content = fs.readFileSync((await download.path())!, 'utf8');
+    expect(content).toContain('#separator:tab');
+    expect(content).toContain('#html:true');
+    // One file per note type, both aimed at the forged deck.
+    expect(content).toMatch(/#deck:.*Renal/);
+  });
+
+  test('the forge never pings a local Anki desktop', async ({ page }) => {
+    // The policy `bf2f8cc` established, asserted as a request guard: on an
+    // HTTPS origin a request to 127.0.0.1/localhost is blocked as Mixed Content
+    // / Private Network Access, so this app must not make one at all -- and a
+    // regression is silent in the UI, which is how it went unnoticed once.
+    const desktopPings: string[] = [];
+    page.on('request', (request) => {
+      if (/:8765\b/.test(request.url())) desktopPings.push(request.url());
+    });
+
+    await mockForge(page);
+    await forgeDeck(page);
+    await page.getByTestId('forge-export-primary').click();
+    await expect(page.getByText('Anki & SM-2 Spaced Repetition Exporter')).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download .apkg Package' }).click();
+    await downloadPromise;
+
+    expect(desktopPings).toEqual([]);
   });
 
   test('a saved recipe re-runs the whole setup, and survives a reload', async ({ page }) => {

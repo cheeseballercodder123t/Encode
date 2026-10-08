@@ -76,7 +76,11 @@ interface ForgeSourcePayload {
 }
 
 const MAX_SOURCES = 12;
-/** Fronts sent back so the "more" pass can avoid repeating them. */
+/**
+ * Fronts put in the model's do-not-repeat list. This is a TOKEN budget and it
+ * bounds the prompt only — the duplicate evidence is matched locally and costs
+ * nothing, so it is not capped by this (see `existingFronts` below).
+ */
 const MAX_EXISTING_FRONTS = 400;
 /** Sources cut into cards at the same time. */
 const SOURCE_CONCURRENCY = 3;
@@ -197,9 +201,15 @@ export async function POST(req: NextRequest) {
         only: z.array(z.string().max(200)).max(12).optional(),
         settings: z.any().optional(),
         report: z.any().optional(),
-        existing: z.array(z.string().max(400)).max(5_000).optional(),
+        // Fronts of the deck the learner already has. The per-entry bound is a
+        // request-size boundary, not a content rule: at 400 it was trippable by
+        // ONE long sentence, and the whole extension pass then failed with a
+        // 400 — no cards, no dedupe. 20,000 is the same order as the answer
+        // fields elsewhere in these schemas, and the list bound is what
+        // actually keeps the request small.
+        existing: z.array(z.string().max(20_000)).max(5_000).optional(),
         resolved: z.any().optional(),
-        known: z.array(z.string().max(400)).max(5_000).optional(),
+        known: z.array(z.string().max(20_000)).max(5_000).optional(),
       })
       .passthrough()
   );
@@ -292,9 +302,16 @@ export async function POST(req: NextRequest) {
   // source text it already paid to resolve — a transcript costs a model call to
   // reproduce, so a second pass over the same lecture reuses it rather than
   // re-running.
+  // Every front the request carries, in the order the deck ships. `promptFronts`
+  // is the window the model is shown; `existingFronts` is the whole list, and
+  // it is what the dedupe is seeded with. They were one value capped at 400,
+  // which left every card past the window un-guarded on BOTH sides: the model was
+  // not told about it, and the drop had never seen it, so a re-worded repeat of
+  // card 450 of a 500-card deck shipped as new.
   const existingFronts: string[] = Array.isArray(body?.existing)
-    ? body.existing.filter((v: any) => typeof v === 'string' && v.trim()).slice(0, MAX_EXISTING_FRONTS)
+    ? body.existing.filter((v: any) => typeof v === 'string' && v.trim())
     : [];
+  const promptFronts = existingFronts.slice(0, MAX_EXISTING_FRONTS);
   const reused = new Map<string, ResolvedSourcePayload>();
   if (Array.isArray(body?.resolved)) {
     for (const entry of body.resolved as ResolvedSourcePayload[]) {
@@ -477,7 +494,7 @@ export async function POST(req: NextRequest) {
               fileName: inlineFile?.name,
               fileType: inlineFile?.type,
               sourceLabel: label,
-              existing: existingFronts,
+              existing: promptFronts,
             })
           : buildSegregationUserPrompt({
               notes: notes || undefined,
@@ -573,7 +590,11 @@ export async function POST(req: NextRequest) {
       // Seeded with the RAW fronts, not their normalized keys: the duplicate
       // index needs the original text to tell "the same card, re-worded" apart
       // from "the same sentence with a different number in it".
-      const known = new Set(existingFronts.filter(Boolean));
+      //
+      // Seeded with ALL of them, not the prompt's 400-line window: the window
+      // exists to bound the prompt, and reusing it here silently dropped the
+      // duplicate protection for the tail of any deck bigger than it.
+      const known = new Set(existingFronts);
       const { report, added, dropped } = dropKnownCards(merged.report, known);
       const counts = countReportSections(report);
       return {

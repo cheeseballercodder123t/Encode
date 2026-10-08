@@ -873,15 +873,27 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
 
                 {audit.length > 0 && (
                   <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                    {audit.map(({ card: c, issues }) => (
+                    {audit.map(({ card: c, issues }) => {
+                      const tooLong = issues.some((i) => i.kind === 'too_long');
+                      // A card whose deletion carries more than the limit on its
+                      // own cannot be split without cutting the deletion in two,
+                      // so the control says so instead of silently doing nothing.
+                      const splittable = tooLong && splitDenseCloze(c) !== null;
+                      return (
                       <div key={c.id} className="p-3 bg-deck/60 border border-edge text-xs space-y-2">
                         <div className="flex items-start justify-between gap-3">
                           <div className="font-mono text-[11px] text-bone leading-relaxed" dangerouslySetInnerHTML={{ __html: c.front }} />
                           <button
                             onClick={() => handleAutoSplit(c.id)}
-                            disabled={!issues.some((i) => i.kind === 'too_long')}
+                            disabled={!splittable}
                             className="shrink-0 px-2.5 py-1 bg-amber/20 hover:bg-amber/30 border border-amber/40 text-amber font-bold flex items-center gap-1.5 transition-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={issues.some((i) => i.kind === 'too_long') ? 'Auto-split into two atomic cards' : 'Only too-long cards can be split'}
+                            title={
+                              !tooLong
+                                ? 'Only too-long cards can be split'
+                                : splittable
+                                  ? 'Auto-split into atomic cards, each at or under the word limit'
+                                  : 'This card cannot be split: one deletion carries the whole sentence. Edit it by hand.'
+                            }
                           >
                             <BracketTag label="SPLIT" />
                             <span>Split</span>
@@ -900,7 +912,8 @@ export function AnkiExportModal({ isOpen, onClose, schema, report, notes, includ
                           ))}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

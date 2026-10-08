@@ -395,6 +395,173 @@ describe('extending a forged deck ("generate more" / "condense")', () => {
     expect(dropped).toBe(1);
     expect(fresh.declarativeFacts.map((f) => f.id)).toEqual(['b']);
   });
+
+  it('drops that same re-worded repeat when it arrives through mergeAdditionalCards', () => {
+    // The guard has two entry points and only ONE of them used to be seeded with
+    // the deck's wording: `dropKnownCards` got raw fronts, while this — the path
+    // the UI's "generate more" and "re-forge" actually take — got
+    // `deckCardKeys`. A normalized key has already been lowercased and
+    // de-punctuated, so `protectedTokens` reads FEWER entities off the seed than
+    // off the incoming card, the mismatching guard returns false, and the
+    // re-worded card the sibling test above drops is appended as new. Same pair,
+    // same module, opposite verdict.
+    const base = report({
+      declarativeFacts: [
+        {
+          id: 'f1',
+          factStatement: 'The loop of Henle reaches 1,200 mOsm at the hairpin of the medulla.',
+          clozeSuggestion: 'reaches {{1,200 mOsm}}',
+        },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const addition = report({
+      declarativeFacts: [
+        {
+          id: 'a',
+          factStatement: 'The loop of Henle can reach 1,200 mOsm at the hairpin of the medulla.',
+          clozeSuggestion: 'x',
+        },
+        { id: 'b', factStatement: 'Vasa recta run parallel to the loop of Henle.', clozeSuggestion: 'y' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    const { report: grown, added, dropped } = mergeAdditionalCards(base, addition);
+    expect(dropped).toBe(1);
+    expect(added).toBe(1);
+    expect(grown.declarativeFacts.map((f) => f.id)).toEqual(['f1', 'b']);
+  });
+
+  it('drops a repeat of a card sitting past the 400-front prompt window', () => {
+    // The route sends the model at most 400 existing fronts and seeds its own
+    // drop with exactly those, so for a deck larger than that window the client
+    // merge is the ONLY guard a repeat of the tail cards has. That is the case
+    // this pins.
+    const facts = Array.from({ length: 400 }, (_, i) => ({
+      id: `f${i}`,
+      factStatement: `Observation ${i}: the medullary interstitium concentrates around the vasa recta`,
+      clozeSuggestion: 'x',
+    }));
+    facts.push({
+      id: 'f400',
+      factStatement: 'The vasa recta carry blood away from the loop of Henle in the medulla',
+      clozeSuggestion: 'x',
+    });
+    const base = report({
+      declarativeFacts: facts,
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const addition = report({
+      declarativeFacts: [
+        {
+          id: 'a',
+          factStatement: 'The vasa recta carry blood away from the loop of Henle, deep in the medulla',
+          clozeSuggestion: 'x',
+        },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    const { added, dropped } = mergeAdditionalCards(base, addition);
+    expect(dropped).toBe(1);
+    expect(added).toBe(0);
+  });
+
+  it('drops a re-forged worked example the deck already carries', () => {
+    // A worked example's card text is its title AND its problem, which is also
+    // what the incoming batch is keyed on — but the prompt's front list names
+    // only the title, so the route's own drop can never match the pair. The
+    // client merge is the guard for it, and it needs the raw text: the seed and
+    // the incoming card both capitalise "Compute", and only the raw comparison
+    // can see that they agree.
+    const base = report({
+      declarativeFacts: [],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [
+        {
+          id: 'e1',
+          title: 'Free-water clearance and the medullary gradient',
+          problem: 'Compute the clearance when urine flow is 2 mL/min and plasma osmolarity is 300 mOsm/kg',
+          steps: ['a', 'b'],
+        },
+      ],
+    });
+    const addition = report({
+      declarativeFacts: [],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [
+        {
+          id: 'e2',
+          title: 'Free-water clearance and the medullary gradient',
+          problem: 'Compute the clearance when the urine flow is 2 mL/min and the plasma osmolarity is 300 mOsm/kg',
+          steps: ['a', 'b'],
+        },
+      ],
+    });
+
+    const { added, dropped } = mergeAdditionalCards(base, addition);
+    expect(dropped).toBe(1);
+    expect(added).toBe(0);
+  });
+
+  it('still keeps a card whose NUMBER changed', () => {
+    // The guard is capped by protected tokens on purpose: two cards that differ
+    // in a quantity are two cards, and collapsing them is silent data loss.
+    const base = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'The loop of Henle reaches 1,200 mOsm at the hairpin of the medulla.', clozeSuggestion: 'x' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const addition = report({
+      declarativeFacts: [
+        { id: 'a', factStatement: 'The loop of Henle reaches 600 mOsm at the hairpin of the medulla.', clozeSuggestion: 'x' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    const { added, dropped } = mergeAdditionalCards(base, addition);
+    expect(dropped).toBe(0);
+    expect(added).toBe(1);
+  });
+
+  it('still keeps a card naming a different entity', () => {
+    const base = report({
+      declarativeFacts: [
+        { id: 'f1', factStatement: 'The loop of Henle reabsorbs salt and water along the ascending limb', clozeSuggestion: 'x' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+    const addition = report({
+      declarativeFacts: [
+        { id: 'a', factStatement: 'The distal tubule reabsorbs salt and water along its whole length', clozeSuggestion: 'x' },
+      ],
+      conceptualMechanisms: [],
+      practiceQuestions: [],
+      workedExamples: [],
+    });
+
+    const { added, dropped } = mergeAdditionalCards(base, addition);
+    expect(dropped).toBe(0);
+    expect(added).toBe(1);
+  });
 });
 
 describe('near-duplicate detection', () => {
