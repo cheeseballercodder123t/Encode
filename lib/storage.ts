@@ -1,5 +1,6 @@
 import { AISettings, EncodingGear, EncodingMode, SavedSchema } from './types';
 import { saveSchemaToIDB, deleteSchemaFromIDB, clearAllSchemasFromIDB, getAllSchemasFromIDB } from './db';
+import { nextSettingsStamp } from './settings-sync';
 
 /**
  * How many schemas the localStorage mirror keeps. The mirror is the synchronous
@@ -36,6 +37,8 @@ export const DEFAULT_SETTINGS: AISettings = {
 };
 
 export function loadAISettings(): AISettings {
+  // The stamp is part of the record, and it survives the merge below: it is how
+  // the cloud guard reads this device's age (defect 36).
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -48,10 +51,24 @@ export function loadAISettings(): AISettings {
   }
 }
 
-export function saveAISettings(settings: AISettings): void {
+/**
+ * Persists AI settings, always carrying a stamp (defect 36).
+ *
+ * This is the single writer every path goes through - save, import, reset and
+ * backup-restore - and the stamp is what the cloud guard compares, so it is
+ * applied here rather than trusted to each caller. The reset path used to write
+ * defaults with no `savedAt` at all, which read as `0`: the account's copy,
+ * however old, then outranked a settings state the learner had just chosen.
+ *
+ * `savedAt` is an *explicit* stamp, used by the cloud restore to keep the
+ * content's own age instead of claiming the content is new on this device - see
+ * `nextSettingsStamp` for why that distinction matters.
+ */
+export function saveAISettings(settings: AISettings, savedAt?: number): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    const record: AISettings = { ...settings, savedAt: nextSettingsStamp(settings, savedAt) };
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(record));
   } catch (e) {
     console.error('Failed to save AI settings', e);
   }

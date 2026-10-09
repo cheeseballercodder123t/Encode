@@ -3,6 +3,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { sound } from '@/lib/audio';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import { remnoteToyEmbedLine } from '@/lib/remnote';
 import { useAuth } from '@/lib/auth-context';
 import { buildToyChallenge, clamp, computeArchetypeOutput, cyclePosition, equationFor, formatToyNumber, initialInputs, restoreToyProgress, variablesFor } from '@/lib/toy-models/engine';
@@ -214,21 +215,15 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
   // RemNote unfurls into this lab, live inside the learner's own notes. The URL
   // carries the activity id itself — the embed route resolves teaching examples
   // (and their `lab-` ids) plus saved-schema stages, so the link round-trips.
-  const [embedCopied, setEmbedCopied] = useState(false);
-  const copyRemnoteEmbed = () => {
+  // The shared copy contract (defect 35). The old handler swallowed a refusal
+  // and left the button looking untouched, which reads as a dead click; the
+  // button now says so, and the export surfaces stay the fallback they were.
+  const embedCopy = useClipboardCopy(2400);
+  const copyRemnoteEmbed = async () => {
     const url = typeof window === 'undefined' ? '' : `${window.location.origin}/embed/toy-models/${activityId}`;
     if (!url) return;
-    void navigator.clipboard
-      ?.writeText(remnoteToyEmbedLine(url, config.title))
-      .then(() => {
-        setEmbedCopied(true);
-        sound.playBeep(520, 'sine', 0.1);
-        window.setTimeout(() => setEmbedCopied(false), 2400);
-      })
-      .catch(() => {
-        // Clipboard permission refused: the button stays as it is; the copy
-        // buttons on the export surfaces remain the always-available fallback.
-      });
+    const outcome = await embedCopy.copy(remnoteToyEmbedLine(url, config.title));
+    if (outcome.ok) sound.playBeep(520, 'sine', 0.1);
   };
   return <section className={`toy-lab ${output.critical ? 'toy-lab-critical' : ''}`} aria-label={`${config.title} interactive laboratory`} data-testid="toy-model-lab" data-archetype={config.type}>
     <header className="toy-header"><div><span className="toy-kicker">INTERACTIVE INTUITION LAB / {config.type.replaceAll('_', ' ')}</span><h3>{config.title}</h3></div><span className="toy-mode-badge">{!unlocked ? '01 / PREDICT' : !progress.revealed ? '02 / MANIPULATE' : '03 / REVEAL'}</span></header>
@@ -278,7 +273,7 @@ export function ToyModelLab({ activityId, config, progress: savedProgress, onPro
         else setSettling(true);
       }}>{settling ? 'Relaxing toward Q=K…' : 'Release to equilibrium'}</button>}
       {config.counterModel && <button type="button" disabled={!unlocked} aria-pressed={showCounter} onClick={() => setShowCounter(!showCounter)}>{showCounter ? 'Hide counter-model' : 'Flaw hunter: compare models'}</button>}
-      <button type="button" data-testid="toy-embed-copy" aria-pressed={embedCopied} title="Copy a RemNote bullet that unfurls this lab inside your notes" onClick={copyRemnoteEmbed}>{embedCopied ? 'RemNote embed copied' : 'Copy RemNote embed'}</button>
+      <button type="button" data-testid="toy-embed-copy" aria-pressed={embedCopy.copied()} data-copy-status={embedCopy.copied() ? 'copied' : embedCopy.failed() ? 'failed' : 'idle'} title={embedCopy.failed() ? embedCopy.message ?? undefined : 'Copy a RemNote bullet that unfurls this lab inside your notes'} onClick={copyRemnoteEmbed}>{embedCopy.copied() ? 'RemNote embed copied' : embedCopy.failed() ? 'Copy blocked — clipboard refused' : 'Copy RemNote embed'}</button>
       <button type="button" onClick={reset}>Reset hypothesis</button>
     </div>
     {duel && progress.duelHeard && !duelDebunked && <p className="toy-hint">The claim stands until the instrument itself says otherwise.</p>}

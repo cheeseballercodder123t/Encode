@@ -8,6 +8,7 @@ import { coerceSavedSchemas } from '@/lib/storage';
 import { sound } from '@/lib/audio';
 import { useAuth } from '@/lib/auth-context';
 import { useModalA11y } from '@/hooks/useModalA11y';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import { generateRemnoteHierarchy } from '@/lib/remnote';
 
 interface HistoryDrawerProps {
@@ -34,13 +35,19 @@ export function HistoryDrawer({
   const { user, cloudSchemas } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'conceptual' | 'memorization'>('all');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 8;
 
 
   // Esc closes, the page behind stops scrolling, focus moves in and back out.
   const sheetRef = useModalA11y(isOpen, onClose);
+
+  // The row that was copied, and whether the write landed (defect 35). The
+  // clipboard call used to be a floating promise whose `[ OK ]` was rendered
+  // regardless of the outcome, so a refused copy told the learner it had
+  // happened.
+  const remnoteCopy = useClipboardCopy(1800);
+
   if (!isOpen) return null;
 
   // Merge cloud schemas and local schemas by id
@@ -65,7 +72,7 @@ export function HistoryDrawer({
     safeHistoryPage * HISTORY_PAGE_SIZE
   );
 
-  const handleCopyRemNote = (s: SavedSchema) => {
+  const handleCopyRemNote = async (s: SavedSchema) => {
     // The shared renderer, so a card copied from history has the same shape as
     // one copied from the export sheet — including which lines get a reverse.
     const content = generateRemnoteHierarchy({
@@ -73,10 +80,11 @@ export function HistoryDrawer({
       activities: s.activities,
       userResponses: s.userResponses,
     }).markdown;
-    navigator.clipboard.writeText(content);
-    setCopiedId(s.id);
-    sound.playBeep(880, 'sine', 0.1);
-    setTimeout(() => setCopiedId(null), 1800);
+    // Awaited, and only sounded on a write that actually landed: the beep is a
+    // confirmation, and a confirmation that plays over an unchanged clipboard
+    // is the lie this defect was about.
+    const outcome = await remnoteCopy.copy(content, s.id);
+    if (outcome.ok) sound.playBeep(880, 'sine', 0.1);
   };
 
   return (
@@ -316,11 +324,29 @@ export function HistoryDrawer({
                         )}
 
                         <button
-                          onClick={() => handleCopyRemNote(schema)}
+                          onClick={() => void handleCopyRemNote(schema)}
+                          data-testid="history-copy-remnote"
                           className="min-h-[44px] px-3 bg-deck hover:bg-inset border border-edge text-solder text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                          title="Copy RemNote format"
+                          data-copy-status={
+                            remnoteCopy.copied(schema.id)
+                              ? 'copied'
+                              : remnoteCopy.failed(schema.id)
+                                ? 'failed'
+                                : 'idle'
+                          }
+                          title={
+                            remnoteCopy.failed(schema.id)
+                              ? remnoteCopy.message ?? undefined
+                              : 'Copy RemNote format'
+                          }
                         >
-                          {copiedId === schema.id ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
+                          {remnoteCopy.copied(schema.id) ? (
+                            <span className="text-amber font-bold font-mono">[ OK ]</span>
+                          ) : remnoteCopy.failed(schema.id) ? (
+                            <span className="text-hazard-300 font-bold font-mono">[ ! ]</span>
+                          ) : (
+                            <span className="text-amber font-bold font-mono">[ COPY ]</span>
+                          )}
                           RemNote
                         </button>
 

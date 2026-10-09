@@ -25,6 +25,7 @@ import {
 import { sound, playSound } from '@/lib/audio';
 import { recordDeckExport, reportCardKeys } from '@/lib/deck-memory';
 import { useModalA11y } from '@/hooks/useModalA11y';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 
 interface SegregationRemnoteModalProps {
   isOpen: boolean;
@@ -33,6 +34,9 @@ interface SegregationRemnoteModalProps {
   activeSchema?: Partial<SavedSchema>;
   settings: AISettings;
 }
+
+/** The copy-all control's key, i.e. "the whole payload" rather than one document. */
+const ALL_DOCS_KEY = 'all';
 
 export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = ({
   isOpen,
@@ -45,8 +49,10 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
   const [parentSystemAnchor, setParentSystemAnchor] = useState(() => inferParentSystemAnchor(topicTitle));
   const [preferFeynmanCloze, setPreferFeynmanCloze] = useState(true);
   const [activeTab, setActiveTab] = useState<'matrix' | 'feynman_cloze' | 'facts' | 'drills' | 'examples' | 'remnote_export' | 'api_push'>('matrix');
-  const [copied, setCopied] = useState(false);
-  const [copiedDoc, setCopiedDoc] = useState<string | null>(null);
+  // Both copy controls share one implementation and one confirmation, keyed by
+  // the document they copied: the write and the "Copied!" used to be two
+  // unrelated events, so a refused copy still claimed success.
+  const docCopy = useClipboardCopy(2500);
   // Two-way cards are a feature, not a default: a concept ↔ definition pair is
   // a real reverse card, while a labelled prompt's reverse can never be
   // answered. Off = every card front → back only.
@@ -132,24 +138,18 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
     });
   };
 
-  const writeClipboard = (text: string) => {
+  const handleCopyMarkdown = async () => {
     playSound('click');
-    // Fire and forget on purpose: the confirmation is about the copy the user
-    // asked for, and a browser without clipboard permission must still see the
-    // markdown selected-and-visible below rather than a silent no-op.
-    void navigator.clipboard?.writeText(text).catch(() => undefined);
+    const outcome = await docCopy.copy(remnotePayload.markdown, ALL_DOCS_KEY);
+    // The confirmation is the write's own result, never the click's optimism: a
+    // refusal says so, and the markdown is still on screen to select by hand.
+    if (outcome.ok) playSound('success');
   };
 
-  const handleCopyMarkdown = () => {
-    writeClipboard(remnotePayload.markdown);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleCopyDocument = (doc: RemnoteDocument) => {
-    writeClipboard(doc.markdown);
-    setCopiedDoc(doc.id);
-    setTimeout(() => setCopiedDoc((current) => (current === doc.id ? null : current)), 2500);
+  const handleCopyDocument = async (doc: RemnoteDocument) => {
+    playSound('click');
+    const outcome = await docCopy.copy(doc.markdown, doc.id);
+    if (outcome.ok) playSound('success');
   };
 
   const handlePushRemnote = async () => {
@@ -708,15 +708,25 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
                     <button
                       type="button"
                       data-testid={`remnote-copy-${doc.id}`}
+                      data-copy-status={docCopy.copied(doc.id) ? 'copied' : docCopy.failed(doc.id) ? 'failed' : 'idle'}
+                      title={docCopy.failed(doc.id) ? docCopy.message ?? undefined : undefined}
                       onClick={() => handleCopyDocument(doc)}
                       className="shrink-0 px-3 py-1.5 text-[11px] font-bold text-bone bg-chassis border border-edge hover:bg-inset flex items-center gap-1.5 transition-none cursor-pointer"
                     >
-                      {copiedDoc === doc.id ? (
+                      {docCopy.copied(doc.id) ? (
                         <span className="text-signal-300 font-bold font-mono">[ OK ]</span>
+                      ) : docCopy.failed(doc.id) ? (
+                        <span className="text-hazard-300 font-bold font-mono">[ ! ]</span>
                       ) : (
                         <span className="text-amber font-bold font-mono">[ COPY ]</span>
                       )}
-                      <span>{copiedDoc === doc.id ? 'Copied — paste into RemNote' : 'Copy this document'}</span>
+                      <span>
+                        {docCopy.copied(doc.id)
+                          ? 'Copied — paste into RemNote'
+                          : docCopy.failed(doc.id)
+                            ? 'Copy failed — select the text below'
+                            : 'Copy this document'}
+                      </span>
                     </button>
                   </div>
                   <textarea
@@ -737,11 +747,25 @@ export const SegregationRemnoteModal: React.FC<SegregationRemnoteModalProps> = (
               <button
                 type="button"
                 data-testid="remnote-copy-all"
+                data-copy-status={docCopy.copied(ALL_DOCS_KEY) ? 'copied' : docCopy.failed(ALL_DOCS_KEY) ? 'failed' : 'idle'}
+                title={docCopy.failed(ALL_DOCS_KEY) ? docCopy.message ?? undefined : undefined}
                 onClick={handleCopyMarkdown}
                 className="shrink-0 px-3.5 py-1.5 text-xs font-bold text-bone bg-inset flex items-center gap-1.5 transition-none cursor-pointer"
               >
-                {copied ? <span className="text-signal-300 font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
-                <span>{copied ? 'Copied!' : 'Copy all as one document'}</span>
+                {docCopy.copied(ALL_DOCS_KEY) ? (
+                  <span className="text-signal-300 font-bold font-mono">[ OK ]</span>
+                ) : docCopy.failed(ALL_DOCS_KEY) ? (
+                  <span className="text-hazard-300 font-bold font-mono">[ ! ]</span>
+                ) : (
+                  <span className="text-amber font-bold font-mono">[ COPY ]</span>
+                )}
+                <span>
+                  {docCopy.copied(ALL_DOCS_KEY)
+                    ? 'Copied!'
+                    : docCopy.failed(ALL_DOCS_KEY)
+                      ? 'Copy failed — select the text in a document'
+                      : 'Copy all as one document'}
+                </span>
               </button>
             </div>
           </div>

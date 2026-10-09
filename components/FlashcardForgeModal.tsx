@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AISettings, SegregationReport, UploadedFileAsset } from '@/lib/types';
 import { BracketTag } from '@/components/ui/BracketTag';
 import { playSound } from '@/lib/audio';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import {
   ForgeCoverageReport,
   ForgeExportTarget,
@@ -173,7 +174,10 @@ export function FlashcardForgeModal({
   const [contradictions, setContradictions] = useState<Contradiction[]>([]);
   const [diff, setDiff] = useState<DeckDiff | null>(null);
   const [skipKnown, setSkipKnown] = useState(false);
-  const [copiedMarkdown, setCopiedMarkdown] = useState(false);
+  // The standardized copy feedback (defect 35). This control used to await
+  // `navigator.clipboard.writeText` bare, so a refused write produced no state
+  // change, no message and an unhandled rejection - the click looked dead.
+  const remnoteCopy = useClipboardCopy(2500);
   /** What the real Anki deck said, when AnkiConnect answered. */
   const [ankiRead, setAnkiRead] = useState<AnkiDeckRead | null>(null);
   const [checkingAnki, setCheckingAnki] = useState(false);
@@ -1952,16 +1956,20 @@ export function FlashcardForgeModal({
                     onClick={async () => {
                       if (!merged) return;
                       const payload = generateSegregationRemnote(merged);
-                      await navigator.clipboard.writeText(payload.markdown);
-                      playSound('success');
-                      setCopiedMarkdown(true);
-                      setTimeout(() => setCopiedMarkdown(false), 2500);
+                      const outcome = await remnoteCopy.copy(payload.markdown);
+                      if (outcome.ok) playSound('success');
+                      else playSound('wrong');
                     }}
                     disabled={emptyDeck || deckBusy !== ''}
+                    data-copy-status={remnoteCopy.copied() ? 'copied' : remnoteCopy.failed() ? 'failed' : 'idle'}
                     className="w-full px-3 py-2 bg-chassis border border-edge hover:border-amber text-bone text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer disabled:opacity-40 transition-colors"
-                    title="Copy hierarchical RemNote markdown directly to clipboard"
+                    title={remnoteCopy.failed() ? remnoteCopy.message ?? undefined : 'Copy hierarchical RemNote markdown directly to clipboard'}
                   >
-                    {copiedMarkdown ? '[ ✅ REMNOTE MARKDOWN COPIED TO CLIPBOARD ]' : '[ 📋 1-CLICK COPY REMNOTE / NOTION MARKDOWN ]'}
+                    {remnoteCopy.copied()
+                      ? '[ ✅ REMNOTE MARKDOWN COPIED TO CLIPBOARD ]'
+                      : remnoteCopy.failed()
+                        ? '[ ⚠ COPY FAILED — OPEN THE REMNOTE SHEET AND COPY FROM THERE ]'
+                        : '[ 📋 1-CLICK COPY REMNOTE / NOTION MARKDOWN ]'}
                   </button>
                 </div>
                 <p className="text-[10px] font-mono text-solder">

@@ -17,6 +17,13 @@ import {
 } from '@/lib/types';
 import { incrementModelCall, saveGenerationInProgress, clearGenerationInProgress, loadGenerationInProgress, loadStudyPrefs, saveStudyPrefs, recordTopicResult, loadTopicStruggles } from '@/lib/storage';
 import { decompressSchemaFromUrl, readSharedPayload } from '@/lib/url-share';
+import {
+  clearStageDraft,
+  loadStageDraft,
+  stageDraftHasTyping,
+  stageDraftStageNumber,
+  type StageDraft,
+} from '@/lib/stage-draft';
 import { SettingsModal } from '@/components/SettingsModal';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { AuthModal } from '@/components/AuthModal';
@@ -45,6 +52,7 @@ import { StudioWorkbench } from '@/components/workbench/StudioWorkbench';
 import { useAuth } from '@/lib/auth-context';
 import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSessionReviewModal';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
+import { SheetErrorBoundary } from '@/components/SheetErrorBoundary';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
 import { CrucibleModal } from '@/components/crucible/CrucibleModal';
 import { EmergencyTriageModal } from '@/components/crisis/EmergencyTriageModal';
@@ -65,6 +73,7 @@ import { useGenerationProgress } from '@/hooks/useGenerationProgress'
 import { requestEncodedSchema } from '@/lib/encode-stream'
 import type { StageOutlineEntry } from '@/lib/stream-schema';
 import { useSettings } from '@/hooks/useSettings';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import { useInputSource } from '@/hooks/useInputSource';
 import { useSchemaLibrary } from '@/hooks/useSchemaLibrary';
 import { CompletedSessionView } from '@/components/CompletedSessionView';
@@ -128,6 +137,7 @@ export default function DeepEncodeApp() {
     addXP,
     loadStageInputs: applyStageInputs,
     resetSession,
+    restoreDraft,
     resumeSchema,
     resumeToEncoding,
     selectModule,
@@ -189,7 +199,37 @@ export default function DeepEncodeApp() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   // Drill modals were removed : review lives in Anki/RemNote, not here.
 
-  // Concept Prerequisites (You Are Not Ready) State
+  // The stage the learner was typing on when the tab went away (defect 37).
+  //
+  // Read on mount rather than during render: the draft is a localStorage read,
+  // and doing it in a `useState` initializer would let the server and the client
+  // disagree on the first paint. Nothing depends on it rendering immediately,
+  // so the banner simply appears with the rest of the launchpad.
+  const [recoverableDraft, setRecoverableDraft] = useState<StageDraft | null>(null);
+  // The reader itself refuses a record that is stale, unreadable, or holds no
+  // work worth recovering (see `loadStageDraft`), so there is nothing to
+  // re-check here. localStorage cannot be read during render without an SSR
+  // hydration mismatch, so syncing from this external system inside an effect is
+  // the sanctioned pattern (the same shape as the study-prefs hydration).
+  /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
+  useEffect(() => {
+    setRecoverableDraft(loadStageDraft());
+  }, []);
+
+  /** Put the learner back on their stage, with the typing that never got submitted. */
+  const handleResumeDraft = useCallback(() => {
+    if (!recoverableDraft) return;
+    restoreDraft(recoverableDraft);
+    setRecoverableDraft(null);
+    sound.playSuccess();
+  }, [recoverableDraft, restoreDraft]);
+
+  /** Throw the recovered stage away: the learner would rather start clean. */
+  const handleDiscardDraft = useCallback(() => {
+    clearStageDraft();
+    setRecoverableDraft(null);
+  }, []);
+
   const [isPrereqModalOpen, setIsPrereqModalOpen] = useState(false);
   const [isAuditingPrereq, setIsAuditingPrereq] = useState(false);
   const [prerequisitesReport, setPrerequisitesReport] = useState<PrerequisitesReport | null>(null);
@@ -253,7 +293,9 @@ export default function DeepEncodeApp() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [endSessionReviewData, setEndSessionReviewData] = useState<EndSessionReviewData | null>(null);
   const [isLoadingEndSessionReview, setIsLoadingEndSessionReview] = useState(false);
-  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
+  // Defect 35: the confirmation comes from the shared hook, so a refused write
+  // can never render as `[ OK ]` and no promise is left floating.
+  const formatCopy = useClipboardCopy(2000);
 
   // Friction-cut loop states: mastered auto-save pulse, stage skip, stage regen
   const [justMastered, setJustMastered] = useState(false);
@@ -1155,6 +1197,9 @@ export default function DeepEncodeApp() {
       } else {
         sound.playLevelUp();
         setAppState('completed');
+        // The session is finished and about to be saved as a schema, so the
+        // in-progress draft is done with (defect 37).
+        clearStageDraft();
 
         // Auto-save completed schema to local storage & cloud
         const newSavedSchema: SavedSchema = {
@@ -1212,6 +1257,7 @@ export default function DeepEncodeApp() {
     } else {
       sound.playLevelUp();
       setAppState('completed');
+      clearStageDraft();
       const newSavedSchema: SavedSchema = {
         id: toySessionId(activities, topicSummary) || `schema_${Date.now()}`,
         timestamp: Date.now(),
@@ -1352,7 +1398,10 @@ export default function DeepEncodeApp() {
   ]);
 
   const resetApp = () => {
+    // resetSession drops the in-progress stage draft as well (defect 37): a
+    // deliberate restart must not be offered back as recoverable work.
     resetSession();
+    setRecoverableDraft(null);
     setRawNotes('');
     setUploadedFile(null);
     setYoutubeUrl('');
@@ -1471,7 +1520,7 @@ export default function DeepEncodeApp() {
   };
 
   // Copy formats for RemNote / Anki / Markdown
-  const copyToClipboard = (format: 'remnote' | 'anki' | 'markdown') => {
+  const copyToClipboard = async (format: 'remnote' | 'anki' | 'markdown') => {
     let content = '';
 
     if (format === 'remnote') {
@@ -1503,10 +1552,9 @@ export default function DeepEncodeApp() {
       });
     }
 
-    navigator.clipboard.writeText(content);
-    setCopiedFormat(format);
-    sound.playBeep(880, 'sine', 0.1);
-    setTimeout(() => setCopiedFormat(null), 2000);
+    const outcome = await formatCopy.copy(content, format);
+    // The beep is the success signal, so it must not play over a refused write.
+    if (outcome.ok) sound.playBeep(880, 'sine', 0.1);
   };
 
   return (
@@ -1802,6 +1850,49 @@ export default function DeepEncodeApp() {
                 >
                   [ DISMISS ]
                 </button>
+              </div>
+            )}
+
+            {/* Recovered stage (defect 37): the tab went away mid-stage, and the
+                typing that had not been submitted was written as a draft, so it
+                is offered back instead of being lost to an empty workbench. */}
+            {recoverableDraft && (
+              <div
+                className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 bg-amber-500/[0.05] border border-gilt/30 rounded-2xl shadow-panel"
+                data-testid="stage-draft-banner"
+                role="status"
+              >
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber block mb-0.5">
+                    [ ▶ STAGE RECOVERED ]
+                  </span>
+                  <p className="text-sm font-bold text-bone leading-snug">
+                    You were typing on stage {stageDraftStageNumber(recoverableDraft)} of{' '}
+                    {recoverableDraft.activities.length} of <em>{recoverableDraft.topicSummary || 'your session'}</em>.
+                  </p>
+                  <p className="text-[11px] text-solder font-mono mt-0.5">
+                    {stageDraftHasTyping(recoverableDraft)
+                      ? 'The work you had not submitted is still there.'
+                      : 'The stages you had already answered are still there.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleResumeDraft}
+                    className="px-5 py-2 rounded-full bg-gradient-to-b from-amber-400 to-amber-600 text-inset text-[11px] font-mono font-semibold uppercase tracking-[0.16em] shadow-gilt hover:from-amber-300 hover:to-amber-500 cursor-pointer"
+                  >
+                    Resume stage {stageDraftStageNumber(recoverableDraft)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDiscardDraft}
+                    className="px-4 py-2 rounded-full bg-chassis border border-edge/70 text-solder text-[11px] font-mono uppercase tracking-[0.16em] hover:text-bone hover:border-gilt/40 cursor-pointer"
+                    title="Discard this recovered stage and start fresh"
+                  >
+                    [ DISCARD ]
+                  </button>
+                </div>
               </div>
             )}
 
@@ -2303,7 +2394,24 @@ export default function DeepEncodeApp() {
             activities={activities}
             userResponses={userResponses}
             youtubeData={youtubeData}
-            copiedFormat={copiedFormat}
+            copiedFormat={
+              formatCopy.copied('remnote')
+                ? 'remnote'
+                : formatCopy.copied('anki')
+                  ? 'anki'
+                  : formatCopy.copied('markdown')
+                    ? 'markdown'
+                    : null
+            }
+            failedFormat={
+              formatCopy.failed('remnote')
+                ? 'remnote'
+                : formatCopy.failed('anki')
+                  ? 'anki'
+                  : formatCopy.failed('markdown')
+                    ? 'markdown'
+                    : null
+            }
             handoffStats={handoffStats}
             onDownloadApkg={handleDownloadApkg}
             onCopy={copyToClipboard}
@@ -2328,161 +2436,192 @@ export default function DeepEncodeApp() {
       </div>
 
       {/* Auth / Cloud Sync Modal */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-      />
+      <SheetErrorBoundary name="Account" open={isAuthOpen} onClose={() => setIsAuthOpen(false)}>
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+        />
+      </SheetErrorBoundary>
 
       {/* Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
-        backupSettingsToCloud={backupSettingsToCloud}
-        mrMMode={mrMMode}
-        onMrMModeChange={setMrMMode}
-      />
+      <SheetErrorBoundary name="Settings" open={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          onSaved={(newSettings: AISettings) => setAiSettings(newSettings)}
+          backupSettingsToCloud={backupSettingsToCloud}
+          mrMMode={mrMMode}
+          onMrMModeChange={setMrMMode}
+        />
+      </SheetErrorBoundary>
 
       {/* Hands-on pathway / circuit builder */}
-      <PathwayBuilderModal isOpen={isPathwayOpen} onClose={() => setIsPathwayOpen(false)} />
+      <SheetErrorBoundary name="Pathway builder" open={isPathwayOpen} onClose={() => setIsPathwayOpen(false)}>
+        <PathwayBuilderModal isOpen={isPathwayOpen} onClose={() => setIsPathwayOpen(false)} />
+      </SheetErrorBoundary>
 
       {/* Question-first inquisitor: verify a claim, hold its boundary open */}
-      <InquisitorModal
-        isOpen={isInquisitorOpen}
-        onClose={() => setIsInquisitorOpen(false)}
-        topic={topicSummary}
-      />
+      <SheetErrorBoundary name="Inquisitor" open={isInquisitorOpen} onClose={() => setIsInquisitorOpen(false)}>
+        <InquisitorModal
+          isOpen={isInquisitorOpen}
+          onClose={() => setIsInquisitorOpen(false)}
+          topic={topicSummary}
+        />
+      </SheetErrorBoundary>
 
       {/* Timed crucible: the clock is allocated across each problem's states */}
-      <CrucibleModal
-        isOpen={isCrucibleOpen}
-        onClose={() => setIsCrucibleOpen(false)}
-        topic={topicSummary}
-        sourceContext={rawNotes}
-      />
+      <SheetErrorBoundary name="Crucible" open={isCrucibleOpen} onClose={() => setIsCrucibleOpen(false)}>
+        <CrucibleModal
+          isOpen={isCrucibleOpen}
+          onClose={() => setIsCrucibleOpen(false)}
+          topic={topicSummary}
+          sourceContext={rawNotes}
+        />
+      </SheetErrorBoundary>
 
       {/* Emergency triage: freeze what can prove it is low-leverage, then run.
           Mounted only while it is open, so the sheet reads its resume record in
           a lazy initializer on the click that opens it rather than from an
           effect (and never during a server render). */}
-      {isTriageOpen && (
-        <EmergencyTriageModal isOpen onClose={() => setIsTriageOpen(false)} />
-      )}
+      <SheetErrorBoundary name="Emergency triage" open={isTriageOpen} onClose={() => setIsTriageOpen(false)}>
+        {isTriageOpen && (
+          <EmergencyTriageModal isOpen onClose={() => setIsTriageOpen(false)} />
+        )}
+      </SheetErrorBoundary>
 
       {/* Course-level Prerequisite Skill Tree */}
-      <SkillTreeModal
-        isOpen={isSkillTreeOpen}
-        onClose={() => setIsSkillTreeOpen(false)}
-        schemas={savedSchemas}
-      />
+      <SheetErrorBoundary name="Skill tree" open={isSkillTreeOpen} onClose={() => setIsSkillTreeOpen(false)}>
+        <SkillTreeModal
+          isOpen={isSkillTreeOpen}
+          onClose={() => setIsSkillTreeOpen(false)}
+          schemas={savedSchemas}
+        />
+      </SheetErrorBoundary>
 
       {/* Saved Schemas History Drawer */}
-      <HistoryDrawer
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        schemas={savedSchemas}
-        onSelectSchemaToResume={handleResumeSchema}
-        onShareSchema={(schema: SavedSchema) => handleOpenStatelessShare(schema)}
-        onDeleteSchema={handleDeleteSchema}
-        onClearAll={handleClearAllHistory}
-        onOpenAuth={() => {
-          setIsHistoryOpen(false);
-          setIsAuthOpen(true);
-        }}
-      />
+      <SheetErrorBoundary name="Saved schemas" open={isHistoryOpen} onClose={() => setIsHistoryOpen(false)}>
+        <HistoryDrawer
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          schemas={savedSchemas}
+          onSelectSchemaToResume={handleResumeSchema}
+          onShareSchema={(schema: SavedSchema) => handleOpenStatelessShare(schema)}
+          onDeleteSchema={handleDeleteSchema}
+          onClearAll={handleClearAllHistory}
+          onOpenAuth={() => {
+            setIsHistoryOpen(false);
+            setIsAuthOpen(true);
+          }}
+        />
+      </SheetErrorBoundary>
 
       {/* Roast My Notes Strict Professor Modal */}
-      <RoastNotesModal
-        isOpen={isRoastModalOpen}
-        onClose={() => setIsRoastModalOpen(false)}
-        report={roastReport}
-        loading={isRoasting}
-        onInjectPatch={handleInjectPatch}
-        onApplyAllPatchesAndEncode={handleApplyAllPatchesAndEncode}
-        onProceedToEncode={() => {
-          setIsRoastModalOpen(false);
-          handleGenerate();
-        }}
-        onRetryRoast={handleRoastNotes}
-      />
+      <SheetErrorBoundary name="Roast my notes" open={isRoastModalOpen} onClose={() => setIsRoastModalOpen(false)}>
+        <RoastNotesModal
+          isOpen={isRoastModalOpen}
+          onClose={() => setIsRoastModalOpen(false)}
+          report={roastReport}
+          loading={isRoasting}
+          onInjectPatch={handleInjectPatch}
+          onApplyAllPatchesAndEncode={handleApplyAllPatchesAndEncode}
+          onProceedToEncode={() => {
+            setIsRoastModalOpen(false);
+            handleGenerate();
+          }}
+          onRetryRoast={handleRoastNotes}
+        />
+      </SheetErrorBoundary>
 
       {/* Stateless URL Sharing Modal (LZ-String Compression) */}
-      <StatelessShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        schema={schemaToShare}
-      />
+      <SheetErrorBoundary name="Share link" open={isShareModalOpen} onClose={() => setIsShareModalOpen(false)}>
+        <StatelessShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          schema={schemaToShare}
+        />
+      </SheetErrorBoundary>
 
       {/* Feature 43: Concept Prerequisites (You Are Not Ready Warning) Modal */}
-      <ConceptPrerequisitesModal
-        isOpen={isPrereqModalOpen}
-        onClose={() => setIsPrereqModalOpen(false)}
-        report={prerequisitesReport}
-        isLoading={isAuditingPrereq}
-        onProceedToEncode={() => {
-          setIsPrereqModalOpen(false);
-          handleGenerate();
-        }}
-      />
+      <SheetErrorBoundary name="Prerequisites" open={isPrereqModalOpen} onClose={() => setIsPrereqModalOpen(false)}>
+        <ConceptPrerequisitesModal
+          isOpen={isPrereqModalOpen}
+          onClose={() => setIsPrereqModalOpen(false)}
+          report={prerequisitesReport}
+          isLoading={isAuditingPrereq}
+          onProceedToEncode={() => {
+            setIsPrereqModalOpen(false);
+            handleGenerate();
+          }}
+        />
+      </SheetErrorBoundary>
 
       {/* Feature 63: The Pre-Testing Effect (Productive Failure) Modal */}
-      <PretestModal
-        isOpen={isPretestModalOpen}
-        onClose={() => setIsPretestModalOpen(false)}
-        session={pretestSession}
-        onPretestComplete={() => {
-          addXP(80);
-          setIsPretestModalOpen(false);
-          handleGenerate();
-        }}
-      />
+      <SheetErrorBoundary name="Pre-test" open={isPretestModalOpen} onClose={() => setIsPretestModalOpen(false)}>
+        <PretestModal
+          isOpen={isPretestModalOpen}
+          onClose={() => setIsPretestModalOpen(false)}
+          session={pretestSession}
+          onPretestComplete={() => {
+            addXP(80);
+            setIsPretestModalOpen(false);
+            handleGenerate();
+          }}
+        />
+      </SheetErrorBoundary>
 
       {/* Teach Me : Brilliant-style interactive lesson (AI-authored, with an
           offline schema-based fallback). Available from the launchpad, the
           per-stage workbench, and the completed session view. */}
-      <TeachMeModal
-        isOpen={isTeachOpen}
-        onClose={() => setIsTeachOpen(false)}
-        scope={teachScope}
-        topicSummary={topicSummary}
-        mode={encodingMode}
-        notes={rawNotes}
-        file={uploadedFile}
-        activities={activities}
-        stageIndex={teachStageIndex}
-        userResponses={userResponses}
-        researchContexts={researchContexts}
-        settings={aiSettings}
-        onAwardXP={(earnedXp: number) => addXP(earnedXp)}
-        onStartEncoding={handleTeachStartEncoding}
-      />
+      <SheetErrorBoundary name="Teach me" open={isTeachOpen} onClose={() => setIsTeachOpen(false)}>
+        <TeachMeModal
+          isOpen={isTeachOpen}
+          onClose={() => setIsTeachOpen(false)}
+          scope={teachScope}
+          topicSummary={topicSummary}
+          mode={encodingMode}
+          notes={rawNotes}
+          file={uploadedFile}
+          activities={activities}
+          stageIndex={teachStageIndex}
+          userResponses={userResponses}
+          researchContexts={researchContexts}
+          settings={aiSettings}
+          onAwardXP={(earnedXp: number) => addXP(earnedXp)}
+          onStartEncoding={handleTeachStartEncoding}
+        />
+      </SheetErrorBoundary>
 
       {/* Feature 51: The Blurting Method (Free Recall Blank Canvas) Modal */}
       {/* Feature 51: The Blurting Method (Free Recall Blank Canvas) Modal */}
-      <BlurtingModal
-        isOpen={isBlurtingModalOpen}
-        onClose={() => setIsBlurtingModalOpen(false)}
-        schemaTitle={topicSummary}
-        activities={activities}
-        researchContexts={researchContexts}
-        settings={aiSettings}
-      />
+      <SheetErrorBoundary name="Blurting" open={isBlurtingModalOpen} onClose={() => setIsBlurtingModalOpen(false)}>
+        <BlurtingModal
+          isOpen={isBlurtingModalOpen}
+          onClose={() => setIsBlurtingModalOpen(false)}
+          schemaTitle={topicSummary}
+          activities={activities}
+          researchContexts={researchContexts}
+          settings={aiSettings}
+        />
+      </SheetErrorBoundary>
 
       {/* Features 71-80: Concept vs Fact Segregator & RemNote Hierarchical Engine Modal */}
-      <SegregationRemnoteModal
-        isOpen={isSegregateModalOpen}
-        onClose={() => setIsSegregateModalOpen(false)}
-        report={segregationReport}
-        activeSchema={{
-          topicSummary,
-          activities,
-          userResponses,
-          mode: encodingMode,
-        }}
-        settings={aiSettings}
-      />
+      <SheetErrorBoundary name="RemNote segregation" open={isSegregateModalOpen} onClose={() => setIsSegregateModalOpen(false)}>
+        <SegregationRemnoteModal
+          isOpen={isSegregateModalOpen}
+          onClose={() => setIsSegregateModalOpen(false)}
+          report={segregationReport}
+          activeSchema={{
+            topicSummary,
+            activities,
+            userResponses,
+            mode: encodingMode,
+          }}
+          settings={aiSettings}
+        />
+      </SheetErrorBoundary>
 
       {/* Export Choice Modal: Anki vs RemNote */}
+      <SheetErrorBoundary name="Export choice" open={showExportChoice} onClose={() => setShowExportChoice(false)}>
       {showExportChoice && segregationReport && (
         <div ref={exportChoiceRef} role="dialog" aria-modal="true" tabIndex={-1} className="fixed inset-0 z-[60] flex items-center justify-center bg-chassis/90">
           <motion.div
@@ -2533,10 +2672,12 @@ export default function DeepEncodeApp() {
           </motion.div>
         </div>
       )}
+      </SheetErrorBoundary>
 
       {/* Feature: Direct Anki .apkg Export & SM-2 Spaced Repetition Webhook Sync */}
-      <AnkiExportModal
-        isOpen={isAnkiExportOpen}
+      <SheetErrorBoundary
+        name="Anki export"
+        open={isAnkiExportOpen}
         onClose={() => {
           setIsAnkiExportOpen(false);
           // The forge's "both" target stacks RemNote behind Anki, so two
@@ -2546,54 +2687,75 @@ export default function DeepEncodeApp() {
             setIsSegregateModalOpen(true);
           }
         }}
-        schema={{
-          topicSummary,
-          activities,
-          userResponses,
-        }}
-        report={segregationReport}
-        notes={rawNotes}
-        includeMcq={segregateOptions.mcq}
-      />
+      >
+        <AnkiExportModal
+          isOpen={isAnkiExportOpen}
+          onClose={() => {
+            setIsAnkiExportOpen(false);
+            // The forge's "both" target stacks RemNote behind Anki, so two
+            // export modals are never on screen at once.
+            if (pendingForgeRemnote) {
+              setPendingForgeRemnote(false);
+              setIsSegregateModalOpen(true);
+            }
+          }}
+          schema={{
+            topicSummary,
+            activities,
+            userResponses,
+          }}
+          report={segregationReport}
+          notes={rawNotes}
+          includeMcq={segregateOptions.mcq}
+        />
+      </SheetErrorBoundary>
 
       {/* Flashcards Only: the Forge. Many sources in, one deduped deck out,
           straight to the export surface the learner chose — no encoding. */}
-      <FlashcardForgeModal
-        isOpen={isForgeOpen}
-        onClose={() => setIsForgeOpen(false)}
-        settings={aiSettings}
-        onDeckReady={handleForgeDeckReady}
-        initialNotes={rawNotes}
-        initialFile={uploadedFile}
-      />
+      <SheetErrorBoundary name="Flashcard forge" open={isForgeOpen} onClose={() => setIsForgeOpen(false)}>
+        <FlashcardForgeModal
+          isOpen={isForgeOpen}
+          onClose={() => setIsForgeOpen(false)}
+          settings={aiSettings}
+          onDeckReady={handleForgeDeckReady}
+          initialNotes={rawNotes}
+          initialFile={uploadedFile}
+        />
+      </SheetErrorBoundary>
 
       {/* Feature: Multi-Document Comparative 4-Quadrant Synthesis */}
-      <ComparativeSynthesisModal
-        isOpen={isComparativeModalOpen}
-        onClose={() => setIsComparativeModalOpen(false)}
-        settings={aiSettings}
-        onOpenAnkiExport={(compReport: any) => {
-          setIsComparativeModalOpen(false);
-          setIsAnkiExportOpen(true);
-        }}
-      />
+      <SheetErrorBoundary name="Comparative synthesis" open={isComparativeModalOpen} onClose={() => setIsComparativeModalOpen(false)}>
+        <ComparativeSynthesisModal
+          isOpen={isComparativeModalOpen}
+          onClose={() => setIsComparativeModalOpen(false)}
+          settings={aiSettings}
+          onOpenAnkiExport={(compReport: any) => {
+            setIsComparativeModalOpen(false);
+            setIsAnkiExportOpen(true);
+          }}
+        />
+      </SheetErrorBoundary>
 
       {/* Science Feature: End Session Metacognitive Performance Review Modal */}
-      <EndSessionReviewModal
-        isOpen={isEndSessionReviewOpen}
-        onClose={() => setIsEndSessionReviewOpen(false)}
-        preSessionConfidence={preSessionConfidence}
-        sessionData={endSessionReviewData}
-        isLoading={isLoadingEndSessionReview}
-        topicSummary={topicSummary || 'Cognitive Schema'}
-      />
+      <SheetErrorBoundary name="Session review" open={isEndSessionReviewOpen} onClose={() => setIsEndSessionReviewOpen(false)}>
+        <EndSessionReviewModal
+          isOpen={isEndSessionReviewOpen}
+          onClose={() => setIsEndSessionReviewOpen(false)}
+          preSessionConfidence={preSessionConfidence}
+          sessionData={endSessionReviewData}
+          isLoading={isLoadingEndSessionReview}
+          topicSummary={topicSummary || 'Cognitive Schema'}
+        />
+      </SheetErrorBoundary>
 
       {/* Science Feature: Metacognitive Analytics & Model Quota Dashboard */}
-      <AnalyticsDashboard
-        isOpen={isAnalyticsOpen}
-        onClose={() => setIsAnalyticsOpen(false)}
-        savedSchemas={savedSchemas}
-      />
+      <SheetErrorBoundary name="Analytics" open={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)}>
+        <AnalyticsDashboard
+          isOpen={isAnalyticsOpen}
+          onClose={() => setIsAnalyticsOpen(false)}
+          savedSchemas={savedSchemas}
+        />
+      </SheetErrorBoundary>
 
     </main>
   );

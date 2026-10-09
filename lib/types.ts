@@ -1,6 +1,15 @@
 export type AIProvider = 'gemini' | 'openrouter' | 'openai';
 
 export interface AISettings {
+  /**
+   * When this record's content was chosen, in epoch ms (defect 36).
+   *
+   * It is the input the cloud guard compares: the account's `settingsBackup` is
+   * applied on sign-in only when it is newer than this. Every writer goes through
+   * `saveAISettings`, which stamps it, so no path can write a record that reads as
+   * "older than everything" - which is what an absent stamp used to mean.
+   */
+  savedAt?: number;
   provider: AIProvider;
   geminiApiKey?: string;
   geminiModel?: string;

@@ -13,7 +13,7 @@
  * good parts instead of failing wholesale.
  */
 
-import type { SavedSchema } from './types';
+import type { AISettings, SavedSchema } from './types';
 import {
   loadAISettings,
   loadSavedSchemas,
@@ -217,7 +217,12 @@ export function restoreBackup(file: unknown): RestoreReport {
   }
 
   if (looksLikeSettings(backup.settings)) {
-    saveAISettings(backup.settings as Record<string, never> as never);
+    // Stamped NOW, deliberately, rather than inheriting the file's age (defect
+    // 36): the learner chose this content on this device today, and a record that
+    // claimed the file's old date would let an older account backup override the
+    // restore on the very next sign-in - which is exactly how a deliberate
+    // restore was being undone.
+    saveAISettings(backup.settings as AISettings, Date.now());
     report.settingsRestored = true;
   }
   if (backup.studyPrefs && typeof backup.studyPrefs === 'object' && !Array.isArray(backup.studyPrefs)) {

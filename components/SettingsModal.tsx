@@ -14,7 +14,7 @@ interface SettingsModalProps {
   onClose: () => void;
   onSaved: (settings: AISettings) => void;
   /** Optional cloud backup hook from AuthContext (undefined when unavailable). */
-  backupSettingsToCloud?: (settings: any) => Promise<void>;
+  backupSettingsToCloud?: (settings: AISettings) => Promise<void>;
   /** Mr M mode, owned by the launchpad hook so the masthead pill and this switch agree. */
   mrMMode?: boolean;
   /** Reports a change upward; when absent the switch writes study prefs itself. */
@@ -59,7 +59,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud,
   };
 
   const handleSave = () => {
-    const stamped = { ...settings, savedAt: Date.now() } as any;
+    const stamped: AISettings = { ...settings, savedAt: Date.now() };
     saveAISettings(stamped);
     saveStudyPrefs({ hiddenTemplates, mrMMode });
     onSaved(stamped);
@@ -78,7 +78,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud,
     const payload = {
       kind: 'deepencode-settings-v1',
       exportedAt: Date.now(),
-      settings: { ...settings, savedAt: (settings as any).savedAt || Date.now() },
+      settings: { ...settings, savedAt: settings.savedAt || Date.now() },
       hiddenTemplates,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -104,7 +104,7 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud,
       setSettings(imported);
       setHiddenTemplates(Array.isArray(data.hiddenTemplates) ? data.hiddenTemplates : []);
       // Persist immediately so nothing is lost if the user closes without saving.
-      const stamped = { ...imported, savedAt: Date.now() } as any;
+      const stamped: AISettings = { ...imported, savedAt: Date.now() };
       saveAISettings(stamped);
       saveStudyPrefs({ hiddenTemplates: Array.isArray(data.hiddenTemplates) ? data.hiddenTemplates : [] });
       onSaved(stamped);
@@ -116,11 +116,16 @@ export function SettingsModal({ isOpen, onClose, onSaved, backupSettingsToCloud,
   };
 
   const handleReset = () => {
-    setSettings(DEFAULT_SETTINGS);
-    saveAISettings(DEFAULT_SETTINGS);
+    // Stamped like every other write (defect 36). This is the path that used to
+    // persist defaults with no `savedAt` at all, which read as `0` - older than
+    // everything - so the account's copy restored the very key the learner had
+    // just cleared on the next sign-in.
+    const reset: AISettings = { ...DEFAULT_SETTINGS, savedAt: Date.now() };
+    setSettings(reset);
+    saveAISettings(reset);
     setHiddenTemplates([]);
     saveStudyPrefs({ hiddenTemplates: [] });
-    onSaved(DEFAULT_SETTINGS);
+    onSaved(reset);
   };
 
 
