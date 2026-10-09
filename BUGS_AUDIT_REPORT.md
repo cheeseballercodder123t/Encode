@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-21 (§20-§23) then fixed four of the six, so the running total below is 37;** findings 38 and 39 stay open, with 34-37 closed and recorded in §20-§23. **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-22 (§20-§24) then fixed five of the six, so the running total below is 38;** finding 39 stays open, with 34-38 closed and recorded in §20-§24. **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -1074,7 +1074,7 @@ cost the person using the app. **Findings 34-39 are open candidates, not repairs
 stay at 33 until one of them is fixed and pinned, which is the point of numbering them now: the next round
 has a fixed target and a stated proof for each.
 
-**Update, rounds 18-21 (§20-§23): findings 34, 35, 36 and 37 are fixed and pinned. Their rows below are left as round 17 wrote them - that is the evidence the defects were real - with the repairs, the proofs and the mutation probes in §20, §21, §22 and §23. Finding 35's row also undercounts the surface: the round-19 sweep found **eight** copy controls where round 17 named four (§21.1). Findings 38-39 remain open.**
+**Update, rounds 18-22 (§20-§24): findings 34, 35, 36, 37 and 38 are fixed and pinned. Their rows below are left as round 17 wrote them - that is the evidence the defects were real - with the repairs, the proofs and the mutation probes in §20, §21, §22, §23 and §24. Finding 35's row also undercounts the surface: the round-19 sweep found **eight** copy controls where round 17 named four (§21.1). Finding 39 remains open.**
 
 ### 19.1 Prioritized findings
 
@@ -1084,7 +1084,7 @@ has a fixed target and a stated proof for each.
 | 35 | **P1 - high. FIXED in round 19 (§21)** | Four copy controls, three different behaviours, and the busiest one reports a success it cannot know about. The history drawer's `handleCopyRemNote` calls `navigator.clipboard.writeText(content)` as a **floating promise** - no `await`, no `.catch` - and sets the copied state unconditionally, so the row renders `[ OK ]` whether the write landed or not. The forge's copy control is the opposite failure: it awaits an unguarded `writeText` inside an `async` click handler, so a rejection produces no state change, no message and an unhandled rejection - the click looks dead. Two siblings in the same repo already do this correctly, which is what shows the standard was known and not applied. | `components/HistoryDrawer.tsx:69`-`:80` (the copy), `:323` (the `[ OK ]` glyph); `components/FlashcardForgeModal.tsx:1953`-`:1960`; correct in `components/StatelessShareModal.tsx:69`-`:82` (API check, `execCommand` fallback, failure reported) and `components/SegregationRemnoteModal.tsx:136`-`:141` (catch, text kept visible for manual selection) | Read from the code; reachable without a hostile condition. `writeText` rejects with `NotAllowedError` whenever the document is not focused (a second monitor; a click that follows a keyboard shortcut) or permission is denied, and `navigator.clipboard` is **undefined on a non-secure origin**, where the drawer's call throws a `TypeError` inside the click handler before any state is set. RemNote/Notion is an export path exactly like the `.apkg` download and this is its only handoff, so the failure mode is a learner pasting an unchanged clipboard into RemNote after being told it was copied. **Proof for the fix:** a Playwright init script that makes `writeText` reject (and a second run with `navigator.clipboard` deleted), then a click on each control, asserting the visible state matches what actually reached the clipboard. |
 | 36 | **P2 - medium. FIXED in round 20 (§22)** | The cloud settings restore cannot do what its own comment says. It applies the account's backup when `backup.savedAt >= (settings.savedAt \|\| 0)`, described in the code as "Only applied when the backup is newer than what local storage holds (multi-device safe)" - but `savedAt` is stamped by the **caller**, never by `saveAISettings`, so only two of the four writers produce it. Reset-to-defaults and a backup restore write settings with no stamp at all, `localSavedAt` is then `0`, the comparison is trivially true, and the account's copy - however old - overwrites what is on the device. | `lib/auth-context.tsx:107`-`:118` (the guard); stamps: `components/SettingsModal.tsx:62`-`:68` and `:107`-`:111`; no stamp: `components/SettingsModal.tsx:120` (reset), `lib/backup.ts:219`-`:221` (restore); `lib/storage.ts:51`-`:57` (`saveAISettings`) | Read from the code, and deterministic - no race needed: restore a backup (or reset to defaults) on a device, then sign in, and the stored settings are replaced by the account's copy. That is how a deliberately cleared API key comes back, or a working key is replaced by a stale model choice; the guard's stated purpose is exactly what fails. **Proof for the fix:** the choice is a pure decision over two records, so it can be extracted and unit-tested in both directions (newer local wins, newer backup wins, neither stamped), plus one browser test that restores a backup and signs in. |
 | 37 | **P2 - medium. FIXED in round 21 (§23)** | The stage being written is never persisted until it is submitted. The typed answers live in React state (`field1`/`field2`/`field3` at page level, written on every keystroke) and reach `userResponses` only on Submit, Skip or navigation - and every persistence path hangs off `userResponses` (the stage-boundary save, the cross-device sync, the drawer). There is no draft write for the in-stage fields, so a reload, a crash or a closed tab mid-stage returns to that stage with **empty fields**, while every earlier stage survives. | `app/page.tsx:1144`, `:1203`, `:1269` (where `userResponses` is written), `:1178`, `:1230` (the saves that follow), `:2253` (the fields handed to the workbench), `:293` (`loadStageInputs` is a loader only); the paths that did get autosave: `:1020`-`:1035` (YouTube, per stage) and `:1043`-`:1056` (lab, 500 ms debounce with cleanup) | Read from the code, and reachable in one step: type into a stage, reload without submitting. No draft-shaped storage key exists anywhere (`_draft` / `DRAFT_KEY` across `lib/`, `app/`, `components/` returns nothing), which is what makes this a missing write rather than an unreachable one. The asymmetry is the evidence that the need was known: the YouTube path's own comment says it exists "so 'encode 2 of 9 chapters today' survives a reload", and a text/file session relies entirely on the stage boundary. **Proof for the fix:** type into a stage, reload without submitting, assert the fields come back - then the same run with the fix. |
-| 38 | **P4 - low. OPEN - candidate for the next round** | The debounced autosave is documented, exported, and dead. The function's own comment says "Debounced autosave for performance during typing" and the README describes the storage facade by that behaviour, but it has **zero callers** - nothing in the app debounces a save. This is defect 30's class (§17) in production code rather than in a test: nothing is broken at runtime, and the cost is a reader (and the README) believing typing is debounced when the real cadence is the stage boundary - which is also how finding 37 stayed invisible. | `lib/storage.ts:25` (`autosaveTimer`), `lib/storage.ts:358`-`:370` (`debouncedSaveSchema`), `README.md:225` | Read from the code: a search for `debouncedSaveSchema` and `autosaveTimer` across `app/`, `components/`, `hooks/`, `lib/`, `tests/` and `e2e/` returns only the definition and the module-level timer it guards. **Proof for the fix:** either wire it to the draft it was written for, or delete it and correct the README; the check is a grep that returns nothing plus the round's suite. |
+| 38 | **P4 - low. FIXED in round 22 (§24)** | The debounced autosave is documented, exported, and dead. The function's own comment says "Debounced autosave for performance during typing" and the README describes the storage facade by that behaviour, but it has **zero callers** - nothing in the app debounces a save. This is defect 30's class (§17) in production code rather than in a test: nothing is broken at runtime, and the cost is a reader (and the README) believing typing is debounced when the real cadence is the stage boundary - which is also how finding 37 stayed invisible. | `lib/storage.ts:25` (`autosaveTimer`), `lib/storage.ts:358`-`:370` (`debouncedSaveSchema`), `README.md:225` | Read from the code: a search for `debouncedSaveSchema` and `autosaveTimer` across `app/`, `components/`, `hooks/`, `lib/`, `tests/` and `e2e/` returns only the definition and the module-level timer it guards. **Proof for the fix:** either wire it to the draft it was written for, or delete it and correct the README; the check is a grep that returns nothing plus the round's suite. |
 | 39 | **P4 - low. OPEN - candidate for the next round** | The pending-sync badge can be wrong on screen. `pendingLocalCount` is a `useMemo` over `[user, cloudSchemas, hydrated]` that calls `loadSavedSchemas()` - a module-level cache which changes on every write, with no dependency that moves when it does - so saving a schema while signed in leaves the badge showing the previous count until some unrelated render changes one of those three values. It is the only signal that local work has not reached the cloud, so a stale value reads as "nothing pending" exactly when something is. | `lib/auth-context.tsx:71`-`:77` | Read from the code, and deterministic: save a schema with a signed-in session and watch the count. **Proof for the fix:** take the count from the `useSchemaLibrary` list the drawer already subscribes to (or subscribe to `subscribeToSavedSchemas`), then a browser test that saves and reads the badge with no other interaction. |
 
 ### 19.2 Checked and cleared in this pass (recorded so the next round need not re-derive it)
@@ -1566,8 +1566,9 @@ the library, the cloud or the drawer: it is a device-local checkpoint that exist
 to be either resumed or dropped. It expires after seven days, and the launchpad
 shows nothing rather than a resume button into an empty workbench.
 - **Not a second writer of anything else.** `lib/storage.ts`'s documented-but-dead
-`debouncedSaveSchema`/`autosaveTimer` (finding 38) is left exactly where round 17
-found it; this round's debounce lives in `useSession`, over the draft record only.
+`debouncedSaveSchema`/`autosaveTimer` (finding 38) was left exactly where round 17
+found it *by this round*; round 22 then wired that path for real (§24), and the
+draft's own debounce still lives in `useSession`, over the draft record only.
 - **No new cross-device surface.** A draft belongs to the device it was typed on,
 as `localStorage` states - which is what keeps it synchronous on first paint.
 
@@ -1576,3 +1577,103 @@ as `localStorage` states - which is what keeps it synchronous on first paint.
 several earlier rounds. The three test files added - `tests/unit/stage-draft.test.ts`,
 `tests/unit/sessionReducer.test.ts` and `e2e/stage-draft.spec.ts` - are counted as
 files, following defect 30's precedent.)
+
+## 24. Round 22 - defect 38, the autosave that was described and never wired
+
+Round 17's fifth finding, fixed and pinned. It is the P4 of the set because
+nothing was corrupted: what was wrong is that the documented cadence did not
+exist. `saveSchemaToHistory` called `saveSchemaToIDB` directly on every save,
+while the README and `lib/storage/index.ts` both described a "debounced
+autosave" - and the helper behind that claim, `debouncedSaveSchema` with its own
+module-level `autosaveTimer`, had **zero callers**. Round 17 left the choice open
+between wiring it and deleting it; this round wired it, because the write it
+guards is the expensive one.
+
+### 24.1 What the write costs, and what the debounce now is
+
+- **The heavy half is named in the code**: `saveSchemaToIDB` puts one record and
+then re-reads the whole store to re-mirror it into localStorage
+(`mirrorSchemasToLocalStorage(await getAllSchemasFromIDB())`). The paths that save
+repeatedly are the ones the debounce is for: the YouTube workout saves a schema
+per stage (`app/page.tsx`), a completion save follows the stage-boundary save, the
+cloud-download path re-saves every remote schema (`lib/auth-context.tsx:197`) and
+`restoreBackup` re-saves every imported record (`lib/backup.ts:213`).
+- **One queue, one trailing timer.** `saveSchemaToHistory` writes the mirror
+synchronously and queues the IndexedDB hop in `pendingSchemaIdbWrites`, keyed by
+schema id: repeated saves of one schema collapse to a single write of the NEWEST
+record, and a burst of distinct schemas goes out in one flush. The window is
+`IDB_AUTOSAVE_DELAY_MS` (1000 ms), exported and the only place it is defined.
+- **The page cannot outlive the queue.** `flushPendingSchemaWrites` is exported and
+bound once - on the first queued write, so nobody pays for it until it is used - to
+`pagehide` and to `visibilitychange` when the tab goes hidden. `deleteSchemaFromHistory(id)`
+drops a queued write for that id (otherwise the write scheduled *before* the removal
+would land *after* it and resurrect the row) and `clearAllSchemas()` drops the whole
+queue and disarms the timer.
+- **The dead helper is gone, not left beside its replacement.** `debouncedSaveSchema`
+is deleted - the same class as defect 30, an export that reads as a live mechanism.
+- **The limit, stated in the code and here.** A transaction *started* during unload
+is not guaranteed to commit if the process is killed, which is why the mirror is
+written first and is the store that never waits. Recorded as well, because it is
+how this round nearly fooled itself: `initIndexedDB` migrates a non-empty mirror
+into an empty `schemas` store on boot, so a reload has a second net under it - the
+first version of the browser spec passed with the `pagehide` binding removed, i.e.
+it credited the flush with what the boot migration had done.
+
+### 24.2 Verified
+
+- **The behaviour (unit, `tests/unit/idb-autosave.test.ts`, 16 tests, happy-dom).**
+`@/lib/db` is mocked so the question is *when* the write is attempted: the mirror is
+written immediately and IndexedDB not; the write lands exactly at
+`IDB_AUTOSAVE_DELAY_MS` and not a millisecond before; a burst on one id is one write
+of the newest record; a steady stream of saves restarts the window and is still one
+write; distinct ids go out together; a save after a flush schedules a fresh window;
+flush-on-demand writes and disarms the timer (no second write); flush on `pagehide`;
+flush when the tab goes hidden and not when it comes back; an empty queue is a no-op;
+a queued write for a deleted id is dropped while the delete still reaches IndexedDB;
+the queue is dropped on a clear; and a schema re-saved after a delete still writes.
+- **The claim (same file, 3 source-scan tests).** `lib/storage.ts` no longer defines
+`debouncedSaveSchema`; it does name `IDB_AUTOSAVE_DELAY_MS`,
+`flushPendingSchemaWrites`, the `pagehide` binding and the hidden-tab branch; and the
+README names the window and the flush. That is the half of the finding that was
+about the *description*, and it is pinned so the two cannot drift apart again
+silently - the way they did in the first place.
+- **Mutation-proven.** Writing immediately instead of arming the timer - the pre-fix
+behaviour, verbatim - fails **8 of the 16** tests, including every window and
+coalescing assertion. Reverted, re-run green.
+- **The browser (`e2e/idb-autosave.spec.ts`, 2 tests, live preview).** The first
+finishes a session, asserts the row is absent from the real `schemas` store, then
+dispatches a real `pagehide` and asserts the row appears with **less than the
+window** elapsed since the save was stamped - measured on the page's own clock, so
+the timer cannot have been the writer. The second finishes a session moments before
+a reload and asserts both stores still hold it and the drawer still lists it.
+- **Mutation-proven in the browser too, which is how it was found.** With the
+`pagehide` binding removed the row appeared at **1013 ms** and the spec failed on
+`expected 1013 to be less than 1000` - that is the timer reported as the writer, and
+it is the assertion this spec exists for. The first draft of the same file passed
+under that mutation, because the boot migration had written the row after the
+reload; the spec was rewritten around the in-window measurement rather than the
+reload.
+- **Neighbours, since every save now goes through the queue.** The full unit suite is
+green (86 files, 1425 tests), `bunx tsc -b --noEmit` and `bunx eslint` are clean, and
+the save path's own browser specs still pass: `e2e/schema-library-tabs.spec.ts` (the
+cross-tab save/delete coherence of defect 28 - the closest neighbour),
+`e2e/share-history.spec.ts` (drawer, resume, analytics) and `e2e/stage-draft.spec.ts`
+(round 21's draft write, which never touches this queue).
+
+### 24.3 What the debounce deliberately does not change
+
+- **Nothing a reader sees.** The mirror is written first and synchronously, so
+`loadSavedSchemas`, the drawer, the resume paths and `mergeSchemaLists` are
+unchanged: the queue decides only when the *fuller* store catches up.
+- **Nothing about deletes.** A delete is still synchronous to the mirror and
+immediate to IndexedDB; the queue only learns to drop its own pending write for that
+id, which is what keeps the tombstone work of defect 28 intact.
+- **Nothing about the other writers.** Settings, study prefs, the usage ledger and
+round 21's stage draft keep their own synchronous writes; this queue is only the
+`schemas` store's IndexedDB hop.
+
+**Total: 38 distinct defects in 52 files** (38 is the first in `lib/storage/index.ts`,
+whose comment carried the same claim as the README; `lib/storage.ts` was already
+counted by defects 25, 28 and 36, and `README.md` by defect 28. The two test files
+added - `tests/unit/idb-autosave.test.ts` and `e2e/idb-autosave.spec.ts` - are counted
+as files, following defect 30's precedent.)
