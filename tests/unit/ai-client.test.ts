@@ -8,6 +8,7 @@ import {
   is503OrOverloadedError,
   unsupportedModelCount,
 } from '../../lib/ai-client';
+import { AI_TIMEOUT_MS, AiTimeoutError } from '../../lib/ai-hardening';
 
 /**
  * The Gemini SDK is mocked at its own boundary so the REAL model ladder inside
@@ -17,7 +18,7 @@ import {
  */
 const gemini = vi.hoisted(() => ({
   calls: [] as string[],
-  handler: null as null | ((args: { model: string }) => Promise<any>),
+  handler: null as null | ((args: { model: string; config?: any }) => Promise<any>),
 }));
 
 // PARTIAL mock: only `GoogleGenAI` is replaced. `Type` and everything else the
@@ -31,7 +32,7 @@ vi.mock('@google/genai', async (importOriginal) => {
     ...actual,
     GoogleGenAI: class {
       models = {
-        generateContent: (args: { model: string }) => {
+        generateContent: (args: { model: string; config?: any }) => {
           gemini.calls.push(args.model);
           if (!gemini.handler) return Promise.reject(new Error('no handler installed'));
           return gemini.handler(args);
@@ -322,5 +323,81 @@ describe('generateJSONWithProvider Gemini model availability memory', () => {
     // gemini-3.7-flash was marked dead for the session, so call directly starts on gemini-3.6-flash
     expect(second).toEqual({ ok: true });
     expect(gemini.calls).toEqual(['gemini-3.6-flash']);
+  });
+});
+
+/**
+ * Defect 40, at the call site where it costs the most: the Gemini ladder. A
+ * deadline that does not abort turns every rung into an overlapping copy of the
+ * one above it, so a slow model leaves several generations running — and billed —
+ * at the same time.
+ */
+describe('generateJSONWithProvider aborts a timed-out model call (defect 40)', () => {
+  const geminiSettings = { provider: 'gemini' as const, geminiApiKey: 'test-key' };
+
+  beforeEach(() => {
+    gemini.calls = [];
+    gemini.handler = null;
+    clearUnsupportedModels();
+    clearAICache();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('passes the deadline signal into the SDK and cancels each rung before the next starts', async () => {
+    vi.useFakeTimers();
+
+    const signals: AbortSignal[] = [];
+    const stopped: string[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    gemini.handler = ({ model, config }) => {
+      const signal = config.abortSignal as AbortSignal;
+      signals.push(signal);
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      // A model that keeps thinking past its deadline and only ends when aborted.
+      return new Promise((_resolve, reject) => {
+        const stop = () => {
+          inFlight -= 1;
+          stopped.push(model);
+          reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }));
+        };
+        if (signal.aborted) stop();
+        else signal.addEventListener('abort', stop, { once: true });
+      });
+    };
+
+    const pending = generateJSONWithProvider({
+      systemPrompt: 's',
+      userPrompt: 'u',
+      settings: geminiSettings,
+    });
+    const rejection = expect(pending).rejects.toBeInstanceOf(AiTimeoutError);
+
+    // One generation deadline per rung of the four-name ladder.
+    for (let rung = 0; rung < 4; rung += 1) {
+      await vi.advanceTimersByTimeAsync(AI_TIMEOUT_MS.generate);
+    }
+    await rejection;
+
+    expect(gemini.calls).toEqual([
+      'gemini-3.7-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-2.5-flash',
+    ]);
+    // The SDK really received a signal (not just a bare promise), and the
+    // deadline aborted every one of them rather than walking away.
+    expect(signals).toHaveLength(4);
+    expect(signals.every((signal) => signal && signal.aborted)).toBe(true);
+    // Each rung stopped, in ladder order, before the next one began.
+    expect(stopped).toEqual(gemini.calls);
+    // The defect in one number: the abandoned call used to keep running beside
+    // the replacement, so the ladder ran several copies at once.
+    expect(maxInFlight).toBe(1);
   });
 });

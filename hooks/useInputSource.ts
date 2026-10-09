@@ -24,18 +24,38 @@ export function useInputSource() {
     setStoredActiveTab(tab);
   }, []);
   const [rawNotes, setRawNotes] = useState('');
-  const [uploadedFile, setUploadedFile] = useState<UploadedFileAsset | null>(null);
+  const [uploadedFile, setStoredUploadedFile] = useState<UploadedFileAsset | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
 
   // Uploaded files survive reloads : the asset (name/type/size/base64) is
-  // mirrored into IndexedDB session state. Skipped until the hydration read
-  // completes so the initial null doesn't overwrite the stored upload.
+  // mirrored into IndexedDB session state.
+  //
+  // `uploadTouched` is the file-side twin of `sourceTouched`, and it is what
+  // defect 41 needed. The hydration read below is async, and the guard the old
+  // code used - "skip the write until the read completes" - covered only the
+  // mount-time `null`: a file the LEARNER picked while the read was in flight had
+  // its write dropped on the floor, and the read then ran `setUploadedFile`
+  // unconditionally and replaced the fresh pick with the previous session's
+  // upload. Both halves are fixed by recording the explicit action in a ref:
+  // the ref is written synchronously by the setter, so it is already true when a
+  // read that resolves a moment later checks it, and the persist effect below no
+  // longer refuses to save a value the learner chose.
+  const uploadTouched = useRef(false);
+  const setUploadedFile = useCallback((file: UploadedFileAsset | null) => {
+    uploadTouched.current = true;
+    setStoredUploadedFile(file);
+  }, []);
+
+  /** True once the hydration read has settled - whether or not it found a file. */
   const hydratedRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     getSessionStateIDB<UploadedFileAsset | null>('last_upload').then((stored) => {
-      if (!cancelled && stored && stored.base64Data) {
-        setUploadedFile(stored);
+      if (cancelled) return;
+      // The stored upload is restored only when the learner has not already
+      // answered the same question with a pick of their own.
+      if (!uploadTouched.current && stored && stored.base64Data) {
+        setStoredUploadedFile(stored);
       }
       hydratedRef.current = true;
     });
@@ -45,7 +65,11 @@ export function useInputSource() {
   }, []);
 
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    // The mount-time `null` is not a decision - writing it would delete the very
+    // upload the read above is about to restore. Every other change is: a file
+    // the learner picked (even one that beat the read) and a restored store both
+    // persist here, so a pick is never left unsaved.
+    if (!hydratedRef.current && !uploadTouched.current) return;
     if (uploadedFile) {
       void putSessionStateIDB('last_upload', uploadedFile);
     } else {
