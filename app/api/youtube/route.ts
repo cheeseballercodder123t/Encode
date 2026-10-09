@@ -1,7 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
-import { validateEncodedSchema } from "@/lib/ai-output-validation";
+import { validateYouTubeResult } from "@/lib/ai-output-validation";
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 import { extractYouTubeId, fetchYouTubeMeta, fetchYouTubeTranscript } from "@/lib/services/youtubeTranscript";
 import { parseRouteBody, youtubeSchema } from "@/lib/api-validation";
@@ -148,18 +148,23 @@ ${transcriptSnippet ? `VERIFIED VIDEO TRANSCRIPT:\n${transcriptSnippet}` : ''}`;
       useCache: true,
     });
 
-    const responsePayload = {
-      ...validateEncodedSchema(parsedResult, mode, transcriptSnippet || ''),
-      youtubeData: {
+    // The matching validator for this route (`lib/ai-output-validation.ts`),
+    // which is also what coerces the video metadata: `title` and `authorName`
+    // are rendered as React children and `videoUrl` is an anchor's href, so a
+    // wrong-typed model field has to be dropped at this boundary rather than
+    // forwarded. The id and URL travel in `context` because they are this
+    // route's own read of the URL, not the model's guess at it.
+    const responsePayload = validateYouTubeResult(parsedResult, {
+      mode,
+      source: transcriptSnippet || '',
+      context: {
         videoId,
         videoUrl: `https://www.youtube.com/watch?v=${videoId}`,
-        title: parsedResult.videoTitle || oEmbedTitle || 'YouTube Lecture',
-        authorName: parsedResult.authorName || oEmbedAuthor || 'YouTube Educator',
+        oEmbedTitle,
+        oEmbedAuthor,
         thumbnailUrl,
-        duration: parsedResult.durationEstimated || 'Video Lecture',
-        timestamps: Array.isArray(parsedResult.timestamps) ? parsedResult.timestamps : []
-      }
-    };
+      },
+    });
 
     return NextResponse.json(responsePayload);
   } catch (error: any) {

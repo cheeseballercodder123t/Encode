@@ -79,6 +79,9 @@ export function HistoryDrawer({
       topicSummary: s.topicSummary,
       activities: s.activities,
       userResponses: s.userResponses,
+      // The saved record's own XP — a schema that earned none must export as
+      // 0, not as the 150 the old fallback invented (defect 55).
+      xpEarned: s.xpEarned,
     }).markdown;
     // Awaited, and only sounded on a write that actually landed: the beep is a
     // confirmation, and a confirmation that plays over an unchanged clipboard

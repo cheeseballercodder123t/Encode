@@ -229,18 +229,33 @@ export function validateEvaluationResult(raw: unknown): NonNullable<StageRespons
     secured,
     feedback: asString(data.feedback, ''),
   };
-  if (data.depthAlert) result.depthAlert = asString(data.depthAlert);
-  if (data.errorAnalysis) result.errorAnalysis = asString(data.errorAnalysis, data.errorAnalysis);
-  if (data.jargonBuzzer) result.jargonBuzzer = asString(data.jargonBuzzer);
-  if (data.vivaCrossExamination) result.vivaCrossExamination = asString(data.vivaCrossExamination);
+  // Coerce FIRST, then decide: `if (data.depthAlert)` alone kept an empty string
+  // on the result whenever the model sent a truthy non-string (`42`), which is
+  // the opposite of this module's contract — an optional sentence is kept only
+  // when it really is a sentence.
+  const depthAlert = asString(data.depthAlert);
+  if (depthAlert) result.depthAlert = depthAlert;
+  // The fallback must be '' and not the raw value: this field is rendered as a
+  // React child (`StudioWorkbench`'s needs-work hint) and stored on the stage
+  // response, so a non-string answer from the model has to be dropped here
+  // rather than passed through the one function whose job is to prevent it.
+  const errorAnalysis = asString(data.errorAnalysis);
+  if (errorAnalysis) result.errorAnalysis = errorAnalysis;
+  const jargonBuzzer = asString(data.jargonBuzzer);
+  if (jargonBuzzer) result.jargonBuzzer = jargonBuzzer;
+  const vivaCrossExamination = asString(data.vivaCrossExamination);
+  if (vivaCrossExamination) result.vivaCrossExamination = vivaCrossExamination;
   // What landed + the one sentence that completes it. Falls back to
   // errorAnalysis for the gap so older checker prompts still render the panel.
-  if (data.nailedIt) result.nailedIt = asString(data.nailedIt);
+  const nailedIt = asString(data.nailedIt);
+  if (nailedIt) result.nailedIt = nailedIt;
   const missingLink = asString(data.missingLink) || asString(data.errorAnalysis);
   if (missingLink) result.missingLink = missingLink;
   // The pressure test: one question that pushes the mechanism to its edge.
-  if (data.counterProbe) result.counterProbe = asString(data.counterProbe);
-  if (data.sentenceFinisher) result.sentenceFinisher = asString(data.sentenceFinisher);
+  const counterProbe = asString(data.counterProbe);
+  if (counterProbe) result.counterProbe = counterProbe;
+  const sentenceFinisher = asString(data.sentenceFinisher);
+  if (sentenceFinisher) result.sentenceFinisher = sentenceFinisher;
   // Mr M post-mortem. Absent when the stage landed, when the mode was off, or
   // when the examiner had nothing structural to name — all three are the same
   // outcome for the UI, and the deterministic half of the autopsy is computed
@@ -409,22 +424,70 @@ export function validateDiscriminationResult(raw: unknown): DiscriminationCheck 
 
 // ─── YouTube validation ──────────────────────────────────────────────────────
 
-export function validateYouTubeResult(raw: unknown): {
+/** What the route already knows before the model answers: the URL and oEmbed. */
+export interface YouTubeResultContext {
+  /** The 11-character id the route parsed from the URL — not the model's read. */
+  videoId?: string;
+  videoUrl?: string;
+  /** oEmbed metadata, present whenever the video is public. */
+  oEmbedTitle?: string;
+  oEmbedAuthor?: string;
+  thumbnailUrl?: string;
+}
+
+/**
+ * The YouTube route's whole payload: the encoded schema plus the video it came
+ * from, with every metadata field coerced.
+ *
+ * The coercion is the point rather than a formality, because these fields are
+ * read directly by the UI: `title` and `authorName` are rendered as React
+ * children, `videoUrl` is an anchor's href, and the chapter rail walks
+ * `timestamps`. A model that answers `videoTitle` with an object would reach a
+ * React child and take the workbench down with it, so an unusable value is
+ * dropped to the route's own default instead of being forwarded.
+ *
+ * The id and URL come from the route's own parse (`context`) and only fall back
+ * to the model's copy, so a hallucinated id can never move the player off the
+ * video the learner pasted; the minimal payload is a WATCHABLE link rather than
+ * an empty `href`.
+ */
+export function validateYouTubeResult(
+  raw: unknown,
+  options: { mode?: EncodingMode; source?: string; context?: YouTubeResultContext } = {}
+): {
   topicSummary: string;
   activities: Activity[];
   youtubeData?: Record<string, any>;
   researchContexts: unknown[];
 } {
+  const { mode = 'conceptual', source = '', context = {} } = options;
   const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
-  const schema = validateEncodedSchema(raw, 'conceptual');
+  const schema = validateEncodedSchema(raw, mode, source);
+  // The route's own parse wins: the id decides which video the player embeds,
+  // so a model answer cannot move it off the URL the learner pasted.
+  const videoId = asString(context.videoId) || asString(data.videoId);
+  // Only the objects survive: a string or a number in the chapter list is not a
+  // chapter, and the rail reads `seconds` off each entry.
+  const timestamps = (Array.isArray(data.timestamps) ? data.timestamps : []).filter(
+    (entry: unknown): entry is Record<string, any> => Boolean(entry) && typeof entry === 'object'
+  );
+
   return {
     ...schema,
     topicSummary: asString(data.topicSummary || data.videoTitle, schema.topicSummary),
     youtubeData:
       data.youtubeData && typeof data.youtubeData === 'object'
         ? data.youtubeData
-        : data.videoId
-          ? { videoId: data.videoId, videoUrl: data.videoUrl || '', title: schema.topicSummary, timestamps: [] }
+        : videoId
+          ? {
+              videoId,
+              videoUrl: asString(context.videoUrl) || `https://www.youtube.com/watch?v=${videoId}`,
+              title: asString(data.videoTitle) || asString(context.oEmbedTitle) || 'YouTube Lecture',
+              authorName: asString(data.authorName) || asString(context.oEmbedAuthor) || 'YouTube Educator',
+              thumbnailUrl: asString(context.thumbnailUrl) || undefined,
+              duration: asString(data.durationEstimated) || 'Video Lecture',
+              timestamps,
+            }
           : undefined,
   };
 }

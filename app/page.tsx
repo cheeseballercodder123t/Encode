@@ -378,7 +378,12 @@ export default function DeepEncodeApp() {
             setEncodingMode(decoded.mode || 'conceptual');
             setActivities(decoded.activities || []);
             setUserResponses(decoded.userResponses || {});
-            setXp(decoded.xpEarned || 150);
+            // The link's own number, and 0 when it carries none. `|| 150` turned
+            // a schema that earned nothing into 150 XP on the receiver's
+            // masthead (defect 56) — while the sender's own share sheet read
+            // "0 XP Record" for that same schema, and `saveSchema` normalizes a
+            // missing `xpEarned` to 0 rather than to a bonus.
+            setXp(Number.isFinite(decoded.xpEarned) ? decoded.xpEarned : 0);
             setIsGuidedPathMode(Boolean(decoded.isGuidedPath));
             setGuidedModules(decoded.guidedModules || []);
             setYoutubeData(decoded.youtubeData || null);
@@ -1599,7 +1604,9 @@ export default function DeepEncodeApp() {
       // on every line, which turned each labelled descriptor into a reverse
       // card RemNote could only ask back as "given 'S4 swings outward', name
       // the label". RemNote export logic belongs in lib/remnote.ts.
-      content = generateRemnoteHierarchy({ topicSummary, activities, userResponses }).markdown;
+      // `xpEarned` travels: without it the export cannot know this session's
+      // XP, and the old fallback invented 150 for it (defect 55).
+      content = generateRemnoteHierarchy({ topicSummary, activities, userResponses, xpEarned: xp }).markdown;
     } else if (format === 'anki') {
       content = `# Anki Cloze Cards: ${topicSummary}\n\n`;
       activities.forEach((act, idx) => {

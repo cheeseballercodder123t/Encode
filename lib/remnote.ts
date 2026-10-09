@@ -1184,10 +1184,24 @@ export function generateRemnoteHierarchy(
     emit(ctx, stages, '');
   });
 
+  // The session's own XP, never an invented one.
+  //
+  // The fallback here used to be 150 — which is a real XP amount in this app
+  // (the Feynman checkpoint bonus) — so the line read "**Mastery XP** 150 XP"
+  // for a session that had earned nothing, and for every caller that does not
+  // carry the field at all: the workbench, the history drawer and the
+  // copy-to-clipboard path each pass only the topic, the activities and the
+  // responses (defect 55). Every other reader of `xpEarned` in this codebase
+  // falls back to 0 (`AnalyticsDashboard`, `StatelessShareModal`,
+  // `auth-context`, and `storage.ts`'s own normalization), which is the honest
+  // reading: an export does not know a number it was never given.
+  const masteryXp =
+    typeof schema.xpEarned === 'number' && Number.isFinite(schema.xpEarned) ? schema.xpEarned : 0;
+
   const assembled = assemblePayload(ctx, [prereqs, stages], [
     `**Learning Mode** ${schema.mode === 'memorization' ? 'Taxonomic Memorization' : 'First-Principles Conceptual'}`,
     `**Feynman Cloze Pipeline** ${preferFeynman ? 'Active (User Vocabulary Clozing)' : 'Standard Academic'}`,
-    `**Mastery XP** ${schema.xpEarned || 150} XP`,
+    `**Mastery XP** ${masteryXp} XP`,
     `**Encoded Date** ${new Date(schema.timestamp || Date.now()).toLocaleDateString()}`,
   ]);
   return {

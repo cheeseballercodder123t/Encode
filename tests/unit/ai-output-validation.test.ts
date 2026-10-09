@@ -136,6 +136,7 @@ describe('safeParseJson', () => {
     expect(safeParseJson('not json at all {')).toBeNull();
   });
 });
+
 describe('validateEncodedSchema', () => {
   it('returns safe defaults for a null payload', () => {
     const result = validateEncodedSchema(null, 'conceptual');
@@ -178,6 +179,20 @@ describe('validateEncodedSchema', () => {
         null,
       ],
     };
+    const result = validateEncodedSchema(raw, 'conceptual');
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].id).toBe('ok');
+    expect(result.activities[0].stageNumber).toBe(2);
+    expect((result.activities[0] as Activity).keywords).toEqual(['k']);
+  });
+
+  it('preserves researchContexts when present', () => {
+    const rc = [{ id: 'r1', detectedGap: 'g', conceptAdded: 'c', explanation: 'e' }];
+    const result = validateEncodedSchema({ activities: [], researchContexts: rc }, 'conceptual');
+    expect(result.researchContexts).toEqual(rc);
+  });
+});
+
 describe('validateEvaluationResult', () => {
   it('coerces a valid evaluation without inventing any number', () => {
     const out = validateEvaluationResult({
@@ -233,6 +248,17 @@ describe('validateEvaluationResult', () => {
     expect(out.depthAlert).toBe('watch jargon');
     expect(out.jargonBuzzer).toBeUndefined();
   });
+
+  it('never forwards a non-string errorAnalysis into the panel', () => {
+    // `errorAnalysis` is rendered as a React child by the workbench's needs-work
+    // hint and stored on the stage response, so the one field whose fallback
+    // used to be the raw value is pinned here: anything that is not a string is
+    // dropped rather than forwarded, and a string is still carried.
+    expect(validateEvaluationResult({ secured: false, errorAnalysis: { detail: 'nope' } }).errorAnalysis).toBeUndefined();
+    expect(validateEvaluationResult({ secured: false, errorAnalysis: 42 }).errorAnalysis).toBeUndefined();
+    expect(validateEvaluationResult({ secured: false, errorAnalysis: ['a'] }).errorAnalysis).toBeUndefined();
+    expect(validateEvaluationResult({ secured: true, errorAnalysis: 'Name the link.' }).errorAnalysis).toBe('Name the link.');
+  });
 });
 
 describe('validateBatchEvaluation', () => {
@@ -274,21 +300,49 @@ describe('validateYouTubeResult', () => {
     expect(out.activities).toHaveLength(1);
   });
 
-  it('builds minimal youtubeData from a bare videoId', () => {
+  it('builds a watchable link for the minimal payload', () => {
     const out = validateYouTubeResult({ videoId: 'vid1', activities: [] });
-    expect(out.youtubeData?.videoUrl).toContain('vid1');
-  });
-});
-    const result = validateEncodedSchema(raw, 'conceptual');
-    expect(result.activities).toHaveLength(1);
-    expect(result.activities[0].id).toBe('ok');
-    expect(result.activities[0].stageNumber).toBe(2);
-    expect((result.activities[0] as Activity).keywords).toEqual(['k']);
+    // `videoUrl` is the href `YouTubePlayerEmbed` renders, so an empty string is
+    // a link back to the page itself rather than the lecture.
+    expect(out.youtubeData?.videoUrl).toBe('https://www.youtube.com/watch?v=vid1');
   });
 
-  it('preserves researchContexts when present', () => {
-    const rc = [{ id: 'r1', detectedGap: 'g', conceptAdded: 'c', explanation: 'e' }];
-    const result = validateEncodedSchema({ activities: [], researchContexts: rc }, 'conceptual');
-    expect(result.researchContexts).toEqual(rc);
+  it('takes the video identity from the route, not from the model', () => {
+    const out = validateYouTubeResult(
+      { videoId: 'hallucinated', videoTitle: 'T', activities: [] },
+      { context: { videoId: 'vid1', videoUrl: 'https://www.youtube.com/watch?v=vid1' } }
+    );
+    expect(out.youtubeData?.videoId).toBe('vid1');
+    expect(out.youtubeData?.videoUrl).toBe('https://www.youtube.com/watch?v=vid1');
+  });
+
+  it('coerces every metadata field the UI renders', () => {
+    const out = validateYouTubeResult(
+      {
+        videoTitle: { nope: true },
+        authorName: 42,
+        durationEstimated: ['x'],
+        timestamps: [{ seconds: 12, label: 'intro' }, 'junk', null],
+        activities: [],
+      },
+      {
+        mode: 'conceptual',
+        source: 'the transcript',
+        context: {
+          videoId: 'vid1',
+          videoUrl: 'https://www.youtube.com/watch?v=vid1',
+          oEmbedTitle: 'Real title',
+          oEmbedAuthor: 'Dr X',
+          thumbnailUrl: 'thumb.jpg',
+        },
+      }
+    );
+    expect(out.youtubeData?.videoId).toBe('vid1');
+    expect(out.youtubeData?.title).toBe('Real title');
+    expect(out.youtubeData?.authorName).toBe('Dr X');
+    expect(out.youtubeData?.duration).toBe('Video Lecture');
+    expect(out.youtubeData?.thumbnailUrl).toBe('thumb.jpg');
+    // Only the chapter objects survive: the rail reads `seconds` off each one.
+    expect(out.youtubeData?.timestamps).toEqual([{ seconds: 12, label: 'intro' }]);
   });
 });

@@ -26,6 +26,26 @@ test.describe('Stateless URL sharing', () => {
     await expect(page.getByText('Classmate Shared Schema Loaded')).not.toBeVisible();
   });
 
+  test('a link from a session that earned nothing arrives at 0, not at 150 (defect 56)', async ({ page }) => {
+    // The sender's share sheet reads "0 XP Record" for this schema, and the app
+    // itself saves a freshly seeded YouTube schema with `xpEarned: 0`. The
+    // receiver used to open it on 150 XP, a number nobody earned.
+    const schema = makeSavedSchema({
+      id: 'schema_shared_zero',
+      topicSummary: 'Zero XP Share',
+      activities: [makeActivity({ id: 'zero-1' })],
+      xpEarned: 0,
+    });
+    const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(schema));
+
+    await page.goto(`/?share=${compressed}`);
+
+    await expect(page.getByText('Classmate Shared Schema Loaded')).toBeVisible();
+    // The masthead's progress rail is the number the learner reads as their XP.
+    await expect(page.getByText('0000')).toBeVisible();
+    await expect(page.getByText('0150')).toHaveCount(0);
+  });
+
   test('a corrupt share param is ignored gracefully', async ({ page }) => {
     await page.goto('/?share=NOT_A_VALID_SCHEMA_!!!');
     // App still boots into the normal launchpad

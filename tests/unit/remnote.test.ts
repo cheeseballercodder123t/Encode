@@ -395,6 +395,39 @@ describe('generateSegregationRemnote (RemNote flashcards)', () => {
     expect(example.reversible).toBe(false);
   });
 
+  it('reports the session\u2019s own XP and never invents 150 (defect 55)', () => {
+    // 150 is a real XP amount here (the Feynman checkpoint bonus), and the header
+    // line used to fall back to it — so a session that earned nothing, and every
+    // caller that does not pass the field at all (the workbench, the history
+    // drawer, copy-to-clipboard), exported as "**Mastery XP** 150 XP".
+    const activity = {
+      id: 'a1', stageNumber: 1, title: 'Stage 1', framework: 'F', cognitiveGoal: 'G',
+      contextSnippet: 'ctx', keywords: ['K'], templateType: 'first_principles',
+      prompt: 'P', scaffold: { field1Label: '', field1Placeholder: '', field2Label: '', field2Placeholder: '', exampleAnswer: '' },
+    };
+
+    const earnedNothing = generateRemnoteHierarchy({
+      topicSummary: 'T',
+      activities: [activity],
+      xpEarned: 0,
+    }).markdown;
+    expect(earnedNothing).toContain('**Mastery XP** 0 XP');
+    expect(earnedNothing).not.toContain('150 XP');
+
+    // A schema that carries no XP at all knows no number, so it claims none.
+    const noField = generateRemnoteHierarchy({ topicSummary: 'T', activities: [activity] }).markdown;
+    expect(noField).toContain('**Mastery XP** 0 XP');
+    expect(noField).not.toContain('150 XP');
+
+    // And a real figure still travels verbatim.
+    const earned = generateRemnoteHierarchy({
+      topicSummary: 'T',
+      activities: [activity],
+      xpEarned: 320,
+    }).markdown;
+    expect(earned).toContain('**Mastery XP** 320 XP');
+  });
+
   it('renders the schema path as cards too, with the quadrant prompts one-way', () => {
     const schemaPayload = generateRemnoteHierarchy({
       topicSummary: 'T',
