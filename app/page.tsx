@@ -45,6 +45,7 @@ import { ComparativeSynthesisModal } from '@/components/ComparativeSynthesisModa
 import { generateRemnoteHierarchy } from '@/lib/remnote';
 import { ZenLaunchpad } from '@/components/ZenLaunchpad';
 import { StudioIntro } from '@/components/StudioIntro';
+import { BrandSpark } from '@/components/BrandMark';
 import { TOY_EXAMPLES, activityForToyExample } from '@/lib/toy-models/examples';
 import { toySessionId } from '@/lib/toy-models/progress';
 import { buildSkillTree, conceptMatches } from '@/lib/course-tree';
@@ -1636,12 +1637,28 @@ export default function DeepEncodeApp() {
         <header className="studio-masthead animate-dawn">
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
             <div className="studio-brand">
-              <svg viewBox="0 0 40 44" fill="none" aria-hidden="true">
-                <path d="M20 2L37 12V32L20 42L3 32V12L20 2Z" stroke="currentColor" />
-                <path d="M20 10L30 16V28L20 34L10 28V16L20 10ZM20 10V22M10 16L20 22L30 16M20 22V34" stroke="currentColor" />
+              {/* The emblem, cut from the same brass as the wordmark's spark and
+                  the rail's seal (`components/BrandMark.tsx`): the four stops
+                  are the hero crystal's, lit from the top left like every other
+                  gilded surface here. `currentColor` in the stylesheet is the
+                  fallback for a visitor whose engine drops the gradient. */}
+              <svg className="studio-brand-emblem" viewBox="0 0 40 44" fill="none" aria-hidden="true">
+                <defs>
+                  <linearGradient id="brand-emblem-brass" x1="6" y1="2" x2="34" y2="42" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stopColor="#F5E3BE" />
+                    <stop offset="0.34" stopColor="#E3C285" />
+                    <stop offset="0.62" stopColor="#D2A455" />
+                    <stop offset="1" stopColor="#8F6B28" />
+                  </linearGradient>
+                </defs>
+                {/* A little gilt pooled inside the hexagon, so the emblem is a
+                    solid object on the dark ground rather than a wireframe. */}
+                <path d="M20 2L37 12V32L20 42L3 32V12L20 2Z" fill="#D2A455" fillOpacity="0.055" />
+                <path d="M20 2L37 12V32L20 42L3 32V12L20 2Z" stroke="url(#brand-emblem-brass)" strokeWidth="1.1" />
+                <path d="M20 10L30 16V28L20 34L10 28V16L20 10ZM20 10V22M10 16L20 22L30 16M20 22V34" stroke="url(#brand-emblem-brass)" strokeOpacity="0.8" />
               </svg>
               <div>
-                <h1>DeepEncode<span className="studio-brand-mark" aria-hidden="true" /></h1>
+                <h1>DeepEncode<BrandSpark className="studio-brand-mark" /></h1>
                 <p>COGNITIVE SCIENCE / HUMAN UNDERSTANDING</p>
               </div>
             </div>

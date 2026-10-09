@@ -419,6 +419,15 @@ test('reduced-motion preference stops decorative motion', async ({ page }) => {
   });
   expect(leaf.animationName).toBe('none');
   expect(leaf.angle).toBeGreaterThan(0);
+
+  // The rail seal's dial is caught by the same base rule rather than being
+  // exempted from it: at a 0.001ms duration it lands a full turn later, which
+  // is where it started, so a visitor who asked for stillness gets an engraved
+  // plate instead of one creeping round under the note.
+  const dial = await page.locator('.brand-scale').evaluate((node) =>
+    parseFloat(getComputedStyle(node).animationDuration),
+  );
+  expect(dial).toBeLessThan(0.001);
 });
 
 for (const width of [1440, 390]) {
@@ -459,25 +468,33 @@ for (const width of [1440, 390]) {
 }
 
 /**
- * The two brand accents are drawn marks, not a font glyph.
+ * The two brand accents are drawn metal, not a font glyph.
  *
  * Both used to be `✳` — the superscript after "DeepEncode" in the masthead and
  * a 36px mark above the launchpad rail's tagline. IBM Plex Mono does not carry
  * that character, so each one rendered through whatever fallback the browser
  * picked: a `vertical-align: top` glyph floating beside the wordmark, and a
- * heavy asterisk over a serif line in the rail. They are now the same rotated
- * square the rail already uses as its bullet, so the mark is identical at 5px
- * and at 14px and cannot drift with a font.
+ * heavy asterisk over a serif line in the rail. They are now one piece of drawn
+ * brass (`components/BrandMark.tsx`) — the wordmark's spark, and that same spark
+ * struck at 56% inside the rail's engraved seal — so the mark is decided here
+ * rather than by whichever font the visitor's machine falls back to.
  *
  * Pinned here because a decorative mark is exactly the kind of thing that comes
  * back quietly. The first assertion fails if the glyph reappears anywhere in the
- * page — text or markup — at either width; the rest proves each accent is a real
- * box in the brand's own gilt rather than a character, and that the rail's
- * absence on a phone is the existing responsive rule (`max-width: 640px`) rather
- * than a broken element.
+ * page — text or markup — at either width. The rest pins the two properties
+ * that were actually wrong before: the fill is a brass *gradient* rather than a
+ * flat tint (the facet and the melt from leaf to ochre are the difference
+ * between gilt and a shape painted gold), and the spark is solid through its
+ * centre. A mark rebuilt as four tapered rays converging on the middle — which
+ * is what the previous version was, and what reads as a scatter of thin spikes
+ * at 16px — passes every other assertion here, so the ray count is asserted as
+ * the single star path it replaced.
+ *
+ * The rail's absence on a phone stays the existing responsive rule
+ * (`max-width: 640px`) rather than a broken element.
  */
 for (const width of [1440, 390]) {
-  test(`the brand accents are drawn marks at ${width}px`, async ({ page }) => {
+  test(`the brand accents are cut brass at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await mockAiApis(page);
     await page.goto('/');
@@ -490,23 +507,36 @@ for (const width of [1440, 390]) {
     expect(asterisks).toEqual([]);
 
     const brand = await page.locator('.studio-brand-mark').evaluate((node) => {
-      const style = getComputedStyle(node);
+      const svg = node as unknown as SVGSVGElement;
       const box = node.getBoundingClientRect();
+      const spark = svg.querySelector('path')!;
       return {
+        tag: svg.tagName.toLowerCase(),
         text: (node.textContent || '').trim(),
-        background: style.backgroundColor,
-        transform: style.transform,
+        viewBox: svg.getAttribute('viewBox'),
+        shapes: svg.querySelectorAll('path').length,
+        gradient: svg.querySelector('linearGradient')?.getAttribute('id') ?? '',
+        fill: getComputedStyle(spark).fill,
+        filter: getComputedStyle(node).filter,
+        color: getComputedStyle(node).color,
         width: box.width,
         height: box.height,
         wordmarkHeight: node.parentElement!.getBoundingClientRect().height,
       };
     });
-    // Empty element: the mark is the box, so it cannot be a glyph that fell back.
+    // An SVG drawing its own shapes: no text, so it cannot be a glyph that fell
+    // back. Three paths are the whole spark — the star, its hairline rim and the
+    // lit core — and one of them is the star, not four rays meeting at a point.
+    expect(brand.tag).toBe('svg');
     expect(brand.text).toBe('');
-    expect(brand.background).toBe('rgb(210, 164, 85)');
-    expect(brand.transform).toContain('matrix');
-    expect(brand.width).toBeGreaterThan(3);
-    expect(brand.height).toBeGreaterThan(3);
+    expect(brand.viewBox).toBe('0 0 48 48');
+    expect(brand.shapes).toBe(3);
+    expect(brand.gradient).toBe('brand-gilt-spark');
+    expect(brand.fill).toMatch(/url\(.*brand-gilt-spark.*\)/);
+    expect(brand.filter).toContain('drop-shadow');
+    expect(brand.color).toBe('rgb(227, 194, 133)');
+    expect(brand.width).toBeGreaterThan(10);
+    expect(brand.height).toBeGreaterThan(10);
     // It rides the wordmark's line box instead of stretching it.
     expect(brand.wordmarkHeight).toBeLessThan(40);
 
@@ -514,19 +544,50 @@ for (const width of [1440, 390]) {
     if (width > 640) {
       await expect(railNote).toBeVisible();
       const rail = await page.locator('.studio-rail-symbol').evaluate((node) => {
-        const style = getComputedStyle(node);
+        const svg = node as unknown as SVGSVGElement;
         const box = node.getBoundingClientRect();
+        const seal = node.closest('.studio-rail-medallion')!;
+        const leaf = getComputedStyle(seal, '::after');
         return {
+          tag: svg.tagName.toLowerCase(),
           text: (node.textContent || '').trim(),
-          border: style.borderTopColor,
+          viewBox: svg.getAttribute('viewBox'),
+          // Eight teeth + the spark's star and rim + its core.
+          paths: svg.querySelectorAll('path').length,
+          // The pool of light, the rim, the creeping scale, the inner hairline.
+          circles: svg.querySelectorAll('circle').length,
+          scaleDash: svg.querySelector('.brand-scale circle')?.getAttribute('stroke-dasharray') ?? '',
+          scaleTurn: getComputedStyle(svg.querySelector('.brand-scale')!).animationName,
+          coreGlint: getComputedStyle(svg.querySelector('.brand-core-glint')!).animationName,
+          sealRadius: getComputedStyle(seal).borderRadius,
+          leafBackground: leaf.backgroundImage,
+          leafMask: leaf.maskComposite || leaf.webkitMaskComposite,
+          leafAnimation: leaf.animationName,
+          color: getComputedStyle(node).color,
           width: box.width,
           height: box.height,
         };
       });
+      // The same spark struck inside an engraved plate: rim, dashed minute
+      // scale, eighth-tooth edge, and the star itself at 56%.
+      expect(rail.tag).toBe('svg');
       expect(rail.text).toBe('');
-      expect(rail.border).toBe('rgb(210, 164, 85)');
-      expect(rail.width).toBeGreaterThan(3);
-      expect(rail.height).toBeGreaterThan(3);
+      expect(rail.viewBox).toBe('0 0 48 48');
+      expect(rail.paths).toBe(11);
+      expect(rail.circles).toBe(4);
+      expect(rail.scaleDash).not.toBe('');
+      // The dial actually turns and the core actually glints — the two pieces of
+      // motion that make the seal an instrument rather than a badge.
+      expect(rail.scaleTurn).toBe('brand-scale-turn');
+      expect(rail.coreGlint).toBe('brand-glint');
+      // It is a circle, which is what lets the page's gold leaf rim it.
+      expect(rail.sealRadius).toBe('50%');
+      expect(rail.leafBackground).toContain('conic-gradient');
+      expect(rail.leafMask).toContain('exclude');
+      expect(rail.leafAnimation).toBe('leaf-turn');
+      expect(rail.color).toBe('rgb(210, 164, 85)');
+      expect(rail.width).toBeGreaterThan(40);
+      expect(rail.height).toBe(rail.width);
     } else {
       // The rail's note is hidden under 640px by the layout's own rule, so the
       // mark must not be what is keeping it on screen.
