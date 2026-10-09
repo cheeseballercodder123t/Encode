@@ -376,6 +376,55 @@ describe('verifyLedger — plausibility, the rules that need no domain model', (
     expect(failure?.detail).toContain('-5');
   });
 
+  it('does not mistake a velocity for a negative mass (defect 53)', () => {
+    // Up-positive with a ball thrown DOWNWARD: v0 is negative and the ledger is
+    // correct. The rule used to match every symbol beginning with `v`, so this
+    // exact ledger reached the learner as "A mass or a volume is a positive
+    // quantity ... declared as zero or negative: v0 = -5 m/s".
+    const thrown = verifyLedger(
+      [
+        { symbol: 'v0', value: -5, unit: 'm/s' },
+        { symbol: 'a', value: -9.81, unit: 'm/s^2' },
+        { symbol: 't', value: 2, unit: 's' },
+        { symbol: 'v', value: -24.62, unit: 'm/s' },
+      ],
+      [{ lhs: 'v', rhs: 'v0 + a * t', note: 'velocity after 2 seconds' }]
+    );
+
+    expect(thrown.failures).toEqual([]);
+    expect(thrown.verified).toBe(true);
+
+    // The same letter elsewhere is signed too: an initial RATE, and a voltage
+    // that only looks like a volume (`V1 = -12 V` is a battery).
+    const signed = verifyLedger(
+      [
+        { symbol: 'v_max', value: 3.5, unit: 'umol/min' },
+        { symbol: 'V1', value: -12, unit: 'V' },
+        { symbol: 'E', value: -12, unit: 'V' },
+      ],
+      [{ lhs: 'E', rhs: 'V1', note: 'a cell potential' }]
+    );
+    expect(signed.failures).toEqual([]);
+  });
+
+  it('still refuses the mass and volume families it names', () => {
+    // Under-reaching is deliberate, but not this far: a mass or a volume
+    // written as a word, or as `m` with a suffix or a digit, is still refused.
+    for (const symbol of ['m', 'm1', 'm_water', 'mass_g', 'vol', 'vol_gas', 'volume']) {
+      const verification = verifyLedger(
+        [
+          { symbol, value: -2, unit: '' },
+          { symbol: 'prod', value: -2, unit: '' },
+        ],
+        [{ lhs: 'prod', rhs: '-2' }]
+      );
+      expect(
+        verification.failures.some((check) => check.id === 'POSITIVE_EXTENSIVE'),
+        symbol
+      ).toBe(true);
+    }
+  });
+
   it('refuses water at or past its boiling point with no latent-heat term', () => {
     const withoutLatent = verifyLedger(
       [

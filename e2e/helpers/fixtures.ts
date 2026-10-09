@@ -1258,8 +1258,9 @@ export const CRUCIBLE_RESPONSE = {
   // the three served problems arrived with every declared relation closed, one
   // problem did not survive the check at all (so the sprint is one problem
   // shorter than the proctor wrote), and the escalation is the re-aimed one a
-  // single-chapter material earns. The client received all of this and rendered
-  // none of it until the summary grew a receipt for it.
+  // domain-matched material earns when none of the collision's chapters could be
+  // identified in it. The client received all of this and rendered none of it
+  // until the summary grew a receipt for it.
   ledger: { verifiedProblems: 2, checkedProblems: 3 },
   rejectedProblems: [
     'Unequal titration: RELATION_2 does not close: n_base = 0.011 against n_base = 0.0128 (14.1% apart)',
@@ -1267,7 +1268,7 @@ export const CRUCIBLE_RESPONSE = {
   escalation: {
     mode: 'depth',
     reason:
-      'Only one Thermochemistry chapter is in this material, so the sprint goes DEEPER inside that chapter instead of colliding it with two chapters you have not met.',
+      'This material matches Thermochemistry, but none of the chapters the collision needs could be identified in it, so the sprint goes DEEPER inside the chapter the material actually carries instead of colliding it with two chapters you have not met.',
   },
 };
 

@@ -286,9 +286,16 @@ export function fusionReadiness(
     present,
     absent,
     ready,
+    // Three readings, not two. A row can match on its DOMAIN alone ("Thermochemistry"
+    // is enough to find the collision, and carries none of its chapters), and the
+    // one-chapter sentence would then tell the learner a chapter is in the material
+    // that the read never found — while `soloDepthBrief` deepens it. The zero case
+    // says what it measured instead of naming a chapter by default.
     reason: ready
       ? `${present.length} of ${row.topics.length} ${row.domain} chapters are in this material, so the sprint can collide them: ${present.join(' + ')}.`
-      : `Only one ${row.domain} chapter is in this material (${present[0] || row.topics[0]}), so the sprint goes DEEPER inside that chapter instead of colliding it with ${absent.join(' + ')} — a collision with a chapter you have not met is not an escalation, it is a problem you cannot finish.`,
+      : present.length === 1
+        ? `Only one ${row.domain} chapter is in this material (${present[0]}), so the sprint goes DEEPER inside that chapter instead of colliding it with ${absent.join(' + ')} — a collision with a chapter you have not met is not an escalation, it is a problem you cannot finish.`
+        : `This material matches ${row.domain}, but none of the chapters the collision needs could be identified in it, so the sprint goes DEEPER inside the chapter the material actually carries instead of colliding it with ${absent.join(' + ')} — a collision with a chapter you have not met is not an escalation, it is a problem you cannot finish.`,
   };
 }
 
@@ -303,11 +310,18 @@ export function fusionReadiness(
  * in the learner's own copy, that no collision was faked.
  */
 export function soloDepthBrief(readiness: FusionReadiness): string {
-  const topic = readiness.present[0] || readiness.row?.topics[0] || 'the topic';
+  // With no chapter identified, the subject is the row's DOMAIN: naming one of
+  // its topics would point the deepening at a chapter the material may not carry
+  // at all — the same mistake the readiness line above deliberately avoids.
+  const topic = readiness.present[0] || readiness.row?.domain || 'the topic';
   const missing = readiness.absent.length > 0 ? readiness.absent.join(' + ') : 'a second chapter';
+  const carried =
+    readiness.present.length === 1
+      ? 'this material carries one chapter'
+      : "none of the collision's chapters could be identified in the material";
   return `BOSS-LEVEL DEPTH — ${topic.toUpperCase()}, ONE CHAPTER.
 
-The learner has solved consecutive problems without scaffolding, so the load has to rise. It cannot rise by COLLISION here: this material carries one chapter, and ${missing} is not in it. Do NOT invent a second chapter, do NOT import vocabulary the learner has not met, and do NOT staple a distractor onto the statement.
+The learner has solved consecutive problems without scaffolding, so the load has to rise. It cannot rise by COLLISION here: ${carried}, and ${missing} is not in it. Do NOT invent a second chapter, do NOT import vocabulary the learner has not met, and do NOT staple a distractor onto the statement.
 
 RAISE THE LOAD INSIDE ${topic.toUpperCase()} instead, by mutating its boundary conditions:
   · Break any 1:1 or unit-value assumption the easy version relies on — unequal ratios, a non-unit density, an imperfect yield, a non-standard temperature or pressure.

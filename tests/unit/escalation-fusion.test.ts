@@ -151,6 +151,29 @@ describe('fusionReadiness — a collision needs two chapters, present', () => {
     expect(readiness.present).toContain(thermo.topics[2]);
   });
 
+  it('says what it measured when the material names the domain but no chapter of it', () => {
+    // "Thermochemistry" is enough to find the collision and carries none of its
+    // chapters. The read must not report a chapter it never found (the old line
+    // said "Only one <domain> chapter is in this material (Calorimetry ...)"),
+    // and the brief must not deepen a chapter the material never named.
+    const readiness = fusionReadiness('Thermochemistry', '');
+
+    expect(readiness.row?.id).toBe('thermo-collision');
+    expect(readiness.present).toEqual([]);
+    expect(readiness.matchedTopics).toBe(0);
+    expect(readiness.ready).toBe(false);
+    expect(readiness.reason).not.toContain('Only one');
+    expect(readiness.reason).toContain('none of the chapters');
+    expect(readiness.reason).toContain('DEEPER');
+
+    const brief = soloDepthBrief(readiness);
+    // The subject is the domain, since no chapter was identified — and the brief
+    // does not claim the material carries one chapter it never found.
+    expect(brief.split('\n')[0]).toBe('BOSS-LEVEL DEPTH — THERMOCHEMISTRY, ONE CHAPTER.');
+    expect(brief).not.toContain('this material carries one chapter');
+    expect(brief).toContain('Do NOT invent a second chapter');
+  });
+
   it('reports no collision at all when no row matches, rather than inventing one', () => {
     const readiness = fusionReadiness('The French Revolution', 'the Estates General');
 

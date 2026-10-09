@@ -445,7 +445,23 @@ function findQuantity(quantities: LedgerQuantity[], pattern: RegExp): LedgerQuan
   return quantities.find((quantity) => pattern.test(quantity.symbol));
 }
 
-const MASS_OR_VOLUME = /^(?:m|mass|vol|volume|v)_?/i;
+/**
+ * Mass and volume symbols, by NAME.
+ *
+ * This pattern used to be `/^(?:m|mass|vol|volume|v)_?/i`, and the bare `v`
+ * alternative made it swallow every symbol beginning with that letter: a
+ * correct kinematics ledger written up-positive (`v0 = -5 m/s` for a ball
+ * thrown downward) was refused with "A mass or a volume is a positive quantity
+ * ... declared as zero or negative: v0 = -5 m/s" (defect 53). A velocity is
+ * signed by construction and `V1 = -12 V` is a battery, not a volume, so the
+ * rule now refuses only what it can actually name: the mass family (`m`,
+ * `m_water`, `m1`, `mass_g`) and the volume family (`vol`, `volume`, `vol_gas`).
+ *
+ * Under-reaching is the cheaper mistake here: a missed rule leaves the closure
+ * check to do its work, while a false refusal costs the learner the whole
+ * problem and tells them their physics is wrong when it is not.
+ */
+const MASS_OR_VOLUME = /^(?:m(?:ass)?|vol(?:ume)?)(?:_|\d|$)/i;
 const TEMPERATURE = /(?:^|_)(?:t|temp|temperature)(?:_|$)/i;
 const LATENT = /(?:^|_)(?:l_?v|l_?f|latent|delta_?h_?(?:vap|fus)|enthalpy_?(?:vap|fus))/i;
 const WATER = /water|h2o|solut|solution|mixture/i;

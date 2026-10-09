@@ -2497,3 +2497,287 @@ it guards — `archetype`, `autopsy`, `blurt`, `checkpoint`, `crisis`, `crucible
 `regenerate-stage`, `remnote`, `roast`, `segregate`, `sequence`, `synthesis`, `triage` — all already named
 by the finding; the coverage is new to this report in `tests/unit/api-route-validation.test.ts`, in the
 schema cases added to `tests/unit/api-validation.test.ts`, and in `e2e/api-validation.spec.ts`.)
+
+## 34. Round 32 - defects 47-52, the suite that never ran and the boundary it was not guarding
+
+This round is the first since §26 to look for defects rather than to fix a filed one, and it
+found the worst of them by a route no earlier round had taken: an audit of the *tests*
+themselves. Six defects, four of them in the same twenty lines of
+`lib/ai-output-validation.ts`, and two more that only became visible once the first one was
+fixed.
+
+### 34.1 How the sweep ran, and what each mechanical pass returned
+
+- **Modules this report has never named**, the §26 list refreshed: 35 files under `lib/`,
+  `hooks/` and `app/api/` are still unmentioned. Read closely:  `lib/stem-text.ts`,
+  `lib/priming.ts`, `lib/pathway.ts`, `lib/toy-models/progress.ts`,
+  `lib/cognitive-telemetry.ts`, `lib/templates/registry.ts`, `lib/causal-frame.ts`,
+  `lib/encode-stream.ts`, `lib/inquisitor/parse.ts`, `lib/mr-m/diagnostics.ts`,
+  `lib/services/transcript.ts`, `lib/services/slide-deck-parser.ts`,
+  `lib/services/contradiction.ts`, `lib/services/segregation.ts`,
+  `lib/services/templateSelector.ts`, `lib/services/adaptiveDifficulty.ts`, `lib/teach-lessons.ts`,
+  `hooks/useModalA11y.ts`, `hooks/useGenerationProgress.ts`.
+- **The orphan-export pass, run properly this time.** Two of this round's own tools were wrong
+  before they were right, and both mistakes are worth recording because they produced
+  the same false answer twice: (a) a `/g` regex reused with `.test()` is stateful across
+  calls and silently skips matches, and (b) `[^'"\n]*?` cannot span the multi-line `import`
+  statements this repo writes everywhere, so a line-based import scan misses most importers.
+  The written answer came from resolving every specifier to a file: **two modules** have no
+  package importer at all - `hooks/use-mobile.ts` (`useIsMobile`, already recorded as dead
+  code in §26) and `lib/presets.ts` - and `lib/storage/index.ts` is the nine-line re-export
+  §22.5 already describes. Nothing else is unreachable.
+- **The export-shaped dead code** (`registerTemplate`, `getTemplatesByCategory`,
+  `transcribeYouTubeAudio`'s unused `maxSeconds`, `lib/url-share.ts`'s superseded
+  `generateStatelessShareUrl`/`slimSchemaForShare` pair) is bucket (b) of §26.1: nothing
+  describes them as live, so they are not filed.
+- **The pass that paid.** Every test file was checked for suites written at top-level
+  indentation but *inside* another block, which vitest collects as nothing and runs as
+  nothing. `tests/unit/ai-output-validation.test.ts` had three of them.
+
+### 34.2 Findings
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 47 | **P2 - medium-high. FIXED** | **Ten tests in `tests/unit/ai-output-validation.test.ts` have never executed.** `describe('validateEvaluationResult')`, `describe('validateBatchEvaluation')` and `describe('validateYouTubeResult')` - ten `it`s - were written *inside* the callback body of `it('preserves well-formed activities and drops unusable ones')`, after its `const raw = {...}` and before its assertions. Vitest registers suites during collection, so suites created while a test body is running are attached to a collection that is already closed: the file *declares* 32 `it(` blocks and the runner *reports* 22. The whole evaluation contract - the legacy-grade bridge, the optional-field discipline, the null-payload fallback - and the YouTube validator were covered by nothing, while the suite count in every previous round's verification (92 files / 1,578 tests) looked healthy. | the three suites: `tests/unit/ai-output-validation.test.ts:181`, `:238`, `:264`; the `it` they are nested in opens at `:172` and its own assertions resume at `:283` | Countable and reproducible: `grep -c "^\s*it(" tests/unit/ai-output-validation.test.ts` is **32**, `vitest run … --reporter=verbose` lists **22** ✓ names, and the ten missing names appear nowhere in the output. Fixed by moving the three suites to the file's top level: the same command now lists **35** (the 10 unblocked suites plus this round's 3 new pins), and the audit's own scanner (below) no longer flags the file. |
+| 48 | **P3 - low/medium. FIXED** | The evaluation validator could forward a non-string. `result.errorAnalysis = asString(data.errorAnalysis, data.errorAnalysis)` passes the **raw value as its own fallback**, so `asString`'s guarantee is void for that field: `{"errorAnalysis": {"detail": "…"}}` from the model comes out of the validator as an object, is stored on the stage response and set into `stageErrorAnalysis`, and is then rendered as a React child (`{stageErrorAnalysis}` in the needs-work hint). React throws on an object child, so the one module whose stated job is "a malformed model payload degrades gracefully to a safe shape instead of crashing the client" is the module that hands the crash over. The sibling line below it (`missingLink`) coerces correctly, which is why the class of mistake was not obvious from the surrounding code. | `lib/ai-output-validation.ts` (`if (data.errorAnalysis) result.errorAnalysis = asString(data.errorAnalysis, data.errorAnalysis)`, now the coerced `const` form) | Read from the code and grep-countable: the `asString(x, x)` shape occurs **once** in the repository, and the render site is a JSX child in `components/workbench/StudioWorkbench.tsx:1863` (`Checker noted: <em>{stageErrorAnalysis}</em>`). Pinned by a new case that feeds an object, a number and an array and asserts all three are dropped while a string survives. |
+| 49 | **P3 - low/medium. FIXED. Found only because 47 was fixed** | Six optional evaluation fields were kept as **empty strings** when the model sent a truthy non-string: `if (data.depthAlert) result.depthAlert = asString(data.depthAlert)` (and `jargonBuzzer`, `vivaCrossExamination`, `nailedIt`, `counterProbe`, `sentenceFinisher`). The guard tests the raw value while the assignment stores the coerced one, so `jargonBuzzer: 42` produced `jargonBuzzer: ''` - a field the UI is meant to treat as absent, present as an empty string. The file's own test names the contract ("keeps optional fields only when strings") and **failed the moment it ran**, which is the cleanest possible demonstration of what defect 47 was hiding. | `lib/ai-output-validation.ts`, the six `if (data.X)` guards in `validateEvaluationResult` | The unblocked test failed on the first run with `expected '' to be undefined`; after coercing first (`const x = asString(data.x); if (x) result.x = x;`) the file is green. Behaviour is otherwise unchanged: a real sentence is still carried verbatim. |
+| 50 | **P3 - low. FIXED** | The YouTube validator's minimal payload was a **dead link with the model's id in it**: `videoUrl: data.videoUrl || ''` produces `''`, and `videoUrl` is an anchor's href (`components/YouTubePlayerEmbed.tsx:82`) - an empty href navigates to the current page. Its own (never-run) test expected the id to appear in that URL, i.e. the fallback was always meant to be the canonical watch link; the same line read `videoId` from the **model** rather than from the route's parse, so a hallucinated id could move the player off the video the learner pasted. | `lib/ai-output-validation.ts`, `validateYouTubeResult` | Read from the code: the route already builds `https://www.youtube.com/watch?v=${videoId}` from its own parse, and the test asserted the opposite of what the function did. Fixed to `asString(context.videoId) || asString(data.videoId)` and the canonical URL; pinned by three cases (watchable link, route-wins-over-model, and the field coercion below). |
+| 51 | **P3 - low/medium. FIXED** | **The validator written for `/api/youtube` had no caller, and the route it belongs to trusts the model's types.** The module header states that "every API route should run its response through the matching validator here"; `validateYouTubeResult` exists, is exported and is unit-tested, and `app/api/youtube/route.ts` imported only `validateEncodedSchema` and built `youtubeData` by hand - `title: parsedResult.videoTitle || oEmbedTitle || 'YouTube Lecture'`, `authorName`, `duration`, `timestamps` straight through. Every one of those is read by the UI: `title` is a React child (`StudioWorkbench.tsx:941`), `videoUrl` is an href, and the chapter rail walks `timestamps`. Same failure as 48 on a second surface, reached by the same kind of model answer. | the unused validator: `lib/ai-output-validation.ts`; the hand-built payload: `app/api/youtube/route.ts` | Read from the code, and countable: `grep -rn validateYouTubeResult` returned the definition and its own test and nothing else. Fixed by extending the validator to take the route's own read (`context: { videoId, videoUrl, oEmbedTitle, oEmbedAuthor, thumbnailUrl }`) plus `mode`/`source`, and calling it from the route - so the fixture oEmbed metadata, the memorization default and the transcript-as-evidence pass all still arrive, and every field is coerced once, at the boundary. |
+| 52 | **P3 - low/medium. FIXED** | The re-aimed escalation **told the learner about a chapter it had not found.** `fusionReadiness` matches a row on the row's *keywords*, which the domain name alone satisfies ("Thermochemistry" hits `thermochem`), and its not-ready sentence was written for the one-chapter case only: with **zero** of the row's topics present it still read "Only one Thermochemistry chapter is in this material (Calorimetry (q = mcΔT)), so the sprint goes DEEPER inside that chapter…", and `soloDepthBrief` then named that same never-found topic as the chapter to deepen (`readiness.present[0] || readiness.row?.topics[0]`). This is the learner-facing line (`fusionReadiness().reason`, shown in the boss banner) and the client-side half of the prompt the route sends. | the `reason` and `soloDepthBrief`'s `topic`: `lib/escalation/fusion.ts` | Read from the code and reachable from the UI the moment the domain name is typed: `fusionReadiness('Thermochemistry', '')` has `present: []` and `matchedTopics: 0`, and the three-readings fix gives it its own sentence. The e2e spec that drives exactly this input had **pinned the false claim's shape** - its comment said "this material carries one of that row's chapters" - so the spec's comment, its assertions and the mocked route fixture were corrected with the code. |
+
+### 34.3 Fixed, in four files and two specs
+
+- `lib/ai-output-validation.ts` - the `errorAnalysis` fallback, the six optional-field guards,
+  and `validateYouTubeResult` (context, mode/source, canonical URL, coerced metadata,
+  object-only timestamps).
+- `app/api/youtube/route.ts` - calls `validateYouTubeResult` instead of hand-building the
+  payload; `validateEncodedSchema` is no longer imported there.
+- `lib/escalation/fusion.ts` - three readings in `fusionReadiness.reason` (collision /
+  one chapter / no chapter found) and `soloDepthBrief`'s subject (the row's **domain** when
+  no chapter was identified, never a topic it did not find).
+- `tests/unit/ai-output-validation.test.ts` - structure repaired (three suites at top level)
+  plus four new cases; `tests/unit/escalation-fusion.test.ts` - the zero-chapter case;
+  `e2e/cockpit-escalation.spec.ts` - the boss-banner test now asserts the honest copy
+  (`'none of the chapters'`, and **not** `'Only one'`) and its premise comment matches what
+  the read actually measures; `e2e/helpers/fixtures.ts` - the mocked crucible escalation
+  sentence no longer carries the claim the code stopped making.
+
+### 34.4 Verified
+
+- **The unblocked suite is the proof of 47 and 49.** `tests/unit/ai-output-validation.test.ts`
+  reports **35 tests** where it reported 22 before; the ten recovered tests run, and two of
+  them failed on first execution - one for defect 49, one for defect 50's URL - which is what
+  a hidden suite is worth.
+- `bun run test` - **92 files / 1,592 tests, exit 0** (1,578 before: +10 recovered, +4 new).
+  Both new suites are mutation-proven in the audit's usual sense: restoring
+  `asString(data.errorAnalysis, data.errorAnalysis)` fails the new case, restoring
+  `if (data.jargonBuzzer)` fails the recovered one, and restoring the one-branch `reason`
+  fails the fusion case.
+- `bunx tsc -b --noEmit` exit 0 and `bunx eslint` on all seven changed files exit 0.
+- **The boss banner was read in a browser, not inferred.** `e2e/cockpit-escalation.spec.ts`
+  against the managed preview: **10 passed** in 51.4s, including the added assertions that
+  the banner says `none of the chapters` and does **not** say `Only one` for the
+  domain-only topic.
+- The scanner that found 47 is deliberately **not** committed (see 34.5); it is recorded here
+  so the next round can rebuild it in a minute: strip strings/comments, count braces, and flag
+  any `describe(`/`it(` written at column 0 while the brace depth is non-zero. Its one
+  false positive this round was `tests/unit/fsrs-audit.test.ts:324`, caused by regex literals
+  (`/\{\{/g`) contributing unbalanced braces to the counter - that file runs 34 of its 34
+  tests, which is how it was cleared.
+
+### 34.5 What this round deliberately does not do
+
+- **It does not commit the suite scanner as a test.** Detecting "a suite nested inside a
+  running test" from source needs a brace tracker that understands strings, template literals,
+  comments *and* regex literals; a loose version would fail the build on a legitimate nested
+  `describe`, and a strict version is a parser this audit is not going to hand-maintain. The
+  recovered tests are the guard that matters: they now fail loudly when their contract breaks.
+- **It does not re-check the other 91 test files' coverage by hand.** The scan covered them
+  mechanically and only `ai-output-validation.test.ts` was affected, but "declared tests ==
+  collected tests" is not asserted anywhere, so a future edit can reintroduce this shape.
+- **It does not give `/api/youtube` an end-to-end test.** The real route needs a model
+  provider and a YouTube fetch; the e2e suite mocks the endpoint (which is why the
+  hand-built payload survived this long). The route's proof is unit-level: the validator it
+  now calls is tested with the route's exact context, and `tsc` proves the wiring.
+- **It does not touch the dead exports** named in 34.1 (`registerTemplate`,
+  `getTemplatesByCategory`, `lib/presets.ts`, `use-mobile.ts`, the superseded `url-share`
+  pair). They mislead no one, which is the line §26.1 drew.
+
+**Total: 52 distinct defects** (this round's fixes land in `lib/ai-output-validation.ts`,
+`app/api/youtube/route.ts` and `lib/escalation/fusion.ts` - all already named by the findings;
+the coverage is new to this report in the four cases added to
+`tests/unit/ai-output-validation.test.ts`, the zero-chapter case in
+`tests/unit/escalation-fusion.test.ts`, and the two corrected e2e files.)
+
+## 35. Round 33 - defects 53-54, the rules that refused correct work
+
+This round went at the two modules that make **claims about the learner's physics with no model
+in the loop**: the escalation gate's plausibility rules (`lib/escalation/consistency.ts`) and
+Mr M's perturbation readout (`lib/mr-m/perturbation.ts`). Both are pure, both reach the learner as
+sentences, and neither had ever been handed a *legitimate* input by hand. That is the only way a
+rule that refuses correct work becomes visible: every existing test pinned what the rule catches,
+and nothing pinned what it must leave alone.
+
+### 35.1 How the sweep ran, and what each mechanical pass returned
+
+- **Client `fetch` targets against the routes that answer them.** Every `/api/...` path the
+  client posts to resolves to a real `route.ts`; no route lacks a caller except the three §33.3
+  already names (`/api/autopsy`, `/api/mutation`, `/api/synthesis`). Clean.
+- **localStorage key concordance**, the class that produced 36 and 38: each literal key read or
+  written in `lib/`, `hooks/` and `components/` appears on both sides of its read/write pair.
+  The one asymmetry is the deliberate `v1` migration read in `lib/storage.ts`. Clean.
+- **The pass that paid.** `verifyLedger`'s rules were probed with correct inputs rather than
+  read - a kinematics ledger, a boundary-work ledger, a calorimetry ledger, and the same
+  test applied to the perturbation evaluator with a dragged slider. The first probe was refused,
+  and the evaluator answered a second question with a wrong number and a wrong cause.
+
+### 35.2 Findings
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 53 | **P2 - medium-high. FIXED** | **The positivity rule matched every symbol beginning with `v`, so a correct ledger was refused and the learner was told their velocity was a negative mass.** `MASS_OR_VOLUME = /^(?:m|mass|vol|volume|v)_?/i` and `MASS_OR_VOLUME.test(quantity.symbol) && quantity.value <= 0`: the bare `v` alternative swallows `v0`, `v1`, `v_max`, `velocity`, and the upper-case `V1` beside them, so any signed quantity written with that letter is asserted to be a mass or a volume. A ball thrown downward written up-positive - `v0 = -5 m/s`, `a = -9.81 m/s^2`, `t = 2 s`, `v = -24.62 m/s`, closing exactly on `v = v0 + a*t` - is a **physically correct ledger**, and it came back `ok: false`, `verified: false` with `A mass or a volume is a positive quantity: declared as zero or negative: v0 = -5 m/s, v = -24.62 m/s`. | the `POSITIVE_EXTENSIVE` rule: `lib/escalation/consistency.ts` | The message is reproducible without the mutation (probe script, this round's evidence): the old pattern flags those two quantities and the sentence is built verbatim from them, while the fixed code reports `ok: true, verified: true, failures: 0` and `describeLedgerFailures` returns `''`. Pinned by a new case in `tests/unit/escalation-consistency.test.ts` (and by a second pin that the named mass/volume families are still refused). Mutation-proofed below. |
+| 53.1 | **P2 - the consequence, not a second rule** | A false `!ok` is not a comment. In `app/api/mutation/route.ts` it first spends the **one repair generation** (`if (result.ok && !ledger.ok)`) and then refuses the variant at **every tier** - `The variant's own arithmetic does not close, so it was not served: A mass or a volume is a positive quantity…`, status 422, `refusal: 'inconsistent-numbers'`. In `app/api/crucible/route.ts` the same check **drops the problem from the sprint** (`gate()` keeps only `ok` problems and folds the false reason into `rejectedProblems`), spends that route's own one repair pass, and if every problem is dropped the whole sprint is refused as `No problem survived the arithmetic check, so the sprint was not started. …` (422, `refusal: 'inconsistent-numbers'`). So the cost of this rule firing wrongly is a correct problem discarded, an extra model call, a 422 instead of a served problem, and a sentence that tells the learner their physics is wrong when nothing is. | `app/api/mutation/route.ts:176-231`, `app/api/crucible/route.ts:195-259` | Read from the two callers' own code paths: both treat `!ok` as a refusal and neither inspects `verified` for it, which is why the fix belongs in the rule rather than in either route. |
+| 54 | **P3 - low/medium. FIXED** | **The perturbation readout reported a setting with no value as an infinite limit, with a note naming a cause that was not happening.** `Math.pow(-1, 0.5)` is NaN, and a NaN fell through the `!Number.isFinite(relative)` branch at the end of `evaluatePerturbation`: the panel then said `→ ∞` and the note read `As h approaches zero the invariant is no longer finite: nothing bounds the readout any more` while h sat at **-1** and was not approaching anything. `formatRelative(NaN)` was a second instance of the same mistake - `NaN > 0` is false, so ordering the infinity branch first rendered it as `→ −∞`, an infinite magnitude with a sign nobody computed. The second route to NaN is `∞ × 0`: one variable already at its zero-denominator limit (or an infinity from any variable), and another dragged to zero. | `lib/mr-m/perturbation.ts` - the absent NaN branch in the variable loop, the branch order in `formatRelative`, and the `limit` union that had no member for it | Probed before the fix, output recorded verbatim: `{"relative":null,"label":"→ ∞","limit":"infinity","note":"As h approaches zero the invariant is no longer finite: nothing bounds the readout any more."}` and `formatRelative(NaN) === '→ −∞'`. Reachability: the directive asks the encoder for `+1 / -1 / 2`, but `normalizePerturbation` keeps any finite exponent, and `bounds()` derives a slider range from the model's own `min` (or `base/4`, negative for a negative base) - so a fractional exponent plus one sign flip puts the panel in the undefined region, and the `→ limit` preset reaches a limit legitimately right beside it. |
+
+### 35.3 Fixed, in two modules and two suites
+
+- `lib/escalation/consistency.ts` - `MASS_OR_VOLUME` now names what it means:
+  `/^(?:m(?:ass)?|vol(?:ume)?)(?:_|\d|$)/i`, so `m`, `m1`, `m_water`, `mass_g`, `vol`, `volume`,
+  `vol_gas` are refused as before while `v`, `v0`, `v1`, `v_max`, `V1` are left to the physics.
+  Under-reaching is the deliberate direction: a missed rule leaves the closure check to do its
+  work, while a false refusal costs the learner the whole problem.
+- `lib/mr-m/perturbation.ts` - an `undefined` readout as its own outcome, reached from both NaN
+  routes (a negative ratio under a fractional exponent names the variable that left the domain;
+  `∞ × 0` names the furthest-moved one), with its own note and the `—` label; `formatRelative`
+  checks `Number.isNaN` before the signed-infinity branch; the `limit` union gains `'undefined'`
+  so the three outcomes cannot be conflated by a caller.
+- `tests/unit/escalation-consistency.test.ts` - the thrown-ball ledger (plus the signed
+  `v_max`/`V1` variants) and a loop pinning the seven mass/volume symbols that are still refused.
+- `tests/unit/mr-m-perturbation.test.ts` - the fractional-exponent case, the `∞ × 0` case, and
+  `formatRelative(NaN)`.
+
+### 35.4 Verified
+
+- **Mutation-proofed, in the audit's usual sense.** Restoring `/^(?:m|mass|vol|volume|v)_?/i`
+  fails exactly the new velocity pin; deleting both NaN branches and reordering `formatRelative`
+  fails exactly the three new perturbation pins - and in both mutations the **57 pre-existing
+  tests in the two files stay green**, which is what says the old behaviour was the shipped one
+  and that nothing else depended on it. Mutations reverted; the files then pass 61/61.
+- `bun run test` - **92 files / 1,597 tests, exit 0** (1,592 before: +5, all five of them this
+  round's pins). `bunx tsc -b --noEmit` exit 0 and `bunx eslint` on the four changed files exit 0.
+- **The changed panel was watched in a browser, not inferred.** `e2e/mr-m-mode.spec.ts` against
+  the managed preview: **13 passed** (1.4m), including the sliders spec that still reads `×1.00`
+  and `×2.00` off the live panel.
+
+### 35.5 What this round deliberately does not do
+
+- **It does not widen the positivity rule back to bare `v` / `V1` / `V2`.** Those are velocities,
+  rates and voltages as often as they are volumes, and every one of them is legitimately signed;
+  a rule that cannot tell them apart refuses correct work, which is the defect being fixed. The
+  volume *words* (`vol`, `volume`, and their suffixed forms) keep the check.
+- **It does not fix the missed checks the same reading turned up.** `TEMPERATURE` and the
+  `WORK`/`PRESSURE`/`DELTA_VOLUME` trio only match a bare or `_`-delimited symbol, so `T1`, `T2`,
+  `t1` never reach the range or plateau rules - a **missed** refusal, not a false one. Widening
+  the plateau rule would start refusing problems it currently passes, and that change needs its
+  own evidence rather than being smuggled into this round.
+- **It does not commit the probe scripts.** Both findings were reached by running the module
+  against a correct input; the pins carry the answer, and the probes are recorded above.
+- **It does not re-audit the remaining unread modules.** §26.1's line still stands: a module is
+  filed when something it says is untrue or unreachable, not because it has not been read yet.
+
+**Total: 54 distinct defects** (this round's fixes land in `lib/escalation/consistency.ts` and
+`lib/mr-m/perturbation.ts` - both already named by the findings; the coverage is new to this
+report in the two cases added to `tests/unit/escalation-consistency.test.ts` and the three added
+to `tests/unit/mr-m-perturbation.test.ts`.)
+
+## 36. Round 34 - defects 55-56, the numbers that were never earned
+
+This round ran seven mechanical passes this report had never run and then followed the one that
+paid: an audit of the **fallback value** on every zero-capable field. It found two readers of one
+number - the session's XP - that replace a real `0` with `150`, a value the app does earn
+elsewhere (the Feynman checkpoint bonus), which is what made the wrong number look plausible.
+
+### 36.1 The mechanical passes, and what each one returned
+
+- **Stateful regexes.** Every `/g` or `/y` literal that is reachable by `.test()` or `.exec()`
+  (24 literals, 11 with a use site) was checked for the `lastIndex` trap: a global regex that
+  keeps its position between calls silently skips matches. Clean, and for three different
+  reasons worth recording: `FACTOR_CLAIM` (`lib/ai-output-validation.ts`) and `SLOT_RE`
+  (`lib/causal-frame.ts`) reset `lastIndex = 0` before their loops; the extractors in
+  `lib/mr-m/diagnostics.ts`, `lib/mr-m/autopsy.ts`, `lib/wozniak.ts`, `lib/fsrs-audit.ts`,
+  `lib/procedural-validator.ts` and `lib/anki-exporter.ts` build the regex inside the call; and
+  every remaining module-level loop (`tests/unit/sheet-boundaries.test.ts`'s `SHEET_TAG`, used at
+  four call sites) terminates on a null match, which resets `lastIndex` to 0. That last one is
+  safe by construction rather than by intent - it is the shape §34.1's own tooling got wrong - so
+  it is recorded here even though it is not a defect today.
+- **`.sort()` with no comparator.** 15 call sites, 2 in `lib/`: `sameValues` in
+  `lib/services/contradiction.ts` (canonical comparison of two `string[]` value sets) and
+  `protectedTokens` in `lib/services/forge.ts` (a fingerprint of a `Set<string>`). Lexicographic
+  order is the wanted order in both; no numeric array is sorted by default. Clean.
+- **`htmlFor` without a matching `id`.** Every static `htmlFor="x"` in `components/` was checked
+  against the `id`s in its own file: 0 dangling targets. Clean.
+- **`JSON.parse` outside a `try`.** One hit, and it was a comment describing a historic one.
+  Clean.
+- **`await fetch(...)` with no `.ok` check.** 18 hits at the first scan window, all 18 checking
+  `res.ok` (or the body's `error`) a few lines further down. Clean.
+- **`catch` with an empty body.** 49 sites, every one a best-effort path (storage mirrors,
+  telemetry, `AudioContext`, clipboard) with a comment saying so. Reviewed, not filed - §26.1's
+  line.
+- **The pass that paid.** `|| <literal>` where the left side is a zero-capable field and the
+  fallback is **not** zero. Five hits; three are correct (`keywords?.length || 1` guards a
+  denominator, `Math.min((hints?.length || 1) - 1, …)` and `Number(count) || 3` only see values
+  that cannot legitimately be 0). The other two read the same field, and neither had a test.
+
+### 36.2 Findings
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 55 | **P2 - medium-high. FIXED** | **The RemNote export invented 150 XP for every session, and upgraded a real 0 to 150.** The document header read `**Mastery XP** ${schema.xpEarned \|\| 150} XP`, and the three callers that matter pass only the topic, the activities and the responses - `app/page.tsx` (`copyToClipboard`), `components/workbench/StudioWorkbench.tsx` and `components/HistoryDrawer.tsx` - so `schema.xpEarned` was `undefined` on all three and **every** exported document claimed 150 XP whatever the session had earned. Where the field was supplied (`components/SegregationRemnoteModal.tsx` passes the saved schema) a genuine `0` was upgraded to 150. The fabricated number is a real XP amount in this app - the Feynman checkpoint bonus, `xpBonus: 150` - which is why it reads as data rather than as a placeholder. | `lib/remnote.ts`, the `assemblePayload` header notes | Read from the code and countable: `grep -n "Mastery XP" -r .` returned the one line and nothing else, no test or fixture mentioned it, and all three call sites were read (none passes `xpEarned`). The rest of the app disagrees with that line on the same field: `AnalyticsDashboard.tsx` renders `schema.xpEarned \|\| 0`, `StatelessShareModal.tsx` renders `+{schema.xpEarned \|\| 0} XP Record`, `auth-context.tsx` totals `\|\| 0`, and `lib/storage.ts` normalizes a missing value to `0`. Fixed by printing the schema's own finite number, `0` when it carries none, and by handing the two callers that already have the value in scope (`app/page.tsx`'s session `xp`, the drawer's `s.xpEarned`) - so a real figure still travels. |
+| 56 | **P3 - medium. FIXED** | **Opening a share link whose schema earned 0 XP showed the receiver 150 XP.** `app/page.tsx`'s share-import effect ran `setXp(decoded.xpEarned \|\| 150)`, so the masthead's progress rail (which renders the session XP padded to four digits) read `0150` for a link the sender's own share sheet describes as `0 XP Record`. `xpEarned: 0` is a value this app writes itself: a freshly seeded YouTube schema is saved with `xpEarned: 0` (`app/page.tsx`) and `saveSchema` normalizes a missing one to `0` (`lib/storage.ts`), so the case is reachable end to end - history drawer adds a Share control to exactly those records. | the share-import effect: `app/page.tsx` | Reproduced in a browser, not inferred: the new e2e case builds a link from a `xpEarned: 0` schema and failed on its first run against the un-fixed line (`getByText('0000')` never appeared, the rail read `0150`). No test or fixture pinned the 150 (`grep` for `150` across `tests/` and `e2e/` returns nothing on this path). Fixed to `Number.isFinite(decoded.xpEarned) ? decoded.xpEarned : 0`, which also matches how `lib/storage.ts` reads the same field off untrusted JSON. |
+
+### 36.3 Fixed, in three source files and two suites
+
+- `lib/remnote.ts` - the header note prints the schema's own finite `xpEarned`, `0` otherwise,
+  with the reasoning next to it so the next reader does not restore a plausible-looking 150.
+- `app/page.tsx` - the share import keeps a real 0 and no longer invents 150; the
+  copy-to-clipboard export passes the session's own `xp`.
+- `components/HistoryDrawer.tsx` - the copied-from-history export passes `s.xpEarned`.
+- `tests/unit/remnote.test.ts` - one case with three readings: `xpEarned: 0` exports `0 XP`,
+  a schema without the field exports `0 XP`, and `320` still exports `320`; none of them may
+  contain `150 XP`.
+- `e2e/share-history.spec.ts` - the browser case: a `?share=` link from a 0-XP schema lands on a
+  masthead reading `0000`, and `0150` is asserted absent.
+
+### 36.4 Verified
+
+- **Mutation-proofed.** Restoring `${schema.xpEarned || 150}` fails exactly the new remnote case
+  (1 failed / 37 passed). Restoring `setXp(decoded.xpEarned || 150)` fails exactly the new browser
+  case, at its `0000` assertion - the rail really did render `0150`. Both mutations reverted
+  before the checks below.
+- `bun run test` - **92 files / 1,598 tests, exit 0** (1,597 before: +1).
+- `bunx tsc -b --noEmit` exit 0 and `bunx eslint` on all five changed files exit 0.
+- **The import was read in a browser.** `e2e/share-history.spec.ts` against the managed preview:
+  **7 passed** (39.3s), including the new 0-XP link case, the pre-existing import case and the
+  analytics sheet that reads the same field.
+
+### 36.5 What this round deliberately does not do
+
+- **It does not give `StudioWorkbench` an XP prop.** Its RemNote export now says `0 XP` rather
+  than an invented 150, which is true of the object it was handed - the workbench is not passed
+  the session XP at all, and threading it through a 2,000-line component is a change of its own.
+- **It does not treat the 49 empty `catch` blocks as defects.** They are deliberate (a mirror, a
+  telemetry ping, an `AudioContext`), each with a comment; a swallowed error that hides a user-
+  visible failure would be filed, and none of these does.
+- **It does not change `SHEET_TAG`'s shape.** It is the one module-level global regex used from
+  several call sites; every use today runs its loop to exhaustion, and the file's own comment
+  explains why that resets the state. Rewriting it to a local regex would be tidier, not
+  different.
+- **It does not fix `GuidedPathRoadmap`'s `score || 95`.** A *passed* checkpoint whose score is 0
+  would display 95, but `passed` and a zero score are mutually exclusive by the route's own
+  contract, so there is no input that reaches it - a fallback in dead code, not a false claim.
+- **It does not commit the scanners.** They are recorded in 36.1 so the next round can rebuild
+  them in minutes; the pins carry the answers.
+
+**Total: 56 distinct defects** (this round's fixes land in `lib/remnote.ts`, `app/page.tsx` and
+`components/HistoryDrawer.tsx`, plus `tests/unit/remnote.test.ts` and `e2e/share-history.spec.ts`;
+the finding is new to this report, and so is every pass in 36.1.)

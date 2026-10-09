@@ -166,14 +166,19 @@ test.describe('timed crucible', () => {
 
     await page.getByTestId('crucible-topic').fill('Thermochemistry');
 
-    // Thermochemistry belongs to a fusion row, but this material carries one of
-    // that row's chapters, so the route re-aims the sprint deeper inside it. The
-    // banner used to run the UNGATED row match and promise all three chapters —
-    // a cross-chapter collision the paced problems are not built to contain.
+    // Thermochemistry matches a fusion row on its DOMAIN alone, so the read
+    // identifies none of that row's chapters in the material and re-aims the
+    // sprint deeper instead. The banner used to run the UNGATED row match and
+    // promise all three chapters — a cross-chapter collision the paced problems
+    // are not built to contain — and the gated read then reported a chapter it
+    // never found ("Only one … is in this material (Calorimetry …)").
     const banner = page.getByTestId('crucible-escalation');
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('goes DEEPER');
     await expect(banner).toContainText('instead of colliding it with');
+    // It says what it measured: no chapter of the row was found, and none is named.
+    await expect(banner).toContainText('none of the chapters');
+    await expect(banner).not.toContainText('Only one');
     await expect(page.getByTestId('crucible-governor')).not.toContainText('This sprint collides');
   });
 
