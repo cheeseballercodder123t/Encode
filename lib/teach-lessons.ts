@@ -15,6 +15,17 @@ import type { TeachLesson, TeachScope } from './types';
 
 const STORAGE_KEY = 'encode.teachme.library.v1';
 
+/**
+ * The key, under a name the backup can import.
+ *
+ * `lib/backup.ts` shipped a backup of the saved lessons under a second spelling
+ * (`deepencode_teach_lessons_v1`) that this module has never written, so the
+ * lessons a learner parked with "save it for later" were missing from every
+ * backup file and gone after a restore (defect 58). Exported so the two modules
+ * cannot drift apart again, matching `lib/forge-recipes.ts`.
+ */
+export { STORAGE_KEY as TEACH_LESSONS_STORAGE_KEY };
+
 /** How many lessons stay resumable before the oldest are dropped. */
 export const MAX_SAVED_TEACH_LESSONS = 20;
 

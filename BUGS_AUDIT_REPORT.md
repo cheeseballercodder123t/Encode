@@ -2857,3 +2857,119 @@ the finding is new to this report, and so is every pass in 36.1.)
 
 **Total: 57 distinct defects** (this round's fix lands in `app/page.tsx` plus `e2e/encode.spec.ts`;
 the finding and every pass in 37.1 are new to this report.)
+
+---
+
+## 38. Round 36 - the whole suite, defects 58-59, and three fixtures that pinned a key nothing writes
+
+This round was the plan's rather than a hunch: run **every** browser spec in the repository, not the
+three that touch the last change, and fix what it turns up.
+
+### 38.1 The suite, and the capacity limit that kept killing it
+
+All 45 spec files were run against the managed preview - **198 tests** - in chunks, because this
+host stops a terminal command at 180 s. Three runs ended in `net::ERR_CONNECTION_REFUSED` instead
+of a verdict, and the kernel log named the reason:
+
+    Out of memory: Killed process … (next-server (v1) total-vm:56997484kB, anon-rss:1899340kB …)
+
+The workspace has 3.9 GB, `next dev` climbs to roughly 2 GB once enough routes have been compiled,
+and Playwright's Chromium is the other half of the budget - so the OOM killer removes the dev server
+from under the runner whenever a run lasts long enough, and every test after that fails on a
+connection error rather than on an assertion. It is a sandbox capacity limit, not an application
+defect, and nothing in the app needed changing for it: the preview was run for this pass with a
+capped V8 heap for the dev server (`NODE_OPTIONS=--max-old-space-size=1200`) and restarted between
+chunks, which took the peak from ~2.45 GB to ~1.7 GB and let a chunk finish. Every run that died
+this way was re-run to a real result; the failures it produced are not counted as defects.
+
+**Result: 198 passed / 198. No application defect surfaced - the suite's verdict on the app was
+clean.** Two test-side defects did, and one of them was only visible when a spec ran after other
+specs, which is exactly what a per-file habit would have missed.
+
+### 38.2 The mechanical passes, and what each one returned
+
+- **Storage reads vs their guards.** All 50 `JSON.parse` sites, and specifically the four storage
+  readers on a render path (`lib/toy-models/progress.ts`, `lib/teach-lessons.ts`,
+  `lib/forge-recipes.ts`, `lib/stage-draft.ts`): every one reads inside a `try`, validates the
+  shape field by field, and degrades to an empty store. Clean.
+- **Comparator-less `.sort()`** (the classic string-sort on numbers): three in the whole client,
+  all three on `string[]` where lexicographic order is the point - `sameValues` in
+  `lib/services/contradiction.ts` (a multiset comparison of value lists) and the token join in
+  `lib/services/forge.ts`. Clean.
+- **Timers that outlive their owner.** Every `setInterval` in the client is paired with a
+  `clearInterval` in the same file (crisis triage, the paradox panel, the toy lab, the
+  discrimination clock, the crucible clock, generation progress). `hooks/useClipboardCopy.ts`'s
+  confirmation timer is cleared both on a second click and on unmount. The 6 in `lib/audio.ts` are
+  fire-and-forget chimes on a module singleton with no component to outlive. Clean.
+- **Object URLs.** Eleven `URL.createObjectURL` sites, eleven matching `revokeObjectURL` calls.
+  Clean.
+- **Storage keys.** This is the pass that paid (defect 59): a key that one module writes and another
+  names by a different spelling is invisible to every test that seeds the second spelling.
+
+### 38.3 Defect 58 - two specs that asserted against the clock
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 58 | **P2 - medium. FIXED** | **Two specs read an event-captured variable with a non-retrying assertion, one line after the click that triggers the event.** `page.on('dialog')` writes `dialogMessage`; the assertion then runs before the 500 (or the stream's `error` event) has made the round trip, so what is compared is the clock. `encode-stream` lost the race once the dev server was busy - the page snapshot in its failure context still shows the launchpad with no dialog - while `resilience` had the same shape and simply won more often. Both now `await expect.poll(...)`, the same substring, waited for. | `e2e/encode-stream.spec.ts` (the streamed-error test), `e2e/resilience.spec.ts` (the API-500 test) | `Expected substring: "Provider down" / Received string: ""`, reproduced deterministically only when the spec ran after other files, and passing when run alone. |
+
+The third dialog site in the suite (`e2e/encode.spec.ts`) asserts *absence* after two other waits
+have already completed, so it is order-dependent rather than racy and was left alone.
+
+### 38.4 Defect 59 - a backup that carried three keys no module in the app writes
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 59 | **P1 - high. FIXED** | **`buildBackup` collected, and `restoreBackup` accepted, three store keys under spellings that no module has written since those stores were renamed.** Deck memory was listed as `deepencode_deck_memory_v1` while `lib/deck-memory.ts` writes `encode.deck-memory.v1`; parked Teach Me lessons as `deepencode_teach_lessons_v1` while `lib/teach-lessons.ts` writes `encode.teachme.library.v1`; forge recipes as `deepencode_forge_recipes_v1` while `lib/forge-recipes.ts` writes `encode.forge-recipes.v1` (and it already *exports* that key as `FORGE_RECIPES_STORAGE_KEY`, unused). So the "restore onto a new machine" file shipped without the learner's card memory - the store that makes the forge memory-aware and that answers "have I already cut this lecture" - without the lessons they parked with *save it for later*, and without the recipe setups the feature exists to re-run. The restore half was symmetric, so the file could not have put them back even had they been in it. The header of the same module promised all three by name. Three further entries named stores that no longer exist at all: `deck_sources` (the source ledger now lives INSIDE the deck-memory record), `chapter_progress` (derived from the session by `lib/chapters.ts`, never stored) and `sm2_manifest` (a file inside the exported .apkg, not a localStorage key). | `lib/backup.ts` (`EXTRA_KEYS`), `lib/deck-memory.ts`, `lib/teach-lessons.ts` | A backup built from a store seeded through the owners' own writers contained none of the three; after the fix the same round trip reaches the modules' readers. |
+
+**Why every existing test passed.** All three fixtures were written against the dead spellings: two
+unit tests in `tests/unit/backup.test.ts` hand-set `deepencode_teach_lessons_v1` and asserted it came
+back, and `e2e/backup-restore.spec.ts` seeded `deepencode_deck_memory_v1` in its `addInitScript` and
+asserted the *file* carried it. A fixture that writes a key nothing reads, and then checks that the
+same key made the trip, is green by construction - it proves the string is copied, not that the
+learner's data is in the file.
+
+### 38.5 Fixed, in four files
+
+- `lib/deck-memory.ts`, `lib/teach-lessons.ts` - the store key gains the alias export
+  (`DECK_MEMORY_STORAGE_KEY`, `TEACH_LESSONS_STORAGE_KEY`) that `lib/forge-recipes.ts` already had,
+  so the backup imports the owner's own name instead of re-typing a string.
+- `lib/backup.ts` - `EXTRA_KEYS` uses those three aliases, the three ownerless entries are deleted
+  rather than left looking like coverage, and the `as const` / `includes` cast goes with them.
+- `tests/unit/backup.test.ts` - the two stale fixtures re-pointed at the real keys, plus a new test
+  that writes deck memory, a lesson and a recipe **through their modules' own writers** and asserts
+  the round trip back out through those modules' readers.
+- `e2e/backup-restore.spec.ts` - seeds the real deck-memory key with a real store record, asserts
+  the file carries it under that key, and, after the restore into a second browser profile, reads it
+  back out of the recipient's storage.
+
+### 38.6 Verified
+
+- **Mutation-proofed twice.** With `lib/backup.ts` stashed back to HEAD and the tests kept: three
+  unit tests fail (the new round-trip test and the two re-pointed fixtures) and nothing else, 13
+  pass; and `e2e/backup-restore.spec.ts` fails with `TypeError: Cannot convert undefined or null to
+  object` at the assertion that reads the deck-memory entry - i.e. the file in the learner's hands
+  really did not contain it. Reverted, the unit file is 16/16 and the spec is 2/2.
+- `bunx vitest run` - **92 files / 1,599 tests, exit 0** (1,598 before; +1 new test).
+- `bunx tsc -b --noEmit` exit 0 and `bunx eslint` exit 0, statuses captured directly.
+- Playwright: **198/198 across all 45 spec files**, plus `e2e/backup-restore.spec.ts` 2/2 re-run
+  after the change.
+
+### 38.7 What this round deliberately does not do
+
+- **It does not add `encode.teachme.options.v1` to the backup.** That key is the Teach Me sheet's own
+  display preference (style, depth, humour), read once per lesson; the backup's contract is
+  accumulated study state, and widening it to every preference a sheet keeps would trade the
+  contract for tidiness.
+- **It does not migrate old backup files.** A file carrying the dead spellings restores nothing from
+  them because they never held anything; re-asserting that the unknown keys are skipped is the
+  behaviour the suite already pins.
+- **It does not leave the sandbox's dev-server heap cap in place.** It was a workaround for a 3.9 GB
+  workspace, not a project setting: the preview command was restored afterwards, and the command to
+  re-apply it for a full-suite run is noted in this section.
+- **It does not claim the OOM is an app bug.** Nothing in the application was changed for it; the
+  finding is about the environment the suite runs in.
+
+**Total: 59 distinct defects** (this round's fixes land in `lib/backup.ts`, `lib/deck-memory.ts`,
+`lib/teach-lessons.ts`, `tests/unit/backup.test.ts`, `e2e/backup-restore.spec.ts`,
+`e2e/encode-stream.spec.ts` and `e2e/resilience.spec.ts`; the suite run and every pass in 38.2 are
+new to this report.)

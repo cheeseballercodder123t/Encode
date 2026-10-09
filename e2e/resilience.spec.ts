@@ -116,7 +116,11 @@ test.describe('Generation resilience', () => {
 
     await startEncodeFromNotes(page, MOCK_NOTES);
 
-    expect(dialogMessage).toContain('Provider down');
+    // Same race the streamed spec lost: `startEncodeFromNotes` only clicks, and
+    // the message is written by the dialog handler once the 500 has come back.
+    // Reading the variable immediately asserts against the clock, so poll until
+    // the handler has run and then assert the same substring.
+    await expect.poll(() => dialogMessage).toContain('Provider down');
     await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();
   });
 
