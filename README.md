@@ -256,10 +256,15 @@ lib/
                            # accounting behind the sheet's comfort/limit tiers,
                            # and the slim `userResponses`-dropped variant
   auth-context.tsx         # Firebase auth provider
-  storage.ts + storage/    # Sync facade (in-memory cache + debounced autosave +
-                           # localStorage mirror) over the idb-backed engine in
-                           # lib/db.ts (schemas, settings, ai cache, session
-                           # state, one-time localStorage migration). Its cache
+  storage.ts + storage/    # Sync facade (in-memory cache + localStorage mirror)
+                           # over the idb-backed engine in lib/db.ts (schemas,
+                           # settings, ai cache, session state, one-time
+                           # localStorage migration). The IndexedDB hop of a save
+                           # is debounced behind IDB_AUTOSAVE_DELAY_MS and
+                           # coalesced per schema id, so a burst of saves is one
+                           # trip; flushPendingSchemaWrites drains the queue on
+                           # pagehide and on the tab going hidden, so a closed tab
+                           # still writes. Its cache
                            # is dropped on a cross-tab `storage` write, writers
                            # rebuild from the mirror rather than the cache, and
                            # deletions carry a tombstone so the async idb

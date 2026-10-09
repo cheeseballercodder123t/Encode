@@ -4,6 +4,7 @@
 // history and the localStorage fallback when IndexedDB is unavailable.
 //
 // `lib/storage.ts` is the synchronous facade in front of it (in-memory cache,
-// debounced autosave, localStorage mirror), so callers keep reading history
-// synchronously while the heavy writes happen off the UI thread.
+// localStorage mirror, and a real debounced autosave - coalesced per schema id,
+// flushed on pagehide/hidden), so callers keep reading history synchronously
+// while the heavy writes happen off the UI thread.
 export * from '../db';
