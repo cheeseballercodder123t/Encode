@@ -551,8 +551,22 @@ export function clearTopicStruggles(): void {
   } catch { /* non-fatal */ }
 }
 
+// ─── The usage ledger ───────────────────────────────────────────────────────
+//
+// One record answers three questions with three different periods: how many
+// calls today, how many this week, and what the whole hobby has cost in tokens
+// and dollars. Each period has to roll on its own, and a roll may only touch
+// the period that owns it - the lifetime ledgers are what the dashboard reports
+// as LIFETIME and what a backup carries, so rebuilding the record from the
+// fields a roll happens to write is how they were being deleted.
+
+const USAGE_KEY = 'deepencode_usage_stats_v1';
+
 export interface UsageStats {
+  /** The local day `callsByModel` counts. */
   date: string;
+  /** The local Monday `weeklyCallsByModel` counts, as yyyy-mm-dd. */
+  weekStart?: string;
   callsByModel: Record<string, number>;
   weeklyCallsByModel: Record<string, number>;
   /** Lifetime per-model token totals (prompt + completion, provider-normalized). */
@@ -561,19 +575,83 @@ export interface UsageStats {
   costUsdByModel?: Record<string, number>;
 }
 
+function emptyUsageStats(now: number = Date.now()): UsageStats {
+  return {
+    date: new Date(now).toDateString(),
+    weekStart: weekStartKey(now),
+    callsByModel: {},
+    weeklyCallsByModel: {},
+  };
+}
+
+/**
+ * The local Monday of the week `ts` falls in, as yyyy-mm-dd.
+ *
+ * Local and not UTC on purpose: this is a personal hobby ledger, so "this week"
+ * is the week the person is living in, and a UTC boundary would roll the
+ * counter over in the middle of their Sunday evening.
+ */
+export function weekStartKey(ts: number): string {
+  const d = new Date(ts);
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  // getDay() is 0 for Sunday; shift so Monday is 0 and Sunday closes the week.
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
+}
+
+/**
+ * Applies the rolls that are due, and only those.
+ *
+ * Returns the record it was given when nothing was due, so a caller can tell a
+ * plain read from a read that changed the record. A record with no `weekStart`
+ * - one written before the weekly counter had a period - adopts the current
+ * week and starts counting there, rather than carrying an undateable number
+ * forward under a "THIS WEEK" label for another week.
+ */
+function rollUsageStats(stats: UsageStats, now: number): UsageStats {
+  const today = new Date(now).toDateString();
+  const week = weekStartKey(now);
+  const dayDue = stats.date !== today;
+  const weekDue = stats.weekStart !== week;
+  if (!dayDue && !weekDue) return stats;
+  return {
+    ...stats,
+    date: today,
+    weekStart: week,
+    callsByModel: dayDue ? {} : stats.callsByModel,
+    weeklyCallsByModel: weekDue ? {} : stats.weeklyCallsByModel,
+  };
+}
+
+/** A counts map, or an empty one: a record of the wrong shape must not throw. */
+function countMap(value: unknown): Record<string, number> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, number>)
+    : {};
+}
+
 export function loadUsageStats(): UsageStats {
-  if (typeof window === 'undefined') return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} };
+  const now = Date.now();
+  if (typeof window === 'undefined') return emptyUsageStats(now);
   try {
-    const raw = localStorage.getItem('deepencode_usage_stats_v1');
-    if (!raw) return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} };
-    const parsed: UsageStats = JSON.parse(raw);
-    if (parsed.date !== new Date().toDateString()) {
-      const reset: UsageStats = { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: parsed.weeklyCallsByModel || {} };
-      localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(reset));
-      return reset;
-    }
-    return parsed;
-  } catch { return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} }; }
+    const raw = localStorage.getItem(USAGE_KEY);
+    if (!raw) return emptyUsageStats(now);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyUsageStats(now);
+    // Re-read at the boundary rather than trusted: this record is written by
+    // every AI call, and the dashboard dereferences both counters.
+    const stats: UsageStats = {
+      ...(parsed as UsageStats),
+      callsByModel: countMap((parsed as UsageStats).callsByModel),
+      weeklyCallsByModel: countMap((parsed as UsageStats).weeklyCallsByModel),
+    };
+    const rolled = rollUsageStats(stats, now);
+    if (rolled !== stats) localStorage.setItem(USAGE_KEY, JSON.stringify(rolled));
+    return rolled;
+  } catch {
+    return emptyUsageStats(now);
+  }
 }
 
 export function incrementModelCall(modelName: string): void {
@@ -581,7 +659,7 @@ export function incrementModelCall(modelName: string): void {
   const stats = loadUsageStats();
   stats.callsByModel[modelName] = (stats.callsByModel[modelName] || 0) + 1;
   stats.weeklyCallsByModel[modelName] = (stats.weeklyCallsByModel[modelName] || 0) + 1;
-  localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(stats));
+  localStorage.setItem(USAGE_KEY, JSON.stringify(stats));
 }
 
 /**
@@ -607,7 +685,7 @@ export function recordTokenUsage(
       stats.costUsdByModel = stats.costUsdByModel || {};
       stats.costUsdByModel[modelName] = (stats.costUsdByModel[modelName] || 0) + usage.costUsd!;
     }
-    localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(stats));
+    localStorage.setItem(USAGE_KEY, JSON.stringify(stats));
   } catch {
     // Usage ledger is best-effort; never break a generation over it.
   }

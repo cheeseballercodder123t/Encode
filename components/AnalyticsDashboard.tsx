@@ -20,32 +20,14 @@ import {
   type RestoreReport,
 } from '@/lib/backup';
 import { loadParadoxes } from '@/lib/mr-m/ledger';
-
-interface UsageStats {
-  date: string;
-  callsByModel: Record<string, number>;
-  weeklyCallsByModel: Record<string, number>;
-  tokensByModel?: Record<string, number>;
-  costUsdByModel?: Record<string, number>;
-}
+// One definition of the ledger read. The sheet used to carry its own copy of
+// the daily roll, so the two could disagree about what a new day keeps.
+import { loadUsageStats } from '@/lib/storage';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   savedSchemas: import('@/lib/types').SavedSchema[];
-}
-
-function loadUsageStats(): UsageStats {
-  if (typeof window === 'undefined') return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} };
-  try {
-    const raw = localStorage.getItem('deepencode_usage_stats_v1');
-    if (!raw) return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} };
-    const parsed = JSON.parse(raw);
-    if (parsed.date !== new Date().toDateString()) {
-      return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: parsed.weeklyCallsByModel || {} };
-    }
-    return parsed;
-  } catch { return { date: new Date().toDateString(), callsByModel: {}, weeklyCallsByModel: {} }; }
 }
 
 export function AnalyticsDashboard({ isOpen, onClose, savedSchemas }: Props) {

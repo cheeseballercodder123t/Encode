@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-rounds-7-11` (rebased onto `main`, opened as PR #41). **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) are committed on that branch and in review, not yet merged; defects 28-30 (§15-§17, rounds 13-15) are verified in the working tree on the same branch.** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-round-16`. **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) are committed on this branch and in review.** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -985,3 +985,83 @@ would be a repository-wide change (and would surface pre-existing warnings acros
 rather than smuggled into a one-line fix.
 
 **Total: 30 distinct defects in 23 files** (30 is the first in `tests/unit/anki-exporter.test.ts`).
+
+## 18. Round 16 - defects 31-33, the usage ledger's three periods
+
+Round 11 ended the non-functional sweep with a prioritized list; rounds 12-15 closed it. Round 16 opens a
+second pass, and starts on the one record in this app that answers three questions with three different
+periods - how many calls today, how many this week, what it has cost in total - because a period that rolls
+is exactly where a figure that must not change can be rebuilt away.
+
+### 18.1 Defect 31 - the daily roll deleted the two figures labelled LIFETIME
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 31 | A roll that owns one period rebuilding the whole record - **silent loss of a displayed metric, and of what a backup carries** (D=6: nothing on screen says a lifetime total was just zeroed, and the loss is made permanent by the write that causes it) | `lib/storage.ts` (`loadUsageStats`, the date-roll branch), read by `components/AnalyticsDashboard.tsx:271`, `:275` and carried by `lib/backup.ts:99` | The record holds five fields and three periods: `callsByModel` is today, `weeklyCallsByModel` is this week, and `tokensByModel` / `costUsdByModel` are lifetime (their own doc comment: "tokens/cost are lifetime by design - the interesting question is 'what has this hobby cost me', not 'what did it cost today'"). The date-roll branch rebuilt the record as `{ date, callsByModel: {}, weeklyCallsByModel: parsed.weeklyCallsByModel || {} }` - the three fields it happened to name - and **wrote that over the key**. The two lifetime ledgers are not in that object, so the first read of a new day deleted them, and the write made the deletion permanent for every later reader. `loadUsageStats` is called by `incrementModelCall`, by `recordTokenUsage`, by `buildBackup` and on **every render** of the analytics sheet, so the loss fires on the first AI call or the first look at the dashboard after midnight - not at some edge of the flow. The sheet carried a **second copy** of the same loader (lines 39-49), which truncated the record the same way for display, so the panel labelled TOKENS (LIFETIME) and EST. SPEND (LIFETIME) read `0` / `$0.00` the moment the day turned. | Reproduced in both directions, each with a control that fails against the pre-fix source. **Unit:** seed 1,500 + 2,000 tokens and $0.42 + $0.08, date the record `Mon Jan 01 2001`, read it - pre-fix `expected undefined to deeply equal { m1: 1500, m2: 2000 }`, and the stored key no longer holds them either. **Browser** (`e2e/usage-ledger-roll.spec.ts`, a stale-dated record seeded into `localStorage` before the app boots, then the real analytics sheet opened): pre-fix the TOKENS (LIFETIME) card renders `0 tok` where `1.5k` was seeded, EST. SPEND renders `$0.00`. Because `buildBackup` reads this key, the same roll also emptied the `usageStats` field of any backup taken afterwards. |
+
+### 18.2 Defect 32 - the counter labelled THIS WEEK never rolled
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 32 | A counter with no period, under a label that names one - **a wrong number that only grows** (D=4: nothing is lost, and nothing on screen can reveal it - the figure is plausible at every value) | `lib/storage.ts` (`incrementModelCall`, the weekly branch) | `weeklyCallsByModel` is incremented on every call and **preserved** across the daily roll (round 11's test even pins that: "weekly counters survive the daily reset"), and nothing anywhere else writes the key - so there was no week boundary in the app at all. The panel reads it as **THIS WEEK**, which makes it a lifetime total wearing a week's label: after the first week of use it can only be too large, and by the end of a term it is wrong by whatever the term is. | Reproduced: seed a record dated today with `weeklyCallsByModel: { m1: 137 }` and a week that has turned - pre-fix the unit test fails with `expected { m1: 2 } to deeply equal {}` and the browser renders **`137 calls` under THIS WEEK** while today's own card correctly reads `5`. |
+
+### 18.3 Defect 33 - the read path trusted the record it found
+
+| # | Category | File / line | Root cause | Evidence |
+|---|---|---|---|---|
+| 33 | Persisted data dereferenced instead of re-read at the boundary - **a render crash reachable from the store** (D=5: the sheet that shows the ledger is the one that dies, and the reader has no way to know why) | `lib/storage.ts` (`loadUsageStats` returned `parsed` unread) → `components/AnalyticsDashboard.tsx` (`Object.values(usage.callsByModel)`) | The loader validated nothing: if the stored record was today-dated but missing its counters, it was returned as-is, and the sheet's first `Object.values(usage.callsByModel)` threw `TypeError: Cannot convert undefined or null to object` **during render**. This is round 11's defect 25 in a second place - same lesson, different key: the saved history was re-read at the boundary after one bad record took the app down, and this record kept being trusted. | Reproduced at both levels. **Unit:** a today-dated record with no counters - pre-fix `expected undefined to deeply equal {}`. **Browser:** the same seed, then the analytics sheet opened - pre-fix the sheet never appears at all (`SYS.07 // ANALYTICS CORE` is not found) because the render threw and the root error boundary from defect 27 took the segment; post-fix the card renders with `0` in it. |
+
+### 18.4 The fix - one roll, three periods, each owning its own
+
+| Layer | What changed |
+|---|---|
+| `lib/storage.ts` - the roll | `rollUsageStats(stats, now)` spreads the record it was given and overrides **only** the periods that are due: `callsByModel` when the day changed, `weeklyCallsByModel` when the week changed, and never the lifetime ledgers. It returns the record it was given when nothing was due, so a plain read no longer writes at all - the write now happens exactly when a roll does. |
+| `lib/storage.ts` - the week | `weekStartKey(ts)` returns the **local** Monday of the week as `yyyy-mm-dd` (local, because this is a personal ledger and a UTC boundary would roll a Sunday evening over), and that key is stored on the record as `weekStart`. A record written before the field existed adopts the current week and starts counting there instead of carrying an undateable number forward for another week. |
+| `lib/storage.ts` - the boundary | `weekStartKey` is the only new export; the reader now coerces both counters through `countMap()` and rejects a record that is not an object, so a wrong-shaped record is repaired on read rather than dereferenced by its consumer. |
+| `lib/storage.ts` - the ledger's own key | The key string was written out at three call sites in one file; it is now the single `USAGE_KEY` constant, so the reader and the two writers cannot drift apart. |
+| `components/AnalyticsDashboard.tsx` | The sheet's private copy of the loader is gone - it imports `loadUsageStats` from `@/lib/storage`. Two readers of one key is how the display and the record came to disagree about what a new day keeps. |
+
+### 18.5 Verified
+
+| Check | Result |
+|---|---|
+| `bunx vitest run` | exit 0 - 78 files, **1340 passed** (1333 before this round) |
+| `bun tsc -b --noEmit` | exit 0 |
+| `bunx eslint` on the two source files, the two unit files and the new spec | exit 0 |
+| `tests/unit/storage.test.ts` (+4 ledger tests) and `tests/unit/usage-week.test.ts` (new, 3 tests) | exit 0 |
+| the same four ledger tests against the pre-fix source (control: both source files stashed) | **exit 1** - `expected undefined to deeply equal { m1: 1500, m2: 2000 }`, `expected { m1: 2 } to deeply equal {}`, `.toMatch() expects to receive a string, but got undefined`, `expected undefined to deeply equal {}`; the 27 pre-existing tests in that file still pass, so the control isolates the four |
+| `tests/unit/usage-week.test.ts` against the pre-fix source | **exit 1**, all three - the boundary helper did not exist, which is stated as the surface change it is rather than treated as an assertion failure |
+| `e2e/usage-ledger-roll.spec.ts` (new, 3 tests, against the managed preview) | exit 0 |
+| the same spec against the pre-fix source | **exit 1**, all three - `0 tok` where `1.5k` was expected, `137 calls` where `0` was expected, and the sheet itself never rendering because the read threw |
+| `e2e/backup-restore.spec.ts` + `e2e/share-history.spec.ts` (the specs that drive this sheet, and the backup whose `usageStats` field rides this key) | exit 0 - **8 passed** |
+
+### 18.6 Residuals, stated rather than left to be rediscovered
+
+- **A calendar week, not a rolling seven days.** The counter belongs to the week the calls fall in, so a
+  call at Sunday 23:59 and one at Monday 00:01 are in different weeks. A moving window would need every call
+  timestamped; this record stores counts, deliberately, because it is a few hundred bytes of localStorage
+  written on every model call.
+- **An upgraded record starts its week at the first read.** The counters a pre-`weekStart` record holds
+  cannot be dated, so they are not carried forward (the period is unknown, and keeping them would keep the
+  label wrong for another week). These are call counts, not learner content - the trade-off is stated
+  because it is a deletion, however small.
+- **The roll still writes from the read path**, once per period change. That is deliberate: it is the only
+  moment the record can be corrected for every later reader, and it is why the check is a comparison rather
+  than a write on every read.
+- **The ledger is per browser, not per account.** It is localStorage and it rides a backup; nothing syncs it
+  between devices. Unchanged by this round, and the reason `buildBackup` reads it rather than a cloud copy.
+
+### 18.7 Method note
+
+The unit/e2e split here is the same one this audit has used since round 3: the unit tests own the arithmetic
+(the roll is a pure decision over a record and two dates), and the browser owns the **figure**, because the
+defect was visible only in the pairing of a roll with the panel that reads it - a stale-dated record seeded
+into `localStorage` before the app boots, then the real sheet opened by clicking the real control. That is
+also what makes the third defect provable at all: pre-fix the sheet does not render a wrong number, it does
+not render, and the assertion that catches it is the one waiting for the sheet's own title. The control for
+every row is the same test run with the two source files stashed - and for the week-boundary helper, the
+honest statement that the export did not exist yet, which is why it lives in its own file rather than
+failing as a whole-file import error inside `storage.test.ts`.
+
+**Total: 33 distinct defects in 24 files** (31 is the first in `components/AnalyticsDashboard.tsx`; 32 and 33
+are the third and fourth in `lib/storage.ts`, after 25 and 28).
