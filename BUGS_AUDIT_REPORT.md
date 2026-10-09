@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-round-16`. **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) are committed on this branch and in review.** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-21 (§20-§23) then fixed four of the six, so the running total below is 37;** findings 38 and 39 stay open, with 34-37 closed and recorded in §20-§23. **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -1065,3 +1065,514 @@ failing as a whole-file import error inside `storage.test.ts`.
 
 **Total: 33 distinct defects in 24 files** (31 is the first in `components/AnalyticsDashboard.tsx`; 32 and 33
 are the third and fourth in `lib/storage.ts`, after 25 and 28).
+
+## 19. Round 17 - reconnaissance: the next six findings, prioritized
+
+This round changes no code. It is the sweep that opens the next set of fixes: a second non-functional pass
+over the surfaces the first sweep (round 11, §13) did not reach, ending in six findings ranked by what they
+cost the person using the app. **Findings 34-39 are open candidates, not repairs** - the defect totals above
+stay at 33 until one of them is fixed and pinned, which is the point of numbering them now: the next round
+has a fixed target and a stated proof for each.
+
+**Update, rounds 18-21 (§20-§23): findings 34, 35, 36 and 37 are fixed and pinned. Their rows below are left as round 17 wrote them - that is the evidence the defects were real - with the repairs, the proofs and the mutation probes in §20, §21, §22 and §23. Finding 35's row also undercounts the surface: the round-19 sweep found **eight** copy controls where round 17 named four (§21.1). Findings 38-39 remain open.**
+
+### 19.1 Prioritized findings
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 34 | **P0 - critical. FIXED in round 18 (§20)** | A throw inside any of the secondary sheets still replaces the whole app. `getDerivedStateFromError` exists in exactly two places - one boundary per Mr M panel and one around the stage renderer - so the pattern is established in this codebase but was never applied to the sheets: every sheet that throws propagates to the **root** `app/error.tsx` (defect 27), which replaces the segment, and the workbench, the stage the learner was on and the session view all go with it. The sheets are also where model-authored payloads land (crucible plans, forged decks, triage items), and this audit has already found such payloads reaching a render path or a dereference in five earlier rounds. | the ~20 sheets mounted in `app/page.tsx:2331`-`:2592`, none wrapped: `AuthModal`, `SettingsModal`, `PathwayBuilderModal`, `InquisitorModal`, `CrucibleModal`, `EmergencyTriageModal`, `SkillTreeModal`, `HistoryDrawer`, `RoastNotesModal`, `StatelessShareModal`, `ConceptPrerequisitesModal`, `PretestModal`, `TeachMeModal`, `BlurtingModal`, `SegregationRemnoteModal`, `AnkiExportModal`, `FlashcardForgeModal`, `ComparativeSynthesisModal`, `EndSessionReviewModal`, `AnalyticsDashboard`; the two boundaries that do exist: `components/mr-m/MisterMSurface.tsx:39`, `components/stage-templates/TemplateErrorBoundary.tsx:15` | **Already demonstrated in live code, not hypothetical:** defect 33 (§18.3) is a sheet (analytics) throwing during render, and the browser control recorded the outcome - `SYS.07 // ANALYTICS CORE` never appears and the root fallback takes the segment. The payload shapes that reach these surfaces are the ones defects 5-8, 13, 23 and 33 were: a null spec, a non-finite draw, a one-letter answer, a corrupted record. **Proof for the fix:** inject a throw in one sheet the way round 12 proved defect 27, and assert the session view is still on screen with the sheet's own fallback inside it. |
+| 35 | **P1 - high. FIXED in round 19 (§21)** | Four copy controls, three different behaviours, and the busiest one reports a success it cannot know about. The history drawer's `handleCopyRemNote` calls `navigator.clipboard.writeText(content)` as a **floating promise** - no `await`, no `.catch` - and sets the copied state unconditionally, so the row renders `[ OK ]` whether the write landed or not. The forge's copy control is the opposite failure: it awaits an unguarded `writeText` inside an `async` click handler, so a rejection produces no state change, no message and an unhandled rejection - the click looks dead. Two siblings in the same repo already do this correctly, which is what shows the standard was known and not applied. | `components/HistoryDrawer.tsx:69`-`:80` (the copy), `:323` (the `[ OK ]` glyph); `components/FlashcardForgeModal.tsx:1953`-`:1960`; correct in `components/StatelessShareModal.tsx:69`-`:82` (API check, `execCommand` fallback, failure reported) and `components/SegregationRemnoteModal.tsx:136`-`:141` (catch, text kept visible for manual selection) | Read from the code; reachable without a hostile condition. `writeText` rejects with `NotAllowedError` whenever the document is not focused (a second monitor; a click that follows a keyboard shortcut) or permission is denied, and `navigator.clipboard` is **undefined on a non-secure origin**, where the drawer's call throws a `TypeError` inside the click handler before any state is set. RemNote/Notion is an export path exactly like the `.apkg` download and this is its only handoff, so the failure mode is a learner pasting an unchanged clipboard into RemNote after being told it was copied. **Proof for the fix:** a Playwright init script that makes `writeText` reject (and a second run with `navigator.clipboard` deleted), then a click on each control, asserting the visible state matches what actually reached the clipboard. |
+| 36 | **P2 - medium. FIXED in round 20 (§22)** | The cloud settings restore cannot do what its own comment says. It applies the account's backup when `backup.savedAt >= (settings.savedAt \|\| 0)`, described in the code as "Only applied when the backup is newer than what local storage holds (multi-device safe)" - but `savedAt` is stamped by the **caller**, never by `saveAISettings`, so only two of the four writers produce it. Reset-to-defaults and a backup restore write settings with no stamp at all, `localSavedAt` is then `0`, the comparison is trivially true, and the account's copy - however old - overwrites what is on the device. | `lib/auth-context.tsx:107`-`:118` (the guard); stamps: `components/SettingsModal.tsx:62`-`:68` and `:107`-`:111`; no stamp: `components/SettingsModal.tsx:120` (reset), `lib/backup.ts:219`-`:221` (restore); `lib/storage.ts:51`-`:57` (`saveAISettings`) | Read from the code, and deterministic - no race needed: restore a backup (or reset to defaults) on a device, then sign in, and the stored settings are replaced by the account's copy. That is how a deliberately cleared API key comes back, or a working key is replaced by a stale model choice; the guard's stated purpose is exactly what fails. **Proof for the fix:** the choice is a pure decision over two records, so it can be extracted and unit-tested in both directions (newer local wins, newer backup wins, neither stamped), plus one browser test that restores a backup and signs in. |
+| 37 | **P2 - medium. FIXED in round 21 (§23)** | The stage being written is never persisted until it is submitted. The typed answers live in React state (`field1`/`field2`/`field3` at page level, written on every keystroke) and reach `userResponses` only on Submit, Skip or navigation - and every persistence path hangs off `userResponses` (the stage-boundary save, the cross-device sync, the drawer). There is no draft write for the in-stage fields, so a reload, a crash or a closed tab mid-stage returns to that stage with **empty fields**, while every earlier stage survives. | `app/page.tsx:1144`, `:1203`, `:1269` (where `userResponses` is written), `:1178`, `:1230` (the saves that follow), `:2253` (the fields handed to the workbench), `:293` (`loadStageInputs` is a loader only); the paths that did get autosave: `:1020`-`:1035` (YouTube, per stage) and `:1043`-`:1056` (lab, 500 ms debounce with cleanup) | Read from the code, and reachable in one step: type into a stage, reload without submitting. No draft-shaped storage key exists anywhere (`_draft` / `DRAFT_KEY` across `lib/`, `app/`, `components/` returns nothing), which is what makes this a missing write rather than an unreachable one. The asymmetry is the evidence that the need was known: the YouTube path's own comment says it exists "so 'encode 2 of 9 chapters today' survives a reload", and a text/file session relies entirely on the stage boundary. **Proof for the fix:** type into a stage, reload without submitting, assert the fields come back - then the same run with the fix. |
+| 38 | **P4 - low. OPEN - candidate for the next round** | The debounced autosave is documented, exported, and dead. The function's own comment says "Debounced autosave for performance during typing" and the README describes the storage facade by that behaviour, but it has **zero callers** - nothing in the app debounces a save. This is defect 30's class (§17) in production code rather than in a test: nothing is broken at runtime, and the cost is a reader (and the README) believing typing is debounced when the real cadence is the stage boundary - which is also how finding 37 stayed invisible. | `lib/storage.ts:25` (`autosaveTimer`), `lib/storage.ts:358`-`:370` (`debouncedSaveSchema`), `README.md:225` | Read from the code: a search for `debouncedSaveSchema` and `autosaveTimer` across `app/`, `components/`, `hooks/`, `lib/`, `tests/` and `e2e/` returns only the definition and the module-level timer it guards. **Proof for the fix:** either wire it to the draft it was written for, or delete it and correct the README; the check is a grep that returns nothing plus the round's suite. |
+| 39 | **P4 - low. OPEN - candidate for the next round** | The pending-sync badge can be wrong on screen. `pendingLocalCount` is a `useMemo` over `[user, cloudSchemas, hydrated]` that calls `loadSavedSchemas()` - a module-level cache which changes on every write, with no dependency that moves when it does - so saving a schema while signed in leaves the badge showing the previous count until some unrelated render changes one of those three values. It is the only signal that local work has not reached the cloud, so a stale value reads as "nothing pending" exactly when something is. | `lib/auth-context.tsx:71`-`:77` | Read from the code, and deterministic: save a schema with a signed-in session and watch the count. **Proof for the fix:** take the count from the `useSchemaLibrary` list the drawer already subscribes to (or subscribe to `subscribeToSavedSchemas`), then a browser test that saves and reads the badge with no other interaction. |
+
+### 19.2 Checked and cleared in this pass (recorded so the next round need not re-derive it)
+
+A sweep is also the record of what it looked at and did **not** find. Each of these was a candidate shape
+going in, and each is clean in the code as it stands:
+
+- **Timing surfaces cannot be cheated by a hidden tab.** The crucible sprint clock (`components/crucible/CrucibleModal.tsx:236`-`:253`) and the 10-second discrimination gate (`components/DiscriminationGate.tsx:96`-`:113`) both compute from `Date.now()` deltas and a stored deadline rather than decrementing a counter per tick, so a throttled interval in a background tab can only delay the *readout*, never add or remove time. `EmergencyTriageModal`'s runway ticks the same way.
+- **The generation lifecycle is closed.** One `AbortController` exists per generation (`app/page.tsx:274`, reassigned at `:649`/`:732`), Cancel aborts it and clears the interrupted flag (`:606`-`:610`), success and error clear it too (`:714`, `:816`), and the "cut off" notice only appears for a leftover older than 10 s (`:147`-`:151`) - so a live generation in another tab is not reported as a failure and a finished one does not leave a false banner.
+- **Progress reporting is honest under failure.** `hooks/useGenerationProgress.ts` clears both intervals on stop, keeps its bar asymptotic (it cannot show 100% before the response lands), and the stream's real outlines override the ticker.
+- **The debounce windows that do exist are correct.** The lab checkpoint effect debounces 500 ms **with cleanup** (`app/page.tsx:1043`-`:1056`), and `ToyModelLab` stops its intervals when the tab is hidden, flushes on `pagehide`, and removes both listeners.
+- **Listeners and object URLs are paired.** `components/` and `hooks/` contain **18 `addEventListener` calls and 18 `removeEventListener` calls**, and every pair matches by event name and handler in the same effect (`PWAInstallHeader` ×4, `AnkiExportModal`, `SketchCanvas` ×2, `StudioWorkbench` ×3, `ToyModelLab` ×3, `use-mobile`, `useSettings` ×2, `useModalA11y` ×2). Each `createObjectURL` is followed by a `revokeObjectURL` (`lib/backup.ts:151`/`:158`, `lib/services/sessionAnalytics.ts:206`/`:211`, `AnkiExportModal` ×3).
+- **Restore merges rather than clobbers.** `restoreBackup` keeps existing ids and skips collisions (`lib/backup.ts:214`-`:224`), so importing an older backup cannot delete newer work - the settings stamp (finding 36) is the only part of that path that is wrong.
+- **The in-flight write paths tolerate a full or absent store.** IndexedDB failures degrade to the localStorage mirror with a warning, and the usage ledger's own failure paths are already fixed (§18).
+
+### 19.3 Not counted as a defect, stated because it is a real gap
+
+**No service worker is registered.** A search for `serviceWorker` across `app/`, `components/` and `lib/`
+returns nothing, and `public/` holds only `assets` - so the app shell is not cached and the install
+affordance in `PWAInstallHeader` (which listens for `beforeinstallprompt`) has no offline story behind it. It
+is not filed as a defect because generation itself requires the network, and the in-page offline fallback
+generator still works once the page has loaded; the gap is that a learner who is offline **before** the page
+loads gets the browser's error page, not the app's own offline path.
+
+### 19.4 Priority order for the next round, and how the sweep ran
+
+Fix order: **34** (a crash in any secondary sheet costs the session), then **35** (the handoff surfaces),
+then **36** and **37** (both silent regressions with a deterministic reproduction), then **38** and **39**
+(a dead export and a stale badge - cheap, and 38 is small enough to ride along with another round).
+
+The sweep was run read-first: the report's own record of what earlier rounds covered (§1-§18) fixed the
+target list, then each candidate was confirmed by reading the call site and the surrounding contract rather
+than by pattern-matching - which is what removed three candidates that looked bad from a grep and are
+correct in the code (a per-keystroke save, a per-keystroke IndexedDB write, and a `setInterval` that decrements
+a counter). The evidence column above is the exact file and line range read in each case; where a claim rests
+on a behaviour rather than a line, it is named as such (finding 34 rests on defect 33's recorded browser
+control, finding 35 on the four call sites' differing handling of the same rejection). No code, test or
+configuration was changed in this round, which is why its output is a ranked list rather than a diff.
+
+## 20. Round 18 - defect 34, the sheet that took the whole session with it
+
+This is round 17's first finding, fixed and pinned. It is a P0 because of where the throw lands rather
+than how rare the throw is: the twenty secondary sheets were mounted directly in `app/page.tsx`, so a
+render error inside any one of them propagated past every boundary in the tree to the **root**
+`app/error.tsx` (defect 27), which replaces the segment - the workbench, the stage the learner was on and
+the session view all went with it. That is not hypothetical and not from this round's own invention: it is
+exactly what defect 33 (§18.3) recorded in the browser, where one corrupt usage record inside the analytics
+sheet took `SYS.07 // ANALYTICS CORE` off the screen entirely.
+
+### 20.1 The missing rule, and the fault the browser drives it with
+
+Whole-sheet coverage rather than one repaired sheet, because the defect was a missing rule: the pattern was
+already in the codebase twice (`components/mr-m/MisterMSurface.tsx`, one boundary per Mr M panel;
+`components/stage-templates/TemplateErrorBoundary.tsx`, one around the stage renderer) and was never applied
+to the sheets. A boundary on nineteen of twenty would still be a hole, and the twenty-first sheet added next
+month would reopen it silently - so the rule is enforced structurally (§20.3) rather than remembered.
+
+**The fault the spec drives it with is a real one, not a synthetic throw in a component.** The storage
+read boundary coerces a saved record's own fields (`coerceSavedSchema`, defect 25) but not the values
+*inside* its `userResponses` map, and the library-wide stats walk dereferences every response
+(`r.field1?.trim()`, `lib/services/sessionAnalytics.ts`) - so one null response record makes the analytics
+sheet throw during render. That is the same shape as defects 25 and 33: the payload arrives through a
+store, and the throw is in a render path. `e2e/sheet-error-boundary.spec.ts` seeds exactly that record and
+drives the real app against the preview server.
+
+### 20.2 Fixed, in three pieces
+
+1. **`components/SheetErrorBoundary.tsx` (new).** A class boundary with `getDerivedStateFromError` turning
+a throw into error state, and `componentDidCatch` logging the sheet's own name so a report from the field
+says which sheet failed. Two details are deliberate: `retry` clears the error and re-renders the same child
+(the learner's chance to get past a transient throw), and the error is also cleared when the `open` prop
+flips, because otherwise a closed sheet would re-open onto the previous crash's fallback instead of the
+sheet. `open` and `onClose` are **required** props for that reason - a boundary that cannot dismiss the sheet
+it stands in for would leave the learner staring at a fallback with no way back. The fallback is a function
+component so it can take `useModalA11y(true, onClose)` from the same hook every other overlay uses: Escape
+closes it, the page behind stops scrolling and focus moves in. A fallback that could not be dismissed with a
+key would be a smaller version of the problem it is standing in for.
+
+2. **`app/page.tsx` - all twenty mount sites wrapped**, each with its own name (the `data-sheet` attribute
+and the fallback's heading): Account, Settings, Pathway builder, Inquisitor, Crucible, Emergency triage,
+Skill tree, Saved schemas, Roast my notes, Share link, Prerequisites, Pre-test, Teach me, Blurting, RemNote
+segregation, Export choice, Flashcard forge, Comparative synthesis, Session review, Analytics. Nothing else
+in the file changed; the sheets' own props, order and mount flags are untouched.
+
+3. **`app/error.tsx` unchanged on purpose.** It is the last line of defence (defect 27) and stays that way:
+the point of this round is that a sheet error no longer reaches it.
+
+### 20.3 Verified
+
+- **Boundary contract (unit, `tests/unit/sheet-boundary.test.tsx`, 4 tests, happy-dom).** Children render
+untouched while nothing throws; a throw is contained, the fallback names the sheet (`data-sheet="Analytics"`,
+"The Analytics sheet failed to render."), carries the thrown message and states that the session is untouched;
+retry re-renders the sheet and a throw that is still there is contained again rather than re-thrown; and the
+close control asks the *parent* to close (driven through a harness with real `open` state, so the contract is
+the one `app/page.tsx` uses), after which re-opening shows the sheet and not the previous crash's fallback.
+- **Coverage pin (unit, `tests/unit/sheet-boundaries.test.ts`, 5 tests, source scan).** Every `*Modal`,
+`*Drawer` and `AnalyticsDashboard` mount in `app/page.tsx` sits inside a `SheetErrorBoundary`, checked by
+counting boundary tag depth against each mount's position rather than by a count; the scan finds at least 20
+sheets so it cannot pass vacuously; no boundary is self-closed (which would wrap nothing and satisfy a naive
+count); and the hand-rolled `[ SEGREGATION COMPLETE ]` export-choice overlay, which is not a `*Modal`
+component, is behind one too.
+- **The app-level result (e2e, `e2e/sheet-error-boundary.spec.ts`, 3 tests, live preview).** With the corrupt
+record seeded, the analytics sheet throwing during render produces: the root fallback
+("Something in this screen failed to render.") has count **0**; the sheet fallback is visible with
+`data-sheet="Analytics"`; the sheet's own heading is gone rather than half-rendered; closing the failure
+returns to the studio, where a **real keystroke lands in the notes field** and is read back; the history
+drawer then opens and lists the very record whose response map is the reason analytics failed; Settings
+opens with no fallback behind it. The second test presses Escape on the failed sheet and lands in the same
+studio, and the third retries, fails again (the data is still corrupt) and is contained again.
+- **Mutation-proven, which is the part that matters.** Replacing the boundary's catch with a no-op
+(`getDerivedStateFromError` returning `{ error: null }`) makes the app fall back to the **root** boundary and
+all three specs fail with `the sheet throw escaped to the root boundary - nothing contained it`; restoring
+the real catch turns them green. That is the defect reproduced on demand and the fix demonstrated to be what
+stops it, rather than a test that passes for its own reasons. The spec states its premise explicitly
+(`requireContained`): a missing fallback is either an escaped throw, which **fails** with that message, or a
+corruption that no longer reaches a render, which skips with a note telling the next round to pick a new
+shape.
+- **Neighbours re-run, because the wrappers sit around every sheet:** `e2e/modal-a11y.spec.ts` (Escape,
+Tab trap, scroll lock through the export sheet) and `tests/unit/modal-a11y.test.ts` (every overlay asks for
+the shared hook) both pass, and `bunx tsc -b --noEmit` is clean.
+
+### 20.4 What the containment does, and what it does not
+
+The promise is containment, and the fallback says only that: the session is untouched, the work is still
+there, and the sheet can be retried or closed. **It does not repair the data.** The seeded corruption still
+cannot be rendered by the analytics sheet, so retrying it fails again - correctly, and visibly, instead of
+quietly showing wrong numbers. Two consequences are stated rather than implied:
+
+- **A crashed sheet's own in-progress state is lost** when it is retried, because the retry re-renders the
+  sheet from scratch. The session behind it - stages, answers, settings - is what is preserved, and that is
+  the promise the fallback makes.
+- **The reader that produced this fault is still uncoerced:** `lib/services/sessionAnalytics.ts` dereferences
+  every `userResponses` value, and the storage boundary validates that the map is a map without validating
+  what is inside it. Coercing the response records is a candidate of its own (the same shape as defects 25
+  and 33) and is deliberately *not* taken here, because this round is the containment rule and silently
+  changing what the stats reader counts would be a behaviour change dressed as a bug fix.
+
+**Total: 34 distinct defects in 29 files** (34 is the first in `components/SheetErrorBoundary.tsx` and the
+first fix in `app/page.tsx`, which was a call site in four earlier rounds; the three test files added -
+`tests/unit/sheet-boundary.test.tsx`, `tests/unit/sheet-boundaries.test.ts` and
+`e2e/sheet-error-boundary.spec.ts` - are counted as files, following defect 30's precedent).
+
+## 21. Round 19 - defect 35, the handoff that reported a copy it never made
+
+Round 17's second finding, fixed and pinned. It is a P1 rather than a P0 because nothing is lost at the
+moment of failure: the learner keeps the deck and can select the text by hand. What is lost is the only
+signal the handoff gives - a copy control that says `[ OK ]` over an unchanged clipboard sends an empty
+paste, or an old one, into RemNote, and the learner only finds out when the cards are not there.
+
+### 21.1 Eight controls, five behaviours - and a correction to round 17's count
+
+Round 17 counted four copy controls. The sweep for this round found **eight**, because it followed the
+clipboard call rather than the surface: `app/page.tsx`'s `copyToClipboard` (the completed session's three
+format buttons, rendered by `CompletedSessionView`), `StudioWorkbench`'s RemNote copy and `ToyModelLab`'s
+embed bullet are the same control in the same class, and two of the three were wrong in the same two ways
+as the four named. Every one of them is listed below, because "standardised" is only true if the list is
+complete:
+
+| Control | The behaviour it had |
+|---|---|
+| History drawer, per-row RemNote copy (`components/HistoryDrawer.tsx`) | `navigator.clipboard.writeText(content)` as a **floating promise**, then `[ OK ]` unconditionally - and on a non-secure origin the call threw a `TypeError` inside the click handler *before* any state was set |
+| Completed session, three format buttons (`app/page.tsx` → `components/CompletedSessionView.tsx`) | The same floating promise and the same unconditional `[ OK ]`, once per format |
+| Forge 1-click RemNote copy (`components/FlashcardForgeModal.tsx`) | A bare `await navigator.clipboard.writeText(...)` in an async click handler: a refusal produced no state change, no message and an **unhandled rejection** - the click looked dead |
+| Toy model, RemNote embed bullet (`components/toy-models/ToyModelLab.tsx`) | `void navigator.clipboard?.writeText(...).then(...).catch(...)` - a refusal was swallowed and the button deliberately "stays as it is" |
+| Workbench RemNote copy (`components/workbench/StudioWorkbench.tsx`) | Awaited inside a `try`/`catch` whose catch only `console.warn`ed |
+| RemNote sheet, per-document and copy-all (`components/SegregationRemnoteModal.tsx`) | `void navigator.clipboard?.writeText(text).catch(() => undefined)` followed by an unconditional "Copied!" |
+| Share sheet, both buttons (`components/StatelessShareModal.tsx`) | The only one that checked its outcome (with its own `execCommand` ladder) - and the only one that told the learner **nothing** when the write failed, beyond a `console.error` |
+
+### 21.2 Fixed, in two shared pieces and eight wirings
+
+1. **`lib/clipboard.ts` (new).** `copyTextToClipboard(text)` is the only place in the app that writes to the
+clipboard. Order: the async Clipboard API first, then the selection path - tried whether the API was
+**missing** or **refused**, because `NotAllowedError` is the ordinary refusal (the document was not focused,
+or permission was denied) and is exactly the situation the selection path still works in. Every step is
+guarded, the textarea is removed in a `finally`, and the function **never throws**: the caller receives
+`{ ok: true, via }` or `{ ok: false, reason, message }` with `reason` distinguishing `empty`, `unavailable`
+(no clipboard API at all) and `blocked` (both paths refused).
+2. **`hooks/useClipboardCopy.ts` (new).** The feedback half, once: `status`, `key`, `message`, `copied(k)`,
+`failed(k)` and `copy(text, k)`. Success is recorded **only** for `ok: true`; the confirmation resets after
+`resetMs`; the timer is replaced on a second click and cleared on unmount; and the state is **keyed**, so a
+sheet that lists twenty rows marks the row that was copied instead of the sheet.
+3. **The eight controls wired to it**, each carrying `data-copy-status="idle|copied|failed"`, each showing a
+failure state (`[ ! ]` plus the shared message, and for the two sheets roomy enough, a visible line: the
+share sheet's `share-copy-failed`), and each playing its success sound only for a write that landed. The
+success *labels* are deliberately untouched - the ask was one behaviour, not eight new words.
+
+### 21.3 Verified
+
+- **The write (`tests/unit/clipboard.test.ts`, 8 tests).** The landed write names its path and passes the
+exact text; a refusal falls back to the selection path rather than failing; both paths refusing reports
+`blocked` with the shared message; a browser with no clipboard at all reports `unavailable` instead of
+throwing (the old drawer's `TypeError`); a provider that throws **synchronously** is handled too; an empty
+payload is refused before either path is touched; no stray textarea is left behind on success or failure;
+and every refusal shape resolves rather than rejecting.
+- **The feedback (`tests/unit/use-clipboard-copy.test.tsx`, 9 tests, happy-dom).** Idle at rest; `copied` only
+for a landed write; `failed` with the shared message otherwise; the key marks the control that was copied and
+not its siblings; the failure stays attached to the control that failed; the confirmation resets to idle; a
+second click **owns** the confirmation instead of the first timer clearing it; unmounting clears the pending
+reset; and a later success replaces an earlier failure.
+- **The standardisation (`tests/unit/clipboard-standardisation.test.ts`, 6 tests, source scan).** Only
+`lib/clipboard.ts` writes to the clipboard (matched on the **call** form, so this report and the code
+comments can keep quoting the old calls); the seven control files all use the hook; the seven files that
+render copy state all carry `data-copy-status`; every control reads its `failed(` state, not just the
+success one; and the hook itself contains no clipboard call, so the order stays write-then-report.
+- **The browser (`e2e/clipboard-handoff.spec.ts`, 3 tests).** With real clipboard permissions: a click on the
+drawer's copy marks `copied`, shows `[ OK ]`, and the **markdown is read back off the system clipboard** to
+prove the right text arrived - then the mark returns to `idle` on its own. All **three** completed-session
+format buttons are then driven the same way, and each one taking the mark from the previous button is
+itself asserted, so the keyed state is proven across three controls rather than on one. With a refusing
+clipboard: the drawer, the share sheet (including its visible message) and **all three** completed-session
+buttons report `failed` with no `[ OK ]` over any of them. With **no clipboard API
+at all**: the failure is reported, the sheet stays usable, and nothing throws. An init script records
+`unhandledrejection` and `error` before the app boots, and it is asserted empty after **each** interaction.
+- **Mutation-proven.** Removing the refusal's `catch` in `lib/clipboard.ts` - leaving the rejection to
+propagate, the way the forge's bare `await` did - makes the browser record `NotAllowedError: denied` as an
+**unhandled rejection**, and the spec fails with `a refused clipboard write rejected uncaught` before it can
+assert anything else; restoring the catch turns it green. That is the defect reproduced on demand, and it is
+what makes the "nothing rejects" assertion load-bearing rather than decorative.
+- **Neighbours re-run, since every copy control changed:** `e2e/remnote-embed.spec.ts` (which copies from the
+toy lab and reads the bullet back off the real clipboard - now through the shared implementation) and
+`e2e/share-history.spec.ts` (the drawer, the completed view and the analytics sheet) both pass, and
+`bunx tsc -b --noEmit` and `bunx eslint` are clean.
+
+### 21.4 One deliberate behaviour change, and two things left alone
+
+- **A refused write now falls back instead of failing.** The share sheet was the only control that used the
+selection path, and only when `navigator.clipboard` was *absent*. Refusal is the commoner case - an unfocused
+document, a denied permission - so the shared implementation tries the selection path for it as well. That
+changes which clicks succeed, which is the point of the fix, and it is why the outcome carries `via`: a
+caller can tell a real clipboard write from the fallback if it ever needs to.
+- **The success copy stays as it was** (`[ ✅ REMNOTE MARKDOWN COPIED TO CLIPBOARD ]`, the share button's
+`bg-amber600`, `[ OK ]` per format). Consistency was the ask, and eight freshly invented labels would be a
+worse answer than the same state rendered in each surface's own register.
+- **`navigator.clipboard.readText` is untouched.** The scan matches writes only: reading the clipboard back is
+what the tests do, and no control in the app reads it.
+
+**Total: 35 distinct defects in 38 files** (35 is the first in `lib/clipboard.ts` and the first in
+`hooks/useClipboardCopy.ts`, and the first in `components/FlashcardForgeModal.tsx`,
+`components/StatelessShareModal.tsx`, `components/SegregationRemnoteModal.tsx` and
+`components/toy-models/ToyModelLab.tsx`; `components/HistoryDrawer.tsx`, `app/page.tsx`,
+`components/CompletedSessionView.tsx` and `components/workbench/StudioWorkbench.tsx` were already counted by
+earlier rounds. The three test files added - `tests/unit/clipboard.test.ts`,
+`tests/unit/use-clipboard-copy.test.tsx` and `tests/unit/clipboard-standardisation.test.ts` - are counted
+as files.)
+
+## 22. Round 20 - defect 36, the settings stamp four writers were each asked to remember
+
+Round 17's third finding, fixed and pinned. It is a P2 because nothing is
+corrupted: what it costs is the learner's most recent deliberate decision about
+their own configuration - the API key they cleared, or the settings file they
+just restored - being silently replaced by an older account copy the next time
+they sign in. The restore exists to make a cleared browser profile harmless; the
+defect made signing in the thing that undid it.
+
+### 22.1 One field, four writers, and the guard that read it
+
+`settingsBackup` in the user's Firestore document is applied over the device's
+settings on sign-in, and the whole point of the comparison is that it must only
+happen when the account's copy is *newer*. "Newer" is `savedAt`, and the field was
+written by the caller:
+
+| Writer | Stamped before this round |
+|---|---|
+| `SettingsModal.handleSave` | yes, `{ ...settings, savedAt: Date.now() }` |
+| `SettingsModal.handleImportFile` | yes, same shape |
+| `SettingsModal.handleReset` | **no** - `saveAISettings(DEFAULT_SETTINGS)` |
+| `lib/backup.ts restoreBackup` | **no** - `saveAISettings(backup.settings)`, i.e. whatever the file carried (usually nothing, sometimes a months-old stamp) |
+| `lib/auth-context.tsx backupSettingsToCloud` | yes, `savedAt: savedAt \|\| Date.now()`, stored beside the settings body |
+
+A missing stamp is not neutral: the guard read `(current as any)?.savedAt || 0`,
+so an unstamped local record read as `0` - older than every real write - and**any
+truthy** account stamp won, including a string or `Infinity`. So the two paths a
+learner uses *deliberately* to change or clear their settings were the two whose
+state could be overwritten. The account side was never the problem: the cloud
+writer always stamped.
+
+One more cause, worth naming because it is why this could happen quietly:
+`AISettings` had **no `savedAt` field at all**. Every writer and reader reached it
+through `as any`, so omitting it was not a type error - it was invisible. The type
+now carries it, and the casts are gone.
+
+### 22.2 Fixed, in three pieces plus the type
+
+1. **`lib/settings-sync.ts` (new).** The field's rules, in one testable place:
+`readSettingsStamp` (a usable stamp is a finite number **greater than zero** -
+`0`, `NaN`, a string and a missing field all mean "no age to compare");
+`nextSettingsStamp` (explicit stamp > the record's own > now);
+`shouldApplyCloudSettings(local, backup)` (the decision, both directions); and
+`mergeCloudSettings(current, backup)` (the record to write when it applies).
+2. **`lib/storage.ts` - the stamp happens in the single writer.**
+`saveAISettings(settings, savedAt?)` stamps every record, so a caller cannot omit
+it: that is the difference between fixing two paths and closing the class. The
+optional explicit stamp is what lets the cloud-restore path keep the *content's*
+age instead of claiming the content is new on this device - stamping it "now"
+would make this device permanently newer than every later edit made elsewhere, so
+a genuinely newer account copy could never arrive.
+3. **The two writes whose age is not "now" are explicit about it.**
+`lib/backup.ts restoreBackup` stamps `Date.now()`: the learner chose that content
+on this device today, and the file's own age is precisely what let an older
+account backup undo the restore. `lib/auth-context.tsx` replaces its inlined
+comparison with `shouldApplyCloudSettings(current, backup)` and writes
+`mergeCloudSettings(current, backup)` - local fields the account never had are
+kept, and the backup's stamp travels with its content.
+4. **`lib/types.ts`.** `AISettings.savedAt?: number`, documented as the guard's
+input, so the next writer gets told about it by the compiler.
+
+What that produces, per pair of records:
+
+| Device record | Account copy | Result |
+|---|---|---|
+| stamped, newer (reset, restore, save, import) | older | **local wins** - the defect case, now correct |
+| stamped, older | newer | applied, and the local record keeps the account's age |
+| stamped | no usable stamp (absent/`0`/`NaN`/string) | **not applied** - an unreadable age cannot be shown to be newer |
+| no usable stamp (a record written before this round) | any | applied - the wiped-profile case the restore exists for |
+| equal stamps | - | applied, so two devices converge on the same content |
+
+### 22.3 Verified
+
+- **The decision (`tests/unit/settings-sync.test.ts`, 16 tests).** The stamp
+reader (a positive finite number, and `0`/negative/`NaN`/`Infinity`/string/
+boolean/`null`/non-object all read as no stamp); `nextSettingsStamp` in all three
+precedences, including an unusable explicit stamp falling through instead of being
+trusted; the decision in both directions, at a tie, against an unreadable backup
+stamp, against an unstamped local record, and against `null`; the merge taking the
+account's settings, keeping local fields the account never had, and keeping the
+content's age. Then the two failure modes end to end through the real storage
+layer: **a reset written by a path that forgets to stamp** now outranks an older
+account backup instead of being replaced by it, and a pre-fix record with no stamp
+still accepts the account copy.
+- **The storage layer (`tests/unit/storage.test.ts`, +2 tests, 33 in the file).** A
+record written by a path that forgets to stamp carries a fresh one; an explicit
+stamp is honoured; the record's own stamp is kept.
+- **The restore path (`tests/unit/backup.test.ts`, +1 test, 15 in the file).** A
+restored settings file is stamped now, not with the file's age - the file's
+`savedAt` deliberately set a year back, asserted not to survive.
+- **The browser (`e2e/settings-stamp.spec.ts`, 2 tests).** In the real sheet: the
+reset writes a record stamped now and newer than the device's old stamp (and the
+sheet stays usable); a following save moves the stamp forward instead of reusing
+it.
+- **Mutation-proven, both halves.** (a) Writing the record exactly as handed in -
+the pre-fix storage behaviour - fails **five** of the new tests across the three
+files, including both end-to-end ones and the restore regression test. (b)
+Restoring the pre-fix comparison fails `never applies a backup whose age cannot be
+read`, which is the truthy-stamp hole. Both mutations were reverted and the checks
+re-run green.
+- **The e2e's own limit, stated because it is easy to misread.** The stamp is now
+guaranteed twice (at each call site and inside the single writer), so *either*
+layer alone satisfies the browser assertions - the spec pins the observable
+behaviour but cannot tell them apart. The mutation above is run against the unit
+tests, which fail loudly.
+- **Neighbours:** `e2e/share-history.spec.ts` (the settings sheet, the history
+drawer and the analytics sheet) still passes, the full unit suite is green (84
+files, 1391 tests), and `bunx tsc -b --noEmit` and `bunx eslint` are clean.
+
+### 22.4 The one consequence a learner can observe
+
+**A device whose settings record predates this round has no stamp**, so the first
+sign-in after this update still applies the account's copy over it - once. That is
+the intended reading rather than a gap: an unknown age is not evidence of
+newness, and the alternative (treating an unstamped local record as the newest
+thing on the account) would strand every learner who has ever cleared their
+browser profile. After that first write, every subsequent state on the device is
+stamped, so the decision is real from then on.
+
+### 22.5 Checked, and recorded because it is the next trap
+
+Every write path was enumerated rather than assumed: `saveAISettings` in
+`lib/storage.ts` is the **only** persistence for AI settings (a `localStorage`
+mirror; `lib/storage/index.ts` is a nine-line re-export of `lib/db.ts`, and
+greping the settings key across `app/`, `components/`, `hooks/` and `lib/` returns
+only its definition, its reader and that writer). The account side has exactly one
+writer too, `backupSettingsToCloud`, and it stamps.
+
+**One observation, not filed as a defect:** `lib/db.ts` creates a `settings`
+object store that nothing reads or writes - settings never moved to IndexedDB,
+and the only `session_state` use is `last_upload`. It is harmless today, and it is
+worth naming here because it is the obvious place a future round would add a
+second settings writer: anything persisted through that store would bypass
+`saveAISettings` and therefore the stamp. The guard's correctness rests on "one
+writer, and it stamps", so that is the property to keep.
+
+**Total: 36 distinct defects in 45 files** (36 is the first in
+`lib/settings-sync.ts`, the first in `lib/backup.ts`, the first in
+`lib/auth-context.tsx`, the first in `components/SettingsModal.tsx` and the first
+in `lib/types.ts`; `lib/storage.ts` was already counted by defects 25 and 28. The
+two test files added - `tests/unit/settings-sync.test.ts` and
+`e2e/settings-stamp.spec.ts` - are counted as files, and
+`tests/unit/storage.test.ts` and `tests/unit/backup.test.ts` were already counted
+by earlier rounds.)
+
+## 23. Round 21 - defect 37, the stage that was never written down
+
+Round 17's fourth finding, fixed and pinned. It is a P2 because nothing is
+corrupted and no other stage is touched: the workbench simply came back to **that**
+stage with empty fields, so a reload, a crash or a closed tab mid-paragraph took
+the paragraph with it. The asymmetry round 17 named is what made it readable as
+loss rather than as a limitation - a submitted stage survives in `userResponses`,
+and both other input paths already checkpoint explicitly (`app/page.tsx:1020`-
+`:1035` per YouTube stage, `:1043`-`:1056` for the lab on a 500 ms debounce,
+whose own comment says it exists "so 'encode 2 of 9 chapters today' survives a
+reload"). The live fields had no writer at all - a search for a draft-shaped key
+returned nothing - so every keystroke on the visible stage existed only in React
+state until Submit/Skip.
+
+### 23.1 The record, the single writer, and the reader that is also the guard
+
+1. **`lib/stage-draft.ts` (new).** One localStorage record under
+`deepencode_stage_draft_v1`, matching `lib/mr-m/ledger.ts` and
+`interference-traps.ts`: the draft is read on the launchpad's first paint, before
+an async store could answer. The body is the **session the stage belongs to**
+(activities, `userResponses`, encoding mode, XP, guided modules, YouTube data,
+research contexts, source file) **plus the fields that never got submitted**
+(`field1`/`field2`/`field3`, `selectedPreset`, `reflection`) and the
+`currentActivityIndex` that says which stage they are. `saveStageDraft` stamps
+`savedAt` itself, so a caller cannot hand in a stale age.
+2. **The reader is the guard - `loadStageDraft` returns work or `null`.** An
+unparseable record, a non-record, a missing/empty `activities` array, a stamp
+older than seven days, or an unreadable stamp all read as "nothing to resume";
+so does a record that holds neither unsubmitted typing nor a submitted response
+(`stageDraftHasProgress`). Everything is coerced rather than trusted, so a
+half-written or hand-edited record degrades to `null` instead of throwing inside
+a render - the same posture as `coerceSavedSchema` (defect 25) and the settings
+stamp reader (defect 36). A draft in the future (clock skew) is fresh, not stale.
+3. **The write lives in `hooks/useSession.ts`, over the session's own state.**
+One effect turns the reducer's state into the draft and schedules it **300 ms**
+after the last change, so stopping to think is already saved and a burst of typing
+is one write. A second effect flushes the latest draft on `pagehide`, because a
+reload can otherwise land inside the debounce window - and the spec proves the
+debounced write itself lands, not just that the unload rescue does. Nothing typed
+and nothing submitted clears the record instead of accumulating an empty workbench;
+`resetSession` and both completion paths in `app/page.tsx` (final Submit and final
+Skip, where the session becomes a `SavedSchema`) clear it too, so a finished
+session cannot be offered back.
+4. **`restore_draft` hydrates the live fields verbatim.** The reducer action sets
+`appState: 'encoding'` and takes `field1..3`/`selectedPreset`/`reflection` from the
+draft directly - deliberately **not** through `applyLoadedStage`, which only knows
+submitted responses, and the point of the draft is exactly what was never
+submitted. The stage index is clamped into the activities array. The launchpad
+renders `[ ▶ STAGE RECOVERED ]` (`data-testid="stage-draft-banner"`) naming the
+stage number, with **Resume stage N** and a **Discard** that drops the record.
+
+### 23.2 Verified
+
+- **The store (unit, `tests/unit/stage-draft.test.ts`, 18 tests, happy-dom).**
+Round-trip of the live typing and the session it belongs to; the writer stamps
+what it hands in; corrupt records (bad JSON, a bare string, an array, `null`) read
+as nothing; an empty `activities` array is refused; activities without ids are
+dropped; a hand-edited record is coerced rather than trusted; freshness at the
+window edge, at a future stamp, and for every unreadable stamp shape; clearing;
+and the recoverability rules (whitespace-only typing is not typing; a stage already
+submitted this session is progress; a looked-at-but-untouched stage is not).
+- **The reducer (unit, `tests/unit/sessionReducer.test.ts`, +5 tests, 22 in the
+file).** `restore_draft` lands in `encoding` with the unsubmitted fields intact,
+restores the session around them, clamps an out-of-range stage index, and starts
+with empty undo/redo stacks.
+- **The browser (`e2e/stage-draft.spec.ts`, 2 tests, live preview).** Type two
+paragraphs into stage 1, then **poll localStorage to prove the debounced write
+landed before the reload** - surviving on an unload flush alone would not be the
+same guarantee; reload; assert the banner names stage 1 and says the unsubmitted
+work is still there; click **Resume stage 1**; assert both fields carry the typed
+text word for word. The second test is the negative control: walk the whole
+workout to completion, reload, and assert the banner has count **0** - a finished
+session must not be offered back as a half-finished stage.
+- **The spec is load-bearing, and this round has the receipt.** The first browser
+run failed against the real page with `stageDraftHasTyping is not defined` - the
+banner's copy helper was used without being imported. The unit suite and the store
+tests were green with that hole in place; the browser spec is what caught it, which
+is why the reload assertion is run against the app rather than only against the
+store.
+- **Neighbours:** the full unit suite is green (85 files, 1409 tests),
+`bunx tsc -b --noEmit` is clean, and the draft's own `pagehide` flush does not
+disturb the existing flows (the YouTube and lab paths keep their own checkpoints,
+untouched).
+
+### 23.3 What the draft deliberately is not
+
+- **Not a session save.** The draft never becomes a `SavedSchema` and never touches
+the library, the cloud or the drawer: it is a device-local checkpoint that exists
+to be either resumed or dropped. It expires after seven days, and the launchpad
+shows nothing rather than a resume button into an empty workbench.
+- **Not a second writer of anything else.** `lib/storage.ts`'s documented-but-dead
+`debouncedSaveSchema`/`autosaveTimer` (finding 38) is left exactly where round 17
+found it; this round's debounce lives in `useSession`, over the draft record only.
+- **No new cross-device surface.** A draft belongs to the device it was typed on,
+as `localStorage` states - which is what keeps it synchronous on first paint.
+
+**Total: 37 distinct defects in 49 files** (37 is the first in `lib/stage-draft.ts`;
+`hooks/useSession.ts` was already counted by defect 4, and `app/page.tsx` by
+several earlier rounds. The three test files added - `tests/unit/stage-draft.test.ts`,
+`tests/unit/sessionReducer.test.ts` and `e2e/stage-draft.spec.ts` - are counted as
+files, following defect 30's precedent.)
