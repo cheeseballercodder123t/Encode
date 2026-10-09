@@ -24,6 +24,9 @@ import {
   saveStudyPrefs,
   saveSchemaToHistory,
 } from './storage';
+import { DECK_MEMORY_STORAGE_KEY } from './deck-memory';
+import { TEACH_LESSONS_STORAGE_KEY } from './teach-lessons';
+import { FORGE_RECIPES_STORAGE_KEY } from './forge-recipes';
 
 const BACKUP_VERSION = 1;
 
@@ -41,17 +44,33 @@ export interface BackupFile {
   extras: Record<string, unknown>;
 }
 
-/** localStorage keys owned by feature modules (deck memory, lessons, recipes…). */
-const EXTRA_KEYS = [
-  'deepencode_deck_memory_v1',
-  'deepencode_deck_sources_v1',
-  'deepencode_teach_lessons_v1',
-  'deepencode_forge_recipes_v1',
-  'deepencode_chapter_progress_v1',
+/**
+ * localStorage keys owned by feature modules (deck memory, lessons, recipes…).
+ *
+ * A key here is an alias the OWNER exports whenever one exists, because a
+ * hand-written second spelling of a key is a backup that ships without the data
+ * and a restore that silently drops it. That is exactly what had happened to the
+ * first three entries: deck memory, the parked Teach Me lessons and the forge
+ * recipes were listed under `deepencode_deck_memory_v1`,
+ * `deepencode_teach_lessons_v1` and `deepencode_forge_recipes_v1`, while the
+ * modules that own them write `encode.deck-memory.v1`,
+ * `encode.teachme.library.v1` and `encode.forge-recipes.v1` — so a learner's
+ * card memory (which is what makes the forge memory-aware), their saved lessons
+ * and their re-runnable recipe setups were missing from every backup file and
+ * from every restore, while this module's own header promised them by name
+ * (defect 58). The three entries that no longer had an owner at all
+ * (`deck_sources`, which now lives INSIDE the deck-memory store, `chapter_progress`,
+ * which `lib/chapters.ts` derives from the session, and `sm2_manifest`, which is a
+ * file inside the exported .apkg rather than a localStorage key) are gone rather
+ * than left to look like coverage.
+ */
+const EXTRA_KEYS: readonly string[] = [
+  DECK_MEMORY_STORAGE_KEY,
+  TEACH_LESSONS_STORAGE_KEY,
+  FORGE_RECIPES_STORAGE_KEY,
   'deepencode_toy_progress_v1',
   'deepencode_session_meta_v1',
   'deepencode_interference_traps_v1',
-  'deepencode_sm2_manifest',
   'deepencode_mr_m_paradox_v1',
   // The two stores a restore used to wipe in silence: the engineering patch
   // registry (the standing defects a stage is pre-flighted against, keyed in
@@ -62,7 +81,7 @@ const EXTRA_KEYS = [
   // forgets what they had learned about their own mistakes.
   'deepencode_mr_m_patches_v1',
   'deepencode_friction_log_v1',
-] as const;
+];
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined';
@@ -239,7 +258,7 @@ export function restoreBackup(file: unknown): RestoreReport {
   }
   if (backup.extras && typeof backup.extras === 'object') {
     for (const [key, value] of Object.entries(backup.extras)) {
-      if (!EXTRA_KEYS.includes(key as (typeof EXTRA_KEYS)[number])) continue;
+      if (!EXTRA_KEYS.includes(key)) continue;
       if (value === null || typeof value !== 'object') continue;
       writeRawKey(key, value);
       report.extrasRestored++;

@@ -9,6 +9,24 @@ import {
 } from '../../lib/backup';
 import { invalidateSchemaCache } from '../../lib/storage';
 import type { SavedSchema } from '../../lib/types';
+import {
+  DECK_MEMORY_STORAGE_KEY,
+  loadDeckMemory,
+  memoryKeyForTopic,
+  recordDeckExport,
+} from '../../lib/deck-memory';
+import {
+  FORGE_RECIPES_STORAGE_KEY,
+  buildForgeRecipe,
+  loadForgeRecipes,
+  saveForgeRecipe,
+} from '../../lib/forge-recipes';
+import {
+  TEACH_LESSONS_STORAGE_KEY,
+  loadSavedTeachLessons,
+  saveTeachLesson,
+  teachLessonId,
+} from '../../lib/teach-lessons';
 
 // jsdom-less storage harness: the backup/storage modules touch both the
 // global `localStorage` (lib/storage) and `window.localStorage` (lib/backup),
@@ -64,10 +82,10 @@ describe('buildBackup', () => {
   });
 
   it('collects extras that exist and skips ones that do not', () => {
-    store.set('deepencode_teach_lessons_v1', JSON.stringify([{ id: 'l1' }]));
+    store.set(TEACH_LESSONS_STORAGE_KEY, JSON.stringify([{ id: 'l1' }]));
     const backup = buildBackup();
-    expect(backup.extras['deepencode_teach_lessons_v1']).toEqual([{ id: 'l1' }]);
-    expect(backup.extras['deepencode_forge_recipes_v1']).toBeUndefined();
+    expect(backup.extras[TEACH_LESSONS_STORAGE_KEY]).toEqual([{ id: 'l1' }]);
+    expect(backup.extras[FORGE_RECIPES_STORAGE_KEY]).toBeUndefined();
   });
 });
 
@@ -193,12 +211,12 @@ describe('restoreBackup', () => {
     const report = restoreBackup({
       app: 'deepencode',
       extras: {
-        deepencode_teach_lessons_v1: [{ id: 'l1' }],
+        [TEACH_LESSONS_STORAGE_KEY]: [{ id: 'l1' }],
         'malicious_key': { nope: true },
       },
     });
     expect(report.extrasRestored).toBe(1);
-    expect(store.has('deepencode_teach_lessons_v1')).toBe(true);
+    expect(store.has(TEACH_LESSONS_STORAGE_KEY)).toBe(true);
     expect(store.has('malicious_key')).toBe(false);
   });
 
@@ -243,5 +261,65 @@ describe('restoreBackup', () => {
   it('returns an empty report for non-object input', () => {
     expect(restoreBackup(null).schemasRestored).toBe(0);
     expect(restoreBackup('nope').schemasRestored).toBe(0);
+  });
+});
+
+describe('the backup carries what the feature modules actually write (defect 58)', () => {
+  beforeEach(() => {
+    store.clear();
+    mockStorage();
+    invalidateSchemaCache();
+  });
+
+  it('round-trips deck memory, parked lessons and forge recipes through their own writers', () => {
+    // Every entry is written by the module that OWNS it, never by hand-setting
+    // a key. That is the only shape of test that can fail when the two sides
+    // drift apart again, because the defect was a backup listing keys its owners
+    // had renamed years of features ago: deck memory, the lessons parked with
+    // "save it for later", and the forge recipes were absent from every file the
+    // sheet produced, and a restore could not put them back either.
+    recordDeckExport({ topic: 'Photosynthesis', keys: ['card-front-1'] });
+    saveTeachLesson({
+      id: teachLessonId('notes', 'Photosynthesis'),
+      savedAt: 1_700_000_000_000,
+      scope: 'notes',
+      topic: 'Photosynthesis',
+      stageIndex: 0,
+      lesson: { title: 'Photosynthesis', segments: [] },
+      segmentIndex: 0,
+      xpEarned: 40,
+      bestStreak: 2,
+      completed: false,
+    });
+    saveForgeRecipe(
+      buildForgeRecipe({
+        name: 'Monday lectures',
+        sections: ['facts'],
+        target: 'anki',
+        sources: [{ kind: 'text', label: 'Renal notes', notes: 'Loop of Henle countercurrent multiplication.' }],
+      })!
+    );
+
+    const backup = buildBackup();
+    expect(backup.extras[DECK_MEMORY_STORAGE_KEY]).toBeDefined();
+    expect(backup.extras[TEACH_LESSONS_STORAGE_KEY]).toBeDefined();
+    expect(backup.extras[FORGE_RECIPES_STORAGE_KEY]).toBeDefined();
+    // The three spellings the list used to carry are not written by anything in
+    // the app, so a file that listed them in place of the real keys carried none
+    // of this. They must not come back.
+    expect(backup.extras['deepencode_deck_memory_v1']).toBeUndefined();
+    expect(backup.extras['deepencode_teach_lessons_v1']).toBeUndefined();
+    expect(backup.extras['deepencode_forge_recipes_v1']).toBeUndefined();
+
+    store.clear();
+    const report = restoreBackup(backup);
+    expect(report.extrasRestored).toBeGreaterThanOrEqual(3);
+
+    // Read back through the owners' readers, not through the raw keys: the
+    // learner's card memory, their lesson and their recipe have to be visible to
+    // the features that consume them, which is what the backup promises.
+    expect(loadDeckMemory()[memoryKeyForTopic('Photosynthesis')]?.keys).toContain('card-front-1');
+    expect(loadSavedTeachLessons().map((entry) => entry.topic)).toContain('Photosynthesis');
+    expect(loadForgeRecipes().map((recipe) => recipe.name)).toContain('Monday lectures');
   });
 });

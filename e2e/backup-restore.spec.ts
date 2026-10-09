@@ -16,7 +16,18 @@ import { makeActivity, makeSavedSchema } from './helpers/fixtures';
 
 const SCHEMAS_KEY = 'deepencode_saved_schemas_v2';
 const SETTINGS_KEY = 'deepencode_ai_settings_v2';
-const DECK_MEMORY_KEY = 'deepencode_deck_memory_v1';
+/**
+ * The deck-memory store's REAL key (`lib/deck-memory.ts` exports it as
+ * `DECK_MEMORY_STORAGE_KEY`), and the fingerprint its record is filed under
+ * (`memoryKeyForTopic('Backup Topic One')`).
+ *
+ * This spec used to seed and assert `deepencode_deck_memory_v1` — a spelling no
+ * module in the app has written since the store was renamed — which is exactly
+ * why the backup could drop the learner's card memory while this test stayed
+ * green (defect 58). Seeding a key that nothing reads proves nothing.
+ */
+const DECK_MEMORY_KEY = 'encode.deck-memory.v1';
+const DECK_MEMORY_TOPIC_KEY = 'backup topic one';
 
 const seededSchemas = () => [
   makeSavedSchema({
@@ -55,15 +66,25 @@ test.describe('Full backup round trip', () => {
     browser,
   }) => {
     await page.addInitScript(
-      ({ schemas, settings, deckMemory }) => {
+      ({ schemas, settings, deckMemory, deckKey }) => {
         window.localStorage.setItem('deepencode_saved_schemas_v2', JSON.stringify(schemas));
         window.localStorage.setItem('deepencode_ai_settings_v2', JSON.stringify(settings));
-        window.localStorage.setItem('deepencode_deck_memory_v1', JSON.stringify(deckMemory));
+        window.localStorage.setItem(deckKey, JSON.stringify(deckMemory));
       },
       {
         schemas: seededSchemas(),
         settings: { provider: 'gemini', model: 'gemini-2.5-flash' },
-        deckMemory: [{ topic: 'Backup Topic One', fingerprints: ['fp-1'] }],
+        deckKey: DECK_MEMORY_KEY,
+        // The store's real shape: one record per topic fingerprint, carrying the
+        // card fronts already shipped to an export surface.
+        deckMemory: {
+          [DECK_MEMORY_TOPIC_KEY]: {
+            topic: 'Backup Topic One',
+            keys: ['fp-1'],
+            updatedAt: 1_770_000_000_000,
+            exports: 1,
+          },
+        },
       }
     );
     await openAnalytics(page);
@@ -80,7 +101,9 @@ test.describe('Full backup round trip', () => {
     expect(backup.version).toBe(1);
     expect(backup.schemas.map((s: { id: string }) => s.id)).toEqual(['backup_1', 'backup_2']);
     expect(backup.settings).toMatchObject({ provider: 'gemini' });
-    expect(backup.extras[DECK_MEMORY_KEY]).toHaveLength(1);
+    // The card memory rides in the file, keyed the way its owner keys it.
+    expect(Object.keys(backup.extras[DECK_MEMORY_KEY])).toEqual([DECK_MEMORY_TOPIC_KEY]);
+    expect(backup.extras[DECK_MEMORY_KEY][DECK_MEMORY_TOPIC_KEY].keys).toEqual(['fp-1']);
 
     // A second context is a second browser profile: empty localStorage and
     // empty IndexedDB, which is exactly the machine someone restores onto.
@@ -113,6 +136,11 @@ test.describe('Full backup round trip', () => {
     expect(await device.evaluate((key) => window.localStorage.getItem(key), SCHEMAS_KEY)).toContain(
       'backup_1'
     );
+    // And the memory that used to be dropped on both halves of the trip really
+    // lands on the receiving profile, under the key its module reads.
+    expect(
+      await device.evaluate((key) => window.localStorage.getItem(key), DECK_MEMORY_KEY)
+    ).toContain('Backup Topic One');
 
     await fresh.close();
   });

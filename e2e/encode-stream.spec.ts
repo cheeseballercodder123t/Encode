@@ -122,7 +122,14 @@ test.describe('Streamed generation', () => {
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
     await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
 
-    expect(dialogMessage).toContain('Provider down');
+    // The message is written by the dialog handler, which only runs once the
+    // stream's `error` event has made the round trip — one hop after the click.
+    // Reading the variable straight away asserts against the clock rather than
+    // the app: on a warm server the dialog wins the race, and under load (a
+    // cold compile, or any spec that ran before this one) the click has not
+    // resolved yet and the captured message is still empty. Poll until the
+    // handler has actually been called, then assert the same substring.
+    await expect.poll(() => dialogMessage).toContain('Provider down');
     await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();
   });
 });

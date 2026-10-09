@@ -49,6 +49,18 @@ export interface DeckMemoryRecord {
 }
 
 const STORAGE_KEY = 'encode.deck-memory.v1';
+
+/**
+ * The key, under a name the one other module that has to read it can import.
+ *
+ * `lib/backup.ts` captures this store by key and restored it over a device, and
+ * it was doing so with a SECOND spelling of the key (`deepencode_deck_memory_v1`)
+ * that nothing in the app has written since this store was renamed — so a backup
+ * silently shipped without the learner's card memory, and a restore silently
+ * dropped it. Exported so the two modules cannot disagree again, the same way
+ * `lib/forge-recipes.ts` exports its own (defect 58).
+ */
+export { STORAGE_KEY as DECK_MEMORY_STORAGE_KEY };
 const MAX_TOPICS = 60;
 /**
  * The cap on one topic's fingerprints — a cap on the UNION of every device's
