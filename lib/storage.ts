@@ -22,8 +22,8 @@ const STORAGE_KEYS = {
 const schemaCache = new Map<string, SavedSchema[]>();
 let cacheInitialized = false;
 
-// Debounce timer for autosaves
-let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+// The IndexedDB mirror's debounced write lives beside `saveSchemaToHistory`,
+// the single writer that queues it (defect 38).
 
 export const DEFAULT_SETTINGS: AISettings = {
   provider: 'gemini',
@@ -362,8 +362,9 @@ export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
     cacheInitialized = true;
     notifySavedSchemaListeners(capped, 'local');
     
-    // Asynchronously persist to IndexedDB
-    saveSchemaToIDB(schema).catch(e => console.warn('IDB write failed:', e));
+    // The IndexedDB hop is queued behind the debounce (defect 38): the mirror
+    // above is already the synchronous half, and a burst of saves is one trip.
+    scheduleSchemaIdbWrite(schema);
     
     return capped;
   } catch (e) {
@@ -372,18 +373,86 @@ export function saveSchemaToHistory(schema: SavedSchema): SavedSchema[] {
   }
 }
 
-// Debounced autosave for performance during typing
-export function debouncedSaveSchema(schema: SavedSchema, delay: number = 1000): void {
+// ─── The IndexedDB mirror's debounced write (defect 38) ─────────────────────
+//
+// A save writes two stores: the localStorage mirror synchronously (so this tab,
+// and a reload, see the schema immediately) and IndexedDB - the fuller store -
+// through `saveSchemaToIDB`. That second write is the heavy one: it reads the
+// whole IndexedDB store back and re-mirrors it, and paths like the YouTube
+// workout save a schema per stage while a stage boundary can save several in a
+// row. The debounce that was written for it (`debouncedSaveSchema`, timer and
+// all) was never called by anything, so every save hit IndexedDB immediately and
+// the README described a cadence the code did not have.
+//
+// One queue, one timer, coalesced by id: repeated saves of the same schema inside
+// the window collapse to one write of the NEWEST record, and different schemas
+// saved in a burst go out together. The mirror is still written synchronously, so
+// nothing waits on the timer to be readable - the queue only decides when the
+// fuller store catches up.
+//
+// The window cannot outlive the page: the flush below is bound to `pagehide` and
+// to the tab going hidden, so the write is at least STARTED before the page can
+// go away. That is the honest limit of the guarantee - a transaction started
+// during unload is not guaranteed to commit if the process is killed - and it is
+// why the synchronous mirror is the store that never waits.
+
+/** How long a queued IndexedDB mirror write waits for a burst of saves to end. */
+export const IDB_AUTOSAVE_DELAY_MS = 1000;
+
+const pendingSchemaIdbWrites = new Map<string, SavedSchema>();
+let idbAutosaveTimer: ReturnType<typeof setTimeout> | null = null;
+let idbFlushBound = false;
+
+/** Queue a write, keeping only the newest record per id, and arm the timer. */
+function scheduleSchemaIdbWrite(schema: SavedSchema): void {
   if (typeof window === 'undefined') return;
-  
-  if (autosaveTimer) {
-    clearTimeout(autosaveTimer);
+  pendingSchemaIdbWrites.set(schema.id, schema);
+  bindSchemaIdbFlush();
+  if (idbAutosaveTimer) clearTimeout(idbAutosaveTimer);
+  idbAutosaveTimer = setTimeout(() => {
+    idbAutosaveTimer = null;
+    flushPendingSchemaWrites();
+  }, IDB_AUTOSAVE_DELAY_MS);
+}
+
+/**
+ * Write every queued schema to IndexedDB now, and clear the queue.
+ *
+ * Exported because the page cannot wait on a timer: this is what `pagehide` and
+ * the tab going hidden call, and what the tests drive directly.
+ */
+export function flushPendingSchemaWrites(): void {
+  if (idbAutosaveTimer) {
+    clearTimeout(idbAutosaveTimer);
+    idbAutosaveTimer = null;
   }
-  
-  autosaveTimer = setTimeout(() => {
-    saveSchemaToHistory(schema);
-    autosaveTimer = null;
-  }, delay);
+  if (pendingSchemaIdbWrites.size === 0) return;
+  const queued = [...pendingSchemaIdbWrites.values()];
+  pendingSchemaIdbWrites.clear();
+  for (const schema of queued) {
+    saveSchemaToIDB(schema).catch(e => console.warn('IDB write failed:', e));
+  }
+}
+
+/** Forget queued writes and disarm the timer (a clear is authoritative). */
+function dropPendingSchemaIdbWrites(): void {
+  pendingSchemaIdbWrites.clear();
+  if (idbAutosaveTimer) {
+    clearTimeout(idbAutosaveTimer);
+    idbAutosaveTimer = null;
+  }
+}
+
+/** Started once, by the first queued write: nobody pays for it until it is used. */
+function bindSchemaIdbFlush(): void {
+  if (idbFlushBound || typeof window === 'undefined') return;
+  idbFlushBound = true;
+  window.addEventListener('pagehide', flushPendingSchemaWrites);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushPendingSchemaWrites();
+    });
+  }
 }
 
 export function deleteSchemaFromHistory(id: string): SavedSchema[] {
@@ -406,6 +475,9 @@ export function deleteSchemaFromHistory(id: string): SavedSchema[] {
     cacheInitialized = true;
     notifySavedSchemaListeners(updated, 'local');
     
+    // A queued write for this id would land AFTER the removal and resurrect the
+    // row: the queue is part of the delete's ordering, not beside it.
+    pendingSchemaIdbWrites.delete(id);
     deleteSchemaFromIDB(id).catch(e => console.warn('IDB delete failed:', e));
     return updated;
   } catch (e) {
@@ -427,6 +499,9 @@ export function clearAllSchemas(): void {
     cacheInitialized = false;
     notifySavedSchemaListeners([], 'local');
     
+    // Drop queued writes with it: anything scheduled would land after the clear
+    // and rebuild a row the learner just removed.
+    dropPendingSchemaIdbWrites();
     clearAllSchemasFromIDB().catch(e => console.warn('IDB clear failed:', e));
   } catch (e) {
     console.error('Failed to clear schemas', e);
