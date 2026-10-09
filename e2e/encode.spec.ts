@@ -21,6 +21,18 @@ test.describe('Main encode flow', () => {
     await expect(page.getByText('Action Potentials').first()).toBeVisible();
   });
 
+  test('a standard encode starts the schema at 100 XP, not 200 (defect 57)', async ({ page }) => {
+    await mockAiApis(page);
+    await startEncodeFromNotes(page, MOCK_NOTES);
+    await expectStage(page, 1);
+
+    // The award used to be `setXp(100); addXP(100)` — both through the same
+    // reducer — so the rail total moved by 200 while the gain popup rendered
+    // beside it said `+100`. This reads the number the learner reads.
+    await expect(page.getByTestId('xp-total')).toContainText('0100');
+    await expect(page.getByTestId('xp-total')).not.toContainText('0200');
+  });
+
   test('quick diagnostic: prerequisites audit opens with mocked report', async ({ page }) => {
     await mockAiApis(page);
     await page.goto('/');
@@ -55,6 +67,9 @@ test.describe('YouTube flow', () => {
 
     await confirmReadiness(page);
     await expectStage(page, 1);
+    // The YouTube path's own baseline (120), awarded once: the same defect-57
+    // doubling ran through it.
+    await expect(page.getByTestId('xp-total')).toContainText('0120');
     await page.getByPlaceholder('STAGE1_FIELD1').fill('Layers learn edge detectors first.');
     await page.getByPlaceholder('STAGE1_FIELD2').fill('Backprop assigns credit to earlier layers.');
     await page.getByRole('button', { name: /FINISH/ }).click();

@@ -2781,3 +2781,79 @@ elsewhere (the Feynman checkpoint bonus), which is what made the wrong number lo
 **Total: 56 distinct defects** (this round's fixes land in `lib/remnote.ts`, `app/page.tsx` and
 `components/HistoryDrawer.tsx`, plus `tests/unit/remnote.test.ts` and `e2e/share-history.spec.ts`;
 the finding is new to this report, and so is every pass in 36.1.)
+
+## 37. Round 35 - defect 57, the award that counted twice
+
+### 37.1 The mechanical passes, and what each one returned
+
+- **DOM ids the client queries against the ids that exist.** Three `getElementById`/`querySelector('#…')`
+  lookups in the whole client, and the one that has no matching `id` in the source is
+  `#gsi-script` in `lib/google-drive.ts`, which *creates* that script tag itself before looking it
+  up. Clean.
+- **`catch` blocks that report success.** Re-read after round 34's list: none of the 49 empty
+  bodies, and none of the caught paths, returns a success shape. Clean.
+- **In-place array mutation** (`reverse`/`shift`/`unshift`/`splice` on a named array): four, all
+  deliberate - `openSheets.splice` unregisters the sheet the module registered itself,
+  `current.unshift` writes the local ledger it is building, `strokeHistoryRef.current.shift()` caps
+  a ref's own undo history at twenty strokes, and `next.splice` in the export sheet operates on
+  `[...baseCards]`. Clean.
+- **Day keys taken from the UTC clock** (`toISOString().slice(0, 10)`): two, and both are download
+  *filenames* (`deepencode-settings-…json`, the backup stamp), not day boundaries. Clean.
+- **A `Map`/`Set` handed to `JSON.stringify`** (which serialises as `{}`): two hits, both false
+  positives on `loadAISettings()`. Clean.
+- **JSX returned from `.map()` with no `key`.** None. Clean.
+- **`useState` seeded from a prop.** Three real candidates; all three reviewed -
+  `useGenerationProgress` re-homes during render, `AnalyticsDashboard` tracks `prevOpen`, and
+  `MetaReflectionPrompt` is **never rendered anywhere** (a dead component, §26.1 bucket (b), not
+  filed).
+- **The `||` fallback pass re-run with NAMED constants as the fallback**, which is the shape of round
+  34's two defects and which the first pass could not see (it only matched literal fallbacks): nine
+  hits, every one a guard against a value that cannot legitimately be zero - `Math.floor(perPage) || 1`,
+  a keywords denominator, `window.devicePixelRatio || 1`, a request count clamped to 1..5, and the
+  plan's own `runwayMinutes`. Clean.
+- **The pass that paid** was a probe rather than a scan: the XP a generation leaves on the masthead,
+  read in the browser on each path.
+
+### 37.2 Finding
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 57 | **P2 - medium-high. FIXED** | **Every generation awarded its XP twice, and the gain it flashed disagreed with its own total.** All four generation paths wrote `setXp(N); addXP(N);`, and both calls go through the *same* session reducer: `setXp` is `patch({ xp: v })` and `addXP` dispatches `add_xp` → `xp + amount`. So a standard schema left the learner on **200 XP** while the gain popup rendered beside that number said **+100** - two numbers, one line, contradicting each other. Measured: standard encode `0200+100`, YouTube `0240+120`; the offline workout (60) and the guided path (150) are written the same way, so they awarded 120 and 300. The comment above the offline pair states the scale the module intends ("Fewer XP than a model-authored schema: the same work, less of the generation effect, and the scale should not pretend otherwise"), i.e. one number per generation type - not two. The doubled figure is also the one the schema records as its own `xpEarned` on save, and therefore the one the analytics panel, the history drawer and the RemNote export read back. | `app/page.tsx` - the four `setXp(N); addXP(N)` pairs: offline 60, standard 100, guided 150, YouTube 120 | Probed rather than argued: a temporary spec drove the mocked encode and read the masthead in the browser, printing `{"rail":"0200+100"}`. Pinned on the two paths the suite drives end to end, and both pins fail against the old line: `Expected substring: "0100" / Received string: "0200"` and `Expected substring: "0120" / Received string: "0240"`. |
+
+### 37.3 Fixed, in two files
+
+- `app/page.tsx` - a single `startXp(baseline)` helper: zero the session's XP, then award the
+  baseline **once**. Both halves of the intent survive - the schema starts at the baseline (so its
+  own `xpEarned` is its own, rather than the previous schema's total plus a bonus), and the award
+  still flashes. The four call sites now read one line each. The masthead's rail value gained
+  `data-testid="xp-total"`: it is the number every XP claim in this app is measured against, and it
+  had no handle by which to read it.
+- `e2e/encode.spec.ts` - the standard-encode pin (100, and explicitly **not** 200) and the YouTube
+  pin (120), both read off that testid.
+
+### 37.4 Verified
+
+- **Mutation-proofed.** Restoring `setXp(N); addXP(N)` inside the helper fails exactly the two new
+  pins - with the doubled values quoted in 37.2 - and nothing else in the spec. Reverted, the spec
+  is 6/6.
+- `bun run test` - **92 files / 1,598 tests, exit 0** (unchanged: no unit test covers
+  `app/page.tsx`'s handlers, which is why this survived - the pins are the browser's).
+- `bunx tsc -b --noEmit` exit 0 and `bunx eslint` exit 0 on both changed files.
+- `e2e/encode.spec.ts` **6 passed**; `e2e/share-history.spec.ts` **7 passed** (including round 34's
+  0-XP import pin, which reads the same rail); `e2e/teachme.spec.ts` **passed** as well - its
+  `XP 0`/`XP 15` counter belongs to the lesson modal rather than to this session state, which is why
+  it was run: it is the one spec that asserts an XP number on screen.
+
+### 37.5 What this round deliberately does not do
+
+- **It does not drop the gain animation.** `setXp(0); addXP(N)` keeps the `+N` popup while making
+  the total agree with it; `setXp(N)` alone would also fix the total and would silently delete the
+  feedback that a generation just landed.
+- **It does not change the baseline values** (60 / 100 / 150 / 120). The doubling was the defect;
+  what a standard schema is worth is the plan's call, and the code states it.
+- **It does not add a unit test for `app/page.tsx`.** The handlers live in a 2,900-line client
+  component with no unit harness, and the two browser pins exercise the real paths end to end.
+- **It does not touch `MetaReflectionPrompt`**, the dead component 37.1 turned up (§26.1's line).
+
+**Total: 57 distinct defects** (this round's fix lands in `app/page.tsx` plus `e2e/encode.spec.ts`;
+the finding and every pass in 37.1 are new to this report.)
