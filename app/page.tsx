@@ -700,7 +700,24 @@ export default function DeepEncodeApp() {
    * what changes is that the stages are deterministic template scaffolds built
    * from this device's own text rather than model-authored ones, and the screen
    * says so instead of letting them believe a model read their notes.
+   */  /**
+   * Starts a generation's XP at `baseline`, exactly once.
+   *
+   * Every one of these awards used to be written as `setXp(N); addXP(N)`, and
+   * both calls go through the SAME reducer: the patch sets `xp` to N and the
+   * award then adds another N, so a standard schema left the learner on 200 XP
+   * while the gain popup beside that number said `+100` (defect 57). The
+   * baseline is also what makes the number this schema's own: the next schema's
+   * `xpEarned` is read off this state, so a generation that inherited the last
+   * one's total would record it as its own. Zeroing first and awarding once
+   * keeps both halves of the intent - the schema starts at `baseline`, and the
+   * award flashes.
    */
+  const startXp = (baseline: number) => {
+    setXp(0);
+    addXP(baseline);
+  };
+
   const runOfflineFallback = (reason: 'offline' | 'connection' = 'offline') => {
     const workout = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);
     if (!workout.activities || workout.activities.length === 0) {
@@ -722,8 +739,7 @@ export default function DeepEncodeApp() {
     loadStageInputs(0, workout.activities, {});
     // Fewer XP than a model-authored schema: the same work, less of the
     // generation effect, and the scale should not pretend otherwise.
-    setXp(60);
-    addXP(60);
+    startXp(60);
     setOfflineFallback(reason);
     sound.playSuccess();
     setAppState('encoding');
@@ -772,8 +788,7 @@ export default function DeepEncodeApp() {
           setCurrentActivityIndex(0);
           setUserResponses({});
           loadStageInputs(0, data.activities, {});
-          setXp(120);
-          addXP(120);
+          startXp(120);
           sound.playSuccess();
           setAppState('encoding');
 
@@ -887,8 +902,7 @@ export default function DeepEncodeApp() {
         setCurrentActivityIndex(0);
         setUserResponses({});
         loadStageInputs(0, data.guidedModules[0].activities, {});
-        setXp(150);
-        addXP(150);
+        startXp(150);
         sound.playSuccess();
         setAppState('encoding');
       } else if (data.activities && data.activities.length > 0) {
@@ -902,8 +916,7 @@ export default function DeepEncodeApp() {
         setCurrentActivityIndex(0);
         setUserResponses({});
         loadStageInputs(0, data.activities, {});
-        setXp(100);
-        addXP(100);
+        startXp(100);
         sound.playSuccess();
         setAppState('encoding');
       } else {
@@ -1838,7 +1851,10 @@ export default function DeepEncodeApp() {
           {appState !== 'input' && (
             <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
               <span className="label-caps">Progress</span>
-              <span className="relative font-mono text-sm font-semibold text-amber-300">
+              <span
+                data-testid="xp-total"
+                className="relative font-mono text-sm font-semibold text-amber-300"
+              >
                 {String(xp).padStart(4, '0')}
                 <AnimatePresence>
                   {xpGainAnimation && (
