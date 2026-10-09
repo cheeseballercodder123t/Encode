@@ -8,6 +8,7 @@ import { UploadedFileAsset, EncodingMode, EncodingGear } from '@/lib/types';
 import { playSound } from '@/lib/audio';
 import { parseSlideDeck } from '@/lib/services/slide-deck-parser';
 import { TOY_EXAMPLES } from '@/lib/toy-models/examples';
+import { BrandStar } from './BrandMark';
 
 const MEMORIZATION_TRIGGERS = [
   'periodic table', 'elements', 'amino acid', 'cranial nerve', 'bones', 
@@ -662,7 +663,12 @@ export function ZenLaunchpad({
             </div>
           </details>
           <div className="studio-rail-note">
-            <span className="studio-rail-symbol" aria-hidden />
+            {/* The seal wears the page's gold leaf: a circular wrapper, so the
+                leaf's rim (`.leaf-edge::after`) becomes the travelling gilt
+                edge of the plate. */}
+            <span className="studio-rail-medallion leaf-edge" aria-hidden>
+              <BrandStar className="studio-rail-symbol" />
+            </span>
             <p>Understanding is built,<br /><em>not downloaded.</em></p>
             <span>ACTIVE ENCODING / EVERY GEAR</span>
           </div>

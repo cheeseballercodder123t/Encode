@@ -406,16 +406,32 @@
   }
   .studio-masthead { padding-bottom: 22px; border-bottom: 1px solid rgba(210,164,85,0.19); }
   .studio-brand { display: flex; align-items: center; gap: 13px; flex-shrink: 0; }
-  .studio-brand svg { width: 34px; height: 38px; color: #D2A455; }
+  /* The emblem is addressed by its own class, not `.studio-brand svg`: the
+     wordmark's spark is an SVG too, and a descendant selector would size a 16px
+     accent as a 34x38 emblem (a defect one selector wide). It keeps
+     `currentColor` as its fallback and takes the brass the rest of the studio is
+     cut from in `page.tsx`, so the masthead's gilt objects — hexagon, wordmark
+     accent, rail seal — are one material, lit from the same corner. */
+  .studio-brand-emblem { width: 34px; height: 38px; color: #D2A455; filter: drop-shadow(0 0 7px rgba(210,164,85,0.3)) drop-shadow(0 0 20px rgba(210,164,85,0.14)); }
   .studio-brand h1 { font-size: 27px; font-weight: 500; letter-spacing: -1.2px; line-height: 1.1; }
   /*
-   * The wordmark's accent. It used to be a `✳` glyph in the mono face, which
-   * meant the mark depended on a font fallback for a character IBM Plex Mono
-   * does not carry (and rendered differently in every browser). It is drawn
-   * instead — the same rotated square the rail already uses as its bullet — so
-   * it is the same mark at 5px as at any other size, in the gilt it always had.
+   * The wordmark's accent. It began as a `✳` glyph in the mono face, which meant
+   * the mark depended on a font fallback for a character IBM Plex Mono does not
+   * carry, and rendered differently in every browser. It is now a drawn
+   * four-ray spark (`BrandSpark`), so it is the same mark at every size, in the
+   * brighter gilt the studio already reserves for a highlight.
+   *
+   * `display: inline-block` is load-bearing: Tailwind's preflight makes every
+   * `svg` display block, and a block next to the wordmark takes a line box of
+   * its own — the masthead grew 13px taller and "DeepEncode" sat above its own
+   * spark. Inline, `vertical-align` lifts it off the baseline the way a
+   * superscript would, and the wordmark's line box cannot grow around it.
+   *
+   * 16px rather than 13: below that the facet and the lit centre are thinner
+   * than a device pixel at 1x and the mark collapses back into a smudge. The
+   * bloom is what makes gold read as lit on a dark ground rather than pasted.
    */
-  .studio-brand-mark { display: inline-block; width: 5px; height: 5px; margin-left: 6px; vertical-align: 12px; border-radius: 1px; background: #D2A455; transform: rotate(45deg); }
+  .studio-brand-mark { display: inline-block; width: 16px; height: 16px; margin-left: 7px; vertical-align: 4px; color: #E3C285; filter: drop-shadow(0 0 6px rgba(227,194,133,0.4)); }
   .studio-brand p { margin-top: 7px; font: 7px 'IBM Plex Mono', monospace; letter-spacing: 1.6px; color: #B5B1A6; }
   .studio-nav { gap: 0; }
   .studio-nav > button { font-size: 11px; padding-left: 10px; padding-right: 10px; min-height: 40px; }
@@ -532,9 +548,41 @@
   .studio-tuning-details summary > span:last-child span { display: inline-block; margin-left: 7px; color: #E3C285; font-size: 15px; }
   .studio-tuning-details[open] summary > span:last-child span { transform: rotate(45deg); }
   .studio-rail-note { display: flex; flex-direction: column; align-items: center; margin-top: auto; padding: 5px 24px 25px; text-align: center; }
-  /* The rail note's mark: the same drawn diamond, outlined, instead of a 36px
-   * glyph that carried neither the note's register nor a guaranteed font. */
-  .studio-rail-symbol { width: 14px; height: 14px; border: 1px solid #D2A455; border-radius: 2px; transform: rotate(45deg); }
+  /*
+   * The rail note's seal: the wordmark's spark struck inside an engraved brass
+   * plate, so the note is crowned rather than bulleted.
+   *
+   * The wrapper is a circle, which is what lets it wear the page's own gold
+   * leaf: `.leaf-edge::after` draws its conic sweep at `inset: 0` with
+   * `border-radius: inherit`, so on a circular box that travelling hairline is
+   * a gilt rim — a 61px engraved plate inside a 68px leaf, and the two read as
+   * one object. The dial turns (`.brand-scale`) and the core glints
+   * (`.brand-core-glint`); both are transform/opacity only, unlike the leaf,
+   * which repaints a gradient every frame and is therefore kept to the plates
+   * that carry the whole design rather than to every mark.
+   *
+   * The two drop-shadows are the halo — a tight gilt edge and a wide faint
+   * bloom — and they are what make the mark feel lit from within the note.
+   */
+  .studio-rail-medallion { position: relative; width: 68px; height: 68px; border-radius: 50%; margin-bottom: 4px; }
+  /* The pool of light the seal stands in. It paints on the wrapper's own ::before,
+     behind the engraving (the leaf already holds ::after), and reaches well past
+     the plate so the note reads as lit from the mark rather than next to it.
+     `z-index: -1` is safe here because `.leaf-edge` isolates the wrapper: the
+     glow stays inside that stacking context instead of dropping behind the rail. */
+  .studio-rail-medallion::before {
+    content: '';
+    position: absolute;
+    inset: -46px;
+    z-index: -1;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, rgba(210,164,85,0.14), rgba(210,164,85,0.05) 42%, rgba(210,164,85,0) 70%);
+  }
+  .studio-rail-symbol { display: block; width: 68px; height: 68px; color: #D2A455; filter: drop-shadow(0 0 8px rgba(210,164,85,0.3)) drop-shadow(0 0 26px rgba(210,164,85,0.16)); }
+  /* One revolution in 140s: a mark that is alive without asking to be watched. */
+  .brand-scale { transform-box: view-box; transform-origin: 24px 24px; animation: brand-scale-turn 140s linear infinite; }
+  .brand-core-glint { animation: brand-glint 7s ease-in-out infinite; }
   .studio-rail-note p { font-family: 'Fraunces', Georgia, serif; font-size: 16px; line-height: 1.45; margin-top: 8px; color: #B5B1A6; }
   .studio-rail-note em { color: #E3C285; }
   .studio-rail-note > span:last-child { font: 7px 'IBM Plex Mono', monospace; color: #807D73; letter-spacing: 1.1px; margin-top: 14px; }
@@ -812,6 +860,11 @@
   50% { background-position: 100% 50%; }
 }
 @keyframes slow-spin { to { transform: rotate(360deg); } }
+/* The seal's core. It ends on the bright state on purpose: the base
+   reduced-motion rule flattens every animation to a single iteration, so this
+   parks the core lit rather than half-faded the way `orbit-breathe` would. */
+@keyframes brand-glint { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes brand-scale-turn { to { transform: rotate(360deg); } }
 @keyframes sheen { 0% { left: -50%; } 100% { left: 105%; } }
 
 @keyframes orbit-breathe {
