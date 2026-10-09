@@ -10,6 +10,7 @@ import {
   clearAllSchemas,
   loadUsageStats,
   incrementModelCall,
+  recordTokenUsage,
   loadStudyPrefs,
   saveStudyPrefs,
   DEFAULT_STUDY_PREFS,
@@ -223,6 +224,14 @@ describe('mergeSchemaLists', () => {
   });
 });
 
+// The usage ledger answers three questions with three periods (today, this week,
+// lifetime), so a roll is only ever allowed to touch the period that owns it.
+const USAGE_KEY = 'deepencode_usage_stats_v1';
+const readStoredUsage = () => JSON.parse(localStorage.getItem(USAGE_KEY)!);
+const ageTheRecord = (patch: Record<string, unknown>) => {
+  localStorage.setItem(USAGE_KEY, JSON.stringify({ ...readStoredUsage(), ...patch }));
+};
+
 describe('usage stats', () => {
   it('increments per-model counters', () => {
     incrementModelCall('gemini-3.7-flash');
@@ -235,14 +244,86 @@ describe('usage stats', () => {
 
   it('resets daily counters when the stored date is stale', () => {
     incrementModelCall('m1');
-    const raw = JSON.parse(localStorage.getItem('deepencode_usage_stats_v1')!);
-    raw.date = 'Mon Jan 01 2001';
-    localStorage.setItem('deepencode_usage_stats_v1', JSON.stringify(raw));
+    ageTheRecord({ date: 'Mon Jan 01 2001' });
 
     const stats = loadUsageStats();
     expect(stats.callsByModel['m1']).toBeUndefined();
     // weekly counters survive the daily reset
     expect(stats.weeklyCallsByModel['m1']).toBe(1);
+  });
+
+  // Defect 31: the daily roll rebuilt the record from the three fields it
+  // owned, so the first read of a new day deleted the two the dashboard labels
+  // LIFETIME - and those two are also what a backup carries.
+  it('keeps the lifetime token and cost ledgers across the daily roll', () => {
+    recordTokenUsage('m1', { promptTokens: 1_000, completionTokens: 500, costUsd: 0.42 });
+    recordTokenUsage('m2', { totalTokens: 2_000, costUsd: 0.08 });
+    ageTheRecord({ date: 'Mon Jan 01 2001' });
+
+    const stats = loadUsageStats();
+
+    expect(stats.tokensByModel).toEqual({ m1: 1_500, m2: 2_000 });
+    expect(stats.costUsdByModel!.m1).toBeCloseTo(0.42);
+    // The record on disk keeps them too: the next reader, and the backup, are
+    // reading the same numbers this call returned.
+    expect(readStoredUsage().tokensByModel).toEqual({ m1: 1_500, m2: 2_000 });
+    expect(readStoredUsage().costUsdByModel.m2).toBeCloseTo(0.08);
+    // ...and the daily roll still did its own job.
+    expect(stats.callsByModel).toEqual({});
+  });
+
+  // Defect 32: nothing rolled `weeklyCallsByModel`, so the panel labelled THIS
+  // WEEK showed every call ever made once the first week had passed.
+  it('rolls the weekly counters when the week turns', () => {
+    incrementModelCall('m1');
+    incrementModelCall('m1');
+    recordTokenUsage('m1', { totalTokens: 300, costUsd: 0.02 });
+    ageTheRecord({ date: 'Mon Jan 01 2001', weekStart: '2001-01-01' });
+
+    const stats = loadUsageStats();
+
+    expect(stats.weeklyCallsByModel).toEqual({});
+    expect(readStoredUsage().weeklyCallsByModel).toEqual({});
+    // The lifetime ledger is not the week's to clear.
+    expect(stats.tokensByModel).toEqual({ m1: 300 });
+  });
+
+  it('a record written before the week had a period adopts the current week', () => {
+    localStorage.setItem(USAGE_KEY, JSON.stringify({
+      date: new Date().toDateString(),
+      callsByModel: { m1: 3 },
+      weeklyCallsByModel: { m1: 9 },
+      tokensByModel: { m1: 700 },
+      costUsdByModel: { m1: 0.01 },
+    }));
+
+    const stats = loadUsageStats();
+
+    expect(stats.weekStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(readStoredUsage().weekStart).toBe(stats.weekStart);
+    expect(stats.weeklyCallsByModel).toEqual({});
+    expect(stats.callsByModel).toEqual({ m1: 3 });
+    expect(stats.tokensByModel).toEqual({ m1: 700 });
+    expect(stats.costUsdByModel).toEqual({ m1: 0.01 });
+  });
+
+  // Defect 33: the read path trusted the record it found. A today-dated record
+  // with no counters reached the dashboard as `undefined`, and the sheet's
+  // `Object.values(usage.callsByModel)` threw while rendering the usage card.
+  it('reads a record of the wrong shape instead of trusting it', () => {
+    localStorage.setItem(USAGE_KEY, JSON.stringify({ date: new Date().toDateString(), tokensByModel: { m1: 10 } }));
+
+    const stats = loadUsageStats();
+
+    expect(stats.callsByModel).toEqual({});
+    expect(stats.weeklyCallsByModel).toEqual({});
+    expect(Object.values(stats.callsByModel)).toHaveLength(0);
+    expect(stats.tokensByModel).toEqual({ m1: 10 });
+
+    localStorage.setItem(USAGE_KEY, 'not json at all');
+    expect(loadUsageStats().callsByModel).toEqual({});
+    localStorage.setItem(USAGE_KEY, JSON.stringify([]));
+    expect(loadUsageStats().callsByModel).toEqual({});
   });
 });
 
