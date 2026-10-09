@@ -311,17 +311,21 @@ export async function generateJSONWithProvider({
     let lastError: any = null;
     for (const mName of modelsToTry) {
       try {
+        // The deadline's signal rides in the SDK config, so a call the ladder
+        // gives up on is cancelled at the transport before the next rung starts
+        // (defect 40) instead of continuing to run — and to bill — in parallel.
         const response = await withTimeout(
-          ai.models.generateContent({
-            model: mName,
-            contents: [
-              {
-                role: "user",
-                parts
-              }
-            ],
-            config,
-          }),
+          (signal: AbortSignal) =>
+            ai.models.generateContent({
+              model: mName,
+              contents: [
+                {
+                  role: "user",
+                  parts
+                }
+              ],
+              config: { ...config, abortSignal: signal },
+            }),
           isChecker ? AI_TIMEOUT_MS.checker : AI_TIMEOUT_MS.generate,
           `Gemini ${mName}`
         );

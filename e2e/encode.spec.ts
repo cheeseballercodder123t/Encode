@@ -64,20 +64,27 @@ test.describe('YouTube flow', () => {
 });
 
 test.describe('Offline resilience', () => {
-  test('going offline after load informs the user with an alert', async ({ page, context }) => {
+  test('going offline after load builds the workout on this device', async ({ page, context }) => {
     await page.goto('/');
 
     // Kill the network after the app has loaded
     await context.setOffline(true);
-    let dialogMessage = '';
-    page.on('dialog', async (dialog) => {
-      dialogMessage = dialog.message();
-      await dialog.accept();
+    // This scenario used to pin an ALERT, because an offline generation could
+    // only fail. It is now a fallback rather than a failure (defect 42): nothing
+    // is reported as an error, and the on-device generator produces the session.
+    const dialogs: string[] = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.message());
+      void dialog.accept();
     });
+
     await page.getByPlaceholder(/Paste study material/).fill(MOCK_NOTES);
     await page.getByRole('button', { name: 'Build Cognitive Schema' }).click();
 
-    expect(dialogMessage).toBeTruthy();
-    await expect(page.getByPlaceholder(/Paste study material/)).toBeVisible();
+    await expect(page.getByTestId('offline-fallback-banner')).toHaveAttribute('data-workout-origin', 'offline');
+    // Five deterministic stages: the generator's own workout, not a mocked model
+    // payload (this spec mocks no AI routes at all).
+    await expect(page.getByText('01/05')).toBeVisible();
+    expect(dialogs).toEqual([]);
   });
 });

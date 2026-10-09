@@ -4,6 +4,7 @@ import './toy-models.css';
 import './pathway.css';
 import { AuthProvider } from '@/lib/auth-context';
 import MonitoringInit from '@/components/MonitoringInit';
+import ServiceWorkerInit from '@/components/ServiceWorkerInit';
 
 export const viewport: Viewport = {
   themeColor: '#D08430',
@@ -38,6 +39,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased text-bone bg-chassis font-sans" suppressHydrationWarning>
         <MonitoringInit />
+        <ServiceWorkerInit />
         <AuthProvider>
           {children}
         </AuthProvider>

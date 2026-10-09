@@ -6,9 +6,13 @@
  * (Gemini SDK, OpenRouter, OpenAI-compatible) share one implementation:
  *
  *  - `fetchJsonWithRetry` — fetch + parse with a hard deadline and bounded
- *    retries on 429/5xx/network errors, exponential backoff with jitter.
- *  - `withTimeout`       — wraps any promise (incl. the Gemini SDK call) in an
- *    AbortSignal-backed deadline that rejects instead of hanging.
+ *    retries on 429/5xx/network errors, exponential backoff with jitter. The
+ *    deadline carries an AbortSignal into the transport, so the attempt it gave
+ *    up on is cancelled before the next one starts (defect 40).
+ *  - `withTimeout`       — the deadline itself: it starts the work with an
+ *    AbortSignal, and aborts that signal when the deadline passes (or when the
+ *    caller's own signal does), so a timed-out fetch/SDK call is really
+ *    cancelled rather than merely abandoned.
  *  - usage capture       — normalizes provider usage payloads to
  *    { promptTokens, completionTokens, totalTokens } and records them per
  *    model in localStorage (`lib/storage` keeps call counts today; this adds
@@ -29,19 +33,95 @@ export const AI_TIMEOUT_MS = {
   stream: 120_000,
 } as const;
 
-/** Wraps a promise in a deadline. Rejects with a tagged Error on timeout. */
-export function withTimeout<T>(promise: Promise<T>, ms: number, label = 'AI call'): Promise<T> {
+/**
+ * A deadline over an abortable operation.
+ *
+ * `work` is either a promise that is already in flight, or — the form this
+ * exists for — a factory that receives the deadline's `AbortSignal` and starts
+ * the transport with it (a `fetch`, or the Gemini SDK's own `abortSignal`).
+ *
+ * When the deadline passes, the controller is aborted **before** the promise
+ * rejects, so the request the deadline gave up on is cancelled at the transport
+ * rather than abandoned mid-flight. That distinction is the whole of defect 40:
+ * the timer used to race the promise and reject while the `fetch` it had given
+ * up on kept running, and because `fetchJsonWithRetry` treats a timeout as
+ * retryable, the retry started against the same provider while the first attempt
+ * was still in flight — two or three concurrent copies of one generation, each
+ * billed.
+ *
+ * A caller's own `signal` composes with the deadline: whichever fires first
+ * aborts the one controller the transport is listening to, and a caller-driven
+ * cancel is reported as the transport's own `AbortError` rather than as a
+ * timeout.
+ *
+ * Rejects with {@link AiTimeoutError} when the deadline passes, and with the
+ * underlying failure when the operation fails first.
+ */
+export function withTimeout<T>(work: Promise<T>, ms: number, label?: string, signal?: AbortSignal): Promise<T>;
+export function withTimeout<T>(
+  work: (signal: AbortSignal) => Promise<T>,
+  ms: number,
+  label?: string,
+  signal?: AbortSignal
+): Promise<T>;
+export function withTimeout<T>(
+  work: Promise<T> | ((signal: AbortSignal) => Promise<T>),
+  ms: number,
+  label = 'AI call',
+  signal?: AbortSignal
+): Promise<T> {
+  const start: (signal: AbortSignal) => Promise<T> =
+    typeof work === 'function' ? (work as (signal: AbortSignal) => Promise<T>) : () => work as Promise<T>;
+
   return new Promise<T>((resolve, reject) => {
+    const controller = new AbortController();
+    let settled = false;
+
+    // The caller's cancellation and the deadline drive the same controller, so
+    // both reach the transport through the one signal it was started with.
+    const onExternalAbort = () => controller.abort();
+    if (signal) {
+      if (signal.aborted) controller.abort();
+      else signal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onExternalAbort);
+    };
+
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      // Abort BEFORE rejecting: by the time the caller's `catch` runs, the
+      // transport is already cancelled and its abort listeners have run, so a
+      // retry cannot begin alongside the attempt it replaces.
+      controller.abort();
+      cleanup();
       reject(new AiTimeoutError(`${label} timed out after ${Math.round(ms / 1000)}s.`));
     }, ms);
+
+    let promise: Promise<T>;
+    try {
+      promise = start(controller.signal);
+    } catch (err) {
+      settled = true;
+      cleanup();
+      reject(err);
+      return;
+    }
+
     promise.then(
       (value) => {
-        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve(value);
       },
       (err) => {
-        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        cleanup();
         reject(err);
       }
     );
@@ -88,10 +168,21 @@ export function backoffDelay(attempt: number): number {
   return Math.floor(Math.random() * ceiling);
 }
 
+/** One attempt's outcome: the parsed body, or the HTTP failure worth retrying. */
+type FetchAttempt =
+  | { kind: 'ok'; data: any; status: number }
+  | { kind: 'http'; status: number; body: string };
+
 /**
  * fetch + JSON with a deadline and bounded retries on retryable failures.
  * Returns the parsed body plus the HTTP status; throws `ApiHttpError` for
  * non-retryable HTTP errors after the retries are spent.
+ *
+ * The deadline covers the whole attempt — the request AND the body read, because
+ * the model's answer is the body — and it is carried into `fetch` as
+ * `init.signal` composed with the deadline's own controller. So an attempt that
+ * crosses its deadline is aborted at the transport before the loop moves on, and
+ * a retry is never a second concurrent copy of the call it is retrying.
  */
 export async function fetchJsonWithRetry(
   url: string,
@@ -105,17 +196,26 @@ export async function fetchJsonWithRetry(
       await new Promise((r) => setTimeout(r, backoffDelay(attempt - 1)));
     }
     try {
-      const res = await withTimeout(fetch(url, init), opts.timeoutMs, opts.label);
-      if (res.ok) {
-        const data = await res.json();
-        return { data, status: res.status };
-      }
-      const body = await res.text().catch(() => '');
-      if (isRetryableStatus(res.status) && attempt < MAX_RETRIES) {
-        lastErr = new Error(`${opts.label} error (${res.status}): ${body.slice(0, 200)}`);
+      // A fresh controller per attempt; `init.signal` (when the caller had one)
+      // is composed with the deadline's, so a cancel and a timeout both reach
+      // the transport through the signal `fetch` is given.
+      const external = init.signal ?? undefined;
+      const outcome = await withTimeout<FetchAttempt>(
+        async (signal: AbortSignal): Promise<FetchAttempt> => {
+          const res = await fetch(url, { ...init, signal });
+          if (res.ok) return { kind: 'ok', data: await res.json(), status: res.status };
+          return { kind: 'http', status: res.status, body: await res.text().catch(() => '') };
+        },
+        opts.timeoutMs,
+        opts.label,
+        external
+      );
+      if (outcome.kind === 'ok') return { data: outcome.data, status: outcome.status };
+      if (isRetryableStatus(outcome.status) && attempt < MAX_RETRIES) {
+        lastErr = new Error(`${opts.label} error (${outcome.status}): ${outcome.body.slice(0, 200)}`);
         continue;
       }
-      throw new ApiHttpError(res.status, body, opts.label);
+      throw new ApiHttpError(outcome.status, outcome.body, opts.label);
     } catch (err) {
       lastErr = err;
       if (err instanceof ApiHttpError) throw err;

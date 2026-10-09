@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-22 (§20-§24) then fixed five of the six, so the running total below is 38;** finding 39 stays open, with 34-38 closed and recorded in §20-§24. **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43 and findings 43 and 44 are the only ones still open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -1074,7 +1074,7 @@ cost the person using the app. **Findings 34-39 are open candidates, not repairs
 stay at 33 until one of them is fixed and pinned, which is the point of numbering them now: the next round
 has a fixed target and a stated proof for each.
 
-**Update, rounds 18-22 (§20-§24): findings 34, 35, 36, 37 and 38 are fixed and pinned. Their rows below are left as round 17 wrote them - that is the evidence the defects were real - with the repairs, the proofs and the mutation probes in §20, §21, §22, §23 and §24. Finding 35's row also undercounts the surface: the round-19 sweep found **eight** copy controls where round 17 named four (§21.1). Finding 39 remains open.**
+**Update, rounds 18-22 (§20-§24): findings 34, 35, 36, 37 and 38 are fixed and pinned. Their rows below are left as round 17 wrote them - that is the evidence the defects were real - with the repairs, the proofs and the mutation probes in §20, §21, §22, §23 and §24. Finding 35's row also undercounts the surface: the round-19 sweep found **eight** copy controls where round 17 named four (§21.1). Finding 39 was fixed and pinned in round 23 (§25).**
 
 ### 19.1 Prioritized findings
 
@@ -1085,7 +1085,7 @@ has a fixed target and a stated proof for each.
 | 36 | **P2 - medium. FIXED in round 20 (§22)** | The cloud settings restore cannot do what its own comment says. It applies the account's backup when `backup.savedAt >= (settings.savedAt \|\| 0)`, described in the code as "Only applied when the backup is newer than what local storage holds (multi-device safe)" - but `savedAt` is stamped by the **caller**, never by `saveAISettings`, so only two of the four writers produce it. Reset-to-defaults and a backup restore write settings with no stamp at all, `localSavedAt` is then `0`, the comparison is trivially true, and the account's copy - however old - overwrites what is on the device. | `lib/auth-context.tsx:107`-`:118` (the guard); stamps: `components/SettingsModal.tsx:62`-`:68` and `:107`-`:111`; no stamp: `components/SettingsModal.tsx:120` (reset), `lib/backup.ts:219`-`:221` (restore); `lib/storage.ts:51`-`:57` (`saveAISettings`) | Read from the code, and deterministic - no race needed: restore a backup (or reset to defaults) on a device, then sign in, and the stored settings are replaced by the account's copy. That is how a deliberately cleared API key comes back, or a working key is replaced by a stale model choice; the guard's stated purpose is exactly what fails. **Proof for the fix:** the choice is a pure decision over two records, so it can be extracted and unit-tested in both directions (newer local wins, newer backup wins, neither stamped), plus one browser test that restores a backup and signs in. |
 | 37 | **P2 - medium. FIXED in round 21 (§23)** | The stage being written is never persisted until it is submitted. The typed answers live in React state (`field1`/`field2`/`field3` at page level, written on every keystroke) and reach `userResponses` only on Submit, Skip or navigation - and every persistence path hangs off `userResponses` (the stage-boundary save, the cross-device sync, the drawer). There is no draft write for the in-stage fields, so a reload, a crash or a closed tab mid-stage returns to that stage with **empty fields**, while every earlier stage survives. | `app/page.tsx:1144`, `:1203`, `:1269` (where `userResponses` is written), `:1178`, `:1230` (the saves that follow), `:2253` (the fields handed to the workbench), `:293` (`loadStageInputs` is a loader only); the paths that did get autosave: `:1020`-`:1035` (YouTube, per stage) and `:1043`-`:1056` (lab, 500 ms debounce with cleanup) | Read from the code, and reachable in one step: type into a stage, reload without submitting. No draft-shaped storage key exists anywhere (`_draft` / `DRAFT_KEY` across `lib/`, `app/`, `components/` returns nothing), which is what makes this a missing write rather than an unreachable one. The asymmetry is the evidence that the need was known: the YouTube path's own comment says it exists "so 'encode 2 of 9 chapters today' survives a reload", and a text/file session relies entirely on the stage boundary. **Proof for the fix:** type into a stage, reload without submitting, assert the fields come back - then the same run with the fix. |
 | 38 | **P4 - low. FIXED in round 22 (§24)** | The debounced autosave is documented, exported, and dead. The function's own comment says "Debounced autosave for performance during typing" and the README describes the storage facade by that behaviour, but it has **zero callers** - nothing in the app debounces a save. This is defect 30's class (§17) in production code rather than in a test: nothing is broken at runtime, and the cost is a reader (and the README) believing typing is debounced when the real cadence is the stage boundary - which is also how finding 37 stayed invisible. | `lib/storage.ts:25` (`autosaveTimer`), `lib/storage.ts:358`-`:370` (`debouncedSaveSchema`), `README.md:225` | Read from the code: a search for `debouncedSaveSchema` and `autosaveTimer` across `app/`, `components/`, `hooks/`, `lib/`, `tests/` and `e2e/` returns only the definition and the module-level timer it guards. **Proof for the fix:** either wire it to the draft it was written for, or delete it and correct the README; the check is a grep that returns nothing plus the round's suite. |
-| 39 | **P4 - low. OPEN - candidate for the next round** | The pending-sync badge can be wrong on screen. `pendingLocalCount` is a `useMemo` over `[user, cloudSchemas, hydrated]` that calls `loadSavedSchemas()` - a module-level cache which changes on every write, with no dependency that moves when it does - so saving a schema while signed in leaves the badge showing the previous count until some unrelated render changes one of those three values. It is the only signal that local work has not reached the cloud, so a stale value reads as "nothing pending" exactly when something is. | `lib/auth-context.tsx:71`-`:77` | Read from the code, and deterministic: save a schema with a signed-in session and watch the count. **Proof for the fix:** take the count from the `useSchemaLibrary` list the drawer already subscribes to (or subscribe to `subscribeToSavedSchemas`), then a browser test that saves and reads the badge with no other interaction. |
+| 39 | **P4 - low. FIXED in round 23 (§25)** | The pending-sync badge can be wrong on screen. `pendingLocalCount` is a `useMemo` over `[user, cloudSchemas, hydrated]` that calls `loadSavedSchemas()` - a module-level cache which changes on every write, with no dependency that moves when it does - so saving a schema while signed in leaves the badge showing the previous count until some unrelated render changes one of those three values. It is the only signal that local work has not reached the cloud, so a stale value reads as "nothing pending" exactly when something is. | `lib/auth-context.tsx:71`-`:77` | Read from the code, and deterministic: save a schema with a signed-in session and watch the count. **Proof for the fix:** take the count from the `useSchemaLibrary` list the drawer already subscribes to (or subscribe to `subscribeToSavedSchemas`), then a browser test that saves and reads the badge with no other interaction. |
 
 ### 19.2 Checked and cleared in this pass (recorded so the next round need not re-derive it)
 
@@ -1107,7 +1107,17 @@ returns nothing, and `public/` holds only `assets` - so the app shell is not cac
 affordance in `PWAInstallHeader` (which listens for `beforeinstallprompt`) has no offline story behind it. It
 is not filed as a defect because generation itself requires the network, and the in-page offline fallback
 generator still works once the page has loaded; the gap is that a learner who is offline **before** the page
-loads gets the browser's error page, not the app's own offline path.
+loads gets the browser's error page, not the app's own offline path. **Correction, round 24
+(§26.2 finding 42): the second half of that sentence was wrong** - the offline generator is not
+wired to anything, so "still works" was an assertion about a behaviour nobody had run, inside the
+paragraph whose stated purpose was to be clear about what the sweep did not find. The gap was wider
+than this paragraph claimed. **Update, round 25 (§27): finding 42 is fixed, so the sentence above is
+now true as written** - the generator is wired, and the paragraph's remaining point (no service
+worker, so a learner who is offline before the page loads still gets the browser's error page) stands
+unchanged. **Closed, round 28 (§30), as defect 45.** That round got further than the gap was ever
+stated to be: the missing worker was the second half, and the first was that the manifest's own
+`/icon-192.png` and `/icon-512.png` returned **404**, which is why Chromium never considered the app
+installable and the install affordance above could not appear for anyone.
 
 ### 19.4 Priority order for the next round, and how the sweep ran
 
@@ -1677,3 +1687,572 @@ whose comment carried the same claim as the README; `lib/storage.ts` was already
 counted by defects 25, 28 and 36, and `README.md` by defect 28. The two test files
 added - `tests/unit/idb-autosave.test.ts` and `e2e/idb-autosave.spec.ts` - are counted
 as files, following defect 30's precedent.)
+
+## 25. Round 23 - defect 39, the badge that could not move
+
+Round 17's last finding, fixed and pinned. It is the P4 that closes the list, and it
+was left where round 17 put it - *not* a wrong number, but a number that could not
+change: `pendingLocalCount` was a `useMemo` over `[user, cloudSchemas, hydrated]`
+whose value came from `loadSavedSchemas()`, a module-level cache none of those three
+dependencies move with. Saving a schema therefore left the badge on the count it
+captured at mount. It is the only signal that local work has not reached the account,
+so the failure mode reads as "nothing pending" exactly when something is.
+
+### 25.1 What the count now reads, and why it is a subscription
+
+- **The value comes from a source that announces itself.** `lib/auth-context.tsx` now
+holds the library in state (`localSchemas`), hydrated once on mount and then updated
+by `subscribeToSavedSchemas` - the same subscription `useSchemaLibrary` gives the
+drawer - so every write moves it, including a write made by another tab (the
+`storage` event reaches this listener). The count is then the derived difference it
+always claimed to be: the whole local list when nobody is signed in, and the local
+list minus the account's ids when somebody is.
+- **The hydration shim is gone with the memo it served.** The old code needed
+`useSyncExternalStore` to know when it could read localStorage during render;
+"can I read the store" is no longer a question the render asks. The first paint is
+an empty library and the effect fills it in, which is the same server-safe first
+paint `useSchemaLibrary` already documents for its own count.
+- **The count is on the badge's face, not only in its tooltip.** The number used to
+appear only inside the button's `title`, where a value that cannot update is also a
+value nobody can watch. The masthead now reads `Cloud: OFF · 2 local` (or
+`Cloud: SYNCED · 2 local`), so the pending work is visible at a glance, in the
+accessible name of the control as well as on screen, and a test can assert it as the
+person reads it.
+
+### 25.2 Verified
+
+- **The count itself (unit, `tests/unit/auth-context-pending-count.test.tsx`, 3
+tests, happy-dom; Firebase mocked at the SDK boundary, so this is about what the
+number derives from).** Signed out: the badge starts at 0, a save moves it to 1 and
+then 2, and deleting one of them takes it back to 1 - with no sign-in, no snapshot
+and no other interaction. Signed in: two local records and an account that knows one
+of them reads 2 → 1 as the account's copy arrives, back to 2 when a new schema is
+saved locally, and down to 0 once the account holds everything, which is the
+"nothing pending" state the badge exists to report honestly. Third test: a device
+that already holds schemas counts them, no account involved.
+- **Mutation-proven.** Restoring the pre-fix memo verbatim (the memo over
+`[user, cloudSchemas]` reading `loadSavedSchemas()`) fails **all three** tests, with
+`expected '0' to be '1'`, `expected '1' to be '2'` and `expected '1' to be '2'` -
+the stale count, stated as an assertion failure. Reverted, re-run green.
+- **The badge, in the browser (`e2e/pending-badge.spec.ts`, 2 tests, live preview).**
+The first drives a real workout to completion and asserts the badge goes
+`Cloud: OFF` → `Cloud: OFF · 1 local` with no reload in between, then deletes that
+schema from the drawer and asserts it returns to `Cloud: OFF` - the count follows the
+library down as well as up. The second boots a device whose localStorage mirror
+already holds two schemas, asserts `Cloud: OFF · 2 local` before any interaction, and
+`Cloud: OFF · 3 local` after a session saves a third. Both assert the Library
+button's own count beside the badge, so the two readings of the same library cannot
+disagree silently.
+- **Mutation-proven in the browser too.** With the pre-fix memo the first spec fails
+after the save on `Expected "Cloud: OFF · 1 local", Received "Cloud: OFF"` - which is
+the defect as the learner saw it, on screen. Reverted, re-run green.
+- **Neighbours.** Full unit suite green (87 files, 1428 tests), `bunx tsc -b --noEmit`
+and `bunx eslint` clean on the changed files, and the specs around the same surfaces
+still pass: `e2e/schema-library-tabs.spec.ts` (two tabs, one library),
+`e2e/share-history.spec.ts` (drawer, resume, analytics, seeded schemas) and
+`e2e/history-drawer-legacy.spec.ts` (the malformed-record drawer) - 12 tests in one
+run, after an earlier run of the same set failed with `ERR_CONNECTION_REFUSED`
+because the preview server had stopped; that run is not evidence of anything about
+this change, which is why it was repeated against a server that was up.
+
+### 25.3 What the count deliberately is not
+
+- **Not a per-schema "seen" flag.** The badge answers "what has not reached the
+account", which is what the tooltip, the sign-in prompt and the analytics copy all
+already claimed. Nothing in the schema record tracks whether a learner has opened it,
+and inventing that flag would have produced a second, disagreeing source of truth for
+the same screen.
+- **Not emptied optimistically.** A successful write is what removes a schema from the
+count - the account's own snapshot delivering it - so a failed push leaves the number
+standing rather than clearing a warning that is still true.
+
+**Total: 39 distinct defects in 54 files** (39 is the last of round 17's findings;
+`lib/auth-context.tsx` was already counted by defect 36 and `app/page.tsx` by defect
+37, while the two new test files - `tests/unit/auth-context-pending-count.test.tsx`
+and `e2e/pending-badge.spec.ts` - are counted as files, following defect 30's
+precedent.)
+
+## 26. Round 24 - reconnaissance: the surfaces this audit never opened
+
+This round changes no code. Round 17 (§19) swept the *surfaces* the first sweep had not
+reached; this one sweeps the **modules this report has never named**, which is a
+different list and a smaller one. The target list was not guessed: every file under
+`lib/`, `hooks/` and `app/api/` was checked against the text of this report, and the
+modules with **zero mentions** are the ones read closely - `lib/google-drive.ts`,
+`lib/comparative-synthesis.ts`, `lib/monitoring.ts`, `lib/ai-hardening.ts`,
+`lib/triage.ts`, `lib/presets.ts`, `lib/media-types.ts`, `lib/utils.ts`,
+`lib/encode-stream.ts`, `lib/forge-stream.ts`, `lib/json-repair.ts`,
+`hooks/useInputSource.ts`. Two of the three findings below are in that set; the third
+was found by the second half of the sweep, described in §26.1.
+
+### 26.1 How the sweep ran, and what each pass returned
+
+- **Read-first, as always**, on the forty-odd files the report had never named: the
+  call site and the contract around it, not a grep hit.
+- **Then a mechanical pass for this audit's own recurring class** - `export function
+  f` with no caller outside its file. It split the results honestly into three
+  buckets. *(a) Harmless:* type declarations, and small units whose only consumer is
+  their own test (`allocateSeconds`, `auditAnkiCard`, `classifyPacing`,
+  `sessionReducer` - each reached in production through a larger function in the same
+  module). *(b) Export-shaped helpers nothing uses at all* (`useIsMobile`,
+  `getDifficultyLabel`, `clearInterferenceTraps`, `parseCausalFrame`): dead code, not
+  filed, because nothing describes them as a live mechanism and no caller is misled -
+  which is the line defects 30 and 38 both fell on the other side of. *(c) A whole
+  described feature with no caller* - findings **42** and **43** below, which is the
+  reason this mechanical pass was worth running a second time.
+
+### 26.2 Findings
+
+| # | Priority | Finding | Location | Evidence |
+|---|---|---|---|---|
+| 40 | **P3 - low/medium. FIXED in round 26 (§28)** | The AI call's deadline does not abort the call it gave up on. `withTimeout` is documented in its own module header as an "AbortSignal-backed deadline that rejects instead of hanging", but there is **no `AbortController` and no `AbortSignal` anywhere in `lib/ai-hardening.ts` or `lib/ai-client.ts`** - the wrapper races a timer against the promise and rejects, and the `fetch` it abandoned keeps running. It is worse than a leaked request because of where it sits: `fetchJsonWithRetry` treats a timeout as retryable (`isRetryableError` returns true for `AiTimeoutError`), so after the 90s deadline expires it starts a **second** attempt against the same provider while the first is still in flight, and a third after that - three concurrent copies of one generation, each one billed. The learner sees a long, apparently stuck wait and pays for the copies. | the claim: `lib/ai-hardening.ts:10`-`:11`; the wrapper: `:30`-`:50`; the retry loop that makes a timeout a second concurrent call: `:95`-`:120`, with `isRetryableError`: `:74`-`:90` | Read from the code, and deterministic: the `fetch` is passed straight into `withTimeout` with no signal, and `init` is the caller's object - neither `withTimeout` nor `fetchJsonWithRetry` ever touches a signal. **Proof for the fix:** thread an `AbortController` through `withTimeout` and abort it in the timer (and, where the caller already has a controller - `app/page.tsx`'s Cancel - compose the two signals), then a unit test with a `fetch` stub that records its signals: after the deadline, the stub's signal is `aborted`, and the retry does not begin before the previous attempt has stopped. `tests/unit/ai-hardening.test.ts` already pins the rejection itself, which is why this half survived it. |
+| 41 | **P4 - low. FIXED in round 27 (§29)** | A file chosen before the hydration read resolves is replaced by the previous session's upload - or silently never saved. The hook's own comment says the persist effect is "skipped until the hydration read completes so the initial null doesn't overwrite the stored upload", and that guard covers exactly one case: the mount-time `null`. A file the **learner** picked is not covered, because `readIdb`'s callback calls `setUploadedFile(stored)` unconditionally, and the persist effect has already run (with `hydratedRef.current` still false) by the time the pick happened. So the next tick overwrites the fresh pick with the stored one, and nothing re-runs the write for what the learner actually chose. | `hooks/useInputSource.ts:33`-`:59` (the hydration read, the unconditional `setUploadedFile(stored)`, and the persist effect's `if (!hydratedRef.current) return`) | Read from the code; the window is the IndexedDB read, and the first run is the slow one because `initIndexedDB` performs the one-time localStorage→IndexedDB migration of an existing history. **Reachability, stated honestly:** it needs the read to outlast the pick (a large existing history, a cold or blocked store), so this is a narrow window rather than a everyday failure - but within it the outcome is silent, which is the part that makes it worth fixing. **Proof for the fix:** a hydration ref already exists in this hook for the same purpose (`sourceTouched`); guard the assignment the same way and let the persist effect run once it flips, then a unit test that resolves the read *after* a pick and asserts the pick is what is stored. |
+| 42 | **P2 - medium. FIXED in round 25 (§27)** | **The offline fallback is described in three places and wired in none.** `lib/services/offlineGenerator.ts` holds a complete deterministic workout generator ("Deterministically generates a rich 5-Stage Cognitive Workout ... offline"), it is unit-tested, and **no production code calls it** - not `app/page.tsx`'s generate path, not `lib/ai-client.ts`, not any route. `hooks/useSettings.ts` computes `isOffline` from a `useSyncExternalStore` subscription to `online`/`offline` and **no consumer reads it**. And the README advertises the feature twice ("installable, with an offline fallback generator when you have no network/key"; and, in the E2E list, a spec for it), while `e2e/resilience.spec.ts` - the spec that covers exactly this - opens its own header with "generation API errors fall back to the offline generator" and then asserts the **opposite**: its first test is named "API 500 on `/api/encode` alerts the user rather than producing fake cards" and expects an alert dialog. So the code, the README and the spec's own docstring disagree, and a learner with no network gets an error dialog rather than the offline workout the README promises. **Which side is wrong is a product decision, and the finding is the disagreement:** the resilience spec's title reads like a deliberate later decision (never fabricate cards), in which case the README, the module's header and the spec's header all need correcting - or the fallback is the intended behaviour and wants wiring. | `lib/services/offlineGenerator.ts:48`-`:52` (the export and its docstring); the unused subscription: `hooks/useSettings.ts:27`-`:29`, `:47`; the promise: `README.md:62`, `README.md:116`; the contradiction: `e2e/resilience.spec.ts:5`-`:9` vs its first test at `:16`-`:31` | Read from the code and countable: `grep -rn "generateOfflineWorkout" app components hooks lib` returns only the unit test, and `grep -rn "isOffline" app components hooks lib` returns only its own definition and the object it is returned in (`resilience.spec.ts` is the only spec that mentions the fallback at all, and it asserts the alert). **Proof for the fix:** whichever direction is chosen, the other two artefacts move with it - wire it (and add the spec the README's E2E list already claims, asserting the offline workout's stages offline) or delete the module and correct the three claims, with a source-scan test pinning the README's wording to the code the way defect 38's round pinned its own. |
+| 43 | **P3 - low/medium** | **Teach Me's deterministic fallback builder has no caller either.** `lib/services/teachLesson.ts` exposes `buildFallbackLesson` under a header that says "Deterministic offline fallback", and `app/page.tsx`'s own comment on the mount says Teach Me is "AI-authored, **with an offline schema-based fallback**" - but only `sanitizeLesson` is imported by `components/TeachMeModal.tsx`, whose failure path is a `catch` that reports the error. A lesson request that fails therefore has no lesson, which is the case the builder exists for; the module's header states the intent, the UI comment states the behaviour, and nothing joins them. | `lib/services/teachLesson.ts:395`-`:399` (the section header and the export); the only import: `components/TeachMeModal.tsx:19` (`sanitizeLesson`); the claim: `app/page.tsx:2577`-`:2579`; the failure path with no fallback: `components/TeachMeModal.tsx:245`-`:262` | Read from the code: `grep -rn "buildFallbackLesson"` returns the definition and nothing else, in production or in tests. Same class as 43 and as defect 38 - a mechanism whose only reader is a comment - but narrower, because Teach Me is one sheet rather than the primary generation path. **Proof for the fix:** wire it into that `catch` (the builder takes the same scope/topic the modal already has), then a spec that fails `/api/teach` and asserts a lesson still renders, with the deterministic sections named. |
+| 44 | **P4 - low** | The shared body-validation guard is applied to **5 of 27 routes**. `lib/api-validation.ts` exists, states its purpose ("make impossible input impossible", no 10MB string as `notes`, bounded file assets) and is imported by `encode`, `encode/stream`'s neighbours `evaluate`, `forge`, `teach` and `youtube` - while the other 22 handlers call `await req.json()` and destructure, including routes that take the **same free text the guarded route bounds**: `/api/triage` (`{ text }`) and `/api/roast` (`{ notes }`) are handed the learner's `rawNotes` by the same UI that gets a clean 400 from `/api/encode` for a paste that is too large. Two consequences, both visible: an oversized paste is sent to a paid provider call instead of being refused with the guard's message, and malformed JSON throws out of `req.json()` into the route's own catch - a 500 rather than the guard's "Request body must be valid JSON." | the guard: `lib/api-validation.ts:1`-`:25` (`parseRouteBody` at `:136`); guarded: `app/api/encode/route.ts`, `evaluate`, `teach`, `youtube`, `forge`; unguarded, same free text: `app/api/triage/route.ts:47`, `app/api/roast/route.ts:60` (and the other 20 in the sweep's list) | Read from the code, and countable: `grep -l api-validation app/api/*/route.ts` names five files, `ls app/api` names twenty-seven. **Proof for the fix:** one schema per remaining route (they are all a handful of fields), then a test per route that a wrong-typed body gets a 400 naming the field, the way `tests/unit/forge-route.test.ts` already does for the forge. This is breadth rather than a single line, which is why it is last. |
+
+### 26.3 Checked and cleared in this pass
+
+Recorded so the next round does not re-derive it. Each was a candidate going in and is
+correct in the code as it stands:
+
+- **`lib/google-drive.ts` handles the Docs-editor case the picker creates.** `driveDownloadTarget`
+  routes `application/vnd.google-apps.*` through `/export?mimeType=` (with a per-type
+  format table) and everything else through `alt=media`, labels the asset with the type
+  those bytes really are, and reports the API's own error text when the export is
+  refused - the 403 `fileNotDownloadable` shape a Slides deck used to fail with.
+- **Sentry is genuinely wired, not a described mechanism.** `initSentry` is called from
+  `components/MonitoringInit.tsx:17`, and `captureAiError` has four live call sites in
+  `lib/ai-client.ts` (`:341`, `:354`, `:368` …) plus `/api/metrics`. Both are no-ops
+  without a DSN, which is the documented behaviour.
+- **The lab history's bounded cache and its account mirror agree on their limits.**
+  `syncToyProgressWithCloud` merges to the **cloud** cap and compares against what the
+  device would keep, so a 2,000-snapshot account does not re-report a merge on every
+  sign-in; `saveToyProgressStore` then writes with the local cap. The comment above
+  `TOY_PROGRESS_LIMIT` describes exactly this split.
+- **`lib/chapters.ts` counts what it says it counts.** "Encoded" is submitted wording or
+  an examiner grade on wording that was typed, never a timer or a watch position, and a
+  `skipped` stage is explicitly not encoded.
+- **`lib/triage.ts` fails safe in both directions.** An unknown verdict degrades to
+  `kernel` rather than `noise`, out-of-range indices are ignored, and `stripNoise`
+  returns the original source if everything came back as noise.
+- **`saveStudyPrefs` merges rather than replaces**, which is what makes the two writers
+  in `useInputSource` safe: the tab effect writes only `activeTab` and the toggle effect
+  writes only the toggles, and neither erases the other's fields.
+- **The stage draft's debounce is closed.** The 300ms timer is cleared in the effect's
+  own cleanup and its handle nulled before each reschedule, the ref is dropped when the
+  session leaves `encoding`, and the `pagehide` flush covers the reload race (§23).
+- **`lib/audio.ts`'s fire-and-forget chimes cost nothing to leave alone.** The module is
+  a singleton with no React state and no listeners; a scheduled note after a transition
+  is inaudible, and `playBeep` swallows a blocked context by design.
+
+### 26.4 Priority order, and what this round deliberately did not do
+
+Fix order as round 24 filed it: **42** (a feature the README sells and the code does not have, and the only one
+of these a learner meets on their first offline session) - **fixed in round 25 (§27)**, so the order
+now starts at **40**; then **40** (it spends the
+learner's money on copies of a call the app has already abandoned), then **43** (the same
+class as 42 in one sheet), then **41** (a silent overwrite in a narrow window), then **44**
+(breadth, cheap per route but twenty-two of them). Nothing was changed in this round - its
+output is a ranked list with a stated proof for each, the way round 17's was - so the
+running total of defects stays at **39**, and findings 40-44 are candidates until a round
+fixes one.
+
+## 27. Round 25 - defect 42, the offline fallback that was described and never wired
+
+Round 24's first finding, fixed and pinned. The README advertised an "offline fallback
+generator when you have no network/key", `lib/services/offlineGenerator.ts` held a
+complete deterministic generator, `hooks/useSettings.ts` subscribed to the browser's
+`online`/`offline` events - and **nothing joined them**: `generateOfflineWorkout` had no
+production caller, `isOffline` had no consumer, and the one spec that mentioned the
+fallback asserted the opposite in its own first test ("alerts the user rather than
+producing fake cards"). A learner with no connection got an error dialog.
+
+### 27.1 The decision, and where it was made
+
+- **The call was to implement, not to delete**, because the machinery was already
+
+there and the behaviour it promises is the one a learner needs: the three artefacts
+that disagreed now agree, with the code moved rather than the claim.
+- **One predicate owns the choice.** `shouldFallBackToOffline({ isOffline, error })`
+returns true when the browser already knows there is no connection, or when the
+attempt failed because the connection is what went missing
+(`isConnectivityFailure`, matched on the failure's own wording - "Failed to fetch",
+"Load failed", `ERR_INTERNET_DISCONNECTED`, "The network connection was lost" - and
+never on the error's class). It is extracted so both directions can be tested without
+a browser, and so the launchpad has exactly one line that decides.
+- **The boundary it protects is the point.** A server that *answered* with an error is
+not a lost connection: the 500 still alerts and still produces no cards, which is what
+`e2e/resilience.spec.ts` has pinned since the defect-34 round. The fix deliberately does
+not turn a provider outage into an invented workout.
+- **Two ways in, both wired.** Before the attempt: the notes/file branch short-circuits
+before `setAppState('loading')`, so an offline Generate makes **no request at all** - no
+abort controller, no in-progress flag, nothing spent. Mid-request: the existing `catch`
+consults the same predicate before it alerts, so a tunnel, a dropped wifi or a sleeping
+laptop lands in the same place instead of being reported as a schema failure.
+- **The learner is told which way the workout was made.** A notice above the state switch
+(`data-testid="offline-fallback-banner"`, `role="status"`) carries
+`data-connectivity` (offline/online, live) and `data-workout-origin`
+(model/offline/connection, a property of the session). Offline it says the model will not
+be the one reading the notes; afterwards it says this workout was built here, and stays
+saying so after the connection returns - because it was. It is dismissible, as the
+interrupted-generation notice is.
+- **Honest about what the fallback is.** Five deterministic template stages built from
+the device's own text, marked as such in the topic ("… (Offline Schema Workout)"), worth
+**60 XP against the model's 100** - the same work, less of the generation effect - and it
+produces none of the model-authored extras (no guided path, no research contexts). A
+model-written schema clears the origin flag, so the notice never outlives its session.
+
+### 27.2 Verified
+
+- **The decision (unit, `tests/unit/offline-fallback.test.ts`, 13 tests).** The classifier
+in both directions: the seven wordings a browser or runtime uses when the request never
+landed, against the refusals it must not swallow (a provider error, a 500 body, "Invalid
+schema format", a JSON `SyntaxError`, an `AbortError`, nothing thrown). The predicate over
+both inputs, including that a cancel does not fall back. The generator's payload contract
+the workbench relies on: five `offline-stage-N` activities with the labels, placeholders,
+preset options and visual data a stage needs to be answerable, determinism, and a hidden
+template staying hidden. And the wiring itself, scanned at the source the way
+`xp-timer-cleanup.test.ts` scans its timer: the import, `isOffline` read from `useSettings`
+(and still published there, listener included), **both** call sites, the real
+`generateOfflineWorkout(rawNotes, encodingMode, …)` call rather than a stub, the alert
+that survives for a server that answered, the banner and its two attributes, the notice
+rendered above the state switch, and the origin flag being cleared by a model-written
+schema.
+- **The behaviour (browser, `e2e/resilience.spec.ts`, 3 new tests, live app).** With no
+connection at the moment Generate is pressed: the notice reads `data-connectivity="offline"`
+before the click and `data-workout-origin="offline"` after it, the workbench shows
+**`01/05`** (the generator's five stages; the mocked payload has two), the mocked payload's
+placeholder is absent, and **zero** requests reached either encode route. A connection
+aborted mid-request (`route.abort('internetdisconnected')`) falls back with
+`data-workout-origin="connection"`. And the round trip: reconnecting flips
+`data-connectivity` to `online` while the session keeps its origin, dismissing clears the
+notice, and the next generation is the model's again (`STAGE1_FIELD1_PLACEHOLDER` back,
+`01/05` gone, no notice).
+- **Mutation-proven.** With both call sites replaced by `if (false as boolean)` - the
+pre-fix behaviour, verbatim - **all three** browser tests fail, the first on
+`Expected: "offline", Received: "model"` for `data-workout-origin`, which is the defect
+stated as an assertion. Under the same mutation 1 of the 13 unit tests fails (the wiring
+guard that names both call sites); the decision and generator tests are independent of the
+wiring by construction. Reverted, re-run green.
+- **One existing test changed, deliberately.** `e2e/encode.spec.ts`'s "Offline resilience"
+test pinned the alert ("going offline after load informs the user with an alert"). That
+alert is exactly what this round removes, so the test now asserts the fallback - no dialog
+was raised, `01/05` is on screen, the origin attribute says `offline` - with the reason
+for the change written in the test. Nothing else in the suite asserted the old behaviour
+(`grep setOffline e2e/`), and the alert that remains (a server that answered) is still
+pinned in `resilience.spec.ts`.
+- **Neighbours.** Full unit suite green (88 files, 1441 tests), `bunx tsc -b --noEmit` and
+`bunx eslint` clean, and the generation specs whose flow this touches all pass:
+`e2e/resilience.spec.ts` (9, including the 500-still-alerts test), `e2e/encode.spec.ts`
+(5), `e2e/encode-stream.spec.ts` (3, including the one asserting the streamed payload
+"produced the real workout, not the offline fallback"), `e2e/stage-templates.spec.ts`,
+`e2e/idb-autosave.spec.ts` and `e2e/stage-draft.spec.ts`.
+
+### 27.3 What it deliberately does not do
+
+- **No fallback for the YouTube path.** A transcript is the network; with no connection
+there is nothing on the device to build chapters from, so that path keeps its honest alert.
+The wired fallback is the notes/file one, which is the one the README advertised.
+- **No service worker.** §19.3's remaining gap stands: a learner who is offline *before*
+the page loads still gets the browser's error page, because nothing caches the app shell.
+This round made the in-page claim true; it did not add an offline app.
+- **Not a second encoder.** The fallback never guesses at model output, never invents
+content beyond templates derived from the learner's own text, and says on screen that it
+did so - which is why the "no fake cards" rule survives it intact.
+
+**Total: 40 distinct defects in 56 files** (40 is the first in
+`lib/services/offlineGenerator.ts` - the module that carried the generator and the unused
+marker, and did not count while the finding was open - and the round's new unit file,
+`tests/unit/offline-fallback.test.ts`, is counted as a file, following defect 30's
+precedent. `app/page.tsx` (defect 37), `hooks/useSettings.ts` (named by round 24's row 42),
+`README.md` (defect 28) and the two browser specs were already named by earlier rounds; only
+`e2e/encode.spec.ts`'s offline test changed its assertion rather than being added to.)
+
+## 28. Round 26 - defect 40, the deadline that did not abort the call it gave up on
+
+Round 24's second finding, fixed and pinned. `lib/ai-hardening.ts`'s own module header
+described `withTimeout` as an "AbortSignal-backed deadline" and the module contained **no
+`AbortController` at all**: the timer raced the promise and rejected, and the `fetch` (or the
+Gemini SDK call) it had given up on kept running. The retry loop made it worse rather than
+better - `isRetryableError` returns true for `AiTimeoutError`, so 90 seconds into a
+generation the loop started a **second** attempt against the same provider while the first
+was still in flight, and a third after that: three concurrent copies of one generation, each
+billed, while the learner watched an apparently stuck wait.
+
+### 28.1 The mechanism, and what it reaches
+
+- **The deadline owns a controller now, and aborts before it rejects.** `withTimeout` takes
+  either a promise (unchanged for a caller that has nothing to cancel) or a factory
+  `(signal) => Promise<T>`; in the factory form it creates an `AbortController`, starts the
+  work with `controller.signal`, and on the deadline calls `controller.abort()` **before**
+  rejecting. The ordering is the point: `AbortSignal` dispatches `abort` synchronously, so by
+  the time the caller's `catch` runs the transport is already cancelled and its abort
+  listeners have already run - which is what makes the retry a *successor* rather than a
+  *twin*.
+- **The signal reaches the transport, both ways in.** `fetchJsonWithRetry` builds each
+  attempt as `fetch(url, { ...init, signal })`, and the Gemini branch passes the same signal
+  into the SDK's own `config.abortSignal` (`@google/genai` 2.20.0). A timed-out call is
+  cancelled at the layer that was still holding the connection open.
+- **The deadline now covers the whole attempt.** It used to wrap the `fetch` alone, so the
+  body read - which *is* the model's answer - sat outside any deadline. Each attempt now
+  returns a discriminated outcome (`ok` with the parsed body, or `http` with the status and
+  the provider's own text) from inside the deadline, so a stalled response body is cut too.
+- **A caller's signal composes with the deadline.** `withTimeout`'s optional fourth argument
+  (and, for `fetchJsonWithRetry`, the standard `init.signal`) drives the *same* controller,
+  so a cancel and a timeout both reach the transport, and a cancel is reported as the
+  transport's `AbortError` rather than being rewritten as a timeout. An already-aborted
+  caller signal starts the work already cancelled.
+- **Retry behaviour is unchanged where it should be.** A timeout is still retryable, a 503 is
+  still retried after backoff, a 401 still throws `ApiHttpError` without retrying, and the
+  Gemini ladder still steps down on a deadline. The difference is that each of those now
+  happens after the previous attempt has stopped.
+
+### 28.2 Verified
+
+- **The abort (unit; 6 new tests in `tests/unit/ai-hardening.test.ts`, 1 in
+  `tests/unit/ai-client.test.ts`).** `withTimeout` hands the work a signal, and that signal is
+  `aborted` when the deadline passes - with the `abort` event observed firing, not just the
+  flag; the signal is left untouched when the work beats the deadline; a caller's
+  `AbortController` aborts the work and the rejection is an `AbortError`, not an
+  `AiTimeoutError`; an already-aborted caller starts cancelled. `fetchJsonWithRetry` is driven
+  through a stubbed `fetch` that records the signal it was handed and only settles when
+  aborted: after the deadline **all three** attempts' signals are `aborted`, each attempt
+  stopped before the next began (`[1, 2, 3]`), and **`maxInFlight` is 1** - the defect stated
+  as one number. A caller's `init.signal` cancels the request and costs exactly one call. The
+  Gemini test drives the real ladder on fake timers: four rungs, four signals, all `aborted`,
+  each rung stopped in ladder order before the next started, `maxInFlight` 1.
+- **Mutation-proven.** With the single `controller.abort()` line removed from the deadline's
+  timer - the pre-fix behaviour, verbatim - exactly the three tests that pin the abort fail
+  (`expected false to be true` on the signal's `aborted`), and the other 38 pass, because the
+  retry decision, the status classification and the model ladder are independent of it.
+  Restored, re-run green.
+- **Neighbours.** `bunx tsc -b --noEmit` clean, `bunx eslint` clean on both edited modules and
+  both edited test files, and the full unit suite green (**88 files, 1448 tests** - the seven
+  new tests on top of the 1441 defect 42 left). Both provider paths that go through
+  `fetchJsonWithRetry` (OpenRouter and OpenAI-compatible) are pinned by the existing
+  `ai-client.test.ts` cases, which still pass unchanged.
+
+### 28.3 What it deliberately does not do
+
+- **No propagation from the HTTP request that started the call.** A cancelled `/api/encode`
+  still does not cancel the model call: `req.signal` is not threaded through the ~25 route
+  call sites into `generateJSONWithProvider`. The composition primitive now exists (an optional
+  signal on `withTimeout`, and `fetchJsonWithRetry` composing `init.signal`), so that is a
+  plumbing change with a clear home, but it is a separate feature from the deadline defect and
+  is not claimed here.
+- **The streaming path still has no deadline of its own.** `streamTextWithProvider` reads the
+  SDK/fetch stream with no timer, so `AI_TIMEOUT_MS.stream` remains unused. A deadline over a
+  stream is a different design question (a whole-stream budget versus a per-chunk idle
+  timeout), and this round did not decide it - the defect was the deadline that existed and
+  did not abort.
+
+**Total: 41 distinct defects in 58 files** (40 is the first in `lib/ai-hardening.ts` - the
+module that carried the deadline and did not count while the finding was open, the same rule
+as `lib/services/offlineGenerator.ts` in round 25 - and `tests/unit/ai-client.test.ts` is
+newly named by this round. `lib/ai-client.ts`, `tests/unit/ai-hardening.test.ts` and
+`README.md` were already named by round 24's row 40 and earlier rounds, and no new test file
+was created: the two existing suites were extended.)
+
+## 29. Round 27 - defect 41, the attached file the hydration read could clobber
+
+Round 24's third finding, fixed and pinned. `hooks/useInputSource.ts` mirrors the attached
+file into IndexedDB session state and restores it on mount, and both halves of that
+arrangement were guarded by a single `if (!hydratedRef.current) return` in the persist effect
+- which covers exactly one case, the mount-time `null` the comment names. A file the
+**learner** picked inside the read's window was not covered, so it lost both halves of the
+deal: the effect returned early and never re-ran, dropping the write, and the read that
+followed called `setUploadedFile(stored)` unconditionally and replaced the fresh pick with the
+previous session's upload. The read is the slow one on a first visit, because `initIndexedDB`
+performs the one-time localStorage→IndexedDB migration of an existing history - so the window
+is widest exactly where a learner has the most to lose.
+
+### 29.1 The guard, and why it is a ref
+
+- **`uploadTouched` is the file-side twin of `sourceTouched`.** The hook already records an
+  explicit user action for the input tab (`if (!sourceTouched.current) setStoredActiveTab(...)`)
+  and consults it before applying hydrated prefs; the upload now does the same, for the same
+  reason.
+- **The setter writes it synchronously.** `setUploadedFile` marks the ref and then sets the
+  state, so the flag is already true when a read resolving a microtask later inspects it.
+  React state would not do: the read's callback closes over the render that started it and
+  would still see the pre-pick value.
+- **The read restores only what the learner has not already overridden.** `stored` is applied
+  when `!uploadTouched.current`, so a pick wins whichever side of the read it landed on.
+- **The persist effect refuses only the untouched mount `null`.** The condition is
+  `!hydratedRef.current && !uploadTouched.current`, true only for the initial state the
+  original comment was about ("writing it would delete the very upload the read is about to
+  restore"). Every other change persists immediately - including a pick that arrived before
+  the read finished, which is the write the old guard dropped.
+
+### 29.2 Verified
+
+- **The ordering (unit, `tests/unit/input-source-upload.test.tsx`, 8 tests).** The hook is
+  mounted in happy-dom with `lib/db`'s three session-state functions mocked and the read held
+  open, so the test decides when hydration answers. A pick is written *before* the read
+  settles; the read then answering with the previous session's upload leaves both the
+  on-screen file and the store holding the pick, and never writes the stored one; a pick that
+  beat an *empty* store still persists; the ordinary restore, the empty-store no-op, a later
+  pick replacing a restored upload, clearing deleting the key, and a read that resolves after
+  unmount writing nothing are pinned too.
+- **Mutation-proven (unit).** With the three pre-fix lines restored - the setter no longer
+  marking, the read applying unconditionally, the effect refusing until hydration - exactly
+  three tests fail, and they fail on the defect itself: `expected [] to deeply equal
+  [['last_upload', …]]` (the dropped write) and `expected { yesterday-lecture.pdf } to deeply
+  equal { today-lecture.pdf }` (the clobber). The other five pass, because the ordinary
+  restore path is not what changed.
+- **The real thing (browser, `e2e/upload-persistence.spec.ts`, 3 tests, live app).** With real
+  IndexedDB: a picked PNG is stored and, after a real `page.reload()`, comes back with its
+  exact bytes - the assertion is on the rendered `src`, so a reload that restored *a* file
+  rather than *this* file still fails; the newest pick wins over one an earlier reload had
+  restored; and the race itself is made real by **holding an IndexedDB connection** in an
+  init script, so the app's own version-2 open is blocked and its read answers late, with a
+  previous session's upload seeded in the store. The pick wins on screen and in the store,
+  and survives the reload.
+- **Mutation-proven (browser).** With the pre-fix hook, the slow-hydration test fails at the
+  store assertion - the record is the seeded `yesterday-upload.png`, the pick's write having
+  been dropped - which is the defect stated as a browser assertion.
+- **A dead end worth recording.** The first attempt at slowing the read shadowed `onsuccess`
+  on the request returned by `indexedDB.open`. `idb` 8 resolves its open through
+  `request.addEventListener('success', …)`, and an own-property shadow of `onsuccess` does not
+  intercept that listener, so instead of delaying the connection the patch starved it:
+  `getDB()` never resolved, every session-state write quietly no-op'd, and the test hung
+  rather than failing informatively. The hold-a-connection script is the version that works,
+  and it touches no API.
+- **Neighbours.** `bunx tsc -b --noEmit` clean, `bunx eslint` clean on the hook and both new
+  specs, and the full unit suite green (**89 files, 1456 tests** - the eight new tests on top
+  of the 1448 the deadline round left).
+
+### 29.3 What it deliberately does not do
+
+- **No `pagehide` flush for the session-state write.** `putSessionStateIDB` is issued
+  synchronously on the pick (the effect has no debounce), unlike the schema writes that need
+  `flushPendingSchemaWrites`; the reload test above is what pins the durable path. A second
+  flush mechanism for a write that has nothing queued would be machinery without a caller.
+- **No change to the notes or YouTube inputs.** The race was the upload's; neither of those
+  has an async restore of its own to lose to.
+
+**Total: 42 distinct defects in 61 files** (41 is the first in `hooks/useInputSource.ts` - the
+module that carried the hook and did not count while the finding was open, the same rule as
+`lib/ai-hardening.ts` in round 26 - and the round's two new specs,
+`tests/unit/input-source-upload.test.tsx` and `e2e/upload-persistence.spec.ts`, are counted as
+files following defect 30's precedent. `README.md` was already named by defect 28.)
+
+## 30. Round 28 - defect 45, the icons the manifest declared and the shell nothing cached
+
+`app/manifest.ts` has described an installable app since it was written: `display: 'standalone'`,
+a `start_url`, a `scope`, the studio's own colours, and three icon entries - `/icon-192.png` at
+`192x192` with `purpose: 'any'`, and `/icon-512.png` twice, once `any` and once `maskable`.
+`public/` held one directory, `assets`, and **no file at either path**, so both returned **404**.
+Nothing in the tree registered a service worker either. The two absences were joined by
+`components/PWAInstallHeader.tsx`, whose whole install affordance - the `[ INSTALL APP: PWA ]`
+button, rendered only when `deferredPrompt || isIOS` - waits on `beforeinstallprompt`, an event
+Chromium will not fire for a manifest whose declared raster icons do not load, nor for an app with
+no worker behind a `fetch` handler. So the button could not appear on any Chromium browser, for any
+learner, ever: the masthead's only install path was dead code behind a promise the tree did not
+keep.
+
+The same absence had a second face, and it is the one a learner meets. The studio is built for a
+train: it generates from text, files and YouTube URLs and hands the results to RemNote, Anki and the
+clipboard, and its shell needs nothing from the network. §19.3 declared this gap in round 17 and
+chose not to file it, on the grounds that "the in-page offline fallback generator still works once
+the page has loaded". Round 25 (§27) had to correct half of that sentence - the generator was wired
+to nothing - and fixing it made the remaining half load-bearing rather than academic: a learner who
+is offline *before* the page loads got the browser's own error page. Rounds 18-27 worked through the
+other findings while this one kept standing. This round closes it, and files it, because the gap as
+§19.3 stated it was only half of what was actually wrong.
+
+### 30.1 The fix, and the four choices inside it
+
+- **The icons are generated, not committed.** `lib/pwa/appIcon.ts` draws the studio's own `[ ▮ ]`
+  token - the plate, the dim frame, the gilt bracket, the bright core - from four rectangle lists in
+  0..1 space, and encodes it as a real PNG: signature, `IHDR` (8-bit truecolour RGB, no interlace),
+  one `deflateSync`'d `IDAT`, `IEND`, with a CRC-32 table built in the module. This follows
+  `lib/anki-sqlite-writer.ts`, which builds its .apkg in code for the same reason: the format is
+  small and fully specified, and one description renders at any size, so the drawing stays
+  reviewable as code rather than as an opaque blob nobody can diff.
+- **Served from a dotted route segment, at the paths already declared.**
+  `app/icon-192.png/route.ts` and `app/icon-512.png/route.ts` are real App Router handlers, so the
+  manifest needs no edit and no rename: the file name carries the size, which makes a mismatch
+  between the path and the pixels visible in the path itself. `dynamic = 'force-static'` prerenders
+  both and `renderAppIconPng` memoises per size, so the bytes cost one render.
+- **The worker is network-first, and narrow on purpose.** `public/sw.js` serves the network and uses
+  the cache only as the fallback, which is the property that makes it safe to register in every
+  environment: online, nothing this worker does can serve a stale page or a stale response. It
+  declines **every non-GET** request and **every off-origin** request outright, so the streamed
+  generation POSTs (`/api/encode/stream`, `/api/forge`, …) and every provider, Drive and Firestore
+  call pass through untouched - replaying a generation from a cache would be a far worse defect than
+  the one being fixed. It precaches `/`, the manifest and both icons; it skips Next's dev-only
+  `/_next/webpack-hmr` and `__nextjs` endpoints; each precache path is added independently, so one
+  failure cannot cost the whole install; and activate deletes superseded caches and claims the
+  clients, so the first visit is controlled without needing a second.
+- **Registration is deferred, and a refusal is tolerated.** `components/ServiceWorkerInit.tsx`
+  mounts beside `MonitoringInit` in the root layout - the existing precedent for browser-only
+  initialisation - and registers after the `load` event, so the first paint never competes with the
+  worker's install for the network. A `catch` swallows a refused registration: a private window runs
+  the app exactly as it did before, just without the install button.
+
+### 30.2 Verified
+
+- **The bytes, decoded independently of the encoder (`tests/unit/pwa-install.test.ts`, 17 tests).**
+  The suite re-walks the chunk stream with **its own bit-by-bit CRC-32** and **its own
+  `inflateSync`**, so a self-consistent-but-wrong encoder cannot pass by agreeing with itself, and
+  asserts the IHDR dimensions, 8-bit colour type 2, exactly `IHDR/IDAT/IEND`, an image that inflates
+  to `(1 + 3w) × h` bytes with a zero filter byte on every row, determinism, and - so a valid but
+  blank icon cannot pass - that the decoded pixels really contain the plate, the frame and the gilt
+  mark. The same decode was then run against the **served** bytes with Python's own `zlib`, a third
+  implementation sharing nothing with either: `GET /icon-192.png` and `/icon-512.png` both answer
+  `200 image/png`, and both reconstruct to complete 192x192 and 512x512 RGB bitmaps with every CRC
+  valid.
+- **The promise and the disk, checked against each other.** The manifest is a promise about files;
+  the 404s existed because nothing verified it. The suite now extracts every declared `src` and
+  `sizes` from `app/manifest.ts` and asserts that a route handler exists at each path, that the
+  filename, the declared `sizes` and the size that handler renders all agree, and that both an `any`
+  and a `maskable` purpose survive.
+- **The browser's own verdict (`e2e/pwa-install.spec.ts`, 3 tests, against the live app).** The
+  manifest is linked and fetched over HTTP, and every icon it declares answers 200 with valid PNG
+  dimensions equal to its declared `sizes`. A worker registers, reaches `activated` with its
+  `scriptURL` at `/sw.js`, and takes control of the page that registered it. And the headline claim:
+  with the worker in control and `context.setOffline(true)`, a `reload()` still paints the launchpad,
+  with `navigator.onLine === false` asserted at the same moment so that a quietly reachable network
+  cannot be doing the work.
+- **Mutation-proven, twice.** Reversing the worker to cache-first and relaxing its GET guard fails
+  exactly the three tests that describe those properties, including the ordering assertion
+  (`expected 2908 to be less than 2821`). And letting a worker register and claim while **caching
+  nothing** leaves registration and control passing while **only** the offline test fails, at the
+  shell-cache poll that guards the reload - which is what shows the two browser tests measure
+  different things, and that the offline reload depends on precisely the caching under test.
+- **A first run that failed, and what it turned out to be (recorded because it matters).** The
+  offline spec failed its first time out: the registration state was sampled once as `activating`,
+  and the control poll never turned true. A throwaway probe spec then showed the worker installing,
+  activating, claiming and filling its cache correctly on the first load and after a reload, with
+  and without the mocked routes - so the worker was never the fault, and the assertions were: one
+  raced a mid-flight state transition, the other raced a first install that fetches four paths
+  through a cold dev server. Both now poll to a generous ceiling, and the shell-cache check was
+  split into its own assertion so that a future failure says which half broke. The probe was
+  deleted. The honest reading of that first run was "the fix does not work", and it did not.
+- **Neighbours.** `bunx tsc -b --noEmit` and `bunx eslint` clean, the full unit suite green with the
+  17 new tests in it, and §27's offline specs unaffected: the worker declines every POST, so the
+  `page.route`-mocked API calls are still answered by the mocks rather than from a cache.
+
+### 30.3 What it deliberately does not do
+
+- **No offline *generation*.** This caches the app shell, not the model. A generation still needs
+  the network; what a learner gets offline is the app, their library, their saved drafts and - via
+  defect 42's fallback - a deterministic workout built from their own notes. That is the boundary
+  §19.3 drew, and it has not moved.
+- **No precache manifest, no build-time asset list, no cache versioning UI.** A generated list of
+  hashed chunk names would be a build step buying what the runtime cache already provides, and it
+  would rot the first time a chunk was renamed. The opportunistic cache fills as the app is used,
+  which also means the offline shell is what this learner actually loaded.
+- **No background sync, no push, no update prompt.** There is nothing to sync in the background -
+  the writes are local and the cloud mirrors are already best-effort - and a "new version available"
+  prompt on a single-page studio is machinery without a decision behind it.
+- **No change to the offline experience itself.** The offline notice, the IndexedDB story and the
+  fallback banner are defect 42's, and the worker does not touch them.
+
+**Total: 43 distinct defects in 68 files** (45 is the first in `lib/pwa/appIcon.ts`, a module created
+by this round; the round's seven new files - `lib/pwa/appIcon.ts`, the two icon routes,
+`public/sw.js`, `components/ServiceWorkerInit.tsx` and the two specs, `tests/unit/pwa-install.test.ts`
+and `e2e/pwa-install.spec.ts` - are counted following defect 30's precedent. `app/layout.tsx` is
+named here, and `README.md` was already named by defect 28.)

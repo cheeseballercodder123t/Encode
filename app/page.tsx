@@ -54,6 +54,7 @@ import { EndSessionReviewModal, EndSessionReviewData } from '@/components/EndSes
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { SheetErrorBoundary } from '@/components/SheetErrorBoundary';
 import { computeSuccessRate } from '@/lib/services/adaptiveDifficulty';
+import { generateOfflineWorkout, shouldFallBackToOffline } from '@/lib/services/offlineGenerator';
 import { CrucibleModal } from '@/components/crucible/CrucibleModal';
 import { EmergencyTriageModal } from '@/components/crisis/EmergencyTriageModal';
 import { diagnoseDiscrepancy, patchStatementFor } from '@/lib/mr-m/autopsy';
@@ -99,10 +100,12 @@ export default function DeepEncodeApp() {
     wordCount,
   } = useInputSource();
 
-  // AI settings, audio & connectivity (useSettings)
+  // AI settings, audio & connectivity (useSettings). `isOffline` is what makes
+  // the on-device generator reachable rather than a described export (defect 42).
   const {
     aiSettings, setAiSettings,
     soundMuted, toggleSound,
+    isOffline,
   } = useSettings();
 
   // The whole session flow : schema, progress, stage inputs & gamification
@@ -309,6 +312,12 @@ export default function DeepEncodeApp() {
 
   // Feynman Evaluator checking state
   const [isEvaluating, setIsEvaluating] = useState(false);
+
+  // How the workout on screen was produced (defect 42): `null` when the model
+  // wrote it, otherwise which way the request was lost. It drives the offline
+  // notice, so "this was built on this device" is a property of the session
+  // rather than of the connection the learner happens to have now.
+  const [offlineFallback, setOfflineFallback] = useState<'offline' | 'connection' | null>(null);
 
   // Generation progress tracking: start timestamp + abort controller so the
   // loading view can show live elapsed time and a Cancel button.
@@ -677,6 +686,43 @@ export default function DeepEncodeApp() {
     initiateGenerateRef.current = handleInitiateGenerate;
   });
 
+  /**
+   * The workout a generation becomes when there is no network (defect 42).
+   *
+   * Deliberately the same shape as an online result - activities, a topic, a
+   * session the workbench can run - because the learner's next move is identical;
+   * what changes is that the stages are deterministic template scaffolds built
+   * from this device's own text rather than model-authored ones, and the screen
+   * says so instead of letting them believe a model read their notes.
+   */
+  const runOfflineFallback = (reason: 'offline' | 'connection' = 'offline') => {
+    const workout = generateOfflineWorkout(rawNotes, encodingMode, loadStudyPrefs().hiddenTemplates);
+    if (!workout.activities || workout.activities.length === 0) {
+      // Nothing to build from is an error, not a fallback: never open an empty
+      // workbench and call it offline mode.
+      alert('You are offline and there is nothing on this device to build a workout from yet. Paste or upload your material and try again.');
+      setAppState('input');
+      return;
+    }
+
+    setIsGuidedPathMode(false);
+    setGuidedModules([]);
+    setActivities(workout.activities);
+    setTopicSummary(workout.topicSummary);
+    setResearchContexts([]);
+    setYoutubeData(null);
+    setCurrentActivityIndex(0);
+    setUserResponses({});
+    loadStageInputs(0, workout.activities, {});
+    // Fewer XP than a model-authored schema: the same work, less of the
+    // generation effect, and the scale should not pretend otherwise.
+    setXp(60);
+    addXP(60);
+    setOfflineFallback(reason);
+    sound.playSuccess();
+    setAppState('encoding');
+  };
+
   // Main Generation Handler (Text / File / YouTube)
   async function handleGenerate(confirmedConfidence?: number) {
     const userConfidenceVal = confirmedConfidence || preSessionConfidence;
@@ -763,6 +809,15 @@ export default function DeepEncodeApp() {
     // Standard Notes or File Upload
     if (!rawNotes.trim() && !uploadedFile) return;
 
+    // Offline is not a failed generation, it is a different one: the welcome
+    // sheet has already told the learner the app works this way, and the
+    // deterministic workout needs neither a network nor a key, so nothing is
+    // attempted and nothing is spent.
+    if (shouldFallBackToOffline({ isOffline })) {
+      runOfflineFallback('offline');
+      return;
+    }
+
     setAppState('loading');
     sound.playBeep(440, 'sine', 0.15);
     incrementModelCall(aiSettings.geminiModel || 'gemini-3.7-flash');
@@ -810,6 +865,10 @@ export default function DeepEncodeApp() {
         },
       });
 
+      // The model wrote this one, so whatever an earlier session was built
+      // from is no longer the current session's story.
+      setOfflineFallback(null);
+
       if (data.isGuidedPath && data.guidedModules && data.guidedModules.length > 0) {
         // Guided Path Mode Active
         setIsGuidedPathMode(true);
@@ -848,6 +907,17 @@ export default function DeepEncodeApp() {
       // User cancelled : abort the fetch silently and return to input.
       if (error?.name === 'AbortError') {
         setAppState('input');
+        return;
+      }
+      // The connection went away between the click and the answer - a tunnel, a
+      // dropped wifi, a laptop that just slept. That is the same situation as
+      // being offline before the attempt, so it takes the same path instead of
+      // reporting the learner's own network as a schema failure (defect 42).
+      // A server that ANSWERED with an error is not this case: it is an error,
+      // and the resilience spec pins that it stays one.
+      if (shouldFallBackToOffline({ isOffline, error })) {
+        console.warn('Generation fell back to the on-device workout:', error);
+        runOfflineFallback('connection');
         return;
       }
       console.error('API generation failed:', error);
@@ -1614,7 +1684,13 @@ export default function DeepEncodeApp() {
 
             {/* Cloud Sync / Account Button : honest live status */}
             {(() => {
+              // The count is on the badge's FACE, not only in its tooltip
+              // (defect 39): it is the only signal that local work has not
+              // reached the cloud, and a number a person has to hover to read is
+              // not a signal. Signed out, every local schema is un-synced;
+              // signed in, it is the local list minus the account's copy.
               const pendingNote = pendingLocalCount > 0 ? ` : ${pendingLocalCount} local` : '';
+              const pendingBadge = pendingLocalCount > 0 ? ` · ${pendingLocalCount} local` : '';
               let status = 'OFF';
               let dot = 'bg-solder';
               let title = 'Sign in to sync schemas across devices (Firestore)';
@@ -1643,7 +1719,7 @@ export default function DeepEncodeApp() {
                   title={title}
                 >
                   <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
-                  Cloud: {status}
+                  Cloud: {status}{pendingBadge}
                 </button>
               );
             })()}
@@ -1813,6 +1889,38 @@ export default function DeepEncodeApp() {
               </button>
             </div>
           </motion.div>
+        )}
+
+        {/* Offline notice (defect 42): the app says which way a workout is being
+            made BEFORE it is made, and says so afterwards about the session on
+            screen. Rendered above the state switch so it is visible on the
+            launchpad and in the workbench alike - a learner about to type notes
+            should know the model is not the one that will read them. */}
+        {(isOffline || offlineFallback) && (
+          <div
+            className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-500/[0.06] border border-gilt/30 px-4 py-3.5 rounded-2xl shadow-panel"
+            data-testid="offline-fallback-banner"
+            data-connectivity={isOffline ? 'offline' : 'online'}
+            data-workout-origin={offlineFallback || 'model'}
+            role="status"
+          >
+            <p className="text-[11px] font-mono text-bone leading-relaxed">
+              <span className="text-amber font-bold uppercase">[ OFFLINE ]</span>{' '}
+              {offlineFallback
+                ? `This workout was built on this device${offlineFallback === 'connection' ? ' when the connection dropped' : ''} - deterministic template stages from your own material, no model call. Everything after this stage is unchanged: check, XP, export and history all work.`
+                : 'No connection, so Generate builds the workout on this device from your own material - deterministic template stages rather than model-authored ones. Reconnect for a model read.'}
+            </p>
+            {offlineFallback && (
+              <button
+                type="button"
+                onClick={() => setOfflineFallback(null)}
+                className="shrink-0 min-h-[36px] px-3.5 rounded-full text-[10px] font-mono uppercase tracking-[0.16em] text-solder hover:text-bone border border-edge/70 hover:border-gilt/40 cursor-pointer"
+                title="Hide this notice"
+              >
+                [ DISMISS ]
+              </button>
+            )}
+          </div>
         )}
 
         {/* ------------------------------------------------------------- */}

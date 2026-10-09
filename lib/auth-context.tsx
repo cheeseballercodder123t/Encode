@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { 
   User, 
   onAuthStateChanged, 
@@ -24,7 +24,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
 import { AISettings, SavedSchema } from './types';
-import { loadSavedSchemas, saveSchemaToHistory, loadAISettings } from './storage';
+import { loadSavedSchemas, saveSchemaToHistory, subscribeToSavedSchemas, loadAISettings } from './storage';
 import { mergeCloudSettings, nextSettingsStamp, shouldApplyCloudSettings } from './settings-sync';
 
 interface AuthContextType {
@@ -53,12 +53,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const subscribeToHydration = () => () => {};
-const clientSnapshot = () => true;
-const serverSnapshot = () => false;
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [cloudSchemas, setCloudSchemas] = useState<SavedSchema[]>([]);
@@ -68,14 +63,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [settingsRestored, setSettingsRestored] = useState(false);
 
-  // How many local schemas are not yet in the cloud : derived, not state, so
-  // the UI can show "N pending" without a cascading render pass.
+  // The library as this tab currently holds it (defect 39).
+  //
+  // The pending count below used to read `loadSavedSchemas()` inside a memo keyed
+  // on `[user, cloudSchemas, hydrated]`, while the module-level cache that reader
+  // consults moves on every write with none of those three moving with it - so
+  // saving a schema left the badge on its previous number until an unrelated
+  // render changed one of them. A just-saved schema is exactly what the badge
+  // exists to report, so it now follows the subscription the drawer already uses:
+  // hydrated once on mount, then updated by every write, this tab's and another
+  // tab's alike.
+  const [localSchemas, setLocalSchemas] = useState<SavedSchema[]>([]);
+  /* eslint-disable react-hooks/set-state-in-effect -- hydration-safe localStorage sync; the rule does not model the external-system-on-mount exception */
+  useEffect(() => {
+    setLocalSchemas(loadSavedSchemas());
+    return subscribeToSavedSchemas((schemas) => setLocalSchemas(schemas));
+  }, []);
+
+  // How many local schemas are not yet in the cloud : derived from the live list
+  // and the account's copy, so it moves when either of them does.
   const pendingLocalCount = React.useMemo(() => {
-    const local = hydrated ? loadSavedSchemas() : [];
-    if (!user) return local.length;
+    if (!user) return localSchemas.length;
     const cloudIds = new Set(cloudSchemas.map((s) => s.id));
-    return local.filter((s) => !cloudIds.has(s.id)).length;
-  }, [user, cloudSchemas, hydrated]);
+    return localSchemas.filter((s) => !cloudIds.has(s.id)).length;
+  }, [localSchemas, user, cloudSchemas]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Listen to Auth State
   useEffect(() => {

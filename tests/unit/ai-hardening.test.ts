@@ -170,6 +170,160 @@ describe('timeout budget', () => {
   });
 });
 
+/**
+ * Defect 40: the deadline used to race a timer against the promise and reject
+ * while the call it had given up on kept running. Everything below is about the
+ * transport actually being cancelled, in the order that makes it useful.
+ */
+describe('withTimeout aborts the work it gave up on', () => {
+  it('hands the work an AbortSignal and aborts it when the deadline passes', async () => {
+    const events: string[] = [];
+    let seen: AbortSignal | null = null;
+
+    const call = withTimeout(
+      (signal) => {
+        seen = signal;
+        signal.addEventListener('abort', () => events.push('aborted'));
+        return new Promise<string>(() => {}); // never settles on its own
+      },
+      20,
+      'slow call'
+    );
+
+    await expect(call).rejects.toBeInstanceOf(AiTimeoutError);
+    expect(seen).not.toBeNull();
+    // The signal the transport was started with is the aborted one — which is
+    // the difference between a cancelled request and a leaked one.
+    expect((seen as unknown as AbortSignal).aborted).toBe(true);
+    // And the abort event reached the transport, not just the signal's flag.
+    expect(events).toEqual(['aborted']);
+  });
+
+  it('leaves the signal untouched when the work beats the deadline', async () => {
+    let seen: AbortSignal | null = null;
+    const value = await withTimeout(
+      (signal) => {
+        seen = signal;
+        return Promise.resolve('ok');
+      },
+      1000
+    );
+
+    expect(value).toBe('ok');
+    expect((seen as unknown as AbortSignal).aborted).toBe(false);
+  });
+
+  it('composes a caller signal: a cancel aborts the work and is not reported as a timeout', async () => {
+    const caller = new AbortController();
+    let transport: AbortSignal | null = null;
+
+    const call = withTimeout(
+      (signal) => {
+        transport = signal;
+        return new Promise<string>((_resolve, reject) => {
+          const stop = () => reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }));
+          if (signal.aborted) stop();
+          else signal.addEventListener('abort', stop, { once: true });
+        });
+      },
+      1000,
+      'cancelled call',
+      caller.signal
+    );
+
+    caller.abort();
+
+    await expect(call).rejects.toMatchObject({ name: 'AbortError' });
+    expect((transport as unknown as AbortSignal).aborted).toBe(true);
+  });
+
+  it('starts cancelled when the caller signal was already aborted', async () => {
+    const caller = new AbortController();
+    caller.abort();
+
+    const call = withTimeout(
+      (signal) => {
+        expect(signal.aborted).toBe(true);
+        return Promise.resolve('should not be used');
+      },
+      1000,
+      'pre-cancelled',
+      caller.signal
+    );
+
+    await expect(call).resolves.toBe('should not be used');
+  });
+});
+
+describe('fetchJsonWithRetry aborts the attempt it gave up on (defect 40)', () => {
+  it('aborts the timed-out request, and starts no retry before it has stopped', async () => {
+    const signals: AbortSignal[] = [];
+    const stopped: number[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    global.fetch = ((_url: string, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal;
+      const attempt = signals.push(signal);
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      // A request that only ends when it is aborted — the shape of a model that
+      // is thinking past its deadline.
+      return new Promise((_resolve, reject) => {
+        const stop = () => {
+          inFlight -= 1;
+          stopped.push(attempt);
+          reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }));
+        };
+        if (signal.aborted) stop();
+        else signal.addEventListener('abort', stop, { once: true });
+      });
+    }) as unknown as typeof fetch;
+
+    await expect(
+      fetchJsonWithRetry('https://x.test', { method: 'POST' }, { timeoutMs: 20, label: 't' })
+    ).rejects.toBeInstanceOf(AiTimeoutError);
+
+    // The initial attempt plus MAX_RETRIES — a timeout stays retryable.
+    expect(signals).toHaveLength(3);
+    // Every attempt reached the transport with a signal, and the deadline
+    // aborted all of them rather than walking away.
+    expect(signals.every((signal) => signal && signal.aborted)).toBe(true);
+    // Each attempt stopped, and only then did the next one begin: 1, 2, 3.
+    expect(stopped).toEqual([1, 2, 3]);
+    // The defect in one number: the retry used to start beside the attempt it
+    // was replacing, so three copies of one generation ran (and billed) at once.
+    expect(maxInFlight).toBe(1);
+  });
+
+  it("cancels through the caller's own init.signal, without spending a retry", async () => {
+    const caller = new AbortController();
+    let calls = 0;
+
+    global.fetch = ((_url: string, init?: RequestInit) => {
+      calls += 1;
+      const signal = init?.signal as AbortSignal;
+      return new Promise((_resolve, reject) => {
+        const stop = () => reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }));
+        if (signal.aborted) stop();
+        else signal.addEventListener('abort', stop, { once: true });
+      });
+    }) as unknown as typeof fetch;
+
+    const pending = fetchJsonWithRetry(
+      'https://x.test',
+      { method: 'POST', signal: caller.signal },
+      { timeoutMs: 5000, label: 't' }
+    );
+    caller.abort();
+
+    // A cancel is the caller's decision, not a transport hiccup, so it is
+    // reported as an AbortError and is not retried.
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(calls).toBe(1);
+  });
+});
+
 /** Minimal local stand-in for vitest's afterEach when only some suites stub fetch. */
 function afterEachIfStubbed() {
   // Each test assigns global.fetch directly; vitest restores the environment

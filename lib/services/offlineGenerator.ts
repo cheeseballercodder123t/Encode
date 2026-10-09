@@ -47,6 +47,60 @@ function extractTextFeatures(rawText: string): ExtractedFacts {
 }
 
 /**
+ * Every phrase a browser or a runtime uses when the request never reached a
+ * server. Matched against the message, never against the error's class, because
+ * `fetch` rejects with a plain `TypeError` whose only useful content is this
+ * text - and because a `TypeError` thrown while parsing a response that DID
+ * arrive must not be mistaken for a lost connection.
+ */
+const CONNECTIVITY_FAILURE_PHRASES = [
+  'failed to fetch', // Chromium / Firefox
+  'fetch failed', // Node's undici, and the route handlers
+  'networkerror', // "NetworkError when attempting to fetch resource."
+  'network error',
+  'network request failed',
+  'load failed', // Safari
+  'err_internet_disconnected',
+  'err_network_changed',
+  'err_connection',
+  'internet disconnected',
+  'connection appears to be offline',
+  'network connection was lost',
+];
+
+/**
+ * Whether a generation failed because there is no network, as opposed to the
+ * network answering and the answer being a refusal.
+ *
+ * The distinction is the whole of defect 42's fix: a lost connection is the case
+ * the on-device generator exists for, while a server error must keep reaching the
+ * learner as an error. "Rather than producing fake cards" is the rule the
+ * existing resilience spec pins, and a 500 is not a reason to invent a workout -
+ * it is a reason to say the provider is down.
+ */
+export function isConnectivityFailure(error: unknown): boolean {
+  if (!error) return false;
+  // A deliberate cancel is not a lost connection, and must stay silent.
+  if ((error as { name?: unknown })?.name === 'AbortError') return false;
+  const message = String((error as { message?: unknown })?.message ?? error).toLowerCase();
+  return CONNECTIVITY_FAILURE_PHRASES.some((phrase) => message.includes(phrase));
+}
+
+/**
+ * The single decision the launchpad makes before it either calls the model or
+ * builds the workout on this device: generate offline when the browser already
+ * knows there is no connection, or when the attempt failed because the
+ * connection is what went missing.
+ *
+ * Extracted so it can be tested in both directions without a browser - the two
+ * inputs are a connectivity flag and a thrown value, and the caller owns
+ * everything else.
+ */
+export function shouldFallBackToOffline(input: { isOffline: boolean; error?: unknown }): boolean {
+  return input.isOffline || isConnectivityFailure(input.error);
+}
+
+/**
  * Deterministically generates a rich 5-Stage Cognitive Workout with Generation Effect partial schemas offline.
  */
 export function generateOfflineWorkout(
