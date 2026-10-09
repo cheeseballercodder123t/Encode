@@ -25,6 +25,7 @@ import { ChapterRail } from './ChapterRail';
 import { StemPreview } from './StemPreview';
 import { buildCausalFrame, frameToSentence, type CausalFieldKey } from '@/lib/causal-frame';
 import { resetRungsRevealed } from '@/lib/clue-ladder';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import { MisterMSurface } from '@/components/mr-m/MisterMSurface';
 import {
   loadPatches,
@@ -227,7 +228,9 @@ export function StudioWorkbench({
   stageErrorAnalysis,
 }: StudioWorkbenchProps) {
   const [fluffStripperActive, setFluffStripperActive] = useState(false);
-  const [copiedRemNote, setCopiedRemNote] = useState(false);
+  // The shared copy contract (defect 35): the confirmation is driven by the
+  // write's own outcome, so a refused copy can never render as "Copied".
+  const remnoteCopy = useClipboardCopy(2500);
   const [mobileTab, setMobileTab] = useState<'source' | 'forge' | 'remnote'>('forge');
   
   // Hands-Free Spoken Feynman State
@@ -805,14 +808,10 @@ export function StudioWorkbench({
 
   const handleCopyRemNote = async () => {
     if (!liveRemNote.markdown) return;
-    try {
-      await navigator.clipboard.writeText(liveRemNote.markdown);
-      setCopiedRemNote(true);
-      playSound('success');
-      setTimeout(() => setCopiedRemNote(false), 2500);
-    } catch {
-      console.warn('Clipboard write failed');
-    }
+    const outcome = await remnoteCopy.copy(liveRemNote.markdown);
+    // Only a write that landed earns the success sound; a refusal is shown on
+    // the button itself instead of a console line nobody reads.
+    if (outcome.ok) playSound('success');
   };
 
   // ─── Crystallization: the cards are the exhaust, not the engine ──────────
@@ -1949,13 +1948,17 @@ export function StudioWorkbench({
               <button
                 type="button"
                 onClick={handleCopyRemNote}
+                data-copy-status={remnoteCopy.copied() ? 'copied' : remnoteCopy.failed() ? 'failed' : 'idle'}
+                title={remnoteCopy.failed() ? remnoteCopy.message ?? undefined : undefined}
                 className={`w-full py-2.5 px-3 text-xs font-semibold rounded-md border transition-colors duration-150 cursor-pointer ${
-                  copiedRemNote
+                  remnoteCopy.copied()
                     ? 'bg-signal-500 border-signal-500 text-inset'
-                    : 'bg-inset border-edge text-bone hover:border-amber-500/60'
+                    : remnoteCopy.failed()
+                      ? 'bg-hazard-500/15 border-hazard-500/50 text-hazard-300'
+                      : 'bg-inset border-edge text-bone hover:border-amber-500/60'
                 }`}
               >
-                {copiedRemNote ? 'Copied' : 'Copy into RemNote'}
+                {remnoteCopy.copied() ? 'Copied' : remnoteCopy.failed() ? 'Copy blocked' : 'Copy into RemNote'}
               </button>
             </div>
 

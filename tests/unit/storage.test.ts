@@ -52,6 +52,26 @@ describe('AI settings', () => {
     localStorage.setItem('deepencode_ai_settings_v2', '{not json');
     expect(loadAISettings()).toEqual(DEFAULT_SETTINGS);
   });
+
+  // Defect 36: the record's age is what the cloud guard compares, and the reset
+  // and backup-restore paths used to write a record without one - which read as
+  // `0`, i.e. older than every account backup, so an old copy was applied over a
+  // deliberate local choice.
+  it('stamps a record written by a path that forgot to', () => {
+    saveAISettings({ provider: 'gemini' });
+
+    const stored = JSON.parse(localStorage.getItem('deepencode_ai_settings_v2')!);
+    expect(typeof stored.savedAt).toBe('number');
+    expect(stored.savedAt).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it('honours an explicit stamp, and otherwise keeps the record’s own', () => {
+    saveAISettings({ provider: 'openai' }, 1234);
+    expect(JSON.parse(localStorage.getItem('deepencode_ai_settings_v2')!).savedAt).toBe(1234);
+
+    saveAISettings({ provider: 'openai', savedAt: 4321 });
+    expect(JSON.parse(localStorage.getItem('deepencode_ai_settings_v2')!).savedAt).toBe(4321);
+  });
 });
 
 describe('schema history', () => {

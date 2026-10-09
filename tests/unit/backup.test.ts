@@ -169,6 +169,26 @@ describe('restoreBackup', () => {
     expect(JSON.parse(store.get(SETTINGS_KEY)!).provider).toBe('gemini');
   });
 
+  it('stamps a restored settings file now, not with the age of the file', () => {
+    // Defect 36: the restore used to write the file's own `savedAt` straight
+    // through. A file exported months ago then carried a months-old stamp, so the
+    // account's older copy outranked the restore the learner had just performed
+    // and undid it on the next sign-in. The learner chose this content today.
+    const fileAge = Date.parse('2025-06-01T00:00:00Z');
+
+    const report = restoreBackup({
+      app: 'deepencode',
+      settings: { provider: 'openai', openaiApiKey: 'sk-restored', savedAt: fileAge },
+    });
+
+    expect(report.settingsRestored).toBe(true);
+    const stored = JSON.parse(store.get(SETTINGS_KEY)!);
+    expect(stored.provider).toBe('openai');
+    expect(stored.openaiApiKey).toBe('sk-restored');
+    expect(stored.savedAt).toBeGreaterThan(fileAge);
+    expect(stored.savedAt).toBeGreaterThan(Date.now() - 60_000);
+  });
+
   it('restores known extras and ignores unknown keys', () => {
     const report = restoreBackup({
       app: 'deepencode',

@@ -5,6 +5,7 @@ import {
   type SessionState,
 } from '@/hooks/useSession';
 import type { Activity, GuidedPathModule, SavedSchema, StageResponse } from '@/lib/types';
+import type { StageDraft } from '@/lib/stage-draft';
 
 function makeActivity(id: string): Activity {
   return {
@@ -219,6 +220,68 @@ describe('sessionReducer', () => {
     const next = sessionReducer(state, { type: 'feynman_pass', moduleIndex: 0, score: 90, feedback: 'great' });
     expect(next.guidedModules).toHaveLength(1);
     expect(next.guidedModules[0].completed).toBe(true);
+  });
+});
+
+describe('sessionReducer restore_draft (defect 37)', () => {
+  const draft: StageDraft = {
+    savedAt: 5_000,
+    topicSummary: 'Action Potentials',
+    encodingMode: 'memorization',
+    xpEarned: 320,
+    activities: [makeActivity('a1'), makeActivity('a2')],
+    userResponses: { a1: { field1: 'submitted one', field2: 'submitted two' } },
+    currentActivityIndex: 1,
+    isGuidedPath: false,
+    guidedModules: [],
+    youtubeData: null,
+    researchContexts: [],
+    field1: 'half-typed sodium',
+    field2: '',
+    field3: 'anchor note',
+    selectedPreset: 'preset-2',
+    reflection: 'not there yet',
+  };
+
+  it('reinstates the stage with the typing that was never submitted', () => {
+    const next = sessionReducer(initialSessionState, { type: 'restore_draft', draft });
+
+    expect(next.appState).toBe('encoding');
+    expect(next.currentActivityIndex).toBe(1);
+    expect(next.topicSummary).toBe('Action Potentials');
+    expect(next.encodingMode).toBe('memorization');
+    expect(next.xp).toBe(320);
+    // The live fields come from the DRAFT, not from the submitted response for
+    // this stage (there is none) — that is the whole point of the record.
+    expect(next.field1).toBe('half-typed sodium');
+    expect(next.field2).toBe('');
+    expect(next.field3).toBe('anchor note');
+    expect(next.selectedPreset).toBe('preset-2');
+    expect(next.stageReflection).toBe('not there yet');
+    // Stages answered earlier in the session travel with it.
+    expect(next.userResponses.a1.field1).toBe('submitted one');
+    // A restored draft is a starting point, not something to undo back into.
+    expect(next.fieldUndoStack).toEqual([]);
+    expect(next.fieldRedoStack).toEqual([]);
+  });
+
+  it('clamps an out-of-range stage index to a stage that exists', () => {
+    const next = sessionReducer(initialSessionState, {
+      type: 'restore_draft',
+      draft: { ...draft, currentActivityIndex: 9 },
+    });
+    expect(next.currentActivityIndex).toBe(1);
+    expect(next.activities).toHaveLength(2);
+  });
+
+  it('restores a draft that references no activities without crashing', () => {
+    const next = sessionReducer(initialSessionState, {
+      type: 'restore_draft',
+      draft: { ...draft, activities: [], currentActivityIndex: 3 },
+    });
+    expect(next.appState).toBe('encoding');
+    expect(next.currentActivityIndex).toBe(0);
+    expect(next.activities).toEqual([]);
   });
 });
 

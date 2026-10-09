@@ -5,6 +5,7 @@ import { BracketTag } from '@/components/ui/BracketTag';
 import { motion } from 'motion/react';
 import { SavedSchema } from '@/lib/types';
 import { useModalA11y } from '@/hooks/useModalA11y';
+import { useClipboardCopy } from '@/hooks/useClipboardCopy';
 import { buildShareLink, SHARE_URL_LIMIT_BYTES } from '@/lib/url-share';
 import { buildShareSchemaFile, downloadBackup, shareFileSlug } from '@/lib/backup';
 import { playSound } from '@/lib/audio';
@@ -38,7 +39,10 @@ export default function StatelessShareModal({
   onClose,
   schema
 }: StatelessShareModalProps) {
-  const [copied, setCopied] = useState(false);
+  // The copy confirmation is the shared hook's, not this sheet's: the link is
+  // only marked copied for a write that actually landed, and a refusal is shown
+  // rather than logged where the learner will never see it (defect 35).
+  const linkCopy = useClipboardCopy(3000);
   const [preferSlim, setPreferSlim] = useState(false);
 
   const shareStats = useMemo(() => {
@@ -65,23 +69,10 @@ export default function StatelessShareModal({
   const kb = (bytes: number) => (bytes / 1024).toFixed(1);
 
   const handleCopyLink = async () => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(activeUrl);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = activeUrl;
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setCopied(true);
-      playSound('success');
-      setTimeout(() => setCopied(false), 3000);
-    } catch (err) {
-      console.error('Failed to copy link:', err);
-    }
+    const outcome = await linkCopy.copy(activeUrl);
+    // The confirmation sound is played for a write that landed, and for nothing
+    // else - a chime over a refused copy is the same lie as `[ OK ]`.
+    if (outcome.ok) playSound('success');
   };
 
   const handleNativeShare = async () => {
@@ -97,7 +88,7 @@ export default function StatelessShareModal({
         // User cancelled or share failed
       }
     } else {
-      handleCopyLink();
+      void handleCopyLink();
     }
   };
 
@@ -232,15 +223,23 @@ export default function StatelessShareModal({
                 />
                 <button
                   type="button"
+                  data-testid="share-copy-link"
                   onClick={handleCopyLink}
+                  data-copy-status={linkCopy.copied() ? 'copied' : linkCopy.failed() ? 'failed' : 'idle'}
+                  title={linkCopy.failed() ? linkCopy.message ?? undefined : undefined}
                   className={`flex items-center gap-1.5 px-4 py-2.5 font-bold text-xs transition-all shrink-0 cursor-pointer ${
-                    copied ? 'bg-amber600 text-bone' : 'bg-inset hover:bg-deck text-bone'
+                    linkCopy.copied() ? 'bg-amber600 text-bone' : 'bg-inset hover:bg-deck text-bone'
                   }`}
                 >
-                  {copied ? (
+                  {linkCopy.copied() ? (
                     <>
                       <span className="text-amber font-bold font-mono">[ OK ]</span>
                       <span>Copied!</span>
+                    </>
+                  ) : linkCopy.failed() ? (
+                    <>
+                      <span className="text-hazard-300 font-bold font-mono">[ ! ]</span>
+                      <span>Copy Link</span>
                     </>
                   ) : (
                     <>
@@ -250,6 +249,14 @@ export default function StatelessShareModal({
                   )}
                 </button>
               </div>
+
+              {/* The refusal is stated where the learner is looking, with what to
+                  do instead — the one thing the old console.error never did. */}
+              {linkCopy.failed() && (
+                <p data-testid="share-copy-failed" className="text-[11px] text-hazard-300 leading-relaxed">
+                  {linkCopy.message}
+                </p>
+              )}
 
               {slim && (
                 <button
@@ -356,11 +363,26 @@ export default function StatelessShareModal({
             {offersLink ? (
               <button
                 type="button"
+                data-testid="share-copy-url"
                 onClick={handleCopyLink}
+                data-copy-status={linkCopy.copied() ? 'copied' : linkCopy.failed() ? 'failed' : 'idle'}
+                title={linkCopy.failed() ? linkCopy.message ?? undefined : undefined}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 bg-inset hover:bg-deck text-bone font-bold text-xs cursor-pointer"
               >
-                {copied ? <span className="text-amber font-bold font-mono">[ OK ]</span> : <span className="text-amber font-bold font-mono">[ COPY ]</span>}
-                <span>{copied ? 'Copied to Clipboard!' : 'Copy Share URL'}</span>
+                {linkCopy.copied() ? (
+                  <span className="text-amber font-bold font-mono">[ OK ]</span>
+                ) : linkCopy.failed() ? (
+                  <span className="text-hazard-300 font-bold font-mono">[ ! ]</span>
+                ) : (
+                  <span className="text-amber font-bold font-mono">[ COPY ]</span>
+                )}
+                <span>
+                  {linkCopy.copied()
+                    ? 'Copied to Clipboard!'
+                    : linkCopy.failed()
+                      ? 'Copy failed — select the link'
+                      : 'Copy Share URL'}
+                </span>
               </button>
             ) : (
               <button

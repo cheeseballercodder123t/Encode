@@ -10,6 +10,21 @@ import {
   StageResponse,
   YouTubeMetadata,
 } from '@/lib/types';
+import {
+  clearStageDraft,
+  saveStageDraft,
+  stageDraftHasTyping,
+  type StageDraft,
+} from '@/lib/stage-draft';
+
+/**
+ * How long after the last keystroke the stage draft is written.
+ *
+ * Short enough that stopping to think is already saved, long enough that a
+ * burst of typing is one write. A reload inside the window is still safe: the
+ * `pagehide` flush in `useSession` writes the latest draft synchronously.
+ */
+export const STAGE_DRAFT_DEBOUNCE_MS = 300;
 
 export type AppState = 'input' | 'loading' | 'encoding' | 'completed';
 
@@ -107,6 +122,7 @@ export type SessionAction =
   | { type: 'resume_to_encoding'; schema: SavedSchema }
   | { type: 'select_module'; index: number }
   | { type: 'feynman_pass'; moduleIndex: number; score: number; feedback: string }
+  | { type: 'restore_draft'; draft: StageDraft }
   | { type: 'push_field_snapshot'; snapshot: FieldSnapshot }
   | { type: 'undo_fields' }
   | { type: 'redo_fields' };
@@ -242,6 +258,38 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         modActs,
         state.userResponses
       );
+    }
+    case 'restore_draft': {
+      // Put the learner back on the stage they were typing on, with the typing
+      // itself (defect 37). The live fields come from the draft verbatim rather
+      // than from `applyLoadedStage`, which only knows about SUBMITTED
+      // responses — the whole point of the draft is what never got submitted.
+      const draft = action.draft;
+      const acts = draft.activities || [];
+      const lastIndex = Math.max(0, acts.length - 1);
+      const index = Math.min(Math.max(0, Math.floor(draft.currentActivityIndex) || 0), lastIndex);
+      return {
+        ...state,
+        appState: 'encoding',
+        encodingMode: draft.encodingMode,
+        topicSummary: draft.topicSummary,
+        activities: acts,
+        userResponses: draft.userResponses || {},
+        currentActivityIndex: index,
+        isGuidedPathMode: Boolean(draft.isGuidedPath),
+        guidedModules: draft.guidedModules || [],
+        youtubeData: draft.youtubeData ?? null,
+        researchContexts: draft.researchContexts || [],
+        xp: draft.xpEarned,
+        field1: draft.field1 || '',
+        field2: draft.field2 || '',
+        field3: draft.field3 || '',
+        selectedPreset: draft.selectedPreset || '',
+        stageReflection: draft.reflection || '',
+        // A restored draft is a starting point, not a reversible edit.
+        fieldUndoStack: [],
+        fieldRedoStack: [],
+      };
     }
     case 'push_field_snapshot': {
       // Coalesce identical consecutive snapshots and bound stack growth.
@@ -413,6 +461,92 @@ export function useSession() {
     []
   );
 
+  // ─── In-progress stage draft (defect 37) ───────────────────────────────────
+  //
+  // The typing on the visible stage lives in this state and only reaches
+  // `userResponses` on Submit/Skip, so a reload mid-stage used to return to
+  // empty fields. The draft is written while the learner works and read back by
+  // the launchpad, which offers the stage — content and all — rather than
+  // silently dropping it.
+  const latestDraftRef = useRef<StageDraft | null>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (state.appState !== 'encoding' || state.activities.length === 0) {
+      latestDraftRef.current = null;
+      return;
+    }
+
+    const draft: StageDraft = {
+      savedAt: 0,
+      topicSummary: state.topicSummary,
+      encodingMode: state.encodingMode,
+      xpEarned: state.xp,
+      activities: state.activities,
+      userResponses: state.userResponses,
+      currentActivityIndex: state.currentActivityIndex,
+      isGuidedPath: state.isGuidedPathMode,
+      guidedModules: state.guidedModules,
+      youtubeData: state.youtubeData,
+      researchContexts: state.researchContexts,
+      field1: state.field1,
+      field2: state.field2,
+      field3: state.field3,
+      selectedPreset: state.selectedPreset,
+      reflection: state.stageReflection,
+    };
+
+    // Nothing typed and nothing submitted (a stage looked at but untouched) is
+    // not worth offering back: the draft is dropped instead of accumulating.
+    if (!stageDraftHasTyping(draft) && Object.keys(state.userResponses).length === 0) {
+      latestDraftRef.current = null;
+      clearStageDraft();
+      return;
+    }
+
+    latestDraftRef.current = draft;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      draftTimerRef.current = null;
+      saveStageDraft(draft);
+    }, STAGE_DRAFT_DEBOUNCE_MS);
+
+    return () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+      }
+    };
+  }, [
+    state.appState,
+    state.topicSummary,
+    state.encodingMode,
+    state.xp,
+    state.activities,
+    state.userResponses,
+    state.currentActivityIndex,
+    state.isGuidedPathMode,
+    state.guidedModules,
+    state.youtubeData,
+    state.researchContexts,
+    state.field1,
+    state.field2,
+    state.field3,
+    state.selectedPreset,
+    state.stageReflection,
+  ]);
+
+  // A reload must not race the debounce: the draft is flushed synchronously as
+  // the page goes away, so the keystroke before the reload is still there.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const flush = () => {
+      if (latestDraftRef.current) saveStageDraft(latestDraftRef.current);
+    };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
+
   /**
    * Load stage inputs for the given activity index.
    *
@@ -429,6 +563,16 @@ export function useSession() {
   const resetSession = useCallback(() => {
     dispatch({ type: 'reset' });
     setXpGainAnimation(null);
+    latestDraftRef.current = null;
+    clearStageDraft();
+  }, []);
+
+  /**
+   * Restore an in-progress draft — the visible stage, with its unsubmitted
+   * typing (defect 37). Used by the launchpad's recovered-stage banner.
+   */
+  const restoreDraft = useCallback((draft: StageDraft) => {
+    dispatch({ type: 'restore_draft', draft });
   }, []);
 
   /** Restore a saved schema into the completed view. */
@@ -505,6 +649,7 @@ export function useSession() {
     patch,
     loadStageInputs,
     resetSession,
+    restoreDraft,
     resumeSchema,
     resumeToEncoding,
     selectModule,

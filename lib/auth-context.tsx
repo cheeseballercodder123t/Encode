@@ -23,8 +23,9 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase';
-import { SavedSchema } from './types';
+import { AISettings, SavedSchema } from './types';
 import { loadSavedSchemas, saveSchemaToHistory, loadAISettings } from './storage';
+import { mergeCloudSettings, nextSettingsStamp, shouldApplyCloudSettings } from './settings-sync';
 
 interface AuthContextType {
   user: User | null;
@@ -47,7 +48,7 @@ interface AuthContextType {
   deleteSchemaFromCloud: (schemaId: string) => Promise<void>;
   syncLocalToCloud: () => Promise<number>;
   /** Backs up AI settings to the user's Firestore profile (merge). */
-  backupSettingsToCloud: (settings: any) => Promise<void>;
+  backupSettingsToCloud: (settings: AISettings) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -103,16 +104,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               schemasCompleted: data.schemasCompleted || 0
             });
             // Restore cloud settings backup over local defaults : a cleared
-            // browser profile re-amputates nothing. Only applied when the
-            // backup is newer than what local storage holds (multi-device safe).
+            // browser profile re-amputates nothing. Only applied when the backup
+            // is genuinely newer than what local storage holds (multi-device
+            // safe) - the decision itself is `shouldApplyCloudSettings`, because
+            // the version inlined here compared against a field four writers were
+            // each responsible for stamping, and two of them did not (defect 36).
             const backup = data.settingsBackup;
-            if (backup && typeof backup === 'object' && backup.savedAt) {
+            const hasSettings = !!backup && typeof backup === 'object' && !!backup.settings && typeof backup.settings === 'object';
+            if (hasSettings) {
               try {
                 const current = loadAISettings();
-                const localSavedAt = (current as any)?.savedAt || 0;
-                if (backup.savedAt >= localSavedAt) {
+                if (shouldApplyCloudSettings(current, backup)) {
                   const { saveAISettings } = await import('./storage');
-                  saveAISettings({ ...current, ...backup.settings, savedAt: backup.savedAt } as any);
+                  // The account's stamp travels with its content, so a later edit
+                  // on another device still outranks this record.
+                  saveAISettings(mergeCloudSettings(current, backup));
                   setSettingsRestored(true);
                 }
               } catch (restoreErr) {
@@ -264,13 +270,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   /** Backs up AI settings into the user's Firestore profile doc (merge). */
-  const backupSettingsToCloud = async (settingsWithMeta: any): Promise<void> => {
+  const backupSettingsToCloud = async (settingsWithMeta: AISettings): Promise<void> => {
     if (!user) return;
     try {
-      const { savedAt, ...settings } = settingsWithMeta || {};
+      const { savedAt, ...settings } = settingsWithMeta || ({} as AISettings);
       const userRef = doc(db, 'users', user.uid);
+      // `savedAt` is stripped out of the settings body and stored beside it, so
+      // the account's record is exactly what the guard compares (defect 36).
       await setDoc(userRef, {
-        settingsBackup: { settings, savedAt: savedAt || Date.now() },
+        settingsBackup: { settings, savedAt: nextSettingsStamp(settingsWithMeta, savedAt) },
         updatedAt: Date.now(),
       }, { merge: true });
     } catch (err) {

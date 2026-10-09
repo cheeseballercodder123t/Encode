@@ -34,6 +34,8 @@ interface CompletedSessionViewProps {
   userResponses: Record<string, StageResponse>;
   youtubeData: YouTubeMetadata | null;
   copiedFormat: string | null;
+  /** Defect 35: the format whose copy the browser refused, so it says so. */
+  failedFormat?: string | null;
   handoffStats: HandoffStats;
   onDownloadApkg: () => void;
   onCopy: (format: 'remnote' | 'anki' | 'markdown') => void;
@@ -99,6 +101,7 @@ export function CompletedSessionView({
   userResponses,
   youtubeData,
   copiedFormat,
+  failedFormat = null,
   handoffStats,
   onDownloadApkg,
   onCopy,
@@ -306,27 +309,48 @@ export function CompletedSessionView({
           <button
             type="button"
             onClick={() => onCopy('remnote')}
+            data-copy-status={copiedFormat === 'remnote' ? 'copied' : failedFormat === 'remnote' ? 'failed' : 'idle'}
             className="flex items-center gap-2 px-3.5 py-2 rounded-full border border-edge/70 bg-deck text-bone text-xs hover:border-gilt/40 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
           >
-            {copiedFormat === 'remnote' ? <span className="font-mono text-[10px] tracking-[0.14em] text-signal-300">[ OK ]</span> : <span className="font-mono text-[10px] tracking-[0.14em] text-amber-300">[ COPY ]</span>}
+            {copiedFormat === 'remnote' ? (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-signal-300">[ OK ]</span>
+            ) : failedFormat === 'remnote' ? (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-hazard-300">[ ! ]</span>
+            ) : (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-amber-300">[ COPY ]</span>
+            )}
             Copy for RemNote
           </button>
 
           <button
             type="button"
             onClick={() => onCopy('anki')}
+            data-copy-status={copiedFormat === 'anki' ? 'copied' : failedFormat === 'anki' ? 'failed' : 'idle'}
             className="flex items-center gap-2 px-3.5 py-2 rounded-full border border-edge/70 bg-deck text-bone text-xs hover:border-gilt/40 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
           >
-            {copiedFormat === 'anki' ? <span className="font-mono text-[10px] tracking-[0.14em] text-signal-300">[ OK ]</span> : <span className="font-mono text-[10px] tracking-[0.14em] text-amber-300">[ COPY ]</span>}
+            {copiedFormat === 'anki' ? (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-signal-300">[ OK ]</span>
+            ) : failedFormat === 'anki' ? (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-hazard-300">[ ! ]</span>
+            ) : (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-amber-300">[ COPY ]</span>
+            )}
             Copy Anki Cloze
           </button>
 
           <button
             type="button"
             onClick={() => onCopy('markdown')}
+            data-copy-status={copiedFormat === 'markdown' ? 'copied' : failedFormat === 'markdown' ? 'failed' : 'idle'}
             className="flex items-center gap-2 px-3.5 py-2 rounded-full border border-edge/70 bg-inset text-bone text-xs hover:border-gilt/40 hover:bg-white/[0.04] transition-colors duration-150 cursor-pointer"
           >
-            {copiedFormat === 'markdown' ? <span className="font-mono text-[10px] tracking-[0.14em] text-signal-300">[ OK ]</span> : <span className="font-mono text-[10px] tracking-[0.14em] text-amber-300">[ FILE ]</span>}
+            {copiedFormat === 'markdown' ? (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-signal-300">[ OK ]</span>
+            ) : failedFormat === 'markdown' ? (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-hazard-300">[ ! ]</span>
+            ) : (
+              <span className="font-mono text-[10px] tracking-[0.14em] text-amber-300">[ FILE ]</span>
+            )}
             Copy Full Markdown
           </button>
         </div>
