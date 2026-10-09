@@ -2,6 +2,9 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateDiscriminationResult } from "@/lib/ai-output-validation";
+// The body schema is imported under an alias: this file's own
+// `discriminationSchema` is the model's RESPONSE schema.
+import { parseRouteBody, discriminationSchema as discriminationBodySchema } from "@/lib/api-validation";
 
 const discriminationSchema = {
   type: Type.OBJECT,
@@ -65,8 +68,12 @@ const discriminationSchema = {
 
 export async function POST(req: NextRequest) {
   try {
+    const validatedBody = await parseRouteBody(req, discriminationBodySchema);
+    if (!validatedBody.ok) {
+      return NextResponse.json({ error: validatedBody.error }, { status: validatedBody.status });
+    }
     const { conceptTitle, concept, lookalike, distinguishingRule, contextSnippet, topicSummary, settings } =
-      await req.json();
+      validatedBody.data;
 
     const conceptLabel = String(concept || conceptTitle || '').trim();
     if (!conceptLabel) {

@@ -6,6 +6,9 @@ import {
   buildInquisitorUserPrompt,
   inquisitorSchema,
 } from '@/lib/inquisitor/contract';
+// The body schema is imported under an alias: this file's own
+// `inquisitorSchema` is the model's RESPONSE schema.
+import { parseRouteBody, inquisitorSchema as inquisitorBodySchema } from '@/lib/api-validation';
 
 /**
  * The Question-First Inquisitor route.
@@ -25,7 +28,11 @@ const MAX_CLAIM_LENGTH = 1200;
 
 export async function POST(req: NextRequest) {
   try {
-    const { claim, topic, domain, contextSnippet, settings } = await req.json();
+    const validatedBody = await parseRouteBody(req, inquisitorBodySchema);
+    if (!validatedBody.ok) {
+      return NextResponse.json({ error: validatedBody.error }, { status: validatedBody.status });
+    }
+    const { claim, topic, domain, contextSnippet, settings } = validatedBody.data;
 
     const text = typeof claim === 'string' ? claim.trim() : '';
     if (!text) {

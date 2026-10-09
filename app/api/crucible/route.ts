@@ -1,6 +1,9 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateJSONWithProvider } from '@/lib/ai-client';
+// The body schema is aliased: this file's own `crucibleSchema` is the model's
+// RESPONSE schema.
+import { parseRouteBody, crucibleSchema as crucibleBodySchema } from '@/lib/api-validation';
 import { CRUCIBLE_MINUTES, validateCruciblePlan } from '@/lib/crucible/budget';
 import { fusionBrief, fusionReadiness, soloDepthBrief } from '@/lib/escalation/fusion';
 import { describeLedgerFailures, verifyLedger } from '@/lib/escalation/consistency';
@@ -123,7 +126,11 @@ const MAX_TOPIC_LENGTH = 300;
 
 export async function POST(req: NextRequest) {
   try {
-    const { topic, minutes: rawMinutes, boss, sourceContext, settings } = await req.json();
+    const validatedBody = await parseRouteBody(req, crucibleBodySchema);
+    if (!validatedBody.ok) {
+      return NextResponse.json({ error: validatedBody.error }, { status: validatedBody.status });
+    }
+    const { topic, minutes: rawMinutes, boss, sourceContext, settings } = validatedBody.data;
 
     const cleanTopic = typeof topic === 'string' ? topic.trim() : '';
     if (!cleanTopic) {

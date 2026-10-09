@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, checkpointSchema } from "@/lib/api-validation";
 
 const checkpointReviewSchema = {
   type: Type.OBJECT,
@@ -31,13 +32,22 @@ const checkpointReviewSchema = {
 
 export async function POST(req: NextRequest) {
   try {
+    const parsed = await parseRouteBody(req, checkpointSchema);
+    if (!parsed.ok) {
+      // Same body shape as the empty-answer path below: the client renders
+      // `feedback` for a failed checkpoint, and only throws on a non-ok status.
+      return NextResponse.json(
+        { passed: false, score: 0, xpBonus: 0, feedback: parsed.error },
+        { status: parsed.status }
+      );
+    }
     const { 
       moduleTitle, 
       question, 
       corePrerequisite, 
       userAnswer, 
       settings 
-    } = await req.json();
+    } = parsed.data;
 
     if (!userAnswer || !userAnswer.trim()) {
       return NextResponse.json({ 

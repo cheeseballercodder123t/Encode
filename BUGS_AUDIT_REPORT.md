@@ -1,6 +1,6 @@
 # DeepEncode Bug Audit — 2026-10-08
 
-Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43 and findings 43 and 44 are the only ones still open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
+Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43.** **Round 29 (§31) then fixed defect 46 - the AnkiConnect spec whose mock matched a host the app never requests, so three of its four tests could not pass - found by regression-testing round 28 rather than by looking for it, so the running total is 44,** with findings 43 and 44 the only ones still open. **Round 30 (§32) then fixed defect 43 - Teach Me's deterministic fallback builder, exported, documented and promised by the mount comment, with no caller anywhere, so a failed lesson request taught nothing at all - so the running total is 45,** with finding 44 the only one still open. **Round 31 (§33) then fixed defect 44 - the shared body validator applied to 5 of 27 routes, so twenty-two handlers read their bodies with a bare `await req.json()`: free text out of `/api/triage` and `/api/roast` reached a paid provider call with no ceiling at all, and a malformed body answered 500 - which closes round 24's sweep, so the running total is 46 and nothing filed is left open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
 pinned by a test that was then **proven able to fail**.
@@ -1808,8 +1808,8 @@ was found by the second half of the sweep, described in §26.1.
 | 40 | **P3 - low/medium. FIXED in round 26 (§28)** | The AI call's deadline does not abort the call it gave up on. `withTimeout` is documented in its own module header as an "AbortSignal-backed deadline that rejects instead of hanging", but there is **no `AbortController` and no `AbortSignal` anywhere in `lib/ai-hardening.ts` or `lib/ai-client.ts`** - the wrapper races a timer against the promise and rejects, and the `fetch` it abandoned keeps running. It is worse than a leaked request because of where it sits: `fetchJsonWithRetry` treats a timeout as retryable (`isRetryableError` returns true for `AiTimeoutError`), so after the 90s deadline expires it starts a **second** attempt against the same provider while the first is still in flight, and a third after that - three concurrent copies of one generation, each one billed. The learner sees a long, apparently stuck wait and pays for the copies. | the claim: `lib/ai-hardening.ts:10`-`:11`; the wrapper: `:30`-`:50`; the retry loop that makes a timeout a second concurrent call: `:95`-`:120`, with `isRetryableError`: `:74`-`:90` | Read from the code, and deterministic: the `fetch` is passed straight into `withTimeout` with no signal, and `init` is the caller's object - neither `withTimeout` nor `fetchJsonWithRetry` ever touches a signal. **Proof for the fix:** thread an `AbortController` through `withTimeout` and abort it in the timer (and, where the caller already has a controller - `app/page.tsx`'s Cancel - compose the two signals), then a unit test with a `fetch` stub that records its signals: after the deadline, the stub's signal is `aborted`, and the retry does not begin before the previous attempt has stopped. `tests/unit/ai-hardening.test.ts` already pins the rejection itself, which is why this half survived it. |
 | 41 | **P4 - low. FIXED in round 27 (§29)** | A file chosen before the hydration read resolves is replaced by the previous session's upload - or silently never saved. The hook's own comment says the persist effect is "skipped until the hydration read completes so the initial null doesn't overwrite the stored upload", and that guard covers exactly one case: the mount-time `null`. A file the **learner** picked is not covered, because `readIdb`'s callback calls `setUploadedFile(stored)` unconditionally, and the persist effect has already run (with `hydratedRef.current` still false) by the time the pick happened. So the next tick overwrites the fresh pick with the stored one, and nothing re-runs the write for what the learner actually chose. | `hooks/useInputSource.ts:33`-`:59` (the hydration read, the unconditional `setUploadedFile(stored)`, and the persist effect's `if (!hydratedRef.current) return`) | Read from the code; the window is the IndexedDB read, and the first run is the slow one because `initIndexedDB` performs the one-time localStorage→IndexedDB migration of an existing history. **Reachability, stated honestly:** it needs the read to outlast the pick (a large existing history, a cold or blocked store), so this is a narrow window rather than a everyday failure - but within it the outcome is silent, which is the part that makes it worth fixing. **Proof for the fix:** a hydration ref already exists in this hook for the same purpose (`sourceTouched`); guard the assignment the same way and let the persist effect run once it flips, then a unit test that resolves the read *after* a pick and asserts the pick is what is stored. |
 | 42 | **P2 - medium. FIXED in round 25 (§27)** | **The offline fallback is described in three places and wired in none.** `lib/services/offlineGenerator.ts` holds a complete deterministic workout generator ("Deterministically generates a rich 5-Stage Cognitive Workout ... offline"), it is unit-tested, and **no production code calls it** - not `app/page.tsx`'s generate path, not `lib/ai-client.ts`, not any route. `hooks/useSettings.ts` computes `isOffline` from a `useSyncExternalStore` subscription to `online`/`offline` and **no consumer reads it**. And the README advertises the feature twice ("installable, with an offline fallback generator when you have no network/key"; and, in the E2E list, a spec for it), while `e2e/resilience.spec.ts` - the spec that covers exactly this - opens its own header with "generation API errors fall back to the offline generator" and then asserts the **opposite**: its first test is named "API 500 on `/api/encode` alerts the user rather than producing fake cards" and expects an alert dialog. So the code, the README and the spec's own docstring disagree, and a learner with no network gets an error dialog rather than the offline workout the README promises. **Which side is wrong is a product decision, and the finding is the disagreement:** the resilience spec's title reads like a deliberate later decision (never fabricate cards), in which case the README, the module's header and the spec's header all need correcting - or the fallback is the intended behaviour and wants wiring. | `lib/services/offlineGenerator.ts:48`-`:52` (the export and its docstring); the unused subscription: `hooks/useSettings.ts:27`-`:29`, `:47`; the promise: `README.md:62`, `README.md:116`; the contradiction: `e2e/resilience.spec.ts:5`-`:9` vs its first test at `:16`-`:31` | Read from the code and countable: `grep -rn "generateOfflineWorkout" app components hooks lib` returns only the unit test, and `grep -rn "isOffline" app components hooks lib` returns only its own definition and the object it is returned in (`resilience.spec.ts` is the only spec that mentions the fallback at all, and it asserts the alert). **Proof for the fix:** whichever direction is chosen, the other two artefacts move with it - wire it (and add the spec the README's E2E list already claims, asserting the offline workout's stages offline) or delete the module and correct the three claims, with a source-scan test pinning the README's wording to the code the way defect 38's round pinned its own. |
-| 43 | **P3 - low/medium** | **Teach Me's deterministic fallback builder has no caller either.** `lib/services/teachLesson.ts` exposes `buildFallbackLesson` under a header that says "Deterministic offline fallback", and `app/page.tsx`'s own comment on the mount says Teach Me is "AI-authored, **with an offline schema-based fallback**" - but only `sanitizeLesson` is imported by `components/TeachMeModal.tsx`, whose failure path is a `catch` that reports the error. A lesson request that fails therefore has no lesson, which is the case the builder exists for; the module's header states the intent, the UI comment states the behaviour, and nothing joins them. | `lib/services/teachLesson.ts:395`-`:399` (the section header and the export); the only import: `components/TeachMeModal.tsx:19` (`sanitizeLesson`); the claim: `app/page.tsx:2577`-`:2579`; the failure path with no fallback: `components/TeachMeModal.tsx:245`-`:262` | Read from the code: `grep -rn "buildFallbackLesson"` returns the definition and nothing else, in production or in tests. Same class as 43 and as defect 38 - a mechanism whose only reader is a comment - but narrower, because Teach Me is one sheet rather than the primary generation path. **Proof for the fix:** wire it into that `catch` (the builder takes the same scope/topic the modal already has), then a spec that fails `/api/teach` and asserts a lesson still renders, with the deterministic sections named. |
-| 44 | **P4 - low** | The shared body-validation guard is applied to **5 of 27 routes**. `lib/api-validation.ts` exists, states its purpose ("make impossible input impossible", no 10MB string as `notes`, bounded file assets) and is imported by `encode`, `encode/stream`'s neighbours `evaluate`, `forge`, `teach` and `youtube` - while the other 22 handlers call `await req.json()` and destructure, including routes that take the **same free text the guarded route bounds**: `/api/triage` (`{ text }`) and `/api/roast` (`{ notes }`) are handed the learner's `rawNotes` by the same UI that gets a clean 400 from `/api/encode` for a paste that is too large. Two consequences, both visible: an oversized paste is sent to a paid provider call instead of being refused with the guard's message, and malformed JSON throws out of `req.json()` into the route's own catch - a 500 rather than the guard's "Request body must be valid JSON." | the guard: `lib/api-validation.ts:1`-`:25` (`parseRouteBody` at `:136`); guarded: `app/api/encode/route.ts`, `evaluate`, `teach`, `youtube`, `forge`; unguarded, same free text: `app/api/triage/route.ts:47`, `app/api/roast/route.ts:60` (and the other 20 in the sweep's list) | Read from the code, and countable: `grep -l api-validation app/api/*/route.ts` names five files, `ls app/api` names twenty-seven. **Proof for the fix:** one schema per remaining route (they are all a handful of fields), then a test per route that a wrong-typed body gets a 400 naming the field, the way `tests/unit/forge-route.test.ts` already does for the forge. This is breadth rather than a single line, which is why it is last. |
+| 43 | **P3 - low/medium. FIXED in round 30 (§32)** | **Teach Me's deterministic fallback builder has no caller either.** `lib/services/teachLesson.ts` exposes `buildFallbackLesson` under a header that says "Deterministic offline fallback", and `app/page.tsx`'s own comment on the mount says Teach Me is "AI-authored, **with an offline schema-based fallback**" - but only `sanitizeLesson` is imported by `components/TeachMeModal.tsx`, whose failure path is a `catch` that reports the error. A lesson request that fails therefore has no lesson, which is the case the builder exists for; the module's header states the intent, the UI comment states the behaviour, and nothing joins them. | `lib/services/teachLesson.ts:395`-`:399` (the section header and the export); the only import: `components/TeachMeModal.tsx:19` (`sanitizeLesson`); the claim: `app/page.tsx:2577`-`:2579`; the failure path with no fallback: `components/TeachMeModal.tsx:245`-`:262` | Read from the code: `grep -rn "buildFallbackLesson"` returns the definition and nothing else, in production or in tests. Same class as 43 and as defect 38 - a mechanism whose only reader is a comment - but narrower, because Teach Me is one sheet rather than the primary generation path. **Proof for the fix:** wire it into that `catch` (the builder takes the same scope/topic the modal already has), then a spec that fails `/api/teach` and asserts a lesson still renders, with the deterministic sections named. |
+| 44 | **P4 - low. FIXED in round 31 (§33)** | The shared body-validation guard is applied to **5 of 27 routes**. `lib/api-validation.ts` exists, states its purpose ("make impossible input impossible", no 10MB string as `notes`, bounded file assets) and is imported by `encode`, `encode/stream`'s neighbours `evaluate`, `forge`, `teach` and `youtube` - while the other 22 handlers call `await req.json()` and destructure, including routes that take the **same free text the guarded route bounds**: `/api/triage` (`{ text }`) and `/api/roast` (`{ notes }`) are handed the learner's `rawNotes` by the same UI that gets a clean 400 from `/api/encode` for a paste that is too large. Two consequences, both visible: an oversized paste is sent to a paid provider call instead of being refused with the guard's message, and malformed JSON throws out of `req.json()` into the route's own catch - a 500 rather than the guard's "Request body must be valid JSON." | the guard: `lib/api-validation.ts:1`-`:25` (`parseRouteBody` at `:136`); guarded: `app/api/encode/route.ts`, `evaluate`, `teach`, `youtube`, `forge`; unguarded, same free text: `app/api/triage/route.ts:47`, `app/api/roast/route.ts:60` (and the other 20 in the sweep's list) | Read from the code, and countable: `grep -l api-validation app/api/*/route.ts` names five files, `ls app/api` names twenty-seven. **Proof for the fix:** one schema per remaining route (they are all a handful of fields), then a test per route that a wrong-typed body gets a 400 naming the field, the way `tests/unit/forge-route.test.ts` already does for the forge. This is breadth rather than a single line, which is why it is last. |
 
 ### 26.3 Checked and cleared in this pass
 
@@ -1856,7 +1856,8 @@ class as 42 in one sheet), then **41** (a silent overwrite in a narrow window), 
 (breadth, cheap per route but twenty-two of them). Nothing was changed in this round - its
 output is a ranked list with a stated proof for each, the way round 17's was - so the
 running total of defects stays at **39**, and findings 40-44 are candidates until a round
-fixes one.
+fixes one. **All five have since been fixed - 42 in §27, 40 in §28, 41 in §29, 43 in §32 and
+44 in §33 - so this round's list is closed.**
 
 ## 27. Round 25 - defect 42, the offline fallback that was described and never wired
 
@@ -2256,3 +2257,243 @@ by this round; the round's seven new files - `lib/pwa/appIcon.ts`, the two icon 
 `public/sw.js`, `components/ServiceWorkerInit.tsx` and the two specs, `tests/unit/pwa-install.test.ts`
 and `e2e/pwa-install.spec.ts` - are counted following defect 30's precedent. `app/layout.tsx` is
 named here, and `README.md` was already named by defect 28.)
+
+## 31. Round 29 - defect 46, the AnkiConnect spec that could never pass
+
+Found while regression-testing round 28's change rather than by looking for it, and it belongs in
+this report because it is the same class as defects 30 and 38: an artefact that claims something the
+code does not do. Here the artefact is a test, and the claim is coverage.
+
+`e2e/anki-connect.spec.ts` mocks the local AnkiConnect server at the network level, and its route
+predicate read `(url) => url.hostname === '127.0.0.1' && url.port === '8765'` - while the app requests
+`http://localhost:8765` (`lib/anki-connect.ts:27`, `DEFAULT_ANKI_CONNECT_URL`). A predicate that never
+matches means the mock never fires, the request goes to a server that is not running, and the app
+reports its own (correct) "Can't reach AnkiConnect at http://localhost:8765" error instead. Three of
+the file's four tests failed on **every** run, deterministically.
+
+Two details make this worse than a flaky test. First, `localhost` is not an accident on the app's
+side: AnkiConnect's own `webCorsOriginList` default permits only `http://localhost`, which is why the
+README tells the reader to add `http://localhost:<port>` - so the app is right and the spec was wrong.
+Second, the README's own E2E description advertised the push as "mocked at `127.0.0.1:8765`", so the
+doc agreed with the broken spec and the pair of them disagreed with the code. The path with no working
+coverage is the whole AnkiConnect handoff: deck creation, the duplicate report, the origin refusal,
+and the export modal's push.
+
+### 31.1 The fix, and why it is not just a loosened assertion
+
+- **The predicate matches both names the same server answers to.** `localhost` is what the app
+  requests by default; `127.0.0.1` is what the Settings field can be pointed at, and both are the
+  same server on a developer's machine. Matching one and not the other is what broke it.
+- **The comment now records why.** A future reader who wonders why both hosts are listed finds the
+  reason, and the spec's header explains that these tests could not pass rather than were flaky.
+- **The README's E2E line was corrected with it**, so the description and the spec stop agreeing on
+  something false.
+
+### 31.2 Verified
+
+- **Before and after, on the same file.** `bunx playwright test e2e/anki-connect.spec.ts` against the
+  live app: **1 passed / 3 failed** before, **4 passed / exit 0** after - no other edit in between.
+- **The failure was not this audit's change.** With defect 45's worker disabled entirely
+  (`navigator.serviceWorker.register` pointed at a nonexistent script, so no worker could control the
+  page and every off-origin request passed straight through), the same three tests failed with the
+  identical `[ANKI: +` assertion and the identical unreachable-server message. That isolation run is
+  what ruled the round-28 change out before this round touched anything, and it is the reason the
+  finding exists at all.
+
+### 31.3 What it deliberately does not do
+
+- **No change to `DEFAULT_ANKI_CONNECT_URL`, and none to the app.** The app's choice is the one
+  AnkiConnect's own CORS default permits; changing the app to satisfy a test would have broken the
+  real integration to make a green check.
+
+**Total: 44 distinct defects in 69 files** (46 is the first in `e2e/anki-connect.spec.ts`.
+`README.md` was already named by defect 28.)
+
+## 32. Round 30 - defect 43, the fallback that was promised three times and called none
+
+`lib/services/teachLesson.ts` opens its last section with "Deterministic offline fallback" and exports
+`buildFallbackLesson`; `sanitizeLesson`'s own docstring names it as the caller's recourse ("Returns null
+for completely unusable payloads (caller falls back to buildFallbackLesson)"); and the comment on the
+Teach Me mount in `app/page.tsx` told every reader that the sheet is "AI-authored, **with an offline
+schema-based fallback**". Nothing joined them. Only `sanitizeLesson` was imported by
+`components/TeachMeModal.tsx`, so a failed request ended in a `catch` that reported the error and
+returned the learner to the pre-roll: the one case the builder exists for produced no lesson at all.
+
+Three artefacts agreeing on a behaviour neither of them implements is what makes this a defect rather
+than a missing feature - it is the same class as defect 42, which round 25 fixed by wiring the offline
+generator it had already written - and it is why the fix below is wiring rather than design.
+
+### 32.1 The fix, and the four choices inside it
+
+- **The fallback is built when the request fails, from what the sheet already has.** The `catch` builds
+  it with the same topic, mode and activity the request was made with, so a stage lesson gets the arc
+  that stage can actually support (its own title, its prompt as the mechanism, its confusable lookalike
+  as the trap) instead of the generic skeleton. Both paths end in a real lesson: five segments in the
+  generic case, the full mechanism arc in the stage case.
+- **It is labelled rather than disguised.** A notice plays above the lesson for as long as the fallback
+  does, with `data-origin` separating the two failures: `offline` when nothing answered, `server` when
+  something did. That line is drawn by `classifyTeachFailure`, added to the same module as the builder -
+  `fetch` rejects with a `TypeError` when the request never reached the server, and everything else (an
+  HTTP status, a 200 whose payload sanitized to nothing) is a service that is up and disagreeing. On the
+  `server` branch the notice carries the provider's own message, so an outage stays visible instead of
+  being papered over: a fallback that hid the failure would be a second defect of the same family.
+- **The way back is on the notice.** `[ TRY THE MODEL AGAIN ]` re-requests and the model's lesson
+  replaces the fallback (every request clears the notice first, so it cannot outlive the fallback it
+  describes); `[ DISMISS ]` hides the notice and leaves the lesson, because the notice is information
+  rather than part of the lesson. The lesson's own exits are untouched: checkpoints, XP,
+  `[ START ENCODING ]` and `[ SAVE IT FOR LATER ]` work on a fallback lesson exactly as on an authored
+  one, and nothing parks it in the saved-lesson library behind the learner's back.
+- **The failure path still cannot brick the sheet.** If the deterministic builder ever threw, the inner
+  `catch` reports the original failure the way the pre-fix path did, which keeps this `catch` total in
+  the same way the coercion layers around it are total.
+
+One production edit in this round is not defect 43's: `components/TeachInteractive.tsx` renders JSX
+without importing React, while all six of its sibling `Teach*` bodies import it. Next's own transform
+does not need the identifier, so the app was never broken - but the test runner's classic transform is
+the first compiler to ask that module for `React`, and the first test to render any lesson's second
+segment died with `React is not defined` before it could assert anything about the fallback. The import
+is one line and it is what the file's siblings already carry.
+
+### 32.2 Verified
+
+- **The failure path, at the component level.** `tests/unit/teach-fallback.test.tsx` (new, 6 tests,
+  happy-dom with `MotionGlobalConfig.skipAnimations` set so the sheet's exit animations cannot reject on
+  unmount and be reported as unhandled errors) mounts the real sheet and fails the real request three
+  ways: a rejected `fetch` (nothing answered), a 500 carrying `{ error }`, and a 200 whose payload
+  sanitizes to nothing. Each one asserts the deterministic lesson is on screen with its sections named
+  ("The Core Idea", then "What the mechanism actually does" after one Continue), the notice's
+  `data-origin`, the provider's message on the server branch, that a stage lesson falls back to the
+  activity-derived arc ("The mechanism, link by link", and the stage's own boundary rule as the trap),
+  that retry returns the model's lesson and drops the notice, and that dismissing the notice keeps the
+  lesson.
+- **The tests fail without the fix.** With the pre-fix `catch` restored verbatim, all 6 fail; restored
+  to the fix, all 6 pass.
+- **The failure path, in the browser.** `e2e/teachme.spec.ts` gained two specs that drive the real app:
+  `/api/teach` aborted at the network level (`data-origin="offline"`, the deterministic arc rendering,
+  advancing one segment, and reporting `1/5`), and a first response of 500 followed by the mocked lesson
+  (the reason on screen, then `[ TRY THE MODEL AGAIN ]` returning the learner to the model with the
+  notice gone and exactly two calls made). `bunx playwright test e2e/teachme.spec.ts --workers=1` against
+  the managed preview: **9 passed / exit 0** (7 before this round). With the pre-fix catch restored, the
+  two new specs fail; with the fix back, 9 pass again.
+- **Nothing else moved.** `bun run test` - **91 files / 1481 unit tests, exit 0** (90/1473 before, so
+  +8: the 6 component tests and 2 for `classifyTeachFailure`). `bunx tsc -b --noEmit` exit 0 and
+  `bunx eslint` exit 0, both after the last edit.
+
+### 32.3 What it deliberately does not do
+
+- **It does not retry on its own.** One press is one request; a provider that answered with an error is
+  reported and offered back, not hammered in a loop - the same discipline defect 40's round pinned for
+  the encode path.
+- **It does not change defect 42's rule for the workout path.** The launchpad still alerts on an
+  answered error for a whole workout rather than fabricating cards for a provider outage, because that
+  artefact is thirty minutes of the learner's time. A Teach Me lesson is one sheet with the failure and
+  its reason both on screen, and the builder's own tagline says what it is ("A skeleton lesson so you
+  can still study offline"), so the two paths now differ deliberately. This round did not touch the
+  other one.
+- **It does not park or auto-save the fallback.** `[ SAVE IT FOR LATER ]` stays the learner's decision;
+  a fallback that silently occupied the saved-lesson slot would be the same class of bug as one whose
+  only reader is a comment.
+
+**Total: 45 distinct defects in 72 files** (the fix lands in `lib/services/teachLesson.ts` and
+`components/TeachMeModal.tsx`, both already named by the finding; the coverage is new to this report in
+`tests/unit/teach-fallback.test.tsx` and `e2e/teachme.spec.ts`, and `components/TeachInteractive.tsx` is
+named here for the first time.)
+
+## 33. Round 31 - defect 44, the twenty-two handlers that trusted their bodies
+
+`lib/api-validation.ts` states its own purpose ("Before this module the route handlers trusted client JSON
+bodies … bad input is rejected up front with a 400 that names the field") and was imported by five
+handlers: `encode`, `evaluate`, `teach`, `youtube` and `forge`. The other twenty-two routes that read a
+body called `await req.json()` and destructured the result. Two consequences, both real:
+
+- **Free text reached a paid call with no ceiling.** `/api/triage` (`{ text }`) and `/api/roast`
+  (`{ notes }`) are handed the learner's `rawNotes` by the same UI that gets a clean 400 from `/api/encode`
+  for a paste that is too large, so a 300 kB paste was forwarded to the provider instead of refused. The
+  same was true of `dump` (crisis), `claim` (inquisitor), `blurtText` (blurt), `layers` (probe) and every
+  other free-text field on the list.
+- **Malformed JSON answered 500.** `req.json()` threw inside the handler, so the route's own `catch`
+  reported "Failed to …" as a server error for what is a client mistake.
+
+Two of the twenty-two were milder versions of the same thing: `/api/encode/stream` already caught the parse
+error itself but validated nothing (it forwards its body to the `/api/encode` handler in-process), and
+`/api/remnote` already answered 400 for unparseable JSON but read `apiKey`/`markdown` through `typeof`
+checks with no bounds.
+
+### 33.1 The fix, and the five choices inside it
+
+- **One schema per route, in the module that already holds them.** Twenty-one new exports in
+  `lib/api-validation.ts` (the routes that share a body share a schema: `roast`/`prerequisites`/`pretest`
+  and `segregate` are one `notesAndFile` shape, the four stage-level drills are one `stageDrill`, and
+  `/api/encode/stream` reuses `encodeSchema` because its body is the encode body plus `stream: true`).
+  Every route now calls `parseRouteBody` and answers `{ error: parsed.error }` at `parsed.status`.
+- **The routes keep their own sentences for empty input.** A field the route itself checks for emptiness
+  is deliberately left optional in its schema: a missing topic is still "Name the topic first — a crucible
+  is timed against a chapter", not "Invalid request — topic: Required." The schema's job is the shape and
+  the ceiling; the route's job is to say what to type. `tests/unit/api-route-validation.test.ts` pins six
+  of those sentences so a later loosening cannot quietly replace them.
+- **Two routes answer in their own envelope.** `/api/checkpoint` returns
+  `{ passed, score, xpBonus, feedback }` on a schema failure (the client renders `feedback`, and its
+  empty-answer path is a deliberate 200 that this round did not touch), and `/api/remnote` returns
+  `{ success: false, message }` because that is the shape `lib/remnote.ts` reads.
+- **An aliased import wherever the route already owns a `*Schema`.** Ten files declare a module-level
+  `<name>Schema` for the model's RESPONSE schema (`archetype`, `crucible`, `discrimination`, `inquisitor`,
+  `mutation`, `prerequisites`, `pretest`, `priming`, `probe`, `sequence`, `triage`), so the body schema is
+  imported as `<name>BodySchema` with the reason in a comment rather than renamed away from the contract.
+- **The file fragment had to accept an explicit `null`, and that is a defect this round found rather
+  than created.** `fileAssetSchema` was `.optional()`, but the attachment is React state
+  (`UploadedFileAsset | null`) and `JSON.stringify` keeps the null: "paste notes, upload nothing" posts
+  `file: null`, which the first cut of the guard rejected with a 400. That path was live on the five
+  already-guarded routes, so it is fixed here (`.nullish()`) and pinned for all five.
+
+One route needed a schema-shaped stage rather than a bare passthrough: `regenerate-stage` serializes the
+whole `activity` object into its prompt, so the fields the prompt quotes (`title`, `templateType`,
+`prompt`, `contextSnippet`, `cognitiveGoal`, `keywords`, `stageNumber`) are typed and bounded while the
+rest of the stage still passes through untouched.
+
+### 33.2 Verified
+
+- **Every route, one case per route.** `tests/unit/api-route-validation.test.ts` (new, 55 tests) posts a
+  wrong-typed or oversized field to each of the 21 body-reading handlers and to `/api/checkpoint`, then
+  malformed JSON to all of them: both must answer **400**, and the message must name the field
+  (`text`, `notes`, `dump`, `claim`, `layers`, `include`, `settings.provider`, `minutes`, `tier`,
+  `activity`, `file`, …). A third test posts every rejected body to every route and asserts the model was
+  never called.
+- **Two of them were broken in exactly the way the finding describes, and that is what the browser
+  proves.** `e2e/api-validation.spec.ts` (new, 6 tests) posts over the wire to the real dev server — no
+  page mocks, no intercepted route — an oversized `text` to `/api/triage`, an oversized `notes` to
+  `/api/roast`, a malformed body to both, and `minutes`/`claim` to crucible and inquisitor. Each asserts
+  the 400 **and** that the message names the field, plus triage's own empty-input sentence for `{}`.
+  `PLAYWRIGHT_BASE_URL=… bunx playwright test e2e/api-validation.spec.ts`: **6 passed / exit 0**.
+- **The tests fail without the fix.** With the pre-fix `await req.json()` restored verbatim in
+  `app/api/triage/route.ts` and `app/api/roast/route.ts`, six of the new tests fail — the malformed-JSON
+  case for both routes, the oversized-paste case for both, the field-naming case for roast, and the
+  "never spends a model call" case; restored to the fix, all 55 pass.
+- **Nothing else moved.** `bun run test` — **92 files / 1578 unit tests, exit 0** (91/1481 before this
+  round). `bunx tsc -b --noEmit` exit 0 and `bunx eslint app lib tests e2e` exit 0, both after the last
+  edit. The whole Playwright suite was run against the managed preview: **45 specs / 194 tests passed,
+  0 failed** (`--workers=1`, in chunks, because the managed preview is restarted periodically and a
+  mid-run restart surfaces as `ERR_CONNECTION_REFUSED`; each such chunk was re-run green after a
+  `freebuff-preview restart`).
+
+### 33.3 What it deliberately does not do
+
+- **It does not re-specify what each route already checks.** Length limits the routes already enforce
+  (`MAX_CLAIM_LENGTH`, `MAX_DUMP_LENGTH`, the crucible's 3–30 minute clamp, the 1–5 count clamp) stay
+  theirs, so the sentences a learner reads for those cases are unchanged; the schema is a ceiling above
+  them, not a replacement.
+- **It does not touch the model's RESPONSE schemas.** The ten aliased imports exist precisely so the
+  request contract could be added without renaming the response contract next to it.
+- **It does not delete the routes nothing calls.** `/api/autopsy`, `/api/mutation` and `/api/synthesis`
+  have no client caller (`lib/mr-m/autopsy.ts` names the autopsy route only in a comment, and the
+  comparative-synthesis client posts to `/api/synthesis` from a sheet the workbench no longer opens).
+  They read a body, so they are guarded like the rest; whether they should exist is a separate question
+  this round did not act on.
+- **It does not add content validation.** A chunk of JSON-shaped prose still reaches the prompt
+  assembly; what is now impossible is a wrong type, a missing bound, or a malformed body.
+
+**Total: 46 distinct defects** (this round's fix lands in `lib/api-validation.ts` and the 22 route files
+it guards — `archetype`, `autopsy`, `blurt`, `checkpoint`, `crisis`, `crucible`, `discrimination`,
+`encode/stream`, `inquisitor`, `invert-step`, `mutation`, `prerequisites`, `pretest`, `priming`, `probe`,
+`regenerate-stage`, `remnote`, `roast`, `segregate`, `sequence`, `synthesis`, `triage` — all already named
+by the finding; the coverage is new to this report in `tests/unit/api-route-validation.test.ts`, in the
+schema cases added to `tests/unit/api-validation.test.ts`, and in `e2e/api-validation.spec.ts`.)

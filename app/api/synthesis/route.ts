@@ -2,6 +2,7 @@ import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateJSONWithProvider } from '@/lib/ai-client';
 import { ComparativeSchemaReport } from '@/lib/types';
+import { parseRouteBody, synthesisSchema } from '@/lib/api-validation';
 
 const comparativeSynthesisSchema = {
   type: Type.OBJECT,
@@ -71,7 +72,11 @@ const comparativeSynthesisSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { docA, docB, settings } = await req.json();
+    const body = await parseRouteBody(req, synthesisSchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { docA, docB, settings } = body.data;
 
     if (!docA || !docB) {
       return NextResponse.json(

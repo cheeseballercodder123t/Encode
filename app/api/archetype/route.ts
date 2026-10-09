@@ -1,6 +1,9 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+// The body schema is aliased: this file's own `archetypeSchema` is the model's
+// RESPONSE schema.
+import { parseRouteBody, archetypeSchema as archetypeBodySchema } from "@/lib/api-validation";
 import { ProceduralMCQArchetype } from "@/lib/types";
 import {
   validateProceduralArchetypes,
@@ -134,7 +137,11 @@ function summarizeIssues(archetypes: ProceduralMCQArchetype[], errorsByIndex: Re
 
 export async function POST(req: NextRequest) {
   try {
-    const { topic, count, notes, settings } = await req.json();
+    const parsed = await parseRouteBody(req, archetypeBodySchema);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { topic, count, notes, settings } = parsed.data;
     if (!topic || typeof topic !== 'string' || !topic.trim()) {
       return NextResponse.json({ error: "A 'topic' is required, e.g. 'AP Physics C: Rotational Motion'." }, { status: 400 });
     }

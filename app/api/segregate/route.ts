@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, segregateSchema } from "@/lib/api-validation";
 import {
   buildSegregationSystemPrompt,
   buildSegregationUserPrompt,
@@ -9,7 +10,11 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const { notes, file, settings, include } = await req.json();
+    const body = await parseRouteBody(req, segregateSchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { notes, file, settings, include } = body.data;
 
     const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
     const hasFile = file && file.base64Data && file.type;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { parseRouteBody, remnoteSchema } from '@/lib/api-validation';
 import { buildRemnotePushAttempts, type RemnoteExportPayload } from '@/lib/remnote';
 
 // ─── RemNote push proxy ─────────────────────────────────────────────────────
@@ -13,20 +14,14 @@ export const runtime = 'nodejs';
 const REQUEST_TIMEOUT_MS = 15000;
 
 export async function POST(req: NextRequest) {
-  let apiKey = '';
-  let userId = '';
-  let markdown = '';
-  let title = '';
-
-  try {
-    const body = await req.json();
-    apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
-    userId = typeof body?.userId === 'string' ? body.userId.trim() : '';
-    markdown = typeof body?.markdown === 'string' ? body.markdown : '';
-    title = typeof body?.title === 'string' ? body.title : '';
-  } catch {
-    return NextResponse.json({ success: false, message: 'Invalid request body.' }, { status: 400 });
+  const parsed = await parseRouteBody(req, remnoteSchema);
+  if (!parsed.ok) {
+    return NextResponse.json({ success: false, message: parsed.error }, { status: 400 });
   }
+  const apiKey = (parsed.data.apiKey || '').trim();
+  const userId = (parsed.data.userId || '').trim();
+  const markdown = parsed.data.markdown || '';
+  const title = parsed.data.title || '';
 
   if (!apiKey || !markdown.trim()) {
     return NextResponse.json(

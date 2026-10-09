@@ -16,7 +16,12 @@ import {
   TeachScope,
   UploadedFileAsset,
 } from '@/lib/types';
-import { sanitizeLesson } from '@/lib/services/teachLesson';
+import {
+  buildFallbackLesson,
+  classifyTeachFailure,
+  sanitizeLesson,
+  TeachFallbackOrigin,
+} from '@/lib/services/teachLesson';
 import {
   SavedTeachLesson,
   deleteSavedTeachLesson,
@@ -104,6 +109,13 @@ export function TeachMeModal(props: TeachMeModalProps) {
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
+  // Set when the model request failed and the deterministic builder took over,
+  // so the lesson on screen says which way it was made instead of passing a
+  // device-built lesson off as a model read (defect 43).
+  const [fallbackNotice, setFallbackNotice] = useState<{
+    origin: TeachFallbackOrigin;
+    detail: string;
+  } | null>(null);
   const [showGlossary, setShowGlossary] = useState(false);
   const [parkedAt, setParkedAt] = useState<number | null>(null);
   // Bumped whenever the saved-lesson library changes so the pre-roll list and
@@ -150,6 +162,7 @@ export function TeachMeModal(props: TeachMeModalProps) {
     setErrorMsg('');
     setShowGlossary(false);
     setParkedAt(null);
+    setFallbackNotice(null);
   };
 
   /**
@@ -218,6 +231,9 @@ export function TeachMeModal(props: TeachMeModalProps) {
     setStreak(0);
     setErrorMsg('');
     setParkedAt(entry.savedAt);
+    // A lesson the learner parked earlier was made by whatever made it then;
+    // resuming it is not a fresh fallback.
+    setFallbackNotice(null);
     setPhase('playing');
   };
 
@@ -230,6 +246,9 @@ export function TeachMeModal(props: TeachMeModalProps) {
   const handleGenerate = async () => {
     setPhase('loading');
     setErrorMsg('');
+    // A retry starts clean: a stale notice would outlive the fallback it
+    // describes the moment the model answers.
+    setFallbackNotice(null);
     playSound('click');
     try {
       const res = await fetch('/api/teach', {
@@ -261,9 +280,33 @@ export function TeachMeModal(props: TeachMeModalProps) {
       }
     } catch (err: any) {
       console.error('TeachMe error', err);
-      setPhase('options');
-      setErrorMsg(err?.message || 'Failed to generate lesson. Please check your AI settings.');
-      playSound('error');
+      // Defect 43: a failed request is exactly the case buildFallbackLesson
+      // exists for, and the module header, the mount comment in app/page.tsx
+      // and the type contract on sanitizeLesson all already promised it. The
+      // learner gets the deterministic lesson built from their own material
+      // rather than nothing - labelled, with the reason and a way back to the
+      // model, because a fallback that hides the outage is a different bug.
+      const origin = classifyTeachFailure(err);
+      try {
+        const fallback = buildFallbackLesson(topicSummary, mode, targetActivity || undefined);
+        setLesson(fallback);
+        setSegmentIndex(0);
+        setTotalXpEarned(0);
+        setStreak(0);
+        setBestStreak(0);
+        setParkedAt(null);
+        setFallbackNotice({ origin, detail: err?.message || 'Lesson generation failed' });
+        setPhase('playing');
+        playSound('beep');
+      } catch (fallbackErr) {
+        // The deterministic builder is total in practice (it has no input it
+        // cannot read), but if it ever is not, the sheet reports the original
+        // failure instead of opening on a lesson that does not exist.
+        console.error('TeachMe fallback error', fallbackErr);
+        setPhase('options');
+        setErrorMsg(err?.message || 'Failed to generate lesson. Please check your AI settings.');
+        playSound('error');
+      }
     }
   };
 
@@ -547,6 +590,53 @@ export function TeachMeModal(props: TeachMeModalProps) {
     );
   };
 
+  /**
+   * Why the lesson on screen was built on this device instead of by the model.
+   * The notice is part of the lesson pane, not a toast: it stays for as long as
+   * the fallback does, and it names which failure it stands in for.
+   */
+  const renderFallbackNotice = () => {
+    if (!fallbackNotice) return null;
+    const offline = fallbackNotice.origin === 'offline';
+    return (
+      <div
+        role="status"
+        data-testid="teach-fallback-notice"
+        data-origin={fallbackNotice.origin}
+        className="p-3.5 bg-amber-500/[0.06] border border-gilt/30 rounded-xl space-y-2"
+      >
+        <p className="text-[11px] font-mono text-bone leading-relaxed">
+          <span className="text-amber font-bold uppercase">
+            {offline ? '[ OFFLINE ]' : '[ FALLBACK ]'}
+          </span>{' '}
+          {offline
+            ? 'The lesson service could not be reached, so this lesson was built on this device from your own material: the deterministic concept → mechanism → trap → checkpoint → teach-it-back arc, with no model read.'
+            : `The lesson request failed (${fallbackNotice.detail}), so this lesson was built on this device from your own material rather than retrying forever.`}{' '}
+          Checkpoints, XP, the encode prompts and the save-it-for-later exit all work the same: nothing here is a stub.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleGenerate}
+            data-testid="teach-fallback-retry"
+            className="min-h-[32px] px-3.5 rounded-full bg-chassis border border-edge text-solder hover:text-bone hover:border-gilt/40 text-[10px] font-mono font-bold uppercase tracking-wider cursor-pointer"
+          >
+            [ TRY THE MODEL AGAIN ]
+          </button>
+          <button
+            type="button"
+            onClick={() => setFallbackNotice(null)}
+            data-testid="teach-fallback-dismiss"
+            className="min-h-[32px] px-3 rounded-full text-[10px] font-mono uppercase tracking-wider text-solder hover:text-bone cursor-pointer"
+            title="Hide this notice"
+          >
+            [ DISMISS ]
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderPlaying = (activeLesson: TeachLesson, seg: LessonSegment | undefined) => {
     if (!seg) {
       return <div className="p-6 text-xs text-solder font-mono">Lesson finished. You can close this window.</div>;
@@ -559,6 +649,8 @@ export function TeachMeModal(props: TeachMeModalProps) {
     const isLast = segmentIndex >= totalSegments - 1;
     return (
       <div className="p-5 space-y-3">
+        {renderFallbackNotice()}
+
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] font-mono font-bold text-solder uppercase tracking-wider mr-1">
             {segmentIndex + 1}/{totalSegments}

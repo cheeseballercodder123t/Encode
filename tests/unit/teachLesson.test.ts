@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { buildFallbackLesson, sanitizeLesson, sanitizeSegment } from '@/lib/services/teachLesson';
+import {
+  buildFallbackLesson,
+  classifyTeachFailure,
+  sanitizeLesson,
+  sanitizeSegment,
+} from '@/lib/services/teachLesson';
 import { makeActivity } from './fixtures';
 import { LessonSegment } from '@/lib/types';
 
@@ -276,6 +281,26 @@ describe('buildFallbackLesson', () => {
     const lesson = buildFallbackLesson('Some Topic', 'conceptual');
     expect(lesson.segments.length).toBeGreaterThanOrEqual(2);
     expect(lesson.segments[0].type).toBe('concept');
+  });
+});
+
+describe('classifyTeachFailure', () => {
+  it('reads a request that never left the device as offline', () => {
+    // What fetch() rejects with for an unreachable host: there is no response
+    // to report because nothing answered.
+    expect(classifyTeachFailure(new TypeError('Failed to fetch'))).toBe('offline');
+    expect(classifyTeachFailure(new TypeError('NetworkError when attempting to fetch resource.'))).toBe('offline');
+  });
+
+  it('reads an answered request as the server, whatever it answered', () => {
+    // The errors the modal itself raises from a response: an HTTP status, or a
+    // 200 whose payload sanitized to nothing.
+    expect(classifyTeachFailure(new Error('Lesson generation failed'))).toBe('server');
+    expect(classifyTeachFailure(new Error('Lesson came back empty'))).toBe('server');
+    // And what a caller-side wrapper can hand over: a rejection that is not an
+    // Error at all still counts as a response rather than as silence.
+    expect(classifyTeachFailure('boom')).toBe('server');
+    expect(classifyTeachFailure(undefined)).toBe('server');
   });
 });
 

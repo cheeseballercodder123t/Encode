@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, probeSchema as probeBodySchema } from "@/lib/api-validation";
 import { validateProbeResult } from "@/lib/ai-output-validation";
 
 const probeSchema = {
@@ -32,8 +33,11 @@ const probeSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { stageTitle, framework, contextSnippet, prompt, layers, settings, topicSummary } =
-      await req.json();
+    const body = await parseRouteBody(req, probeBodySchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { stageTitle, framework, contextSnippet, prompt, layers, settings, topicSummary } = body.data;
 
     const chain: string[] = Array.isArray(layers)
       ? layers.filter((l: unknown): l is string => typeof l === 'string' && l.trim().length > 0)

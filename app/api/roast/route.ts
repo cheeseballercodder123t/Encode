@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, roastSchema } from "@/lib/api-validation";
 
 const roastResponseSchema = {
   type: Type.OBJECT,
@@ -57,7 +58,11 @@ const roastResponseSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { notes, file, settings } = await req.json();
+    const body = await parseRouteBody(req, roastSchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { notes, file, settings } = body.data;
 
     const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
     const hasFile = file && file.base64Data && file.type;

@@ -1,6 +1,13 @@
 'use client';
 
+import React from 'react';
 import { LessonSegment, TeachLesson } from '@/lib/types';
+
+// The React import is what every other Teach* body carries, and this file is
+// the one that renders JSX without it: `tsconfig` keeps `jsx: "preserve"` for
+// Next's own transform, so the test runner's classic transform is the first
+// compiler to ask this module for the `React` identifier and the first to fail
+// on it (`React is not defined` at the dispatcher's first JSX line).
 import {
   ContinueButton,
   DeepDiveBody,

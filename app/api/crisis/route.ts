@@ -1,6 +1,7 @@
 import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateJSONWithProvider } from '@/lib/ai-client';
+import { parseRouteBody, crisisSchema } from '@/lib/api-validation';
 import {
   buildTriagePlan,
   mergeCrisisReads,
@@ -70,7 +71,11 @@ const MAX_DUMP_LENGTH = 6000;
 
 export async function POST(req: NextRequest) {
   try {
-    const { dump, scorePct, settings } = await req.json();
+    const parsed = await parseRouteBody(req, crisisSchema);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { dump, scorePct, settings } = parsed.data;
 
     const text = typeof dump === 'string' ? dump.trim() : '';
     if (!text) {

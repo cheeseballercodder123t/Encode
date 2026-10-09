@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { POST as encodePost } from '../route';
 import { streamTextWithProvider } from '@/lib/ai-client';
 import { createSchemaStream, toStageOutline, type StageOutlineEntry } from '@/lib/stream-schema';
+import { parseRouteBody, encodeSchema } from '@/lib/api-validation';
 
 // ─── Streamed encoding: the outline arrives before the schema does ──────────
 //
@@ -80,12 +81,15 @@ function ndjson(events: unknown[]): string {
 }
 
 export async function POST(req: NextRequest) {
-  let body: OutlineBody;
-  try {
-    body = await req.json();
-  } catch {
-    return Response.json({ error: 'Invalid request body.' }, { status: 400 });
+  // This body is the encode body plus `stream: true` (the client sends one
+  // payload and only the endpoint differs), so it is validated with the same
+  // schema /api/encode uses. Both this route's outline pass and the in-process
+  // /api/encode call below read the parsed data, never the raw JSON.
+  const validated = await parseRouteBody(req, encodeSchema);
+  if (!validated.ok) {
+    return Response.json({ error: validated.error }, { status: 400 });
   }
+  const body: OutlineBody = validated.data;
 
   const encoder = new TextEncoder();
   // The encode handler is called with a freshly built request, so the client's

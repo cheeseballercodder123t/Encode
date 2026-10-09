@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { validateParsonsResult } from "@/lib/ai-output-validation";
+import { parseRouteBody, sequenceSchema as sequenceBodySchema } from "@/lib/api-validation";
 
 const sequenceSchema = {
   type: Type.OBJECT,
@@ -35,8 +36,11 @@ const sequenceSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { stageTitle, framework, contextSnippet, prompt, topicSummary, settings } =
-      await req.json();
+    const body = await parseRouteBody(req, sequenceBodySchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { stageTitle, framework, contextSnippet, prompt, topicSummary, settings } = body.data;
 
     if (!stageTitle && !contextSnippet) {
       return NextResponse.json({ error: "No stage to build an ordering drill from." }, { status: 400 });

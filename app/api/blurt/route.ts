@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, blurtSchema } from "@/lib/api-validation";
 
 const blurtingSchema = {
   type: Type.OBJECT,
@@ -43,13 +44,17 @@ const blurtingSchema = {
 
 export async function POST(req: NextRequest) {
   try {
+    const parsed = await parseRouteBody(req, blurtSchema);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
     const { 
       blurtText, 
       schemaTitle, 
       activities, 
       researchContexts, 
       settings 
-    } = await req.json();
+    } = parsed.data;
 
     if (!blurtText || !blurtText.trim()) {
       return NextResponse.json({ error: "Please write down your memory blurt first." }, { status: 400 });

@@ -203,4 +203,75 @@ test.describe('Teach Me interactive lesson', () => {
     // passing because the segment failed to render).
     await expect(page.getByText(/-55 mV the voltage-gated Na\+ channels open\./)).toBeVisible();
   });
+
+  test('a lesson request that never reaches the service still teaches, and says so', async ({ page }) => {
+    // The failure the promise was written for (defect 43): the module exports a
+    // deterministic fallback builder, the sheet's contract names it, and the
+    // mount comment in `app/page.tsx` promised "an offline schema-based
+    // fallback" - but the request's `catch` returned the learner to the
+    // pre-roll with an error string, so nothing taught them.
+    await mockAiApis(page);
+    await page.route('**/api/teach', (route) => route.abort('failed'));
+
+    await page.goto('/');
+    await enterNotes(page, MOCK_NOTES);
+    await page.getByRole('button', { name: /teach me/i }).first().click();
+    await expect(page.getByText('Lesson Pre-Roll')).toBeVisible();
+    await page.getByRole('button', { name: /generate lesson/i }).click();
+
+    // The pre-roll is gone and a lesson is playing: the deterministic arc,
+    // built on this device from the learner's own material.
+    const notice = page.getByTestId('teach-fallback-notice');
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveAttribute('data-origin', 'offline');
+    await expect(notice).toContainText('could not be reached');
+    await expect(page.getByText('The Core Idea')).toBeVisible();
+    await expect(page.getByText('1/5')).toBeVisible();
+
+    // It is a lesson rather than a notice: the arc advances, with the causal
+    // sections the builder is made of.
+    await page.getByRole('button', { name: /continue/i }).click();
+    await expect(page.getByText('What the mechanism actually does')).toBeVisible();
+  });
+
+  test('a lesson service that answers with an error is reported rather than hidden, and retry returns the learner to the model', async ({ page }) => {
+    await mockAiApis(page);
+    // First request: a service that is up and refusing. After that, the model
+    // answers - which is what makes the retry control a real way back.
+    let calls = 0;
+    await page.route('**/api/teach', (route) => {
+      calls += 1;
+      if (calls === 1) {
+        return route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'The AI provider rejected the request' }),
+        });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(TEACH_SHORT_RESPONSE),
+      });
+    });
+
+    await page.goto('/');
+    await enterNotes(page, MOCK_NOTES);
+    await page.getByRole('button', { name: /teach me/i }).first().click();
+    await page.getByRole('button', { name: /generate lesson/i }).click();
+
+    // A response is not a lost connection: the notice carries the reason the
+    // service gave, so the outage is visible instead of papered over.
+    const notice = page.getByTestId('teach-fallback-notice');
+    await expect(notice).toHaveAttribute('data-origin', 'server');
+    await expect(notice).toContainText('The AI provider rejected the request');
+    await expect(page.getByText('The Core Idea')).toBeVisible();
+
+    // The way back is on the notice itself, not something the learner has to
+    // discover by closing the sheet and starting over.
+    await page.getByTestId('teach-fallback-retry').click();
+    await expect(page.getByText('Threshold: The Two-Minute Version')).toBeVisible();
+    await expect(page.getByTestId('teach-fallback-notice')).toHaveCount(0);
+    expect(calls).toBe(2);
+  });
 });
