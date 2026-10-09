@@ -408,7 +408,14 @@
   .studio-brand { display: flex; align-items: center; gap: 13px; flex-shrink: 0; }
   .studio-brand svg { width: 34px; height: 38px; color: #D2A455; }
   .studio-brand h1 { font-size: 27px; font-weight: 500; letter-spacing: -1.2px; line-height: 1.1; }
-  .studio-brand h1 span { vertical-align: top; margin-left: 3px; font: 10px 'IBM Plex Mono', monospace; color: #D2A455; }
+  /*
+   * The wordmark's accent. It used to be a `✳` glyph in the mono face, which
+   * meant the mark depended on a font fallback for a character IBM Plex Mono
+   * does not carry (and rendered differently in every browser). It is drawn
+   * instead — the same rotated square the rail already uses as its bullet — so
+   * it is the same mark at 5px as at any other size, in the gilt it always had.
+   */
+  .studio-brand-mark { display: inline-block; width: 5px; height: 5px; margin-left: 6px; vertical-align: 12px; border-radius: 1px; background: #D2A455; transform: rotate(45deg); }
   .studio-brand p { margin-top: 7px; font: 7px 'IBM Plex Mono', monospace; letter-spacing: 1.6px; color: #B5B1A6; }
   .studio-nav { gap: 0; }
   .studio-nav > button { font-size: 11px; padding-left: 10px; padding-right: 10px; min-height: 40px; }
@@ -525,7 +532,9 @@
   .studio-tuning-details summary > span:last-child span { display: inline-block; margin-left: 7px; color: #E3C285; font-size: 15px; }
   .studio-tuning-details[open] summary > span:last-child span { transform: rotate(45deg); }
   .studio-rail-note { display: flex; flex-direction: column; align-items: center; margin-top: auto; padding: 5px 24px 25px; text-align: center; }
-  .studio-rail-symbol { color: #D2A455; font-size: 36px; font-weight: 400; line-height: 1.2; }
+  /* The rail note's mark: the same drawn diamond, outlined, instead of a 36px
+   * glyph that carried neither the note's register nor a guaranteed font. */
+  .studio-rail-symbol { width: 14px; height: 14px; border: 1px solid #D2A455; border-radius: 2px; transform: rotate(45deg); }
   .studio-rail-note p { font-family: 'Fraunces', Georgia, serif; font-size: 16px; line-height: 1.45; margin-top: 8px; color: #B5B1A6; }
   .studio-rail-note em { color: #E3C285; }
   .studio-rail-note > span:last-child { font: 7px 'IBM Plex Mono', monospace; color: #807D73; letter-spacing: 1.1px; margin-top: 14px; }

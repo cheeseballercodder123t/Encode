@@ -457,3 +457,80 @@ for (const width of [1440, 390]) {
     await diagram.screenshot({ path: testInfo.outputPath(`orbit-${width}.png`) });
   });
 }
+
+/**
+ * The two brand accents are drawn marks, not a font glyph.
+ *
+ * Both used to be `✳` — the superscript after "DeepEncode" in the masthead and
+ * a 36px mark above the launchpad rail's tagline. IBM Plex Mono does not carry
+ * that character, so each one rendered through whatever fallback the browser
+ * picked: a `vertical-align: top` glyph floating beside the wordmark, and a
+ * heavy asterisk over a serif line in the rail. They are now the same rotated
+ * square the rail already uses as its bullet, so the mark is identical at 5px
+ * and at 14px and cannot drift with a font.
+ *
+ * Pinned here because a decorative mark is exactly the kind of thing that comes
+ * back quietly. The first assertion fails if the glyph reappears anywhere in the
+ * page — text or markup — at either width; the rest proves each accent is a real
+ * box in the brand's own gilt rather than a character, and that the rail's
+ * absence on a phone is the existing responsive rule (`max-width: 640px`) rather
+ * than a broken element.
+ */
+for (const width of [1440, 390]) {
+  test(`the brand accents are drawn marks at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await mockAiApis(page);
+    await page.goto('/');
+
+    // No asterisk family anywhere in the rendered page.
+    const asterisks = await page.evaluate(() => {
+      const markup = document.body.innerHTML;
+      return ['\u2733', '\u2731', '\u2732'].filter((mark) => markup.includes(mark));
+    });
+    expect(asterisks).toEqual([]);
+
+    const brand = await page.locator('.studio-brand-mark').evaluate((node) => {
+      const style = getComputedStyle(node);
+      const box = node.getBoundingClientRect();
+      return {
+        text: (node.textContent || '').trim(),
+        background: style.backgroundColor,
+        transform: style.transform,
+        width: box.width,
+        height: box.height,
+        wordmarkHeight: node.parentElement!.getBoundingClientRect().height,
+      };
+    });
+    // Empty element: the mark is the box, so it cannot be a glyph that fell back.
+    expect(brand.text).toBe('');
+    expect(brand.background).toBe('rgb(210, 164, 85)');
+    expect(brand.transform).toContain('matrix');
+    expect(brand.width).toBeGreaterThan(3);
+    expect(brand.height).toBeGreaterThan(3);
+    // It rides the wordmark's line box instead of stretching it.
+    expect(brand.wordmarkHeight).toBeLessThan(40);
+
+    const railNote = page.locator('.studio-rail-note');
+    if (width > 640) {
+      await expect(railNote).toBeVisible();
+      const rail = await page.locator('.studio-rail-symbol').evaluate((node) => {
+        const style = getComputedStyle(node);
+        const box = node.getBoundingClientRect();
+        return {
+          text: (node.textContent || '').trim(),
+          border: style.borderTopColor,
+          width: box.width,
+          height: box.height,
+        };
+      });
+      expect(rail.text).toBe('');
+      expect(rail.border).toBe('rgb(210, 164, 85)');
+      expect(rail.width).toBeGreaterThan(3);
+      expect(rail.height).toBeGreaterThan(3);
+    } else {
+      // The rail's note is hidden under 640px by the layout's own rule, so the
+      // mark must not be what is keeping it on screen.
+      await expect(railNote).toBeHidden();
+    }
+  });
+}

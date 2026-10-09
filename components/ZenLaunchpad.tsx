@@ -662,7 +662,7 @@ export function ZenLaunchpad({
             </div>
           </details>
           <div className="studio-rail-note">
-            <span className="studio-rail-symbol" aria-hidden="true">✳</span>
+            <span className="studio-rail-symbol" aria-hidden />
             <p>Understanding is built,<br /><em>not downloaded.</em></p>
             <span>ACTIVE ENCODING / EVERY GEAR</span>
           </div>

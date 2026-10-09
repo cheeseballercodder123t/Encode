@@ -1641,7 +1641,7 @@ export default function DeepEncodeApp() {
                 <path d="M20 10L30 16V28L20 34L10 28V16L20 10ZM20 10V22M10 16L20 22L30 16M20 22V34" stroke="currentColor" />
               </svg>
               <div>
-                <h1>DeepEncode<span aria-hidden="true">✳</span></h1>
+                <h1>DeepEncode<span className="studio-brand-mark" aria-hidden="true" /></h1>
                 <p>COGNITIVE SCIENCE / HUMAN UNDERSTANDING</p>
               </div>
             </div>
