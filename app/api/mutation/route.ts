@@ -12,6 +12,9 @@ import {
   ledgerRepairPrompt,
   verifyLedger,
 } from '@/lib/escalation/consistency';
+// The body schema is imported under an alias: this file's own `mutationSchema`
+// is the model's RESPONSE schema.
+import { parseRouteBody, mutationSchema as mutationBodySchema } from '@/lib/api-validation';
 
 /**
  * The constraint-mutation matrix.
@@ -119,7 +122,11 @@ const MAX_TOPIC_LENGTH = 300;
 
 export async function POST(req: NextRequest) {
   try {
-    const { topic, tier: rawTier, boss, sourceContext, settings } = await req.json();
+    const validatedBody = await parseRouteBody(req, mutationBodySchema);
+    if (!validatedBody.ok) {
+      return NextResponse.json({ error: validatedBody.error }, { status: validatedBody.status });
+    }
+    const { topic, tier: rawTier, boss, sourceContext, settings } = validatedBody.data;
 
     const cleanTopic = typeof topic === 'string' ? topic.trim() : '';
     if (!cleanTopic) {

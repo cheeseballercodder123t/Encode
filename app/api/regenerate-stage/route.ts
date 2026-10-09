@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, regenerateStageSchema } from '@/lib/api-validation';
 import { validateEncodedSchema } from '@/lib/ai-output-validation';
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 
@@ -58,13 +59,17 @@ const stageResponseSchema = {
 
 export async function POST(req: NextRequest) {
   try {
+    const body = await parseRouteBody(req, regenerateStageSchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
     const {
       activity,
       topicSummary,
       mode = 'conceptual',
       reason,
       settings,
-    } = await req.json();
+    } = body.data;
 
     if (!activity || !activity.title) {
       return NextResponse.json({ error: "Missing activity to regenerate." }, { status: 400 });

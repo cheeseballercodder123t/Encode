@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
 import { splitTriageUnits, validateTriageReport } from "@/lib/triage";
+import { parseRouteBody, triageSchema as triageBodySchema } from "@/lib/api-validation";
 
 const triageSchema = {
   type: Type.OBJECT,
@@ -44,7 +45,11 @@ const MAX_UNITS = 60;
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, topicSummary, settings } = await req.json();
+    const body = await parseRouteBody(req, triageBodySchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { text, topicSummary, settings } = body.data;
 
     const source = typeof text === 'string' ? text : '';
     const units = splitTriageUnits(source);

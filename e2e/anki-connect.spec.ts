@@ -5,11 +5,19 @@ import { mockAiApis, startEncodeFromNotes, confirmReadiness, expectStage } from 
 /**
  * AnkiConnect handoff: the session ends the millisecond the card is forged.
  *
- * AnkiConnect itself is a local HTTP server (127.0.0.1:8765), so the whole
+ * AnkiConnect itself is a local HTTP server on port 8765, so the whole
  * integration can be driven from the real UI with the server mocked at the
  * network level — including the CORS preflight the browser sends, and the
  * origin refusal AnkiConnect answers with when `webCorsOriginList` doesn't
  * include this app.
+ *
+ * The mock matches BOTH names the server answers to, because the app's default
+ * is `http://localhost:8765` (`DEFAULT_ANKI_CONNECT_URL`) and the Settings field
+ * lets a learner point it at `http://127.0.0.1:8765` instead. Matching only
+ * `127.0.0.1` — which this spec did — meant the mock never fired at all: the
+ * request went to a server that is not running in CI, the app reported its
+ * (correct) "can't reach AnkiConnect" error, and all three tests below failed on
+ * every run. They were not flaky; they could not pass. See §31.
  */
 
 const DECK = 'DeepEncode::Action Potentials';
@@ -32,7 +40,10 @@ async function mockAnkiConnect(page: Page, opts: AnkiMockOptions = {}) {
   const calls: { action: string; params: any }[] = [];
 
   await page.route(
-    (url) => url.hostname === '127.0.0.1' && url.port === '8765',
+    // Both names for the same local server: `localhost` is what the app requests
+    // by default (and the only origin AnkiConnect's `webCorsOriginList` permits
+    // out of the box), `127.0.0.1` is what Settings can be pointed at.
+    (url) => (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.port === '8765',
     async (route) => {
       const request = route.request();
 

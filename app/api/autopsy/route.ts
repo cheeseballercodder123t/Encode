@@ -2,6 +2,7 @@ import { Type } from '@google/genai';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateJSONWithProvider } from '@/lib/ai-client';
 import { validateAutopsyNarrative } from '@/lib/ai-output-validation';
+import { parseRouteBody, autopsySchema } from '@/lib/api-validation';
 import { diagnoseDiscrepancy } from '@/lib/mr-m/autopsy';
 import { DISCREPANCY_LABELS } from '@/lib/mr-m/types';
 
@@ -49,7 +50,11 @@ const MAX_TEXT_LENGTH = 4000;
 
 export async function POST(req: NextRequest) {
   try {
-    const { learnerText, expectedText, sourceText, topic, settings } = await req.json();
+    const parsed = await parseRouteBody(req, autopsySchema);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    }
+    const { learnerText, expectedText, sourceText, topic, settings } = parsed.data;
 
     const learner = typeof learnerText === 'string' ? learnerText.trim() : '';
     if (!learner) {

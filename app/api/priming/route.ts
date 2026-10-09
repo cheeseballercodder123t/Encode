@@ -1,6 +1,7 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+import { parseRouteBody, primingSchema as primingBodySchema } from "@/lib/api-validation";
 import {
   isPrimingKind,
   validatePrimingDrill,
@@ -140,8 +141,11 @@ function probeDirective(requestedKind: PrimingKind | undefined): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { stageTitle, framework, contextSnippet, prompt, topicSummary, kind, settings } =
-      await req.json();
+    const body = await parseRouteBody(req, primingBodySchema);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.error }, { status: body.status });
+    }
+    const { stageTitle, framework, contextSnippet, prompt, topicSummary, kind, settings } = body.data;
 
     const requestedKind = isPrimingKind(kind) ? kind : undefined;
 

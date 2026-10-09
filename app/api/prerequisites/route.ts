@@ -1,6 +1,9 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
+// The body schema is imported under an alias: this file's own
+// `prerequisitesSchema` is the model's RESPONSE schema.
+import { parseRouteBody, prerequisitesSchema as prerequisitesBodySchema } from "@/lib/api-validation";
 
 const prerequisitesSchema = {
   type: Type.OBJECT,
@@ -34,7 +37,11 @@ const prerequisitesSchema = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { notes, file, settings } = await req.json();
+    const validatedBody = await parseRouteBody(req, prerequisitesBodySchema);
+    if (!validatedBody.ok) {
+      return NextResponse.json({ error: validatedBody.error }, { status: validatedBody.status });
+    }
+    const { notes, file, settings } = validatedBody.data;
 
     const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
     const hasFile = file && file.base64Data && file.type;

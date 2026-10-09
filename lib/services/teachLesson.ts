@@ -627,3 +627,26 @@ export function buildFallbackLesson(
     ],
   };
 }
+
+// ─── When the caller falls back ──────────────────────────────────────────────
+// Teach Me owes the learner a lesson rather than nothing when the request fails
+// (defect 43), so a failure is served by buildFallbackLesson above. Which
+// FAILURE it was still matters to the person reading the notice it carries:
+// "the request never left this device" and "the service answered with an error"
+// are different facts about the network, and only one of them is a service that
+// is up and disagreeing.
+
+/** Where the lesson on screen came from instead of the model. */
+export type TeachFallbackOrigin = 'offline' | 'server';
+
+/**
+ * `offline` when nothing answered, `server` when something did.
+ *
+ * `fetch` rejects with a `TypeError` when the request never reached the server - 
+ * offline, a DNS failure, a connection that dropped mid-flight - so there is no
+ * status to report because nothing was ever there to answer. Everything else is
+ * a response: an HTTP error status, or a 200 whose payload sanitized to nothing.
+ */
+export function classifyTeachFailure(cause: unknown): TeachFallbackOrigin {
+  return cause instanceof TypeError ? 'offline' : 'server';
+}
