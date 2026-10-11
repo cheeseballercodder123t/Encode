@@ -7,6 +7,7 @@ import { FIRST_PRINCIPLES_ENGINE, FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompt
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 import { encodeSchema, parseRouteBody } from "@/lib/api-validation";
 import { MR_M_DIRECTIVE } from '@/lib/mr-m/directives';
+import { VISUAL_TEMPLATE_TYPES, TEMPLATE_VISUAL_DATA_FIELDS } from '@/lib/templates/types';
 
 // Allow up to 60s for multi-stage schema generation on Vercel
 export const maxDuration = 60;
@@ -107,10 +108,36 @@ const mrMPayloadSchema = {
 };
 
 // Structured visual configurations per template type
-const visualDataSchema = {
+export const visualDataSchema = {
   type: Type.OBJECT,
   description: "Visual and structural diagram data customized for the stage's templateType",
   properties: {
+    anchors: {
+      type: Type.ARRAY,
+      description: "visual_blueprint only: the 2-5 spatial anchors of the motion (places the learner can point at), each rendered as one blueprint zone",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          label: { type: Type.STRING, description: "Short human name for the zone, e.g. 'Aortic outflow tract'" },
+          spatialPosition: { type: Type.STRING, description: "One of: top | left | center | right | bottom" },
+          sensoryDetail: { type: Type.STRING, description: "What physically happens at this anchor" }
+        },
+        required: ["id", "label", "spatialPosition", "sensoryDetail"]
+      }
+    },
+    whereAnalogyBreaks: {
+      type: Type.STRING,
+      description: "analogy_matrix only: the ONE place the familiar source stops behaving like the target - the boundary that keeps the analogy a tool rather than a substitute"
+    },
+    flashcardFront: {
+      type: Type.STRING,
+      description: "personal_schema only: the cue side of the personal card (a question about the learner's own experience), under 15 words"
+    },
+    flashcardBack: {
+      type: Type.STRING,
+      description: "personal_schema only: the answer side of the personal card, under 15 words"
+    },
     generationChallenge: {
       type: Type.OBJECT,
       description: "Generation Effect: Partial schema premise prompting the learner to deduce the missing half",
@@ -552,6 +579,87 @@ const guidedPathResponseSchema = {
   required: ["topicSummary", "guidedModules"]
 };
 
+/**
+ * The top-level JSON shape, stated in the prompt.
+ *
+ * The Gemini path constrains the root through `responseSchema`, so the prompt
+ * never had to name it - but that field is NOT sent to OpenRouter or the
+ * OpenAI-compatible providers (their `json_object` mode only requires valid
+ * JSON), and with the shape unstated the model answered with a bare ARRAY of
+ * stage objects. `typeof []` is `'object'`, so the array had no `activities` key
+ * and every stage was replaced by the single generic fallback (see the encode
+ * probe in BUGS_AUDIT_REPORT.md §41). The shape is now given in words to every
+ * provider, and `validateEncodedSchema` additionally recovers a bare array if a
+ * model answers with one anyway.
+ */
+const STAGE_SHAPE_EXAMPLE = `{
+      "id": "stage-1",
+      "stageNumber": 1,
+      "title": "<names the MECHANISM the stage resolves, never a bare topic label>",
+      "framework": "<the NAME of the cognitive-science framework, e.g. 'Bloom Taxonomy - Analysis' - never a description of the template>",
+      "cognitiveGoal": "<one short purpose, under 12 words>",
+      "contextSnippet": "<the raw fact or figure from the source that this stage targets>",
+      "keywords": ["3-5", "essential", "keywords"],
+      "templateType": "<exactly ONE id from the allowed list below; never invent an id>",
+      "prompt": "<the overarching guiding challenge>",
+      "paradox": "<the how-is-this-possible hook described above>",
+      "gedankenexperiment": "<the before-formalising thought experiment, or an empty string>",
+      "scaffold": { "field1Label": "...", "field1Placeholder": "...", "field2Label": "...", "field2Placeholder": "...", "field3Label": "", "field3Placeholder": "", "exampleAnswer": "...", "causalFrame": "..." },
+      "boundaryContrast": { "confusableLookalike": "...", "distinguishingRule": "..." },
+      "visualData": { the exact fields described for the chosen templateType }
+    }`;
+
+const ALLOWED_TEMPLATE_IDS = VISUAL_TEMPLATE_TYPES.map((id) => `'${id}'`).join(', ');
+
+/**
+ * The visualData field each template's diagram reads, spelled out per id.
+ *
+ * A model that is allowed an id but not told the field it needs guesses a name
+ * for it. The probe caught exactly that: in memorization mode the model chose
+ * `first_principles`, `cause_effect` and `state_transition` (correct ids, now
+ * that the id list is stated) but filled `concept`/`components`,
+ * `cause`/`effectSequence` and `initialState`/`transitionStates` - none of which
+ * any renderer reads, so every one of those stages drew an empty diagram.
+ * `TEMPLATE_VISUAL_DATA_FIELDS` is the renderers' own dependency list, and this
+ * is its prompt form.
+ */
+const TEMPLATE_SHAPE_GUIDE = VISUAL_TEMPLATE_TYPES.map(
+  (id) => `  - '${id}': visualData.${TEMPLATE_VISUAL_DATA_FIELDS[id].join(' and visualData.')}`
+).join('\n');
+
+/**
+ * The ids the model may name, spelled out.
+ *
+ * The mode-specific catalogs above are curated for tone, but a model that needs
+ * a structure its mode's catalog omits invents a name for it (the probe saw
+ * `cyclic_state_machine` in memorization mode, where `state_transition` was not
+ * offered): no renderer resolves it, so the stage draws the wrong diagram. The
+ * full list is therefore stated once, and the shape next to it names it as the
+ * only legal source.
+ */
+const TEMPLATE_ID_RULE = `'templateType' MUST be exactly ONE of these ids - never invent a name and never use an id from outside this list: ${ALLOWED_TEMPLATE_IDS}. Each id's 'visualData' MUST carry the field(s) named here, because that is what the on-screen diagram reads - a stage whose visualData uses other keys renders EMPTY:
+${TEMPLATE_SHAPE_GUIDE}`;
+
+const STANDARD_SHAPE_CONTRACT = `RETURN SHAPE - exactly ONE JSON object, never a bare array and never prose around it:
+{
+  "topicSummary": "<one short line naming the subject>",
+  "activities": [ ${STAGE_SHAPE_EXAMPLE} ],
+  "researchContexts": []
+}
+
+${TEMPLATE_ID_RULE}`;
+
+const GUIDED_SHAPE_CONTRACT = `RETURN SHAPE - exactly ONE JSON object, never a bare array and never prose around it:
+{
+  "topicSummary": "<one short line naming the subject>",
+  "guidedModules": [
+    { "id": "module-1", "title": "<the milestone this module teaches>", "activities": [ ${STAGE_SHAPE_EXAMPLE} ] }
+  ],
+  "researchContexts": []
+}
+
+${TEMPLATE_ID_RULE}`;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await parseRouteBody(req, encodeSchema);
@@ -670,7 +778,6 @@ AVAILABLE MEMORIZATION TEMPLATES:
 5. 'contrast_grid': confusable lookalike pairs and exam traps. 'contrastMatrix': axisX, axisY, 4 quadrants with trap warnings.
 6. 'formula_spatial_grid': formulas, equations, mathematical laws, linear pathways. 'formulaComponents': symbol, meaning, role ('variable' | 'constant' | 'operator' | 'state').
 7. 'interleaved_srs': high-yield active recall synthesis with bidirectional cueing.
-8. 'shape_association': numbered rules or ranked lists pegged to visual shape archetypes.
 
 ${enableDeepResearch ? `DEEP RESEARCH AGENT ACTIVE:
 If the user's notes miss foundational rules (e.g. forgot why HF is a weak acid or omitted a cranial nerve ganglion), fetch the missing foundational context in 'researchContexts' and link it.` : ''}
@@ -694,12 +801,12 @@ Decompose the study notes/file into an interactive 5-stage visual encoding worko
 AVAILABLE CONCEPTUAL TEMPLATES CATALOG:
 1. 'first_principles': foundational mechanisms and physical laws. 'nodes': causal chain (type: 'input' | 'mechanism' | 'outcome').
 2. 'cause_effect': system dynamics, feedback loops, "what happens if variable X drops?". 'nodes': disturbance shock, cascading consequence, broken state (type: 'danger').
-3. 'visual_blueprint': spatial, anatomical, cellular or architectural motion. 'flowSteps' or 'nodes': Foreground Actor, Motion Vector, Spatial Anchor.
-4. 'analogy_matrix': abstract concepts via a familiar domain (Plumbing, Traffic, Electrical Grids, OS Kernels). 'analogyMappings': sourceElement, targetElement, mechanistic explanation.
+3. 'visual_blueprint': spatial, anatomical, cellular or architectural motion. 'anchors': 2-5 zones, each with label, spatialPosition (top|left|center|right|bottom) and sensoryDetail.
+4. 'analogy_matrix': abstract concepts via a familiar domain (Plumbing, Traffic, Electrical Grids, OS Kernels). 'analogyMappings': sourceElement, targetElement, mechanistic explanation, plus 'whereAnalogyBreaks' (the ONE place the analogue diverges).
 5. 'concept_hierarchy': parent theories with sub-mechanisms and branch conditions. 'hierarchyTree': rootNode + branches with subItems.
 6. 'state_transition': cycles (Krebs Cycle, TCP 3-Way Handshake, Cardiac Cycle). 'flowSteps': step numbers, titles, mechanisms, icons.
 7. 'boundary_stress_test': extremes and failure envelopes (Temperature -> infinity, Concentration -> 0). 'boundaryGauges': variable, normalRange, extremeCase, breakdownResult.
-8. 'personal_schema': linking the mechanism to personal intuition and everyday decisions.
+8. 'personal_schema': linking the mechanism to personal intuition and everyday decisions. 'flashcardFront' + 'flashcardBack': a cue about the learner's OWN experience and its answer, under 15 words each.
 9. 'broken_model_debug' (HIGHLY RECOMMENDED): causal mechanisms students fall for. 'brokenModel': 3-5 sequential nodes with 1-2 INTENTIONALLY SABOTAGED (set 'isFlawed: true' + 'flawExplanation').
 ${hiddenNote}
 
@@ -725,6 +832,10 @@ For every stage specify the chosen 'templateType' and populate 'visualData' with
     // empty string and the prompt below is byte-for-byte what it was before the
     // feature existed — which is what makes "off means untouched" true of the
     // generation itself, not just of the rendering.
+    // The declared root shape in words, for the providers whose transport does
+    // not enforce `responseSchema` (see STANDARD_SHAPE_CONTRACT).
+    systemPrompt += `\n\n${isMassiveText ? GUIDED_SHAPE_CONTRACT : STANDARD_SHAPE_CONTRACT}`;
+
     const mrMNote = mrMMode ? `\n\n${MR_M_DIRECTIVE}` : '';
 
     systemPrompt += `\n\n${gearInstruction}${difficultyInstruction}${confidenceContext}${interleaveNote}${mrMNote}\n${TOY_MODEL_INSTRUCTION}`;

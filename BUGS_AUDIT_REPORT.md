@@ -3,7 +3,7 @@
 Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43.** **Round 29 (§31) then fixed defect 46 - the AnkiConnect spec whose mock matched a host the app never requests, so three of its four tests could not pass - found by regression-testing round 28 rather than by looking for it, so the running total is 44,** with findings 43 and 44 the only ones still open. **Round 30 (§32) then fixed defect 43 - Teach Me's deterministic fallback builder, exported, documented and promised by the mount comment, with no caller anywhere, so a failed lesson request taught nothing at all - so the running total is 45,** with finding 44 the only one still open. **Round 31 (§33) then fixed defect 44 - the shared body validator applied to 5 of 27 routes, so twenty-two handlers read their bodies with a bare `await req.json()`: free text out of `/api/triage` and `/api/roast` reached a paid provider call with no ceiling at all, and a malformed body answered 500 - which closes round 24's sweep, so the running total is 46 and nothing filed is left open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
-pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.** **Round 38 (§40) then fixed defects 63-65 - an OpenRouter *streaming* request that still sent no `max_tokens` (so the outline pass 402d on every limited-credit key while the non-streaming path from round 37 was already capped), a formula sandbox that could be walked out of through `constructor`/prototype access or a computed or template literal (arbitrary code inside `/api/archetype` and inside the exported Anki card), and the procedural exporters that wrote archetypes the validator rejects into a student's deck - so the running total is 65.**
+pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.** **Round 38 (§40) then fixed defects 63-65 - an OpenRouter *streaming* request that still sent no `max_tokens` (so the outline pass 402d on every limited-credit key while the non-streaming path from round 37 was already capped), a formula sandbox that could be walked out of through `constructor`/prototype access or a computed or template literal (arbitrary code inside `/api/archetype` and inside the exported Anki card), and the procedural exporters that wrote archetypes the validator rejects into a student's deck - so the running total is 65.** **Round 39 (§41) then fixed defects 66-70 - all found by invoking the real `/api/encode` handler with a live provider and inspecting what it actually returned: a bare-array model response silently deleted for one generic fallback stage (and the prompt never stating the top-level shape), a template id advertised with no renderer behind it, a memorization catalog too narrow to name the structure the model needed (so it invented an id no renderer resolves), and four `visualData` fields that three renderers read but the response schema never offered - so those diagrams drew hardcoded placeholders for every subject - so the running total is 70.**
 
 ## 1. Defects found and fixed
 
@@ -3242,3 +3242,147 @@ gap.
 
 **Total: 65 distinct defects** (this round's fixes land in `lib/ai-client.ts`,
 `lib/procedural-validator.ts`, `lib/anki-exporter.ts`, and the three suites named in §40.5).
+
+## 41. Round 39 - what the encoder actually returns, and the four silent gaps between a stage and its diagram
+
+### 41.1 How the sweep ran
+
+This round was asked to check the *quality* of the AI output rather than the arithmetic, so the method
+was different from every round before it: instead of fuzzing pure functions, the real `/api/encode`
+handler was invoked with the burner OpenRouter key over the app's Action-Potentials preset and the
+**actual provider response was captured and inspected** (the fetch wrapper logged the raw assistant
+content, so the probe could see what the model sent as well as what the route returned). Every finding
+below is a discordance between three things that must agree - the prompt/response schema, the model's
+answer, and what the renderers read - and each was reproduced before it was changed. Speed rule kept
+(`tsc --noEmit` + single-file `vitest` runs), full unit suite once at the end, full Playwright attempted
+once and reported as a limitation (§41.8).
+
+**Environment note.** Same as §39.1/§40.1: `bun.lock` is a lockfile this bun cannot parse and
+`package-lock.json` is out of sync with `package.json`, so deps were restored with
+`npm install --no-package-lock` and **both tracked lockfiles were left byte-identical**. Recorded, not
+fixed.
+
+### 41.2 What the probe found, in the order it found it
+
+1. **The route returned one generic stage for real, substantial notes.** `topicSummary` came back as
+   the default `"Active Cognitive Schema"` and `activities` as a single `Core Mechanism` stage with no
+   paradox, no visualData and no boundaryContrast - the `validateEncodedSchema` fallback, not a
+   generation.
+2. **The model had answered well.** The captured raw content was 11,944 characters of three real
+   stages, each with a genuine paradox ("Cells are filled with charge, yet they maintain a stable
+   negative internal voltage. How?"), a `generationChallenge` with ordered non-revealing clues, real
+   `nodes`, a `causalFrame`, and a sharp `boundaryContrast`. **All of it was being thrown away.**
+3. **The root cause was the root *shape*.** The model returned a **bare JSON array**
+   `[ {…}, {…}, {…} ]`, not the declared `{ topicSummary, activities: [...] }`. `typeof []` is
+   `'object'`, so the array passed the validator's object guard, contributed no `activities` key, and
+   was replaced by the fallback. Defect 66.
+4. **Why the model did not know the shape.** The user prompt is only the notes; the wrapper is conveyed
+   *solely* by Gemini's `responseSchema`, which the OpenRouter and OpenAI-compatible branches never send
+   (`json_object` mode requires valid JSON, not a schema). Defect 67 - the root cause of 66 for those
+   providers.
+5. **The fix changed the answer.** With the shape stated in words, the same model returned a proper
+   object with a real `topicSummary` and three well-formed stages. Re-probed live.
+6. **Then the ids were wrong.** In memorization mode the model invented `cyclic_state_machine` - not in
+   the registry. `TEMPLATE_COMPONENTS` resolved it to `undefined` and `StageVisualRenderer` fell back
+   to `first_principles`, so a cycle stage drew a causal-chain diagram and the model's real
+   `visualData` was never read. The memorization catalog offered only the rote templates, so a model
+   needing a structure had no legal name for it. Defect 69.
+7. **Then the ids were right and the payloads were wrong.** With the full id list stated, memorization
+   stages chose `first_principles`, `cause_effect` and `state_transition` - and filled
+   `concept`/`components`, `cause`/`effectSequence` and `initialState`/`transitionStates`. **No renderer
+   reads any of those**, so all three drew empty diagrams: the mode's catalog documents the visualData
+   shapes of the *rote* templates only. Defect 70 (first half).
+8. **And three renderers were reading fields the schema never offered.** `VisualBlueprintVisual` reads
+   `visualData.anchors` (with three hardcoded generic zones as its fallback - so *every* blueprint stage
+   showed "Top / Anterior Zone · Center Core Engine · Bottom / Posterior Vent" regardless of subject),
+   `AnalogyMatrixVisual` reads `whereAnalogyBreaks` (hardcoded generic sentence), and
+   `PersonalSchemaVisual` reads `flashcardFront`/`flashcardBack`. None of the four fields existed in
+   `visualDataSchema`, so the model could not produce them. Defect 70 (second half).
+9. **`shape_association` was advertised with nothing behind it.** The memorization catalog listed it as
+   template 8; it was in the `VisualTemplateType` union; it had no entry in `TEMPLATE_COMPONENTS` and no
+   visualData interface. A model that chose it got a First-Principles diagram. Defect 68.
+
+### 41.3 Findings
+
+| # | Priority | Finding | Location | Root cause | Evidence |
+|---|---|---|---|---|---|
+| 66 | **P1 - high. FIXED** | **A bare-array model response was silently deleted and replaced by one generic stage.** Every stage, paradox, visual and boundary the model produced was discarded while the request answered `200` and the learner saw a session that looked merely bland. | `lib/ai-output-validation.ts` (`validateEncodedSchema`) | `typeof [] === 'object'`, so the array passed the object guard, had no `activities` key, and fell through to the fallback. | Live probe: raw root was `ARRAY len 3` with 11,944 chars of good stages; the route returned 1 fallback stage. Pinned by 3 new tests (`recovers the stages from a bare array root`, `accepts 'stages' as an alias`, `still falls back for a bare array whose entries are all unusable`). |
+| 67 | **P1 - high. FIXED** | **The prompt never told the model the top-level JSON shape.** The only statement of `{ topicSummary, activities }` was Gemini's `responseSchema`, which is not sent to OpenRouter or any OpenAI-compatible endpoint. Those providers were asked for "a 5-stage workout" and left to invent a root - which is how defect 66 happened. | `app/api/encode/route.ts` (userPrompt + the three systemPrompt branches) | Schema-only contract on a provider with no schema enforcement. | Read from the route: `responseSchema: activeSchema` is consumed by the Gemini branch alone. After adding the shape in words, the same model returned `object keys=topicSummary,activities,researchContexts` with 3 real stages (live re-probe). |
+| 68 | **P2 - medium. FIXED** | **`shape_association` was offered to the model with no renderer.** Advertised as memorization template 8 and present in the type union, but absent from `TEMPLATE_COMPONENTS`, so choosing it silently drew a First-Principles diagram. | `app/api/encode/route.ts` (catalog), `lib/templates/types.ts` (union) | A catalog entry and a type member with no implementation, with nothing asserting the three agree. | `grep` found the id in exactly two places (the prompt and the union) and in no component table. Removed from both, and a new test now asserts `VISUAL_TEMPLATE_TYPES` equals the renderer table's keys. |
+| 69 | **P2 - medium. FIXED** | **The memorization catalog omitted the structural templates, so the model invented ids.** With no legal name for "a cycle", it answered `cyclic_state_machine`; the renderer has no such id, fell back to `first_principles`, and the stage's real `visualData` went unread. Separately, `validateEncodedSchema` passed any `templateType` string straight through. | `app/api/encode/route.ts` (catalog), `lib/ai-output-validation.ts` | A curated per-mode list narrower than the renderer set, plus no validation of an unknown id (unlike the missing-id case, which had a default). | Live probe: `template=cyclic_state_machine` (invalid) in memorization mode, `visualKeys=states,cyclic,energyUnit,…`. After stating the full id list the same mode chose `cause_effect` and `state_transition` - both `OK`. Pinned by 4 tests (mode default for an unknown id, payload-shape resolution for an unknown id, payload-shape resolution for a missing id, valid id untouched). |
+| 70 | **P2 - medium. FIXED** | **Four `visualData` fields three renderers read were missing from the response schema** (`anchors`, `whereAnalogyBreaks`, `flashcardFront`, `flashcardBack`), so the model could not fill them and the diagrams drew their hardcoded placeholders for every subject. Compounding it, the memorization-mode catalog documented only the rote payload shapes, so stages there carried keys no renderer reads and rendered empty. | `app/api/encode/route.ts` (`visualDataSchema`, catalogs), `lib/templates/types.ts` | The renderers' read set and the schema's write set had never been compared; the shape hints existed only per-mode. | `VisualBlueprintVisual` falls back to three literal generic zones when `anchors` is absent, and grep showed `anchors` in no schema and no prompt. Live re-probe after the fix: conceptual `visualKeys=nodes|flowSteps|nodes`, memorization `nodes,edges` and `flowSteps,…` - every stage now carries the field its renderer reads. Pinned by a new test asserting every field in `TEMPLATE_VISUAL_DATA_FIELDS` is a property of `visualDataSchema` (mutation-proven: removing `anchors` fails with `visual_blueprint reads visualData.anchors`). |
+
+### 41.4 Fixed, in four source files and two suites
+
+- `app/api/encode/route.ts` - `STANDARD_SHAPE_CONTRACT` / `GUIDED_SHAPE_CONTRACT` state the root shape in
+  words for every provider; `TEMPLATE_ID_RULE` names the 16 legal ids and forbids inventing one;
+  `TEMPLATE_SHAPE_GUIDE` (built from `TEMPLATE_VISUAL_DATA_FIELDS`) names the `visualData` field each id
+  needs; `visualDataSchema` gains `anchors`, `whereAnalogyBreaks`, `flashcardFront` and
+  `flashcardBack`; the `visual_blueprint`, `analogy_matrix`, `personal_schema` and
+  `shape_association` catalog lines are corrected/removed; `visualDataSchema` is exported so a test can
+  check it.
+- `lib/templates/types.ts` - `VISUAL_TEMPLATE_TYPES` is now the single canonical id list (with the union
+  derived from it), `isVisualTemplateType` guards it, `TEMPLATE_VISUAL_DATA_FIELDS` records what each
+  renderer reads, and `detectTemplateTypeFromVisualData` (moved here from the renderer) is the shared
+  payload-shape resolver.
+- `lib/ai-output-validation.ts` - a bare-array (or `stages`-keyed) root is unwrapped as the activity
+  list, and `resolveTemplateType` names a real template for an unknown or missing id (payload shape
+  first, then the mode default).
+- `components/stage-templates/StageVisualRenderer.tsx` - the inline legacy if-chain is replaced by the
+  shared `detectTemplateTypeFromVisualData`, so the id the validator names and the diagram drawn can no
+  longer disagree.
+- `tests/unit/ai-output-validation.test.ts` (+7), `tests/unit/templateRegistry.test.ts` (+6).
+
+### 41.5 Verified
+
+- `npx tsc --noEmit` - **exit 0**.
+- `npx vitest run` - **94 files / 1,633 tests, exit 0** (1,620 before; +13).
+- `npx eslint .` - **exit 0**.
+- Every fix **mutation-proofed**: reverting the array unwrap fails the 3 root tests; reverting the
+  templateType clamp fails 3 tests; removing `anchors` from the schema fails the coverage test. Each
+  guard was removed on its own, so none is redundant.
+- The end-to-end effect was verified **against the live provider** through the real `/api/encode`
+  handler with the burner key, before and after: 1 fallback stage → 3 real stages; an invented template
+  id → only valid ids; missing/generic `visualData` → the field each renderer reads; `framework`
+  restored from a copied catalog description to a real framework name.
+
+### 41.6 What this round deliberately does not do
+
+- **It does not add a JSON-schema *enforcement* layer for the HTTP providers.** OpenRouter's
+  `json_object` mode has no schema field to send, and a client-side validator cannot make a provider
+  obey one; the fix is to tell the model the shape and to recover it when it still strays. Hard-failing
+  a usable-but-mis-shaped response would trade a degraded session for no session.
+- **It does not hard-fail an unknown `templateType`.** It resolves it to the payload's shape, then to
+  the mode default - the renderer already refused to guess a diagram, so the only thing to fix was the
+  *name*, which downstream consumers (export, cache, regenerate) also read.
+- **It does not regenerate the memorization catalog's tone.** The curated per-mode lists stay; the
+  canonical id list and the shape guide are added alongside them, which is what stopped the invention.
+- **It does not touch the `framework` field's validation.** The probe showed the model copying the
+  catalog description into it; that is a prompt-wording fix (made), not a data defect - the field is
+  free text and is displayed, not parsed.
+- **It does not regenerate either lockfile.**
+
+### 41.7 Tests added
+
+| File | What it pins |
+|---|---|
+| `tests/unit/ai-output-validation.test.ts` (+7) | A bare array root is recovered (not fallen back); `stages` is an alias; an all-unusable array still falls back; an unknown `templateType` resolves to the mode default; an unknown/missing `templateType` resolves from the payload shape; a valid one is untouched. |
+| `tests/unit/templateRegistry.test.ts` (+6) | The canonical id list equals the renderer table's keys exactly; `isVisualTemplateType` accepts its own ids and rejects invented ones; `detectTemplateTypeFromVisualData` maps each payload shape to the template that reads it and returns null for an unclaimed shape; every field in `TEMPLATE_VISUAL_DATA_FIELDS` exists in `visualDataSchema`; the field table names every template. |
+
+### 41.8 The check that did not run: the full Playwright suite
+
+Attempted once, at the end, and **could not run in this sandbox** - the app does not compile here
+(`next dev` is SIGKILLed / V8-aborts on the first compile; the limit is per-process memory, exactly as
+§39.7 and §40.8 record). Reported as a **limitation, not a pass**.
+
+**What this means for the fixes.** The changed files are logic and prompt/data, not layout: a validator
+normaliser, a shared id/payload table, a schema that gained four fields, and the renderer's fallback
+delegated to that shared table. Each is covered by unit tests proven to fail before the fix, and the
+generation path was verified live against the provider. But the **rendered workbench** was not exercised
+in a browser this round, and this report does not claim it was. A runner with headroom should run
+`npx playwright test --project=chromium` - `e2e/scaffold-frame.spec.ts` and `e2e/modal-a11y.spec.ts`
+cover stage rendering.
+
+**Total: 70 distinct defects** (this round's fixes land in `app/api/encode/route.ts`,
+`lib/ai-output-validation.ts`, `lib/templates/types.ts`,
+`components/stage-templates/StageVisualRenderer.tsx`, and the two suites named in §41.7).

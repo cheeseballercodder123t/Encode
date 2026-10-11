@@ -186,6 +186,70 @@ describe('validateEncodedSchema', () => {
     expect((result.activities[0] as Activity).keywords).toEqual(['k']);
   });
 
+  /**
+   * A provider that does not enforce the response schema (OpenRouter's and the
+   * OpenAI-compatible `json_object` mode only require *valid JSON*; only the
+   * Gemini SDK is given `responseSchema`) can answer with a bare ARRAY of stages
+   * instead of the declared `{ topicSummary, activities }` object. `typeof []`
+   * is `'object'`, so the array used to sail past the object guard, contribute no
+   * `activities`, and be replaced by the single generic fallback stage: every
+   * generated stage discarded while the request still answered 200.
+   */
+  it('recovers the stages from a bare array root instead of falling back', () => {
+    const stages = [
+      { id: 's1', title: 'The Na+/K+ pump sets the gradient', templateType: 'first_principles', visualData: { nodes: [{ label: 'pump', type: 'input' }] } },
+      { id: 's2', title: 'Why the spike overshoots', templateType: 'state_transition' },
+    ];
+    const result = validateEncodedSchema(stages, 'conceptual');
+    expect(result.activities).toHaveLength(2);
+    expect(result.activities[0].id).toBe('s1');
+    expect(result.activities[1].templateType).toBe('state_transition');
+    // Never the synthetic fallback when real stages were present.
+    expect(result.activities.some((a) => a.id === 'fallback-stage-1')).toBe(false);
+  });
+
+  it('accepts `stages` as an alias for `activities`', () => {
+    const result = validateEncodedSchema({ topicSummary: 'T', stages: [{ id: 'x', title: 'X' }] }, 'conceptual');
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].id).toBe('x');
+  });
+
+  it('still falls back for a bare array whose entries are all unusable', () => {
+    const result = validateEncodedSchema(['nope', null, 42], 'conceptual');
+    expect(result.activities).toHaveLength(1);
+    expect(result.activities[0].id).toBe('fallback-stage-1');
+  });
+
+  /**
+   * `templateType` is a free string to the model, and a provider that does not
+   * enforce the response schema lets it invent one. The encode probe saw
+   * `cyclic_state_machine` in memorization mode (BUGS_AUDIT_REPORT.md §41),
+   * which no renderer resolves — the stage would draw a First-Principles
+   * diagram and the model's real visualData would never be read. An unknown id
+   * is resolved to a real one instead.
+   */
+  it('replaces an unknown templateType with the mode default', () => {
+    const conceptual = validateEncodedSchema({ activities: [{ id: 'a', templateType: 'cyclic_state_machine' }] }, 'conceptual');
+    expect(conceptual.activities[0].templateType).toBe('first_principles');
+    const rote = validateEncodedSchema({ activities: [{ id: 'a', templateType: 'cyclic_state_machine' }] }, 'memorization');
+    expect(rote.activities[0].templateType).toBe('memory_palace');
+  });
+
+  it('resolves an unknown templateType from the payload shape when it can', () => {
+    const raw = { activities: [{ id: 'a', templateType: 'flow_thing', visualData: { flowSteps: [{ title: 'S1' }] } }] };
+    expect(validateEncodedSchema(raw, 'conceptual').activities[0].templateType).toBe('state_transition');
+  });
+
+  it('resolves a missing templateType from the payload shape too', () => {
+    const raw = { activities: [{ id: 'a', visualData: { palaceRooms: [{ roomName: 'Foyer' }] } }] };
+    expect(validateEncodedSchema(raw, 'conceptual').activities[0].templateType).toBe('memory_palace');
+  });
+
+  it('keeps a valid templateType untouched', () => {
+    const raw = { activities: [{ id: 'a', templateType: 'broken_model_debug' }] };
+    expect(validateEncodedSchema(raw, 'conceptual').activities[0].templateType).toBe('broken_model_debug');
+  });
+
   it('preserves researchContexts when present', () => {
     const rc = [{ id: 'r1', detectedGap: 'g', conceptAdded: 'c', explanation: 'e' }];
     const result = validateEncodedSchema({ activities: [], researchContexts: rc }, 'conceptual');

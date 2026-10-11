@@ -7,6 +7,13 @@ import {
   getTemplatesByCategory,
   registerTemplate,
 } from '@/lib/templates/registry';
+import {
+  VISUAL_TEMPLATE_TYPES,
+  isVisualTemplateType,
+  detectTemplateTypeFromVisualData,
+  TEMPLATE_VISUAL_DATA_FIELDS,
+} from '@/lib/templates/types';
+import { visualDataSchema } from '@/app/api/encode/route';
 
 /**
  * The template registry is the single answer to "which renderer draws this
@@ -49,6 +56,77 @@ afterEach(() => {
   for (const id of Object.keys(TEMPLATE_COMPONENTS)) {
     if (!BASELINE_RENDERERS.has(id)) delete TEMPLATE_COMPONENTS[id];
   }
+});
+
+describe('the canonical template id list', () => {
+  /**
+   * The class of bug this pins (BUGS_AUDIT_REPORT.md §41): the prompt once
+   * advertised `shape_association`, which had no renderer — a model that chose
+   * it got a First-Principles diagram. The list the prompt/validator use and the
+   * table the renderer uses must therefore name exactly the same ids.
+   */
+  it('names exactly the ids the renderer table resolves', () => {
+    expect([...VISUAL_TEMPLATE_TYPES].sort()).toEqual(Object.keys(TEMPLATE_COMPONENTS).sort());
+  });
+
+  it('recognises its own ids and nothing else', () => {
+    for (const id of VISUAL_TEMPLATE_TYPES) expect(isVisualTemplateType(id)).toBe(true);
+    expect(isVisualTemplateType('cyclic_state_machine')).toBe(false);
+    expect(isVisualTemplateType('shape_association')).toBe(false);
+    expect(isVisualTemplateType('')).toBe(false);
+    expect(isVisualTemplateType(undefined)).toBe(false);
+  });
+});
+
+describe('detectTemplateTypeFromVisualData', () => {
+  it('maps each payload shape to the template that reads it', () => {
+    expect(detectTemplateTypeFromVisualData({ brokenModel: [] })).toBe('broken_model_debug');
+    expect(detectTemplateTypeFromVisualData({ mnemonicStoryboard: {} })).toBe('mnemonic_storyboard');
+    expect(detectTemplateTypeFromVisualData({ analogyMappings: [] })).toBe('analogy_matrix');
+    expect(detectTemplateTypeFromVisualData({ hierarchyTree: {} })).toBe('concept_hierarchy');
+    expect(detectTemplateTypeFromVisualData({ flowSteps: [] })).toBe('state_transition');
+    expect(detectTemplateTypeFromVisualData({ boundaryGauges: [] })).toBe('boundary_stress_test');
+    expect(detectTemplateTypeFromVisualData({ chunkBuckets: [] })).toBe('taxonomic_chunking');
+    expect(detectTemplateTypeFromVisualData({ acronymLetters: [] })).toBe('mnemonic_peg');
+    expect(detectTemplateTypeFromVisualData({ palaceRooms: [] })).toBe('memory_palace');
+    expect(detectTemplateTypeFromVisualData({ contrastMatrix: {} })).toBe('contrast_grid');
+    expect(detectTemplateTypeFromVisualData({ formulaComponents: [] })).toBe('formula_spatial_grid');
+    expect(detectTemplateTypeFromVisualData({ nodes: [{ type: 'danger' }] })).toBe('cause_effect');
+  });
+
+  it('returns null for a shape no template claims', () => {
+    expect(detectTemplateTypeFromVisualData({ states: [], cyclic: true })).toBeNull();
+    expect(detectTemplateTypeFromVisualData({ nodes: [{ type: 'mechanism' }] })).toBeNull();
+    expect(detectTemplateTypeFromVisualData(null)).toBeNull();
+    expect(detectTemplateTypeFromVisualData('nope')).toBeNull();
+  });
+});
+
+describe('visualData schema coverage', () => {
+  /**
+   * A renderer that reads a field the response schema never offers can never be
+   * filled by the model, so it silently draws its own hardcoded placeholder for
+   * every subject. `VisualBlueprintVisual` read `anchors`,
+   * `AnalogyMatrixVisual` read `whereAnalogyBreaks`, and
+   * `PersonalSchemaVisual` read `flashcardFront`/`flashcardBack` — none of which
+   * were in `visualDataSchema` (BUGS_AUDIT_REPORT.md §41). This asserts the
+   * schema offers every field the renderers are known to read.
+   */
+  it('offers every visualData field a renderer reads', () => {
+    const offered = new Set(Object.keys((visualDataSchema as any).properties));
+    for (const id of VISUAL_TEMPLATE_TYPES) {
+      for (const field of TEMPLATE_VISUAL_DATA_FIELDS[id]) {
+        expect(offered.has(field), `${id} reads visualData.${field}`).toBe(true);
+      }
+    }
+  });
+
+  it('names every template in the field table', () => {
+    expect(Object.keys(TEMPLATE_VISUAL_DATA_FIELDS).sort()).toEqual([...VISUAL_TEMPLATE_TYPES].sort());
+    for (const id of VISUAL_TEMPLATE_TYPES) {
+      expect(TEMPLATE_VISUAL_DATA_FIELDS[id].length, id).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('template registry', () => {

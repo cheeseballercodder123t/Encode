@@ -2,24 +2,106 @@
 
 import type { MrMPayload } from '../mr-m/types';
 
-export type VisualTemplateType =
-  | 'first_principles'
-  | 'cause_effect'
-  | 'visual_blueprint'
-  | 'analogy_matrix'
-  | 'concept_hierarchy'
-  | 'state_transition'
-  | 'boundary_stress_test'
-  | 'taxonomic_chunking'
-  | 'mnemonic_peg'
-  | 'memory_palace'
-  | 'contrast_grid'
-  | 'formula_spatial_grid'
-  | 'personal_schema'
-  | 'interleaved_srs'
-  | 'shape_association'
-  | 'mnemonic_storyboard'
-  | 'broken_model_debug';
+/**
+ * The canonical, complete set of built-in template ids.
+ *
+ * One source of truth for the three places that have to agree - the prompt
+ * catalog the model chooses from, the validator's clamp, and the TypeScript
+ * union - because when they disagree the failure is silent. The encode probe
+ * (BUGS_AUDIT_REPORT.md §41) caught both directions: `shape_association` was
+ * advertised in the memorization catalog with no renderer behind it, and a model
+ * that needed a cycle structure in memorization mode (where only the rote
+ * templates were listed) invented `cyclic_state_machine`, which no renderer
+ * knows, so the stage drew a First-Principles diagram and the model's real
+ * `visualData` was never read.
+ *
+ * `interleaved_srs` is listed because the renderer resolves it (it borrows the
+ * personal-schema component), even though it is not itself choosable in the UI.
+ */
+export const VISUAL_TEMPLATE_TYPES = [
+  'first_principles',
+  'cause_effect',
+  'visual_blueprint',
+  'analogy_matrix',
+  'concept_hierarchy',
+  'state_transition',
+  'boundary_stress_test',
+  'taxonomic_chunking',
+  'mnemonic_peg',
+  'memory_palace',
+  'contrast_grid',
+  'formula_spatial_grid',
+  'personal_schema',
+  'interleaved_srs',
+  'mnemonic_storyboard',
+  'broken_model_debug',
+] as const;
+
+export type VisualTemplateType = (typeof VISUAL_TEMPLATE_TYPES)[number];
+
+/** True when `value` is one of the built-in template ids. */
+export function isVisualTemplateType(value: unknown): value is VisualTemplateType {
+  return typeof value === 'string' && (VISUAL_TEMPLATE_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * The `visualData` field each template's renderer actually READS.
+ *
+ * Three renderers read a field the response schema did not offer, so the model
+ * could never fill it and the diagram always drew its hardcoded placeholder:
+ * `VisualBlueprintVisual` reads `anchors` (falling back to three generic zones
+ * for every subject), `AnalogyMatrixVisual` reads `whereAnalogyBreaks`, and
+ * `PersonalSchemaVisual` reads `flashcardFront`/`flashcardBack`. This table is
+ * the one place those dependencies are written down - the encode prompt is built
+ * from it and a test asserts every field is present in `visualDataSchema`, so a
+ * renderer can no longer read a field the model is never asked for.
+ */
+export const TEMPLATE_VISUAL_DATA_FIELDS: Record<VisualTemplateType, string[]> = {
+  first_principles: ['nodes'],
+  cause_effect: ['nodes'],
+  visual_blueprint: ['anchors'],
+  analogy_matrix: ['analogyMappings', 'whereAnalogyBreaks'],
+  concept_hierarchy: ['hierarchyTree'],
+  state_transition: ['flowSteps'],
+  boundary_stress_test: ['boundaryGauges'],
+  taxonomic_chunking: ['chunkBuckets'],
+  mnemonic_peg: ['acronymLetters'],
+  memory_palace: ['palaceRooms'],
+  contrast_grid: ['contrastMatrix'],
+  formula_spatial_grid: ['formulaComponents'],
+  personal_schema: ['flashcardFront', 'flashcardBack'],
+  interleaved_srs: ['flashcardFront', 'flashcardBack'],
+  mnemonic_storyboard: ['mnemonicStoryboard'],
+  broken_model_debug: ['brokenModel'],
+};
+
+/**
+ * The template a stage's `visualData` shape implies, or null when nothing
+ * matches.
+ *
+ * This is the payload-shape fallback, and it lives here rather than inside
+ * `StageVisualRenderer` because TWO callers need it and they must not drift: the
+ * renderer (which draws whatever id it is handed) and the validator (which must
+ * name a real id when the model's is unknown). Key order is longest-signature
+ * first, so a payload carrying several hints resolves to the most specific one.
+ */
+export function detectTemplateTypeFromVisualData(visualData: unknown): VisualTemplateType | null {
+  if (!visualData || typeof visualData !== 'object') return null;
+  const v = visualData as Record<string, any>;
+  if (v.brokenModel) return 'broken_model_debug';
+  if (v.mnemonicStoryboard) return 'mnemonic_storyboard';
+  if (v.analogyMappings) return 'analogy_matrix';
+  if (v.hierarchyTree) return 'concept_hierarchy';
+  if (v.flowSteps) return 'state_transition';
+  if (v.boundaryGauges) return 'boundary_stress_test';
+  if (v.chunkBuckets) return 'taxonomic_chunking';
+  if (v.acronymLetters) return 'mnemonic_peg';
+  if (v.palaceRooms) return 'memory_palace';
+  if (v.contrastMatrix) return 'contrast_grid';
+  if (v.formulaComponents) return 'formula_spatial_grid';
+  if (Array.isArray(v.nodes) && v.nodes.some((node: any) => node?.type === 'danger')) return 'cause_effect';
+  return null;
+}
 
 // 14. Mnemonic Storyboard & Interactive Element Grid
 export interface StoryboardTile {

@@ -8,6 +8,7 @@ const ToyModelLab = React.lazy(() => import('@/components/toy-models/ToyModelLab
 import { Activity } from '@/lib/types';
 import { TemplateErrorBoundary } from './TemplateErrorBoundary';
 import { TEMPLATE_COMPONENTS, type TemplateComponentProps } from '@/lib/templates/registry';
+import { detectTemplateTypeFromVisualData } from '@/lib/templates/types';
 
 // The props bundle and the id → renderer table both live in the registry, which
 // owns the mapping; this component only decides which id to resolve.
@@ -53,21 +54,11 @@ export function StageVisualRenderer({ activity, field1, field2, field3, selected
   // it?".
   let resolvedKey = type;
 
-  // Legacy fallback: detect payload shape if templateType not set
+  // Legacy fallback: when the stage names no template, detect the payload's
+  // shape. The mapping is shared with the validator (`detectTemplateTypeFromVisualData`)
+  // so the id it *names* and the id this draws can never disagree.
   if (!resolvedKey) {
-    if (visualData?.brokenModel) resolvedKey = 'broken_model_debug';
-    else if (visualData?.mnemonicStoryboard) resolvedKey = 'mnemonic_storyboard';
-    else if (visualData?.analogyMappings) resolvedKey = 'analogy_matrix';
-    else if (visualData?.hierarchyTree) resolvedKey = 'concept_hierarchy';
-    else if (visualData?.flowSteps) resolvedKey = 'state_transition';
-    else if (visualData?.boundaryGauges) resolvedKey = 'boundary_stress_test';
-    else if (visualData?.chunkBuckets) resolvedKey = 'taxonomic_chunking';
-    else if (visualData?.acronymLetters) resolvedKey = 'mnemonic_peg';
-    else if (visualData?.palaceRooms) resolvedKey = 'memory_palace';
-    else if (visualData?.contrastMatrix) resolvedKey = 'contrast_grid';
-    else if (visualData?.formulaComponents) resolvedKey = 'formula_spatial_grid';
-    else if (visualData?.nodes?.some((n: any) => n.type === 'danger')) resolvedKey = 'cause_effect';
-    else resolvedKey = 'first_principles';
+    resolvedKey = detectTemplateTypeFromVisualData(visualData) ?? 'first_principles';
   }
 
   const Component = TEMPLATE_COMPONENTS[resolvedKey] ?? TEMPLATE_COMPONENTS['first_principles'];

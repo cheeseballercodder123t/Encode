@@ -18,6 +18,7 @@ import {
 } from './types';
 
 import { validateToyModelConfig } from './toy-models/validation';
+import { detectTemplateTypeFromVisualData, isVisualTemplateType } from './templates/types';
 import { repairJson } from './json-repair';
 import { aiMetrics } from './ai-hardening';
 import { normalizeAutopsy, normalizeMrM } from './mr-m/payloads';
@@ -73,6 +74,32 @@ function asString(v: unknown, fallback = ''): string {
 function asStringArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }
+
+/**
+ * The templateType a stage should actually carry.
+ *
+ * `templateType` is a free string as far as the model is concerned, and a
+ * provider that does not enforce the response schema lets it invent one: the
+ * encode probe saw `cyclic_state_machine` (BUGS_AUDIT_REPORT.md §41). The
+ * renderer would then look up an id that does not exist, draw
+ * `first_principles` as a last resort, and never read the stage's real
+ * `visualData`. So an unknown id is resolved here instead: to the template the
+ * payload's shape implies, or to the mode's default. A missing id gets the same
+ * treatment, which is strictly better than the flat default it used to get (a
+ * stage with `palaceRooms` and no id now resolves to `memory_palace`).
+ */
+function resolveTemplateType(
+  raw: unknown,
+  visualData: Record<string, any> | undefined,
+  mode: EncodingMode
+): string {
+  const requested = asString(raw);
+  if (isVisualTemplateType(requested)) return requested;
+  return (
+    detectTemplateTypeFromVisualData(visualData) ??
+    (mode === 'memorization' ? 'memory_palace' : 'first_principles')
+  );
+}
 /**
  * Coerces a raw AI schema payload into the shape DeepEncode's rendering layer
  * depends on. Fills missing scaffold labels with safe defaults, drops unusable
@@ -101,7 +128,23 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?:
   activities: Activity[];
   researchContexts: unknown[];
 } {
-  const data = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any>;
+  // A provider that does NOT enforce the response schema (OpenRouter's and the
+  // OpenAI-compatible `json_object` mode only require valid JSON; only the Gemini
+  // SDK is handed `responseSchema`) can answer with a bare ARRAY of stages
+  // instead of the declared `{ topicSummary, activities }` object. `typeof []`
+  // is `'object'`, so that array used to sail past the guard below, contribute no
+  // `activities`, and be silently replaced by the single generic fallback stage -
+  // every generated stage discarded while the request still answered 200. Unwrap
+  // it, and accept `stages` too, which is the other name a model reaches for.
+  const root: Record<string, any> = Array.isArray(raw)
+    ? { activities: raw }
+    : raw && typeof raw === 'object'
+      ? (raw as Record<string, any>)
+      : {};
+  const data: Record<string, any> =
+    root.activities === undefined && Array.isArray(root.stages)
+      ? { ...root, activities: root.stages }
+      : root;
   const topicSummary = asString(
     data.topicSummary,
     mode === 'memorization' ? 'High-Yield Mnemonic Schema' : 'Active Cognitive Schema'
@@ -113,6 +156,9 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?:
         .map((a, i) => {
           const scaffold = (a.scaffold && typeof a.scaffold === 'object' ? a.scaffold : {}) as Record<string, any>;
           const toy = a.toyModel === undefined ? undefined : validateToyModelConfig(a.toyModel, source);
+          // Normalised once: the templateType resolution and the rendered
+          // payload must be looking at the same object.
+          const visualData = normalizeVisualData(a.visualData);
           return {
             toyModel: toy?.sanitizedConfig,
             toyModelIssues: toy ? toy.issues : undefined,
@@ -131,11 +177,8 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?:
             paradox: asString(a.paradox) || undefined,
             gedankenexperiment: asString(a.gedankenexperiment) || undefined,
             keywords: asStringArray(a.keywords),
-            visualData: normalizeVisualData(a.visualData),
-            templateType: asString(
-              a.templateType,
-              mode === 'memorization' ? 'memory_palace' : 'first_principles'
-            ),
+            visualData,
+            templateType: resolveTemplateType(a.templateType, visualData, mode),
             prompt: asString(
               a.prompt,
               mode === 'memorization'
