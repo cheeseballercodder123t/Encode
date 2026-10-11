@@ -169,6 +169,40 @@ export function compileFormula(
   if (/;\s*(return|while|for|import|require)/.test(formulaJs)) {
     return { error: 'Formula must be a single pure expression (no statements).' };
   }
+
+  // ── The identifier allowlist below is necessary but NOT sufficient ─────────
+  //
+  // It inspects the expression AFTER string/template literals are stripped and
+  // skips property names, so a name hidden inside a literal — or reached as a
+  // property — is invisible to it. Every JS value reaches the `Function`
+  // constructor through `.constructor`, and a `Function` runs with the REAL
+  // global scope, so the sandbox was escapable while this module's own contract
+  // says "No window, document, fetch, eval, or globals of any kind are
+  // reachable":
+  //
+  //   ({}).constructor.constructor('return process')()   // server: /api/archetype
+  //   Math["constructor"]("return 6*7")()                // computed access
+  //   `${({}).constructor("return 1+1")()}`              // template interpolation
+  //
+  // A numeric formula needs none of that syntax, so the syntax is rejected
+  // before the allowlist runs. `Math.sqrt(…)`, `Math.pow(…)` and the built-ins'
+  // `(A * Math.sqrt(k / m)).toFixed(2)` use no strings, templates, brackets,
+  // braces or statement separators and are untouched.
+  if (/[[\]{}`'"\\;]/.test(formulaJs) || /[\r\n]/.test(formulaJs)) {
+    return {
+      error:
+        'Formula must be a single numeric expression (no strings, template literals, brackets, braces, escapes or statement separators).',
+    };
+  }
+  // The remaining way to a real function object from allowed syntax is a
+  // prototype/`constructor` member. Bare globals are already refused by the
+  // allowlist, so banning these names — read as a bare identifier OR as a
+  // property — closes every chain: `(0).constructor` is `Number`, `.constructor`
+  // on that is `Function`.
+  if (/\b(constructor|__proto__|prototype|__defineGetter__|__defineSetter__|__lookupGetter__|__lookupSetter__)\b/.test(formulaJs)) {
+    return { error: 'Formula may not access constructor or prototype members.' };
+  }
+
   const allowed = new Set([...variableNames, 'Math']);
   for (const id of extractIdentifiers(formulaJs)) {
     if (!allowed.has(id)) {

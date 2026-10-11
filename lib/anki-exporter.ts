@@ -9,6 +9,7 @@ import { CONTRADICTION_TAG } from './services/contradiction';
 import { parseSlideDeck, parseDiagramLabels } from './services/slide-deck-parser';
 import { resolvedParadoxes } from './mr-m/ledger';
 import { mrMOf } from './mr-m/payloads';
+import { validateProceduralArchetype } from './procedural-validator';
 
 export { classifyDeckQuality };
 
@@ -1550,6 +1551,32 @@ function sanitizeDeckName(deckName: string): string {
 }
 
 /**
+ * The archetypes that may be written into a student's deck.
+ *
+ * The validator's own contract is that "an archetype that fails here must never
+ * reach a student's deck", and the exported note type does not merely DISPLAY
+ * the archetype: it `new Function`s `correctFormulaJs` and each trap's
+ * `formulaJs` at review time. Writing an archetype the validator rejected would
+ * therefore put both a broken card and an unvetted expression into Anki : and
+ * because the exported runner compiles its formula outside this app, an
+ * expression the sandbox refuses (a `constructor` escape, say) would still run
+ * there. So the boundary is enforced where the deck is built rather than trusted
+ * to the caller, and the list is validated once per export.
+ *
+ * A throwing validator fails closed: an archetype it cannot judge is not
+ * exported.
+ */
+function exportableArchetypes(archetypes: ProceduralMCQArchetype[]): ProceduralMCQArchetype[] {
+  return archetypes.filter((archetype) => {
+    try {
+      return validateProceduralArchetype(archetype).valid;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
  * Generates an Anki text-import deck (.txt/.tsv) with the procedural note
  * type. One row per archetype; the front carries the embedded JSON runner.
  */
@@ -1565,7 +1592,7 @@ export function generateProceduralAnkiTextDeck(
   lines.push(`#notetype:${PROCEDURAL_NOTE_TYPE_NAME}`);
   lines.push('');
 
-  archetypes.forEach((archetype) => {
+  exportableArchetypes(archetypes).forEach((archetype) => {
     const data = buildProceduralFieldData(archetype).replace(/\t/g, ' ').replace(/\n/g, '');
     const topic = (archetype.topic || '').replace(/\t/g, ' ').replace(/\n/g, '');
     const tags = `DeepEncode ProceduralMCQ ${archetype.topic.split(':')[0].replace(/[^a-zA-Z0-9_]/g, '')}`;
@@ -1588,7 +1615,10 @@ export async function generateProceduralApkgPackage(
   archetypes: ProceduralMCQArchetype[],
   deckName: string
 ): Promise<Blob> {
-  if (archetypes.length === 0) {
+  // Validate before writing: see `exportableArchetypes`. An archetype the
+  // validator rejects is not exported even when the caller selected it.
+  const exportable = exportableArchetypes(archetypes);
+  if (exportable.length === 0) {
     throw new Error('No procedural archetypes selected for export.');
   }
   const safeDeck = sanitizeDeckName(deckName);
@@ -1599,7 +1629,7 @@ export async function generateProceduralApkgPackage(
 
   const colJson = buildProceduralColJson(deckId, safeDeck, modSec);
 
-  const notes: AnkiNoteRow[] = archetypes.map((archetype, i) => ({
+  const notes: AnkiNoteRow[] = exportable.map((archetype, i) => ({
     // Deterministic per (deck, archetype id): re-exports update in place.
     guid: deterministicAnkiGuid(`${safeDeck}::${archetype.id}`),
     mid: modelId,
@@ -1628,7 +1658,7 @@ export async function generateProceduralApkgPackage(
   const zip = new JSZip();
   zip.file('collection.anki2', collectionBytes);
   zip.file('media', '{}');
-  zip.file('deck.txt', generateProceduralAnkiTextDeck(archetypes, safeDeck));
+  zip.file('deck.txt', generateProceduralAnkiTextDeck(exportable, safeDeck));
 
   const sm2Manifest = {
     generator: 'DeepEncode Cognitive AI Engine',

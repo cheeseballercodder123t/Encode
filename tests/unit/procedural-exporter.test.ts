@@ -137,3 +137,57 @@ print('PYTHON_OK')
     await expect(generateProceduralApkgPackage([], 'deck')).rejects.toThrow(/No procedural archetypes/);
   });
 });
+/**
+ * The exported note type `new Function`s every archetype's formula at review
+ * time, and it does so OUTSIDE this app — so an expression the validator's
+ * sandbox refuses (`({}).constructor.constructor("return process")()`, say)
+ * would still execute inside Anki if it were written into a deck. The validator
+ * documents that "an archetype that fails here must never reach a student's
+ * deck"; the exporters are what turn that promise into a fact.
+ */
+describe('procedural exporters refuse unvalidated archetypes', () => {
+  /** A minimal archetype that passes the validator. */
+  const good = {
+    id: 'good-1',
+    topic: 'Physics: Good Card',
+    questionTemplate: 'What is {{A}}?',
+    unit: 'm',
+    correctFormulaJs: '(A * 2).toFixed(2)',
+    stepByStepSolutionTemplate: 'A is {{A}}, so the answer is double.',
+    variables: { A: { min: 1, max: 5 } },
+    traps: [
+      { trapName: 'half', formulaJs: '(A / 2).toFixed(2)', explanation: 'Halving.' },
+      { trapName: 'square', formulaJs: '(A * A).toFixed(2)', explanation: 'Squaring.' },
+      { trapName: 'plus', formulaJs: '(A + 1).toFixed(2)', explanation: 'Adding one.' },
+    ],
+  } as any;
+
+  /** The same shape, but the correct formula escapes the sandbox. */
+  const evil = {
+    ...good,
+    id: 'evil-1',
+    topic: 'Physics: Evil Card',
+    correctFormulaJs: "(({}).constructor.constructor('return 6*7')()).toFixed(0)",
+  } as any;
+
+  it('omits a sandbox-escaping archetype from the text deck', () => {
+    const deck = generateProceduralAnkiTextDeck([good, evil], 'deck');
+    expect(deck).toContain('Physics: Good Card');
+    expect(deck).not.toContain('Physics: Evil Card');
+    // Header (6 lines) + exactly ONE data row.
+    expect(deck.split('\n')).toHaveLength(7);
+  });
+
+  it('rejects an .apkg when every selected archetype fails validation', async () => {
+    await expect(generateProceduralApkgPackage([evil], 'deck')).rejects.toThrow(/No procedural archetypes/);
+  });
+
+  it('writes only the validated archetype into the .apkg collection', async () => {
+    const blob = await generateProceduralApkgPackage([good, evil], 'DeepEncode::Gate');
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const coll = await zip.file('collection.anki2')!.async('uint8array');
+    const text = new TextDecoder().decode(coll);
+    expect(text).toContain('Physics: Good Card');
+    expect(text).not.toContain('Physics: Evil Card');
+  });
+});

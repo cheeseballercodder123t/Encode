@@ -697,6 +697,13 @@ export async function* streamTextWithProvider({
       body: JSON.stringify({
         model: modelName,
         stream: true,
+        // The same reservation hazard as the non-streaming path (defect 61):
+        // without a cap OpenRouter pre-authorizes the model's whole output
+        // budget (65535 for the default) and answers HTTP 402 on a key whose
+        // balance is under it, before the stream opens. The OpenAI-compatible
+        // provider is deliberately left alone - its newer reasoning models
+        // reject `max_tokens` - because only OpenRouter reserves this way.
+        ...(isOpenRouter ? { max_tokens: MAX_OUTPUT_TOKENS } : {}),
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON matching the requested structure.` },

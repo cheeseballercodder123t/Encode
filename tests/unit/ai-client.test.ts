@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   generateJSONWithProvider,
+  streamTextWithProvider,
   clearAICache,
   aiCacheSize,
   clearUnsupportedModels,
@@ -425,6 +426,51 @@ describe('generateJSONWithProvider OpenRouter request budget', () => {
       settings,
     });
     expect(out).toEqual({ result: 'capped' });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(typeof body.max_tokens).toBe('number');
+    expect(Number.isFinite(body.max_tokens)).toBe(true);
+    expect(body.max_tokens).toBeGreaterThan(0);
+  });
+});
+
+describe('streamTextWithProvider OpenRouter request budget (defect 63)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** A minimal SSE response carrying the given content deltas, then [DONE]. */
+  function sse(deltas: string[]): Response {
+    const body =
+      deltas
+        .map((content) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`)
+        .join('') + 'data: [DONE]\n\n';
+    return new Response(body, {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  }
+
+  /**
+   * The non-streaming cap (defect 61) was applied to `generateJSONWithProvider`
+   * only; the streaming path went on sending an uncapped body, so the outline
+   * pass — the whole reason the stream route exists — was 402d on every
+   * limited-credit key while pass 2 answered. This pins the cap in the body the
+   * streaming request actually sends.
+   */
+  it('sends a bounded max_tokens on the streaming request too', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(sse(['{"ok"', ':true}']));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const chunks: string[] = [];
+    for await (const chunk of streamTextWithProvider({
+      systemPrompt: 'sys',
+      userPrompt: 'user',
+      settings,
+    })) {
+      chunks.push(chunk);
+    }
+    expect(chunks.join('')).toBe('{"ok":true}');
 
     const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
     expect(typeof body.max_tokens).toBe('number');

@@ -3,7 +3,7 @@
 Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43.** **Round 29 (§31) then fixed defect 46 - the AnkiConnect spec whose mock matched a host the app never requests, so three of its four tests could not pass - found by regression-testing round 28 rather than by looking for it, so the running total is 44,** with findings 43 and 44 the only ones still open. **Round 30 (§32) then fixed defect 43 - Teach Me's deterministic fallback builder, exported, documented and promised by the mount comment, with no caller anywhere, so a failed lesson request taught nothing at all - so the running total is 45,** with finding 44 the only one still open. **Round 31 (§33) then fixed defect 44 - the shared body validator applied to 5 of 27 routes, so twenty-two handlers read their bodies with a bare `await req.json()`: free text out of `/api/triage` and `/api/roast` reached a paid provider call with no ceiling at all, and a malformed body answered 500 - which closes round 24's sweep, so the running total is 46 and nothing filed is left open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
-pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.**
+pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.** **Round 38 (§40) then fixed defects 63-65 - an OpenRouter *streaming* request that still sent no `max_tokens` (so the outline pass 402d on every limited-credit key while the non-streaming path from round 37 was already capped), a formula sandbox that could be walked out of through `constructor`/prototype access or a computed or template literal (arbitrary code inside `/api/archetype` and inside the exported Anki card), and the procedural exporters that wrote archetypes the validator rejects into a student's deck - so the running total is 65.**
 
 ## 1. Defects found and fixed
 
@@ -3113,3 +3113,132 @@ this round, and the report does not claim it was. A runner with more headroom sh
 
 **Total: 62 distinct defects** (this round's fixes land in `lib/anki-exporter.ts`, `lib/ai-client.ts`,
 `lib/procedural-validator.ts`, `app/api/archetype/route.ts`, and the five suites named in §39.4).
+
+## 40. Round 38 - the stream that was never budgeted, and a sandbox that could be walked out of
+
+### 40.1 How the sweep ran
+
+The brief's speed rule was kept: `npx tsc --noEmit` plus targeted single-file runs during the hunt, the
+full unit suite once at the end, and the full Playwright suite attempted once and reported as a
+limitation rather than a pass (§40.8). This round was asked to *test the API key* first and then keep
+hunting, so it did both: the burner key was exercised through the app's own client before any code was
+read, and every finding below came out of that exercise or out of a fuzz/parser harness pointed at the
+real module.
+
+**Environment note (not an application defect).** Same as §39.1: `bun.lock` is a lockfile this bun
+cannot parse and `package-lock.json` is out of sync with `package.json`, so dependencies were restored
+with `npm install --no-package-lock` and **both tracked lockfiles were left byte-identical**. Recorded,
+not fixed, for the same reason as last round.
+
+### 40.2 The API key, exercised for real before anything was read
+
+The provided OpenRouter key was used from the start, through the app's own code rather than a bare
+`curl` (the point of the key was to reach paths a mock cannot):
+
+- **`openrouter/free` (the free router the brief named).** A direct call answered
+  `{"ok":true,"note":"Hello"}` and OpenRouter reported `"cost":0` (it routed to
+  `poolside/laguna-s-2.1:free`). This is the zero-cost way to exercise the pipeline, and it works.
+- **The default paid model (`google/gemini-2.5-flash`), non-streaming.** `{"ok":true}` — the round-37
+  `max_tokens` fix does what it claimed on a limited-credit key.
+- **The default paid model, streaming.** This is where the round's first finding came from (defect 63).
+- **Liveness of the free router.** Two consecutive calls routed to two *different* upstream models
+  (`poolside/laguna-s-2.1:free`, `nvidia/nemotron-3.5-lightning:free`) and both answered 200, so
+  `openrouter/free` is a load-balanced router, not a single model.
+
+### 40.3 The mechanical passes, and what each one returned
+
+- **Provider request bodies.** Every `chat/completions` body and every `max_tokens`/`response_format` in
+  `lib` and `app` was enumerated. Exactly two OpenRouter bodies exist; one was capped in round 37 and the
+  other — the *streaming* one — was not. Defect 63.
+- **Formula sandbox.** `compileFormula` was probed with a dozen escape-shaped expressions, not read.
+  `window` and `process` bare identifiers are correctly refused; `({}).constructor.constructor('return
+  6*7')()` **compiled and returned 42**. Defect 64.
+- **The exporter boundary.** The validator's header states "an archetype that fails here must never reach
+  a student's deck", so the two functions that build a deck were checked against it. Both wrote whatever
+  they were handed; the modal can hand them an archetype marked "Fails validation". Defect 65.
+- **Uncovered modules.** A scan for `lib/**` modules with no test reference returned four files
+  (`presets.ts`, `utils.ts`, `services/youtubeTranscript.ts`, `toy-models/progress-cloud.ts`); all four
+  were read — data tables, a `clsx`/`tailwind-merge` wrapper, and two fetch/coalesce helpers whose every
+  branch is `try/catch`-guarded — and none threw or violated its contract. No defect.
+- **Common defect patterns.** `JSON.parse` outside a try (all 30 sites are in guarded loaders or have a
+  `try/catch` within a line), `toFixed`, `decodeURIComponent` (inside a `try`), `parseInt`, non-null
+  assertions (only two, both guarded by an index check), and array `[0]` dereferences (all behind
+  length/non-empty guards). One unguarded `event.results[i][0].transcript` in the Web Speech handler
+  (`StudioWorkbench.tsx:727`) was examined: the `SpeechRecognitionResultList` contract gives every entry
+  at least one alternative, so it is left as-is rather than "fixed" on speculation.
+- **The other `new Function`.** `lib/anki-exporter.ts` embeds a second evaluator in the exported card's
+  runner; it is the *execution* the validator is supposed to gate, which is why defect 65 is fixed at
+  that boundary rather than in the UI.
+
+### 40.4 Findings
+
+| # | Priority | Finding | Location | Root cause | Evidence |
+|---|---|---|---|---|---|
+| 63 | **P2 - medium. FIXED** | **The streaming OpenRouter request still sent no `max_tokens`.** Round 37 capped the non-streaming body (defect 61) but not `streamTextWithProvider`'s, which serves the outline pass of `/api/encode/stream` — the whole reason that route exists. On a limited-credit key the outline pass therefore 402d on every generation, silently: the route treats the outline call as advisory and swallows the error, so the learner simply never saw the incremental stage titles, while pass 2 (the non-streaming path) answered normally. The failure was invisible by construction. | `lib/ai-client.ts:706` (`streamTextWithProvider`, OpenRouter branch) | The same omitted output ceiling as defect 61, on the one request body that was missed. | Reproduced with the burner key: `google/gemini-2.5-flash`, `stream:true`, **no** `max_tokens` → **HTTP 402** `"You requested up to 65535 tokens, but can only afford 14433"`; the same body with `max_tokens` → **HTTP 200** and a normal SSE stream. Then reproduced through the app's own client (a live loop over `streamTextWithProvider` answered `{"ok": true}` after the fix). Pinned deterministically in `tests/unit/ai-client.test.ts`: the test reads the outgoing streaming body and fails with `expected undefined to be 'number'` when the cap is removed. |
+| 64 | **P0 - critical (code execution). FIXED** | **The formula sandbox was escapable, contradicting its own contract.** `compileFormula` is documented as exposing "Only the declared variable names and `Math` … No window, document, fetch, eval, or globals of any kind are reachable", and it guards with an identifier allowlist. That allowlist inspects the expression *after* string/template literals are stripped and *skips property names*, so `constructor` and any name hidden in a literal were invisible. Since every JS value reaches the `Function` constructor through `.constructor`, and a `Function` runs with the real global scope, a formula could run arbitrary code: `process`/`require` on the server (the `/api/archetype` route validates model-authored archetypes there) and `window`/`fetch` in the browser (the export modal validates there). Three separate shapes reached it: the `constructor` chain, computed access hiding the name in a string (`Math["constructor"]`), and template-literal interpolation (`` `${…}` ``, which the stripper removed whole). | `lib/procedural-validator.ts:162`–`:206` (`compileFormula`) | An allowlist that only inspects *bare identifiers* cannot constrain *property* access, and stripping literals before the check hides names inside them. | Reproduced first: `compileFormula('({}).constructor.constructor(\'return 6*7\')()', [])` returned a working `fn` whose evaluation is **`42`**, while `compileFormula('window', [])` correctly returned an error. After the fix all three shapes return `{ error }`. Pinned by the new `tests/unit/formula-sandbox.test.ts` (8 tests, including the control that plain arithmetic still compiles and that a code-executing archetype is rejected by `validateProceduralArchetype`). |
+| 65 | **P1 - high. FIXED** | **The procedural exporters wrote archetypes that failed validation into a student's deck.** The exported Anki note type does not merely display an archetype: it `new Function`s `correctFormulaJs` and every trap's `formulaJs` at review time, *outside* this app. The modal lists every archetype, marks the ones that fail "Fails validation", and auto-excludes them from selection — but the checkbox is not disabled and "Select all" selects them anyway, and `generateProceduralApkgPackage`/`generateProceduralAnkiTextDeck` exported whatever they were handed. So an archetype the validator rejected — including an expression the sandbox refuses (defect 64) — could still be written into a deck and executed inside Anki, which is exactly what the validator's header promises cannot happen. | `lib/anki-exporter.ts:1569` (`exportableArchetypes`), `:1595`, `:1620` | The exporters trusted their caller instead of enforcing the validator's verdict at the boundary that turns an archetype into an executable card. | Reproduced: `generateProceduralAnkiTextDeck([good, evil], 'deck')` emitted **two** data rows before the fix (the `evil` archetype's `constructor` formula among them) and one after; `generateProceduralApkgPackage([evil], 'deck')` resolved to a zip containing it before the fix and rejects with `No procedural archetypes selected for export.` after. Pinned by 3 tests in `tests/unit/procedural-exporter.test.ts`, all three mutation-proven to fail when the filter is bypassed. |
+
+### 40.5 Fixed, in three source files and three suites
+
+- `lib/ai-client.ts` - the streaming OpenRouter body now carries the same `max_tokens: MAX_OUTPUT_TOKENS`
+  as the non-streaming one, applied only on the OpenRouter branch (the OpenAI-compatible body is left
+  alone: its newer reasoning models reject `max_tokens`).
+- `lib/procedural-validator.ts` - `compileFormula` rejects, before the allowlist runs, any expression
+  containing string/template/bracket/brace/escape/statement-separator syntax and any `constructor` /
+  `prototype` / `__proto__` / dunder-accessor name. The built-ins' `(A * Math.sqrt(k / m)).toFixed(2)`
+  shape is untouched (there are golden tests for that).
+- `lib/anki-exporter.ts` - `exportableArchetypes()` filters a deck to the archetypes
+  `validateProceduralArchetype` vouches for (failing closed if the validator itself throws), and both
+  procedure exporters use it.
+- `tests/unit/formula-sandbox.test.ts` (**new**, 8 tests), `tests/unit/ai-client.test.ts` (+1),
+  `tests/unit/procedural-exporter.test.ts` (+3).
+
+### 40.6 Verified
+
+- `npx tsc --noEmit` - **exit 0**.
+- `npx vitest run` - **94 files / 1,620 tests, exit 0** (1,608 before; +12: 8 + 1 + 3).
+- `npx eslint <the six changed files>` - **exit 0**.
+- Every fix **mutation-proofed**: removing the streaming cap fails the new ai-client test; removing the
+  `constructor`/prototype guard fails 2 of the sandbox tests and removing the syntax guard fails the
+  computed-access test; bypassing `exportableArchetypes` fails all 3 exporter tests. Each guard was
+  removed *individually* to show it is load-bearing rather than redundant.
+- The OpenRouter fixes were verified **against the live provider** with the provided key, through the
+  app's own `generateJSONWithProvider` and `streamTextWithProvider`, including the `openrouter/free`
+  router the brief specified (`cost: 0`).
+- Only the validated archetypes are exported, verified by decoding the `collection.anki2` from a real
+  generated `.apkg`.
+
+### 40.7 What this round deliberately does not do
+
+- **It does not switch the OpenAI-compatible streaming body to `max_tokens`.** Only OpenRouter
+  pre-authorizes against the output budget; the OpenAI-compatible family includes models that reject
+  `max_tokens`, and there is no observed failure to justify changing it.
+- **It does not add the guard to the exported Anki runner as well.** The runner compiles a formula
+  outside this app and cannot call `extractIdentifiers`, so the right place to stop a bad formula is the
+  boundary that writes it (defect 65), which is now gated. The runner is left byte-for-byte unchanged so
+  the shipped note type does not change.
+- **It does not disable selecting a "Fails validation" archetype in the modal.** The export boundary now
+  refuses one regardless of what the UI allows, so the safety property does not depend on the UI. The
+  remaining rough edge — selecting *only* invalid archetypes and clicking download produces a logged
+  no-op — is noted here as a UX follow-up rather than changed without an E2E run to verify it (§40.8).
+- **It does not touch `event.results[i][0]`** in the Web Speech handler; the list contract guarantees at
+  least one alternative, and "fixing" it on speculation would be a change with no reproduction.
+- **It does not regenerate either lockfile**, for the same reason as last round.
+
+### 40.8 The check that did not run: the full Playwright suite
+
+It was attempted once, at the end, and **could not run in this sandbox** — the app does not compile here
+(`next dev` is SIGKILLed / V8-aborts on the first compile, exactly as §39.7 records for round 37; the
+limit is per-process memory, not the project). It is reported here as a **limitation, not a pass**.
+
+**What this means for the fixes.** All three changed files are pure logic — an outgoing request-body
+field, a validator's input guard, and an export filter — with no JSX or DOM change, and each is covered
+by a unit test proven to fail before the fix, plus a live-provider check for the two OpenRouter paths. But
+browser behaviour (the modal's selection UI, the preview iframe, a real `.apkg` import into Anki) was
+**not** re-verified this round, and this report does not claim it was. A runner with more headroom should
+run `npx playwright test --project=chromium` — in particular
+`e2e/procedural-anki-export.spec.ts`, which exercises the export path this round changed — to close the
+gap.
+
+**Total: 65 distinct defects** (this round's fixes land in `lib/ai-client.ts`,
+`lib/procedural-validator.ts`, `lib/anki-exporter.ts`, and the three suites named in §40.5).
