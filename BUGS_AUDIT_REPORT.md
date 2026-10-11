@@ -3,7 +3,7 @@
 Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43.** **Round 29 (§31) then fixed defect 46 - the AnkiConnect spec whose mock matched a host the app never requests, so three of its four tests could not pass - found by regression-testing round 28 rather than by looking for it, so the running total is 44,** with findings 43 and 44 the only ones still open. **Round 30 (§32) then fixed defect 43 - Teach Me's deterministic fallback builder, exported, documented and promised by the mount comment, with no caller anywhere, so a failed lesson request taught nothing at all - so the running total is 45,** with finding 44 the only one still open. **Round 31 (§33) then fixed defect 44 - the shared body validator applied to 5 of 27 routes, so twenty-two handlers read their bodies with a bare `await req.json()`: free text out of `/api/triage` and `/api/roast` reached a paid provider call with no ceiling at all, and a malformed body answered 500 - which closes round 24's sweep, so the running total is 46 and nothing filed is left open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
-pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.** **Round 38 (§40) then fixed defects 63-65 - an OpenRouter *streaming* request that still sent no `max_tokens` (so the outline pass 402d on every limited-credit key while the non-streaming path from round 37 was already capped), a formula sandbox that could be walked out of through `constructor`/prototype access or a computed or template literal (arbitrary code inside `/api/archetype` and inside the exported Anki card), and the procedural exporters that wrote archetypes the validator rejects into a student's deck - so the running total is 65.** **Round 39 (§41) then fixed defects 66-70 - all found by invoking the real `/api/encode` handler with a live provider and inspecting what it actually returned: a bare-array model response silently deleted for one generic fallback stage (and the prompt never stating the top-level shape), a template id advertised with no renderer behind it, a memorization catalog too narrow to name the structure the model needed (so it invented an id no renderer resolves), and four `visualData` fields that three renderers read but the response schema never offered - so those diagrams drew hardcoded placeholders for every subject - so the running total is 70.**
+pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.** **Round 38 (§40) then fixed defects 63-65 - an OpenRouter *streaming* request that still sent no `max_tokens` (so the outline pass 402d on every limited-credit key while the non-streaming path from round 37 was already capped), a formula sandbox that could be walked out of through `constructor`/prototype access or a computed or template literal (arbitrary code inside `/api/archetype` and inside the exported Anki card), and the procedural exporters that wrote archetypes the validator rejects into a student's deck - so the running total is 65.** **Round 39 (§41) then fixed defects 66-70 - all found by invoking the real `/api/encode` handler with a live provider and inspecting what it actually returned: a bare-array model response silently deleted for one generic fallback stage (and the prompt never stating the top-level shape), a template id advertised with no renderer behind it, a memorization catalog too narrow to name the structure the model needed (so it invented an id no renderer resolves), and four `visualData` fields that three renderers read but the response schema never offered - so those diagrams drew hardcoded placeholders for every subject - so the running total is 70.** **Round 40 (§42) then fixed defects 71-74 - a guided path that read exactly one wrapper name and so discarded the model's whole chapter decomposition (module titles kept as stage titles, or one generic fallback stage, with a 200), a scaffold label/placeholder contract that existed in neither the response schema nor the prompt - so the gear stages arrived with the ANSWER in the label the learner reads before answering - an element the model left empty that the validator defaulted into a stage called "Stage 3", and three scaffold prefix fields (plus `totalModulesCount`) that every schema requested while nothing in the app read them - so the running total is 74.**
 
 ## 1. Defects found and fixed
 
@@ -3386,3 +3386,154 @@ cover stage rendering.
 **Total: 70 distinct defects** (this round's fixes land in `app/api/encode/route.ts`,
 `lib/ai-output-validation.ts`, `lib/templates/types.ts`,
 `components/stage-templates/StageVisualRenderer.tsx`, and the two suites named in §41.7).
+
+## 42. Round 40 - the guided path that threw the chapter away, and the blanks that arrived solved
+
+This round was asked to check whether the AI output is actually *good* and to inspect the learning stages
+it produces. Round 39 did that for the standard and memorization paths by capturing the raw provider
+response; this round pointed the same probe at the two prompt paths never exercised at all (the guided
+path and the gears) and, separately, audited every stage field in the pipeline for the two ways a field
+contract can rot: produced by the model and read by nobody, or read by the UI and produced by nobody.
+
+### 42.1 How the sweep ran
+
+The method matched the brief rather than the earlier rounds' fuzzing: the real `/api/encode` handler was
+invoked with the burner OpenRouter key on the free router (`openrouter/free`), the raw provider content
+was captured through a `fetch` wrapper, and what the model sent was compared against what the route
+returned and what the renderers read. The mechanical passes were `npx tsc --noEmit` plus single-file
+`vitest` runs during the hunt, one full unit suite at the end (§42.6), and one bounded attempt at the full
+Playwright suite (§42.8). One extra mechanical pass was specific to this round's question: a
+field-by-field audit (`grep` for every stage field name across `app/`, `components/`, `hooks/`, `lib/`,
+`pages/`, excluding the schemas themselves) to find fields the model is asked to write that nothing reads.
+
+**Environment note.** Same as §39.1-§41.1: `bun.lock` is a lockfile this bun cannot parse and
+`package-lock.json` is out of sync with `package.json`, so dependencies were restored with
+`npm install --no-package-lock` and **both tracked lockfiles were left byte-identical**. Recorded, not
+fixed.
+
+**Provider note (not an application change).** `openrouter/free` is a load-balanced router over free
+upstream models, and this round's runs make its variance part of the evidence: the same 8,000-word guided
+request produced a proper module chain on one routing, a payload whose wrapper was named `modules` on
+another, and on two further routings a non-JSON reply that was literally the string
+`User Safety: safe` - which `/api/encode` correctly answered as a 500 `OpenRouter returned invalid JSON.`
+Those 500s are the upstream model failing, not the app: the route's error path is the honest one, and no
+retry was added for it (see §42.7). Every post-fix live check below names the routing it saw.
+
+### 42.2 The field audit: what the schema asks for, and who reads it
+
+| Field | Declared in | Read by | Verdict |
+|---|---|---|---|
+| `field1Prefix`/`field2Prefix`/`field3Prefix` | all three stage schemas | **nothing** (`lib/types.ts` types it; no renderer, no exporter) | defect 74 |
+| `totalModulesCount` | guided schema | **nothing** (the UI counts `guidedModules.length`) | defect 74 |
+| `targetFocus` | guided schema, **required** | nothing (the guided e2e fixture uses it) | kept on purpose, §42.7 |
+| `videoTimestamp`, `toyModelIssues` | youtube route / validator | rendered | fine |
+
+The prefix fields are the exact class round 39 fixed on the other side (`anchors`,
+`whereAnalogyBreaks`, `flashcardFront`/`flashcardBack` were read but never offered). Here the model is
+forced to spend output budget on three strings per stage that can never appear - and output budget is
+precisely what ran out in the guided probe of §42.3.
+
+### 42.3 What the live probes found, in the order they found it
+
+1. **The gear-1 stage arrived with its answer already in the label.** Live gear-1 output:
+   `field1Label: "countercurrent flow"`, `field1Placeholder: "each ~200 mOsm increase"`, plus camelCase
+   identifiers in the sentence scaffold's slots (`pumpStepEffect`, `resultingGradient`). The workbench
+   renders the label above the blank and the placeholder inside it, so the learner was handed the answer
+   as the question - and `deriveCausalFrame` turns those identifiers into the sentence's clauses
+   ("When pumpStepEffect, then Causal Link, which forces resultingGradient.").
+2. **Gear 2 did the same with the placeholder**: `field1Label: "Active pump step"` (a real label) but
+   `field1Placeholder: "Na+ extrusion in thick ascending limb"` (the answer). The offline generator's own
+   examples use question placeholders (`'What physically changed?'`), so the intent was never the answer.
+3. **Why.** The stage schema describes every field it declares *except* the scaffold's labels and
+   placeholders - `field1Label: { type: Type.STRING }`, a bare string - and the prompt never stated the
+   rule either. Only Gemini receives `responseSchema` at all, so for OpenRouter and the OpenAI-compatible
+   providers the rule did not exist anywhere. Defect 72.
+4. **Gear 2 also shipped a stage the model never wrote.** One element arrived with no title, no prompt, no
+   scaffold, no keywords; every default in `validateEncodedSchema` then turned it into a stage called
+   "Stage 3" with generic boxes and an empty example answer - a blank exercise presented as generated
+   content. Defect 73.
+5. **The guided path discarded the whole chapter.** A 60-section, ~8,000-word source (the exact input
+   class the guided path exists for) answered 200 with `topicSummary: "Active Cognitive Schema"` and a
+   single `Core Mechanism` stage: the fallback. The routed model had answered with a wrapper named
+   `modules`, and the route read only `guidedModules`; the fall-through then handed a *module* payload to
+   the standard validator, whose subject is a stage payload. A second routing answered the same request
+   with a bare array of module objects, which validated as if the MODULES were stages (module titles kept,
+   every stage field defaulted). Defect 71.
+
+### 42.4 Findings
+
+| # | Pri | Defect | Root cause | Fix |
+|---|---|---|---|---|
+| **71** | P1 | A guided request whose module array was named anything but `guidedModules` (or arrived as a bare array) **lost its entire decomposition** - module titles kept as stage titles, or one generic fallback stage, with a 200 | the guided branch read exactly one key; round 39's root recovery was never extended to the guided root | `recoverGuidedModules()` reads the wrapper by *shape* (any array whose items carry a stage list), and a payload that is not a chapter falls through to the standard validator, which now keeps its stages (`lib/ai-output-validation.ts`, `app/api/encode/route.ts`) |
+| **72** | P1 | Models wrote the **answer** into `field1Label`/`field1Placeholder` (and camelCase identifiers into sentence clauses), so gear stages arrived solved | neither field had a description in any of the three stage schemas, and the prompt never stated the rule - which is the only place the HTTP providers could have heard it | `SCAFFOLD_LABEL_RULE` / `SCAFFOLD_PLACEHOLDER_RULE` / `SCAFFOLD_EXAMPLE_RULE` in `lib/prompts.ts`, used as schema descriptions in both encode schemas and the youtube schema, plus `SCAFFOLD_CONTRACT` appended to the prompts of both routes |
+| **73** | P2 | An element the model left empty was **defaulted into a stage** ("Stage 3", generic boxes, empty example) | the validator filtered non-objects, then defaulted every field, so an object with no content became a stage | `hasStageContent()` drops an element with none of the model's own stage fields before the defaults apply |
+| **74** | P2 | Three scaffold prefix fields per stage (and `totalModulesCount`) were requested in every schema with **no reader anywhere** | fields were added to the schemas and never to the renderers; nothing asserted the two agree | removed from all three stage schemas (`fieldNPrefix`, `totalModulesCount`); the optional types stay so stored schemas keep parsing |
+
+### 42.5 Fixed, in four source files and three suites
+
+- `lib/ai-output-validation.ts` - `moduleStages()`, `recoverGuidedModules()`, `hasStageContent()` and the
+  filter that uses it.
+- `app/api/encode/route.ts` - the guided branch recovers its module array by shape, requires only that a
+  module carry stages, and titles the chapter from the first module when `topicSummary` is missing; both
+  stage schemas carry the scaffold descriptions; `SCAFFOLD_CONTRACT` is appended to the prompt for every
+  provider; prefixes and `totalModulesCount` removed.
+- `app/api/youtube/route.ts` - the same scaffold descriptions and the same contract in its prompt; prefixes
+  removed.
+- `lib/prompts.ts` - the scaffold contract, declared once for the three routes that produce stage
+  scaffolds.
+
+### 42.6 Verified
+
+- `npx tsc --noEmit` - **exit 0**.
+- `npx vitest run` - **96 files / 1,649 tests, exit 0** (1,633 before; +16).
+- `npx eslint` on every changed file - **exit 0**.
+- Every fix **mutation-proofed individually**, by removing one guard at a time and re-running:
+  - dropping the `hasStageContent` filter fails the contentless-stage test (1 failure);
+  - dropping `SCAFFOLD_CONTRACT` from the prompt append fails both prompt tests (the contract and the
+    guided root, 2 failures);
+  - removing the descriptions from the youtube schema fails the youtube case of the schema test;
+  - removing the invented-name scan fails the invented-wrapper test;
+  - restricting the wrapper keys to `guidedModules` and dropping the bare-array branch (i.e. restoring the
+    old behaviour) fails all three recovery tests.
+- **Live, before and after, through the real handler** (`openrouter/free`, burner key):
+  - gear 2, after: `field1Label: "Active solute transport"`, `field1Placeholder: "What moves NaCl without
+    water?"`, `field2Label: "Gradient formation"` - role labels and cue placeholders, where the same probe
+    before the fix returned `field1Placeholder: "Na+ extrusion in thick ascending limb"`. A second
+    identical request was served from the prompt cache, as documented.
+  - guided path, after: `isGuidedPath: true` with a real `{ topicSummary, guidedModules }` chain and the
+    model's own chapter title, on a request that previously fell back to one generic stage.
+- **Not verified live:** the guided path was *not* re-run enough times to characterize the free router's
+  wrappers after the fix, and the three post-fix gear-1/2/3 runs that returned non-JSON were provider
+  failures (§42.1). The recovery itself is pinned by deterministic tests against the exact payloads the
+  probe produced, which is the part the fix owns.
+
+### 42.7 What this round deliberately does not do
+
+- **It does not add a retry for a non-JSON provider answer.** `/api/encode` answering 500 with the
+  provider's reason is the honest response, and the free router's garbage replies are not a shape the app
+  can repair. A retry policy is a separate design decision with its own cost profile.
+- **It does not trim stages to the gear's asked-for count.** Gear 1 asks for two stages and the routed
+  model returned five; the app ships what arrived. Trimming generated content is a design change (a shorter
+  workout versus a less complete one), not a defect fix - noted here so it is a decision, not an oversight.
+- **It does not remove `targetFocus`.** It is unread by the UI but it is *required* in the module schema,
+  and a required field steers how the model chunks the chapter; the guided e2e fixture writes it too. It is
+  named in §42.2 rather than silently kept.
+- **It does not touch the derived causal frame's wording.** The gear-1 probe showed the derived frame
+  joining camelCase labels into a sentence, but the labels themselves were the defect (72): with the
+  contract stated, the derived sentence is built from labels that are real labels.
+- **It does not regenerate either lockfile.**
+
+### 42.8 The check that did not run: the full Playwright suite
+
+Attempted once, bounded to five minutes, with `--workers=1`. The dev server it launches starts
+(`✓ Ready in 1669ms`) and is then **killed by the cgroup OOM-killer on the first page compile**: `dmesg`
+records `Memory cgroup out of memory: Killed process ... (next-server)` with anon-rss 1.1 GB against a
+3.9 GB box whose remaining headroom the browser also needs. This is the same per-process ceiling §39.7,
+§40.8 and §41.8 record, reproduced this round with the kernel's own line rather than inferred. Reported
+as a **limitation, not a pass**. The rendered workbench was not exercised in a browser
+this round either: `e2e/scaffold-frame.spec.ts`, `e2e/stage-templates.spec.ts` and
+`e2e/encode.spec.ts` are the specs to run where there is headroom.
+
+**Total: 74 distinct defects** (this round's fixes land in `app/api/encode/route.ts`,
+`app/api/youtube/route.ts`, `lib/ai-output-validation.ts`, `lib/prompts.ts`, and the three suites named in
+§42.6).

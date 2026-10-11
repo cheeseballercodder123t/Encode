@@ -5,8 +5,14 @@ import { validateYouTubeResult } from "@/lib/ai-output-validation";
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 import { extractYouTubeId, fetchYouTubeMeta, fetchYouTubeTranscript } from "@/lib/services/youtubeTranscript";
 import { parseRouteBody, youtubeSchema } from "@/lib/api-validation";
+import {
+  SCAFFOLD_CONTRACT,
+  SCAFFOLD_EXAMPLE_RULE,
+  SCAFFOLD_LABEL_RULE,
+  SCAFFOLD_PLACEHOLDER_RULE,
+} from "@/lib/prompts";
 
-const youtubeSchemaResponse = {
+export const youtubeSchemaResponse = {
   type: Type.OBJECT,
   properties: {
     videoTitle: { type: Type.STRING, description: "Official or inferred video title" },
@@ -59,20 +65,17 @@ const youtubeSchemaResponse = {
           scaffold: {
             type: Type.OBJECT,
             properties: {
-              field1Label: { type: Type.STRING },
-              field1Placeholder: { type: Type.STRING },
-              field1Prefix: { type: Type.STRING },
-              field2Label: { type: Type.STRING },
-              field2Placeholder: { type: Type.STRING },
-              field2Prefix: { type: Type.STRING },
-              field3Label: { type: Type.STRING },
-              field3Placeholder: { type: Type.STRING },
-              field3Prefix: { type: Type.STRING },
+              field1Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+              field1Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
+              field2Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+              field2Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
+              field3Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+              field3Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
               presetOptions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING }
               },
-              exampleAnswer: { type: Type.STRING }
+              exampleAnswer: { type: Type.STRING, description: SCAFFOLD_EXAMPLE_RULE }
             },
             required: ["field1Label", "field1Placeholder", "field2Label", "field2Placeholder", "exampleAnswer"]
           }
@@ -127,6 +130,7 @@ Your tasks:
 2. Identify 4-6 key timestamp inflection points where the presenter introduces pivotal definitions, visual diagrams, mathematical proofs, or counter-intuitive examples.
 3. Generate exactly 5 scaffolded active cognitive exercises. Each exercise MUST include a 'videoTimestamp' object tied to a genuine milestone in the video.
 4. Provide structured scaffold fields, domain options, and crystal-clear example responses.
+${SCAFFOLD_CONTRACT}
 ${TOY_MODEL_INSTRUCTION}
 No verified transcript means no grounded lab: omit toyModel when transcript is absent.`;
 

@@ -123,6 +123,47 @@ function normalizeVisualData(raw: unknown): Record<string, any> | undefined {
   return visual;
 }
 
+/**
+ * Whether a stage object carries any of the model's own content.
+ *
+ * A provider that runs out of budget - or a routed free model that loses the
+ * thread mid-array - leaves a placeholder object in the list. The live gear
+ * probe caught one: an element with no title, no prompt, no scaffold, no
+ * keywords, which every default below then turned into a stage called
+ * "Stage 3" with generic boxes and an empty example answer. Defaulting exists
+ * so a nearly-complete stage still renders; it must not MANUFACTURE a stage out
+ * of nothing, or the learner is handed a blank exercise as if the model had
+ * written it. The workout is better with one real stage fewer.
+ */
+function hasStageContent(raw: Record<string, any>): boolean {
+  const text = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+  const list = (v: unknown) => Array.isArray(v) && v.length > 0;
+  const scaffold =
+    raw.scaffold && typeof raw.scaffold === 'object' ? (raw.scaffold as Record<string, any>) : {};
+  return (
+    text(raw.title) ||
+    text(raw.prompt) ||
+    text(raw.paradox) ||
+    text(raw.gedankenexperiment) ||
+    text(raw.contextSnippet) ||
+    text(raw.framework) ||
+    text(raw.cognitiveGoal) ||
+    text(raw.templateType) ||
+    text(scaffold.field1Label) ||
+    text(scaffold.field1Placeholder) ||
+    text(scaffold.field2Label) ||
+    text(scaffold.field2Placeholder) ||
+    text(scaffold.field3Label) ||
+    text(scaffold.field3Placeholder) ||
+    text(scaffold.exampleAnswer) ||
+    text(scaffold.causalFrame) ||
+    list(raw.keywords) ||
+    list(scaffold.presetOptions) ||
+    (raw.visualData && typeof raw.visualData === 'object' && Object.keys(raw.visualData).length > 0) ||
+    (raw.toyModel && typeof raw.toyModel === 'object')
+  );
+}
+
 export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?: string): {
   topicSummary: string;
   activities: Activity[];
@@ -153,6 +194,9 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?:
   const activities: Activity[] = Array.isArray(data.activities)
     ? data.activities
         .filter((a): a is Record<string, any> => a && typeof a === 'object')
+        // An object with none of the model's own stage fields is a placeholder,
+        // not a stage: defaulting must not manufacture one (see hasStageContent).
+        .filter((a) => hasStageContent(a))
         .map((a, i) => {
           const scaffold = (a.scaffold && typeof a.scaffold === 'object' ? a.scaffold : {}) as Record<string, any>;
           const toy = a.toyModel === undefined ? undefined : validateToyModelConfig(a.toyModel, source);
@@ -245,6 +289,75 @@ export function validateEncodedSchema(raw: unknown, mode: EncodingMode, source?:
 
   return { topicSummary, activities, researchContexts };
 }
+// ─── Guided-path module recovery ─────────────────────────────────────────────
+
+/**
+ * The stage list inside a guided-path module.
+ *
+ * `activities` is what the guided schema declares and what every renderer reads;
+ * `stages` is the alias this module already accepts for a top-level stage list,
+ * and a provider that renames the wrapper usually renames the inner list with
+ * it. Returns null when the value carries no list at all, so callers can tell
+ * "a module with no stages" from "not a module".
+ */
+export function moduleStages(value: unknown): Record<string, any>[] | null {
+  if (!value || typeof value !== 'object') return null;
+  const body = value as Record<string, any>;
+  const list = Array.isArray(body.activities)
+    ? body.activities
+    : Array.isArray(body.stages)
+      ? body.stages
+      : null;
+  if (!list) return null;
+  return list.filter((a): a is Record<string, any> => Boolean(a) && typeof a === 'object');
+}
+
+/** Names a chapter decomposition is actually given by models, best first. */
+const MODULE_ARRAY_KEYS = ['guidedModules', 'modules', 'guidedPath', 'modulesList'] as const;
+
+/**
+ * The module array out of whatever root the model answered with.
+ *
+ * The guided path (a 900+ word chapter, or the Guided Path toggle) asks for
+ * `{ topicSummary, guidedModules: [...] }`, but that name is only a convention
+ * the prompt states in words - it is not enforced by any provider except Gemini,
+ * and even Gemini's schema cannot stop a model from answering the question it
+ * preferred. A live probe of a 60-section source produced a wrapper named
+ * `modules` and, on another routing, the standard `{ activities: [...] }` shape.
+ * The route used to read `guidedModules` and nothing else: the first shape lost
+ * its whole decomposition to the single generic fallback stage, and a bare array
+ * of module objects was validated as if the MODULES were stages (module titles
+ * kept, every stage field defaulted) while the request answered 200.
+ *
+ * Recovery is therefore name-agnostic: a named wrapper is preferred in the order
+ * models reach for it, and failing that, ANY array-valued property whose items
+ * carry a stage list is read as the module array - the payload says what it is
+ * even when its key was invented. Returns [] when the response is not a chapter
+ * decomposition at all, which is the caller's signal to validate it as the
+ * standard single-workout shape instead of discarding it.
+ */
+export function recoverGuidedModules(raw: unknown): Record<string, any>[] {
+  const candidates: unknown[] = [];
+  if (Array.isArray(raw)) {
+    candidates.push(raw);
+  } else if (raw && typeof raw === 'object') {
+    const body = raw as Record<string, any>;
+    for (const key of MODULE_ARRAY_KEYS) {
+      if (Array.isArray(body[key])) candidates.push(body[key]);
+    }
+    for (const value of Object.values(body)) {
+      if (Array.isArray(value) && value.some((item) => moduleStages(item))) candidates.push(value);
+    }
+  }
+  for (const candidate of candidates) {
+    const modules = (candidate as unknown[]).filter(
+      (item): item is Record<string, any> => moduleStages(item) !== null
+    );
+    if (modules.length > 0) return modules;
+  }
+  return [];
+}
+
 // ─── Evaluation validation ───────────────────────────────────────────────────
 /**
  * Coerces an /api/evaluate payload into a safe StageResponse['feynmanReview'].

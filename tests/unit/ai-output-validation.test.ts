@@ -214,6 +214,26 @@ describe('validateEncodedSchema', () => {
     expect(result.activities[0].id).toBe('x');
   });
 
+  /**
+   * A routed free model can leave a placeholder object in the array - the live
+   * gear probe saw an element with no title and no scaffold of its own. Every
+   * default below then produced a stage called "Stage 3" asking generic
+   * questions, which is a stage the model never wrote and the learner cannot
+   * answer with anything they were taught. Defaulting must not manufacture one.
+   */
+  it('drops an element the model left empty instead of defaulting it into a stage', () => {
+    const raw = {
+      topicSummary: 'Chapter',
+      activities: [
+        { id: 's1', title: 'A real stage', scaffold: { field1Label: 'Trigger' } },
+        { id: 's2' },
+        { id: 's3', keywords: [] },
+      ],
+    };
+    const result = validateEncodedSchema(raw, 'conceptual');
+    expect(result.activities.map((a) => a.id)).toEqual(['s1']);
+  });
+
   it('still falls back for a bare array whose entries are all unusable', () => {
     const result = validateEncodedSchema(['nope', null, 42], 'conceptual');
     expect(result.activities).toHaveLength(1);

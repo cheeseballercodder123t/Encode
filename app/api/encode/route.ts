@@ -1,9 +1,16 @@
 import { Type } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { generateJSONWithProvider } from "@/lib/ai-client";
-import { validateEncodedSchema } from "@/lib/ai-output-validation";
+import { recoverGuidedModules, moduleStages, validateEncodedSchema } from "@/lib/ai-output-validation";
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
-import { FIRST_PRINCIPLES_ENGINE, FIRST_PRINCIPLES_FEW_SHOT } from "@/lib/prompts";
+import {
+  FIRST_PRINCIPLES_ENGINE,
+  FIRST_PRINCIPLES_FEW_SHOT,
+  SCAFFOLD_CONTRACT,
+  SCAFFOLD_EXAMPLE_RULE,
+  SCAFFOLD_LABEL_RULE,
+  SCAFFOLD_PLACEHOLDER_RULE,
+} from "@/lib/prompts";
 import { getDifficultyLevel, getDifficultyPromptModifier } from "@/lib/services/adaptiveDifficulty";
 import { encodeSchema, parseRouteBody } from "@/lib/api-validation";
 import { MR_M_DIRECTIVE } from '@/lib/mr-m/directives';
@@ -107,6 +114,13 @@ const mrMPayloadSchema = {
   }
 };
 
+/**
+ * The scaffold's field contract as schema descriptions.
+ *
+ * Declared in `lib/prompts.ts` with the prompt-side `SCAFFOLD_CONTRACT`, because
+ * three routes produce stage scaffolds and only Gemini receives this schema (see
+ * the module comment there for the live evidence).
+ */
 // Structured visual configurations per template type
 export const visualDataSchema = {
   type: Type.OBJECT,
@@ -351,7 +365,7 @@ export const visualDataSchema = {
 };
 
 // Standard Single Schema Response with Deep Research Context Grounding
-const standardResponseSchema = {
+export const standardResponseSchema = {
   type: Type.OBJECT,
   properties: {
     topicSummary: {
@@ -430,21 +444,18 @@ const standardResponseSchema = {
           scaffold: {
             type: Type.OBJECT,
             properties: {
-              field1Label: { type: Type.STRING },
-              field1Placeholder: { type: Type.STRING },
-              field1Prefix: { type: Type.STRING },
-              field2Label: { type: Type.STRING },
-              field2Placeholder: { type: Type.STRING },
-              field2Prefix: { type: Type.STRING },
-              field3Label: { type: Type.STRING },
-              field3Placeholder: { type: Type.STRING },
-              field3Prefix: { type: Type.STRING },
+              field1Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+              field1Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
+              field2Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+              field2Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
+              field3Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+              field3Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
               presetOptions: {
                 type: Type.ARRAY,
                 items: { type: Type.STRING },
                 description: "Helpful suggestions, chunk categories, or domain options"
               },
-              exampleAnswer: { type: Type.STRING, description: "A high-quality example to spark the user's creativity" },
+              exampleAnswer: { type: Type.STRING, description: SCAFFOLD_EXAMPLE_RULE },
               causalFrame: {
                 type: Type.STRING,
                 description:
@@ -462,14 +473,13 @@ const standardResponseSchema = {
 };
 
 // Guided Path Multi-Module Chunking Schema (Miller's Law 7±2 decomposition)
-const guidedPathResponseSchema = {
+export const guidedPathResponseSchema = {
   type: Type.OBJECT,
   properties: {
     topicSummary: {
       type: Type.STRING,
       description: "Overarching title of the massive text / chapter."
     },
-    totalModulesCount: { type: Type.INTEGER },
     researchContexts: {
       type: Type.ARRAY,
       items: {
@@ -545,20 +555,17 @@ const guidedPathResponseSchema = {
                 scaffold: {
                   type: Type.OBJECT,
                   properties: {
-                    field1Label: { type: Type.STRING },
-                    field1Placeholder: { type: Type.STRING },
-                    field1Prefix: { type: Type.STRING },
-                    field2Label: { type: Type.STRING },
-                    field2Placeholder: { type: Type.STRING },
-                    field2Prefix: { type: Type.STRING },
-                    field3Label: { type: Type.STRING },
-                    field3Placeholder: { type: Type.STRING },
-                    field3Prefix: { type: Type.STRING },
+                    field1Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+                    field1Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
+                    field2Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+                    field2Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
+                    field3Label: { type: Type.STRING, description: SCAFFOLD_LABEL_RULE },
+                    field3Placeholder: { type: Type.STRING, description: SCAFFOLD_PLACEHOLDER_RULE },
                     presetOptions: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING }
                     },
-                    exampleAnswer: { type: Type.STRING },
+                    exampleAnswer: { type: Type.STRING, description: SCAFFOLD_EXAMPLE_RULE },
                     causalFrame: {
                       type: Type.STRING,
                       description:
@@ -834,7 +841,7 @@ For every stage specify the chosen 'templateType' and populate 'visualData' with
     // generation itself, not just of the rendering.
     // The declared root shape in words, for the providers whose transport does
     // not enforce `responseSchema` (see STANDARD_SHAPE_CONTRACT).
-    systemPrompt += `\n\n${isMassiveText ? GUIDED_SHAPE_CONTRACT : STANDARD_SHAPE_CONTRACT}`;
+    systemPrompt += `\n\n${isMassiveText ? GUIDED_SHAPE_CONTRACT : STANDARD_SHAPE_CONTRACT}\n\n${SCAFFOLD_CONTRACT}`;
 
     const mrMNote = mrMMode ? `\n\n${MR_M_DIRECTIVE}` : '';
 
@@ -862,14 +869,24 @@ For every stage specify the chosen 'templateType' and populate 'visualData' with
       useCache: true,
     });
 
-    if (isMassiveText && parsedResult.guidedModules && parsedResult.guidedModules.length > 0) {
+    if (isMassiveText) {
       // Validate each guided module's activities so a partial model response
-      // never ships a broken module chain. Non-modular malformed output falls
-      // through to the standard validated response below.
-      const validatedGuidedModules = parsedResult.guidedModules
-        .filter((mod: any) => mod && typeof mod === 'object' && Array.isArray(mod.activities))
-        .map((mod: any) => {
-          const validated = validateEncodedSchema({ ...mod, activities: mod.activities }, mode, hasFile ? undefined : notes);
+      // never ships a broken module chain. The module array is recovered from
+      // whatever root the model answered with (see `recoverGuidedModules`): the
+      // declared name is `guidedModules`, `modules` and a bare array of module
+      // objects are the shapes a live probe produced, and none of them used to
+      // reach this branch - the decomposition was discarded and the standard
+      // validator, whose subject is a stage payload rather than a chapter,
+      // shipped one generic fallback stage while the request answered 200.
+      const recoveredModules = recoverGuidedModules(parsedResult);
+      const validatedGuidedModules = recoveredModules
+        .filter((mod) => (moduleStages(mod) || []).length > 0)
+        .map((mod) => {
+          const validated = validateEncodedSchema(
+            { ...mod, activities: moduleStages(mod) },
+            mode,
+            hasFile ? undefined : notes
+          );
           return {
             ...mod,
             title: mod.title || validated.topicSummary,
@@ -891,7 +908,7 @@ For every stage specify the chosen 'templateType' and populate 'visualData' with
 
         return NextResponse.json({
           isGuidedPath: true,
-          topicSummary: parsedResult.topicSummary || 'Guided Path Chapter',
+          topicSummary: parsedResult.topicSummary || recoveredModules[0]?.title || 'Guided Path Chapter',
           guidedModules: formattedModules,
           researchContexts: parsedResult.researchContexts || [],
           activities: formattedModules[0].activities || [],
