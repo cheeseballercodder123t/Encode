@@ -121,6 +121,22 @@ function providerCacheKey(
 // transient or about the key, and mislabeling one would move the learner onto a
 // model that cannot help either.
 
+/**
+ * Output ceiling for the HTTP-JSON providers (OpenRouter).
+ *
+ * OpenRouter PRE-AUTHORIZES a request against the model's full output budget
+ * when `max_tokens` is absent, and refuses the call with HTTP 402 ("request
+ * requires more credits, or fewer max_tokens") against any account whose balance
+ * is below that reservation - even when the completion actually costs a few
+ * tokens. With a modest balance the OpenRouter path was unusable for every
+ * generation while the same key answered a capped curl instantly. This app's
+ * responses are strictly bounded JSON (a full encoded schema is on the order of
+ * 10-20 KB, well under this ceiling), so a generous cap removes the reservation
+ * without risking truncation. Gemini configures its own limit through the SDK
+ * and is unaffected.
+ */
+const MAX_OUTPUT_TOKENS = 8192;
+
 const unsupportedModels = new Set<string>();
 
 /**
@@ -440,6 +456,9 @@ export async function generateJSONWithProvider({
         },
         body: JSON.stringify({
           model: modelName,
+          // Without this OpenRouter reserves the model's whole output budget
+          // (65535 here) and 402s a low-balance key before the request runs.
+          max_tokens: MAX_OUTPUT_TOKENS,
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: `${systemPrompt}\n\nIMPORTANT: Respond with valid JSON matching the requested structure.` },

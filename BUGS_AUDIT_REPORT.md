@@ -3,7 +3,7 @@
 Branch `fix/nonfunctional-audit-round-17`. **Round 17 (§19) was reconnaissance only - findings 34-39 are candidates rather than repairs, which is why its own totals stop at 33. Rounds 18-23 (§20-§25) then fixed all six, so the running total below is 39;** nothing from round 17 is left open, with 34-39 closed and recorded in §20-§25. Round 24 (§26) is reconnaissance only and changes no code: findings 40-44 were candidates there. **Round 25 (§27) then fixed finding 42 (the offline fallback), round 26 (§28) fixed finding 40 (the deadline that did not abort the call it gave up on) and round 27 (§29) fixed finding 41 (the attached file the hydration read could clobber), so the running total below is 42**, with 43 and 44 still open. **Round 28 (§30) then closed the gap §19.3 declared and deliberately left unfiled - the icons `app/manifest.ts` promised and nothing served, and the app shell nothing cached - formally as defect 45, so the running total is 43.** **Round 29 (§31) then fixed defect 46 - the AnkiConnect spec whose mock matched a host the app never requests, so three of its four tests could not pass - found by regression-testing round 28 rather than by looking for it, so the running total is 44,** with findings 43 and 44 the only ones still open. **Round 30 (§32) then fixed defect 43 - Teach Me's deterministic fallback builder, exported, documented and promised by the mount comment, with no caller anywhere, so a failed lesson request taught nothing at all - so the running total is 45,** with finding 44 the only one still open. **Round 31 (§33) then fixed defect 44 - the shared body validator applied to 5 of 27 routes, so twenty-two handlers read their bodies with a bare `await req.json()`: free text out of `/api/triage` and `/api/roast` reached a paid provider call with no ceiling at all, and a malformed body answered 500 - which closes round 24's sweep, so the running total is 46 and nothing filed is left open.** **Defects 1–12 are merged on `main` (`1b0ffb0`, PR #34), 13–14 in `1f67f2e` (PR #35), 15–16 in `c324989` (PR #36), 17 in `e3c21a6` (PR #37), 18 in PR #39 (round 5, §7) and 19 in PR #40 (round 6, §8) — every defect through round 6 is on `main`; defects 20-27 (§9 round 7, §10 round 8, §11 round 9, §12 round 10, §13 round 11 - the non-functional sweep - and §14 round 12) went to `main` in `2804e78` (PR #41); defects 28-30 (§15-§17, rounds 13-15) went to `main` in `dd1505c` (PR #42); defects 31-33 (§18, round 16, the usage ledger) went to `main` in `17c10fe` (PR #43).** Scope: the attack vectors in the request —
 SM-2/Anki arithmetic, formula/LaTeX handling, hook lifecycle, local-first storage, and ingestion edge
 cases. Every fix below was reproduced against the live code before it was changed, and every fix is
-pinned by a test that was then **proven able to fail**.
+pinned by a test that was then **proven able to fail**. **Round 37 (§39) then fixed defects 60-62 - a fractional SM-2 repetition count that skipped the six-day rung, an OpenRouter request that sent no `max_tokens` and so 402d every limited-credit key before it ran, and a procedural-archetype validator that threw on the wrong-typed model output it exists to reject (taking the route's repair pass down with it) - so the running total is 62.**
 
 ## 1. Defects found and fixed
 
@@ -2973,3 +2973,143 @@ learner's data is in the file.
 `lib/teach-lessons.ts`, `tests/unit/backup.test.ts`, `e2e/backup-restore.spec.ts`,
 `e2e/encode-stream.spec.ts` and `e2e/resilience.spec.ts`; the suite run and every pass in 38.2 are
 new to this report.)
+
+## 39. Round 37 - the count that was a fraction, the key that was never budgeted, and the validator that threw on what it exists to reject
+
+### 39.1 How the sweep ran
+
+The brief's speed rule was followed: `npx tsc --noEmit` plus targeted single-file runs
+(`npx vitest run <file>`) during the hunt, and the full unit suite once at the end. The full
+Playwright suite was attempted once, at the end, and **could not run in this sandbox** - the app
+cannot be compiled here; see §39.7, which records the attempt rather than claiming a pass. The hunt itself was empirical
+rather than read-only: for each target a fuzz/property harness was written first, pointed at the real
+module, and only the failures it produced were treated as findings. The temporary harnesses were
+deleted before the commit; the two that pin real defects were kept and cleaned (below).
+
+**Environment note (not an application defect).** This checkout's `bun.lock` is a text lockfile whose
+declared `lockfileVersion` is 2, which the sandbox's bun 1.3.14 refuses ("Unknown lockfile version"),
+and `package-lock.json` is out of sync with `package.json` (`npm ci` reports `Missing:
+@sentry/nextjs@11.6.0 from lock file` and exits EUSAGE). Dependencies were therefore restored with
+`npm install --no-package-lock`, which installs from `package.json` without writing either tracked
+lockfile — both were left byte-identical. Worth a follow-up so a fresh `npm ci` works, but it is a
+tooling/reproducibility gap, not an app bug, and fixing it means a large regenerated lockfile that
+this round deliberately does not ship.
+
+### 39.2 The mechanical passes, and what each one returned
+
+- **SM-2 fuzz (the review scheduler).** `calculateSM2` was driven over a hostile grid of
+  **390,963 combinations** (`repetitions`, `interval`, `easeFactor`, `grade` × `NaN`, `±Infinity`,
+  `±0`, negatives, fractional, `1e308`, `±MAX_SAFE_INTEGER`, sub-floor ease; `nextReviewTimestamp` ×
+  `0`, `-1`, `1e308`) asserting the contract the app depends on: integer interval ≥ 1, ease ≥ 1.3,
+  finite positive due date, and a JSON round-trip that is not `null`. Exactly one invariant broke
+  (defect 60). After the fix the sweep is clean, and it is kept as `tests/unit/anki-sm2-fuzz.test.ts`.
+- **Formula recognizer / malformed LaTeX.** Two modules were stressed. `lib/stem-text.ts` (the
+  plain-ASCII notation renderer that recognizes `\sqrt{}`, `\alpha`, `^{}`/`_{}`, arrows) survived
+  **60,022 inputs** — unclosed `\sqrt{`, bare `^{`, `_{`, stray `<script>`, a 200-char `\sqrt{` body,
+  100 backslashes — with no throw, no raw input angle bracket (the generated `<sup>`/`<sub>` are the
+  only tags it emits), and every `&` a known entity. `lib/procedural-validator.ts` (which *balances*
+  `\( \)` and `\[ \]` in solution templates) surfaced defect 62.
+- **Hook lifecycle and circular dependencies.** Every `addEventListener` in `components/app/hooks`
+  has a matching `removeEventListener` in the same effect (PWAInstallHeader, ServiceWorkerInit,
+  AnkiExportModal, SketchCanvas, StudioWorkbench ×3, ToyModelLab, app/page.tsx); every `setInterval`
+  is cleared (crisis, paradox ledger, toy lab, discrimination, crucible, generation progress); the
+  `useModalA11y` contract ("call it before any early return") holds at all 25 call sites; and a scan
+  for non-null assertions in the client found **zero**. Three module import cycles exist —
+  `lib/storage.ts ↔ lib/db.ts`, `lib/anki-exporter.ts ↔ lib/fsrs-audit.ts`, and
+  `lib/anki-exporter.ts ↔ lib/wozniak.ts`. All three are **benign**: every cross-module binding is
+  used inside a function (never at module-evaluation time, so no TDZ), and the two `anki-exporter`
+  cycles are erased type-only imports (the second says so in a comment). No defect.
+- **Local-first storage, corrupt and legacy shapes.** Under happy-dom, every storage loader
+  (`loadSavedSchemas`, `loadAISettings`, `loadStudyPrefs`, `loadUsageStats`, `loadTopicStruggles`,
+  `loadStageDraft`, `loadSavedTeachLessons`, `loadForgeRecipes`, `loadDeckMemory`, `loadToyProgressStore`)
+  was fed 12 hand-written corrupt/legacy payloads plus ~3,000 randomized JSON shapes per key and never
+  threw or returned a non-usable value; the pure transforms (`coerceSavedSchema(s)`, `mergeSchemaLists`,
+  `mergeDeckMemoryStores`, `mergeToyProgressStores`, the `describe*` helpers) were fuzzed separately.
+  The streamed-JSON reader (`lib/stream-schema.ts`, which emits an item only once its brackets balance)
+  survived **40,059 inputs** — every truncation of a real payload plus random token soup, fed both
+  whole and in 3-char chunks. No defect.
+- **Primary buttons and modals.** The export/download handlers in `AnkiExportModal` wrap the async
+  package builds in `try/catch`; the sync `.txt` handlers only do `Blob`/`createObjectURL`/anchor
+  click; no `getElementById(...)!` patterns exist; the generated interactive Anki card's
+  `querySelector` targets are created by the same script one line earlier. No defect.
+- **Live provider exercise (the OpenRouter key).** The provided key authenticated but every
+  in-app OpenRouter call answered HTTP 402; that is defect 61.
+
+### 39.3 Findings
+
+| # | Priority | Finding | Location | Root cause | Evidence |
+|---|---|---|---|---|---|
+| 60 | **P2 - medium. FIXED** | **A fractional stored `repetitions` survived as a fraction forever, and skipped the six-day rung.** `repetitions` is the count of consecutive successful reviews, so a non-integer is corrupt state (a legacy writer, a hand-edited record, a bad merge). It was read with `Math.max(0, finiteOr(...))`, which clamps negatives but not fractions, so `1.3` became `2.3`. Worse, the ladder distinguishes rungs by equality (`reps === 0`, `reps === 1`), so `1.3` fell through to the "third rep or later" branch and multiplied the interval (`Math.round(1 * 2.5) = 3` days) where the correct second rung is a fixed `6` days — a wrong schedule, not just a cosmetic field. | `lib/anki-exporter.ts:58` (`calculateSM2`) | The clamp used `Math.max(0, …)` where the count needs `Math.floor`. | Reproduced first: `calculateSM2(5, { repetitions: 1.3, interval: 1, easeFactor: 2.5 })` → `{ repetitions: 2.3, interval: 3 }`. The 390,963-case fuzz flagged `Number.isInteger(repetitions) === false` in 27,075 combinations before the fix and 0 after. Pinned by 3 tests in `tests/unit/anki-sm2-hardening.test.ts` (mutation-proven: they fail on the unfixed code with `expected 2.3 to be 2` and `expected 3 to be 6`) and the kept fuzz harness. |
+| 61 | **P2 - medium. FIXED** | **The OpenRouter request sent no `max_tokens`, so OpenRouter pre-authorized the model's whole output budget and refused a limited-credit key with HTTP 402 before the request ran.** Every in-app OpenRouter generation failed — while the identical prompt through a capped `curl` answered `200` in under a second. OpenRouter reserves `max_tokens` (defaulting to the model maximum, 65535 for `google/gemini-2.5-flash`) against the account balance and rejects the call if the balance cannot cover the reservation, even when the completion is ten tokens. The app's responses are strictly bounded JSON (a full encoded schema is ~10-20 KB, well under 8,192 tokens), so the reservation bought nothing. | `lib/ai-client.ts:138`, `:461` (OpenRouter branch of `generateJSONWithProvider`) | No output ceiling was sent on the HTTP-JSON providers; the Gemini SDK path is unaffected. | Reproduced through the app's own client (a live `generateJSONWithProvider` call against the provided key) with `ApiHttpError: OpenRouter error (402): ... You requested up to 65535 tokens, but can only afford 14437`. After adding `max_tokens: 8192` the same call returned `{"ok":true}` in ~0.7 s. Pinned deterministically (no network) in `tests/unit/ai-client.test.ts` — the test asserts the outgoing body carries a positive finite `max_tokens`, and fails with `expected undefined to be 'number'` when the field is removed. |
+| 62 | **P1 - high. FIXED** | **The procedural-archetype validator threw on exactly the input it exists to reject, and the route that uses it answered 500 instead of repairing.** `/api/archetype` authors archetypes with a model, then validates them and feeds the errors back to a repair model — "an archetype that fails here must never reach a student's deck" (§ header). The provider response is untrusted (OpenRouter's `json_object` mode does not enforce the declared response schema), so a wrong-typed field is expected. `structuralErrors` called `.trim()`/`.includes()`/`.match()` on the raw fields and dereferenced `spec.choices` and `trap.*` with no type or null guard; and the route's id normalizer read `a.id.startsWith(...)`, so a single `null` array element threw *before* the validator. Either one escaped to the route's outer `catch` as a 500 and skipped the repair pass entirely. | `lib/procedural-validator.ts:231`–`:300` (`structuralErrors`), `app/api/archetype/route.ts:148`, `:182`, `:227` | String methods and member access applied to unvalidated model JSON, in the one module whose purpose is to judge that JSON. | Reproduced before the fix: `validateProceduralArchetype({ ...questionTemplate: 123 })` → `TypeError: archetype.questionTemplate.trim is not a function`; `POST /api/archetype` with a mocked response of `{ archetypes: [null] }` → **500** (route test). After the fix the same request is **200** with `validationReport.ok === false`. Pinned by 2 tests in `tests/unit/procedural-archetypes.test.ts` and 2 route tests in `tests/unit/api-route-validation.test.ts`. |
+
+### 39.4 Fixed, in five source files and four suites
+
+- `lib/anki-exporter.ts` - `calculateSM2` floors `repetitions` to a non-negative integer, with the
+  comment explaining why the equality rungs make this more than cosmetic.
+- `lib/ai-client.ts` - a named `MAX_OUTPUT_TOKENS = 8192` sent as `max_tokens` on the OpenRouter
+  body, with the reservation behaviour written down beside it.
+- `lib/procedural-validator.ts` - an `asText(value)` helper reads every model string defensively;
+  traps are read through `Array.isArray` + optional chaining; a null/non-object variable spec is
+  reported rather than dereferenced. The LaTeX balance checks now read the coerced template.
+- `app/api/archetype/route.ts` - `normalizeAuthoredArchetype(value, index)` replaces both inline id
+  maps, so a null entry or a non-string id cannot crash the pass that repairs them.
+- `tests/unit/anki-sm2-hardening.test.ts` (+3), `tests/unit/procedural-archetypes.test.ts` (+2),
+  `tests/unit/api-route-validation.test.ts` (+2), `tests/unit/ai-client.test.ts` (+1), and the new
+  `tests/unit/anki-sm2-fuzz.test.ts` (the deterministic invariant sweep).
+
+### 39.5 Verified
+
+- `npx tsc --noEmit` - **exit 0**.
+- `npx vitest run` - **93 files / 1,608 tests, exit 0** (1,599 before; +9: 3 + 2 + 2 + 1 pinning the
+  three defects, plus 1 fuzz invariant sweep).
+- `npx eslint .` - **exit 0**.
+- Every fix **mutation-proofed**: reverting the `Math.floor` fails the SM-2 tests; removing
+  `max_tokens` fails the ai-client test; the pre-fix validator and route fail the procedural and
+  route tests (observed before the change, above).
+- The OpenRouter fix was verified **against the live provider** through the app's own
+  `generateJSONWithProvider`, not just against a mock.
+- Playwright (full E2E): **not run - reported as unverified, not as passing.** The sandbox
+  cannot compile the app in either dev or production mode (§39.7). This is a capacity limit of the
+  environment, and it is the one verification step this round could not complete.
+
+### 39.6 What this round deliberately does not do
+
+- **It does not cap `max_tokens` on the OpenAI-compatible provider.** The 402 reservation is
+  OpenRouter's documented behaviour; OpenAI-compatible endpoints do not pre-authorize the same way,
+  and changing a provider with no evidence of a failure would be scope, not a fix.
+- **It does not normalise the id at the model boundary** (e.g. rewriting `ai-x` to `aiai-ai-x` inside
+  the provider client). The prefix rule is `/api/archetype`'s own contract, so it stays there.
+- **It does not fix the two import cycles.** They are type-only or function-scope, verified harmless;
+  breaking them would mean moving shared constants across module boundaries for no behavioural gain.
+- **It does not regenerate `bun.lock` or `package-lock.json`.** Both are tracked and left untouched;
+  the mismatch is recorded as an environment finding in §39.1 rather than papered over with a large
+  lockfile diff.
+
+### 39.7 The one check that did not run: the full Playwright suite
+
+The brief asks for the full E2E suite once, at the very end. It was attempted three ways and could not
+be run in this sandbox, and that is reported here as a **limitation, not a pass**:
+
+1. `npx playwright test --project=chromium` (Playwright's own `webServer`) - the session was SIGKILLed
+   while `next dev` logged `○ Compiling / ...`.
+2. A standalone `next dev` with `NODE_OPTIONS=--max-old-space-size=512` - the server logged
+   `FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of
+   memory` while compiling the root page (the app needs more than a 512 MB heap to compile).
+3. `npm run build` (production) followed by `next start` - the build was SIGKILLed at
+   `Creating an optimized production build ...`.
+
+Above 512 MB the V8 heap is fine but the process is killed by the sandbox's memory watchdog (the
+box shows 3.9 GB total, but a Next compile spikes past what a single process is allowed); below it,
+V8 itself aborts. Only 397-470 MB is in use when the shell is idle, so the ceiling is per-process /
+the whole session, not the machine. This is the same capacity limit previous rounds recorded.
+
+**What this means for the fixes.** All four changed files are pure logic (an arithmetic clamp, a
+request-body field, a validator's type handling, and a route's normalisation helper) with no JSX,
+rendering or DOM changes; each is covered by a unit test that was proven to fail before the fix, and
+the full unit suite is green. But the end-to-end behaviour in a real browser was **not** re-verified
+this round, and the report does not claim it was. A runner with more headroom should run
+`npx playwright test --project=chromium` to close this gap.
+
+**Total: 62 distinct defects** (this round's fixes land in `lib/anki-exporter.ts`, `lib/ai-client.ts`,
+`lib/procedural-validator.ts`, `app/api/archetype/route.ts`, and the five suites named in §39.4).

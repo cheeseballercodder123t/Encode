@@ -135,6 +135,25 @@ function summarizeIssues(archetypes: ProceduralMCQArchetype[], errorsByIndex: Re
     .join('\n');
 }
 
+/**
+ * Normalizes ONE model-authored archetype before it is validated or repaired.
+ *
+ * The provider response is untrusted: an entry can be null/non-object, and its
+ * `id` can be the wrong type. The old inline map read `a.id.startsWith(...)`
+ * directly, so a single `null` in the array threw out of the route and answered
+ * 500 — before the validator, and before the repair model that exists for
+ * exactly this. A missing/unusable id is filled in; every other field is left
+ * for `validateProceduralArchetype` to judge.
+ */
+function normalizeAuthoredArchetype(value: unknown, index: number): ProceduralMCQArchetype {
+  const record = (value && typeof value === 'object' ? value : {}) as Partial<ProceduralMCQArchetype>;
+  const id = typeof record.id === 'string' ? record.id : '';
+  return {
+    ...(record as ProceduralMCQArchetype),
+    id: id.startsWith('aiai-') ? id : `aiai-${id || `archetype-${Date.now()}-${index}`}`,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const parsed = await parseRouteBody(req, archetypeBodySchema);
@@ -160,10 +179,7 @@ export async function POST(req: NextRequest) {
       : [];
 
     // ── Validate-then-repair loop (max 2 rounds with the flash-lite tier). ──
-    let archetypes = rawArchetypes.map((a, i) => ({
-      ...a,
-      id: a.id && a.id.startsWith('aiai-') ? a.id : `aiai-${a.id || `archetype-${Date.now()}-${i}`}`,
-    }));
+    let archetypes = rawArchetypes.map(normalizeAuthoredArchetype);
     let repairedCount = 0;
     let repairRounds = 0;
 
@@ -208,10 +224,7 @@ export async function POST(req: NextRequest) {
         ? repairResult.archetypes
         : [];
       if (repaired.length === 0) break; // repair agent returned nothing : keep originals (they'll fail validation)
-      archetypes = repaired.map((a, i) => ({
-        ...a,
-        id: a.id && a.id.startsWith('aiai-') ? a.id : `aiai-${a.id || `archetype-${Date.now()}-${i}`}`,
-      }));
+      archetypes = repaired.map(normalizeAuthoredArchetype);
       repairedCount = 1;
       repairRounds++;
     }

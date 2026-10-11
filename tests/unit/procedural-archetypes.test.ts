@@ -121,4 +121,27 @@ describe('validator catches broken archetypes', () => {
     const degenerate = { ...good, id: 'test-degen', variables: { m: { min: 2, max: 2 }, k: { min: 100, max: 400 } } };
     expect(validateProceduralArchetype(degenerate).errors.join(' ')).toMatch(/degenerate/);
   });
+
+  /**
+   * The validator's whole job is to REJECT model-authored archetypes so the
+   * /api/archetype route can feed the errors back to the repair model. A
+   * response that carries a field of the wrong JSON type is exactly the input it
+   * exists to catch — but the structural pass called `.trim()` / `.includes()`
+   * on the raw fields, so a `questionTemplate: 123` threw out of the validator
+   * and the route answered 500 instead of repairing. These pin the rejection.
+   */
+  it('reports a wrong-typed field instead of throwing on it', () => {
+    const wrongTypes = { ...good, id: 'test-types', questionTemplate: 123, unit: null } as unknown as ProceduralMCQArchetype;
+    const result = validateProceduralArchetype(wrongTypes);
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toMatch(/questionTemplate|unit/);
+  });
+
+  it('reports null traps and null variable specs instead of throwing', () => {
+    const nullTrap = { ...good, id: 'test-null-trap', traps: [null, good.traps[1], good.traps[2]] } as unknown as ProceduralMCQArchetype;
+    expect(validateProceduralArchetype(nullTrap).valid).toBe(false);
+
+    const nullSpec = { ...good, id: 'test-null-spec', variables: { m: null, k: { min: 1, max: 2 } } } as unknown as ProceduralMCQArchetype;
+    expect(validateProceduralArchetype(nullSpec).valid).toBe(false);
+  });
 });

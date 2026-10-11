@@ -84,6 +84,29 @@ describe('calculateSM2 hardening against corrupt stored state', () => {
     });
   });
 
+  describe('a fractional repetition count is not a count', () => {
+    // Repetitions is the number of consecutive successful reviews, so a
+    // fractional value is corrupt state. It used to survive: `Math.max(0, 1.3)`
+    // is 1.3, so the field round-tripped as 2.3, and — because the ladder's
+    // `reps === 1` rung is an equality test — 1.3 skipped the 6-day rung and
+    // multiplied the interval on what should have been only the second review.
+    it('floors a fractional stored count to an integer', () => {
+      const s = calculateSM2(5, { ...base, repetitions: 1.3 });
+      expect(Number.isInteger(s.repetitions)).toBe(true);
+      expect(s.repetitions).toBe(2);
+    });
+
+    it('uses the second rung (6 days) for a fractional one-rep state', () => {
+      const s = calculateSM2(5, { repetitions: 1.3, interval: 1, easeFactor: 2.5, nextReviewTimestamp: 0 });
+      expect(s.interval).toBe(6);
+    });
+
+    it('floors a fractional count on the failure path too', () => {
+      const s = calculateSM2(1, { ...base, repetitions: 4.9 });
+      expect(s.repetitions).toBe(0);
+    });
+  });
+
   describe('the ordinary ladder is unchanged', () => {
     it('schedules 1 day on the first successful rep', () => {
       const s = calculateSM2(5, { repetitions: 0, interval: 0, easeFactor: 0, nextReviewTimestamp: 0 });

@@ -401,3 +401,34 @@ describe('generateJSONWithProvider aborts a timed-out model call (defect 40)', (
     expect(maxInFlight).toBe(1);
   });
 });
+describe('generateJSONWithProvider OpenRouter request budget', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * OpenRouter pre-authorizes a request against the model's WHOLE output budget
+   * when `max_tokens` is omitted, and answers HTTP 402 ("requires more credits,
+   * or fewer max_tokens") on any account whose balance is under that
+   * reservation — before the request ever runs. An uncapped body therefore made
+   * the OpenRouter provider unusable on a limited-credit key while the same key
+   * answered a capped curl instantly. This pins the cap in the body the app
+   * actually sends.
+   */
+  it('sends a bounded max_tokens so a low-balance key is not 402d', async () => {
+    const fetchMock = okFetch({ result: 'capped' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const out = await generateJSONWithProvider({
+      systemPrompt: 'sys',
+      userPrompt: 'user',
+      settings,
+    });
+    expect(out).toEqual({ result: 'capped' });
+
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(typeof body.max_tokens).toBe('number');
+    expect(Number.isFinite(body.max_tokens)).toBe(true);
+    expect(body.max_tokens).toBeGreaterThan(0);
+  });
+});

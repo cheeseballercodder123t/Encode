@@ -49,7 +49,13 @@ export function calculateSM2(grade: number, previousState?: SM2State): SM2State 
 
   // 0 and NaN keep falling back to the defaults, exactly as `|| 0` / `|| 1` /
   // `|| 2.5` did. Infinity now falls back as well instead of propagating.
-  const reps = Math.max(0, finiteOr(previousState?.repetitions, 0) || 0);
+  //
+  // `repetitions` is a COUNT of consecutive successful reviews, so it is floored
+  // to an integer: a fractional stored value (a legacy writer, a hand-edited
+  // record, a bad merge) used to survive as-is and propagate forever - and, more
+  // than cosmetic, `reps === 1` is an equality test, so 1.3 skipped the six-day
+  // rung and multiplied the interval on only the second review.
+  const reps = Math.max(0, Math.floor(finiteOr(previousState?.repetitions, 0) || 0));
   let ease = finiteOr(previousState?.easeFactor, DEFAULT_EASE) || DEFAULT_EASE;
   let interval = finiteOr(previousState?.interval, 1) || 1;
 

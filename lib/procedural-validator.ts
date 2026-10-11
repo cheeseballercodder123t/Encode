@@ -229,38 +229,61 @@ function validateOneFormula(
   };
 }
 
+/**
+ * A field of an archetype is UNTRUSTED model output: it arrives from a provider
+ * response (OpenRouter's `json_object` mode does not enforce the declared
+ * response schema at all) and may carry the wrong JSON type — a number where a
+ * template belongs, a null trap, a null variable spec. Reading those with
+ * `.trim()` / `.includes()` threw straight out of the validator, which is the
+ * one module whose whole job is to REJECT malformed archetypes and hand the
+ * errors to the route's repair model. So every string read goes through this and
+ * a wrong type is REPORTED, not thrown on.
+ */
+function asText(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
 function structuralErrors(archetype: ProceduralMCQArchetype): string[] {
   const errors: string[] = [];
-  if (!archetype.id || !archetype.id.trim()) errors.push('Archetype is missing an id.');
-  if (!archetype.topic || !archetype.topic.trim()) errors.push('Archetype is missing a topic.');
-  if (!archetype.questionTemplate || !archetype.questionTemplate.trim()) {
+  if (!asText(archetype.id).trim()) errors.push('Archetype is missing an id.');
+  if (!asText(archetype.topic).trim()) errors.push('Archetype is missing a topic.');
+  if (!asText(archetype.questionTemplate).trim()) {
     errors.push('questionTemplate is empty.');
   }
-  if (!archetype.unit || !archetype.unit.trim()) errors.push('unit is empty.');
-  if (!archetype.correctFormulaJs || !archetype.correctFormulaJs.trim()) {
+  if (!asText(archetype.unit).trim()) errors.push('unit is empty.');
+  if (!asText(archetype.correctFormulaJs).trim()) {
     errors.push('correctFormulaJs is empty.');
   }
-  if (!archetype.stepByStepSolutionTemplate || !archetype.stepByStepSolutionTemplate.trim()) {
+  if (!asText(archetype.stepByStepSolutionTemplate).trim()) {
     errors.push('stepByStepSolutionTemplate is empty.');
   }
-  if (!archetype.traps || archetype.traps.length !== 3) {
-    errors.push(`Archetype must declare exactly 3 traps (found ${archetype.traps?.length ?? 0}).`);
+  const traps = Array.isArray(archetype.traps) ? archetype.traps : [];
+  if (traps.length !== 3) {
+    errors.push(`Archetype must declare exactly 3 traps (found ${traps.length}).`);
   } else {
     const names = new Set<string>();
-    archetype.traps.forEach((trap, i) => {
-      if (!trap.trapName?.trim()) errors.push(`traps[${i}] is missing trapName.`);
-      else if (names.has(trap.trapName)) errors.push(`Duplicate trapName "${trap.trapName}".`);
-      else names.add(trap.trapName);
-      if (!trap.formulaJs?.trim()) errors.push(`traps[${i}] (${trap.trapName || i}) is missing formulaJs.`);
-      if (!trap.explanation?.trim()) errors.push(`traps[${i}] (${trap.trapName || i}) is missing an explanation.`);
+    traps.forEach((trap, i) => {
+      const trapName = asText(trap?.trapName).trim();
+      if (!trapName) errors.push(`traps[${i}] is missing trapName.`);
+      else if (names.has(trapName)) errors.push(`Duplicate trapName "${trapName}".`);
+      else names.add(trapName);
+      if (!asText(trap?.formulaJs).trim()) errors.push(`traps[${i}] (${trapName || i}) is missing formulaJs.`);
+      if (!asText(trap?.explanation).trim()) errors.push(`traps[${i}] (${trapName || i}) is missing an explanation.`);
     });
   }
 
-  // Variable specs sanity + question template placeholder coverage.
-  const declared = new Set(Object.keys(archetype.variables || {}));
+  // Variable specs sanity + question template placeholder coverage. A spec that
+  // is null or not an object declares nothing, so it is reported as such rather
+  // than dereferenced.
+  const variables: Record<string, ProceduralMCQVariableSpec> =
+    archetype.variables && typeof archetype.variables === 'object'
+      ? (archetype.variables as Record<string, ProceduralMCQVariableSpec>)
+      : {};
+  const declared = new Set(Object.keys(variables));
   if (declared.size === 0) errors.push('No variables declared.');
-  for (const [name, spec] of Object.entries(archetype.variables || {})) {
-    if (spec.choices && spec.choices.length > 0) {
+  for (const [name, rawSpec] of Object.entries(variables)) {
+    const spec = rawSpec && typeof rawSpec === 'object' ? rawSpec : ({} as ProceduralMCQVariableSpec);
+    if (Array.isArray(spec.choices) && spec.choices.length > 0) {
       if (spec.choices.some((c) => !Number.isFinite(c))) {
         errors.push(`Variable "${name}" has non-finite choices.`);
       }
@@ -274,7 +297,10 @@ function structuralErrors(archetype: ProceduralMCQArchetype): string[] {
       errors.push(`Variable "${name}" has a degenerate range (max === min) : the card would always roll the same numbers.`);
     }
   }
-  const placeholders = archetype.questionTemplate?.match(/\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}/g) || [];
+  const questionTemplate = asText(archetype.questionTemplate);
+  const solutionTemplate = asText(archetype.stepByStepSolutionTemplate);
+  const formulaJs = asText(archetype.correctFormulaJs);
+  const placeholders = questionTemplate.match(/\{\{\s*([A-Za-z_$][\w$]*)\s*\}\}/g) || [];
   for (const ph of placeholders) {
     const name = ph.replace(/[{}]/g, '').trim();
     if (!declared.has(name)) {
@@ -285,14 +311,14 @@ function structuralErrors(archetype: ProceduralMCQArchetype): string[] {
   // or solution : otherwise it's dead weight and likely a template typo.
   for (const name of declared) {
     const used =
-      archetype.questionTemplate.includes(`{{${name}}}`) ||
-      archetype.stepByStepSolutionTemplate.includes(name) ||
-      archetype.correctFormulaJs.includes(name);
+      questionTemplate.includes(`{{${name}}}`) ||
+      solutionTemplate.includes(name) ||
+      formulaJs.includes(name);
     if (!used) errors.push(`Variable "${name}" is declared but never used.`);
   }
 
   // LaTeX delimiter balance in the solution template.
-  const template = archetype.stepByStepSolutionTemplate || '';
+  const template = solutionTemplate;
   const opens = (template.match(/\\\(/g) || []).length;
   const closes = (template.match(/\\\)/g) || []).length;
   if (opens !== closes) {

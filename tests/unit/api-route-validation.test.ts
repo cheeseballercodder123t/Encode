@@ -217,3 +217,45 @@ describe('the file fragment accepts the client\u2019s "no upload" value', () => 
     });
   }
 });
+
+/**
+ * `/api/archetype` exists to VALIDATE model-authored archetypes and hand the
+ * errors to a repair model. The provider response is untrusted — OpenRouter's
+ * `json_object` mode does not enforce the declared response schema — so a
+ * wrong-typed field or a null element is exactly the input the route must
+ * survive. It used to throw out of the validator (`.trim()` on a number) and
+ * out of the id normalizer (`a.id` on null), answering 500 and skipping the
+ * repair pass entirely.
+ */
+describe('/api/archetype survives a malformed model response', () => {
+  const validBody = JSON.stringify({ topic: 'AP Chemistry: Buffer pH', count: 1, settings: { provider: 'gemini' } });
+
+  it('reports wrong-typed fields instead of answering 500', async () => {
+    generateJSON.mockResolvedValue({
+      archetypes: [
+        {
+          id: 'ai-x',
+          topic: 123,
+          questionTemplate: null,
+          variables: { m: null },
+          unit: null,
+          correctFormulaJs: 5,
+          traps: [null, null, null],
+          stepByStepSolutionTemplate: {},
+        },
+      ],
+    });
+    const res = await archetype(post('/api/archetype', validBody));
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.validationReport.ok).toBe(false);
+  });
+
+  it('does not crash on a null archetype entry', async () => {
+    generateJSON.mockResolvedValue({ archetypes: [null] });
+    const res = await archetype(post('/api/archetype', validBody));
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.validationReport.ok).toBe(false);
+  });
+});
