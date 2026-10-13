@@ -554,6 +554,13 @@ export interface StreamTextOptions {
   settings?: Partial<AISettings>;
   isChecker?: boolean;
   file?: UploadedFileAsset | null;
+  /**
+   * Caller cancellation or deadline. Carried into the transport itself (the
+   * Gemini SDK config and the OpenRouter/OpenAI fetch), so giving up on a
+   * stream cancels the request instead of abandoning it to run on beside the
+   * next one — the same rule the non-streaming path follows.
+   */
+  signal?: AbortSignal;
 }
 
 export async function* streamTextWithProvider({
@@ -562,6 +569,7 @@ export async function* streamTextWithProvider({
   settings,
   isChecker = false,
   file = null,
+  signal,
 }: StreamTextOptions): AsyncGenerator<string, void, void> {
   const provider = settings?.provider || 'gemini';
 
@@ -589,6 +597,7 @@ export async function* streamTextWithProvider({
     const config: any = {
       responseMimeType: 'application/json',
       temperature: isChecker ? 0.3 : 0.6,
+      abortSignal: signal,
     };
 
     let lastError: any = null;
@@ -694,6 +703,7 @@ export async function* streamTextWithProvider({
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
+      signal,
       body: JSON.stringify({
         model: modelName,
         stream: true,

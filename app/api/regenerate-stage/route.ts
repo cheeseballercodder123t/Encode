@@ -5,8 +5,11 @@ import { parseRouteBody, regenerateStageSchema } from '@/lib/api-validation';
 import { validateEncodedSchema } from '@/lib/ai-output-validation';
 import { toyModelSchema, TOY_MODEL_INSTRUCTION } from '@/lib/toy-models/synthesis';
 
-// Allow time for single-stage regeneration
-export const maxDuration = 30;
+// Single-stage regeneration runs on the checker model, whose deadline is
+// AI_TIMEOUT_MS.checker (45s). A 30s function budget killed the call before
+// that deadline could report anything, which is the same defect the encode
+// routes carried. 60s is the smallest ceiling that nests the deadline.
+export const maxDuration = 60;
 
 /**
  * Regenerates ONE encoding stage using the lightweight checker model

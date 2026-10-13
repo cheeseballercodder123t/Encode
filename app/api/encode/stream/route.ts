@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { POST as encodePost } from '../route';
 import { streamTextWithProvider } from '@/lib/ai-client';
+import { AI_TIMEOUT_MS, withTimeout } from '@/lib/ai-hardening';
 import { createSchemaStream, toStageOutline, type StageOutlineEntry } from '@/lib/stream-schema';
 import { parseRouteBody, encodeSchema } from '@/lib/api-validation';
 
@@ -29,9 +30,18 @@ import { parseRouteBody, encodeSchema } from '@/lib/api-validation';
 // The outline pass is strictly advisory: if that call fails, is rate limited,
 // or the provider cannot stream, the events simply stop early and the full
 // schema still arrives. Nothing here can turn a working generation into a
-// failed one.
+// failed one — which is why that pass is BOUNDED (below): an unbounded
+// advisory pass could hold the whole function budget and leave the pass that
+// matters with none.
+//
+// The budget covers the deadlines this route can spend: the outline pass is
+// bounded by AI_TIMEOUT_MS.stream and the schema pass by AI_TIMEOUT_MS.generate.
+// At 60s the platform killed the function before either deadline could fire, so
+// the app's own timeout never got to explain itself — the client saw a stream
+// that simply stopped, with no result and no error, and reported the opaque
+// 'Failed to generate schema'. 300s is also what /api/forge declares.
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface OutlineBody {
   notes?: string;
@@ -120,23 +130,35 @@ export async function POST(req: NextRequest) {
         try {
           const parser = createSchemaStream({ itemKeys: ['activities', 'guidedModules'] });
           let emitted = 0;
-          for await (const chunk of streamTextWithProvider({
-            systemPrompt: buildOutlinePrompt(body, stages),
-            userPrompt: buildOutlineUserPrompt(body),
-            settings: body.settings,
-          })) {
-            for (const event of parser.push(chunk)) {
-              if (event.type === 'field' && event.key === 'topicSummary') {
-                send({ type: 'title', title: event.value });
-              } else if (event.type === 'item') {
-                const outline = toStageOutline(event.value, event.index);
-                if (!outline) continue;
-                outlines.push(outline);
-                emitted += 1;
-                send({ type: 'outline', outline, count: emitted, expected: stages });
+          // Bounded, because "advisory" has to mean "cannot cost the request
+          // its life": this pass must not be able to spend the budget the
+          // required pass needs. The deadline aborts the transport through the
+          // signal, so a stalled provider is cancelled rather than left
+          // streaming into a response nobody reads.
+          await withTimeout(
+            async (signal) => {
+              for await (const chunk of streamTextWithProvider({
+                systemPrompt: buildOutlinePrompt(body, stages),
+                userPrompt: buildOutlineUserPrompt(body),
+                settings: body.settings,
+                signal,
+              })) {
+                for (const event of parser.push(chunk)) {
+                  if (event.type === 'field' && event.key === 'topicSummary') {
+                    send({ type: 'title', title: event.value });
+                  } else if (event.type === 'item') {
+                    const outline = toStageOutline(event.value, event.index);
+                    if (!outline) continue;
+                    outlines.push(outline);
+                    emitted += 1;
+                    send({ type: 'outline', outline, count: emitted, expected: stages });
+                  }
+                }
               }
-            }
-          }
+            },
+            AI_TIMEOUT_MS.stream,
+            'Encode outline pass'
+          );
         } catch (outlineError: any) {
           // Advisory only: the schema does not depend on this pass.
           console.warn('Encode stream outline pass failed:', outlineError?.message || outlineError);

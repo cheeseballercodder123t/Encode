@@ -16,8 +16,13 @@ import { encodeSchema, parseRouteBody } from "@/lib/api-validation";
 import { MR_M_DIRECTIVE } from '@/lib/mr-m/directives';
 import { VISUAL_TEMPLATE_TYPES, TEMPLATE_VISUAL_DATA_FIELDS } from '@/lib/templates/types';
 
-// Allow up to 60s for multi-stage schema generation on Vercel
-export const maxDuration = 60;
+// The function budget has to cover the deadlines the route itself spends: this
+// handler gives its generation call AI_TIMEOUT_MS.generate (90s), and at 60s the
+// platform killed the function before that deadline could fire — so the app's
+// own timeout never got to report anything, and the learner saw the platform's
+// failure instead of the provider's. 300s is what /api/forge already declares,
+// and the maximum a Hobby function gets with Fluid compute on.
+export const maxDuration = 300;
 
 // Structured visual configurations per template type
 /**

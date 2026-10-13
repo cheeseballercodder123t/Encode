@@ -49,8 +49,25 @@ export async function requestEncodedSchema({ body, signal, handlers }: EncodeStr
   });
 
   if (!res.ok) {
-    const failure = await res.json().catch(() => null);
-    throw new Error(failure?.error || 'Failed to generate schema');
+    // Three different failures used to collapse into the same opaque message:
+    // the server's own JSON error, a platform error page that is not JSON at
+    // all (a function killed at its time limit answers with HTML), and a JSON
+    // error object with no usable `error` string. Read the body once and report
+    // what is actually there — the status included, because on a deployment the
+    // status is often the only thing that identifies the failure.
+    const raw = await res.text().catch(() => '');
+    let detail = '';
+    try {
+      const parsed = JSON.parse(raw);
+      const candidate = parsed?.error;
+      if (typeof candidate === 'string') detail = candidate;
+      else if (typeof candidate?.message === 'string') detail = candidate.message;
+      else if (typeof parsed?.message === 'string') detail = parsed.message;
+    } catch {
+      // Not JSON: a platform error page. The status is the whole story.
+    }
+    const status = `HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''}`;
+    throw new Error(detail || `Schema generation failed (${status}).`);
   }
 
   const contentType = res.headers.get('content-type') || '';
@@ -109,6 +126,15 @@ export async function requestEncodedSchema({ body, signal, handlers }: EncodeStr
   }
 
   if (failure) throw new Error(failure);
-  if (result === null) throw new Error('Failed to generate schema');
+  if (result === null) {
+    // A stream that stops with no `result` and no `error` is the signature of a
+    // function killed at its time limit — Vercel cannot send an event on the
+    // way out. Saying so is the whole difference between a learner who can act
+    // on the failure and one staring at 'Failed to generate schema'.
+    const seen = outlines.length;
+    throw new Error(
+      `The generation stopped before the schema arrived — the server ended the stream after ${seen} stage outline${seen === 1 ? '' : 's'} and never sent a result. This usually means the request outlived the deployment's function time limit. Try again.`
+    );
+  }
   return result;
 }

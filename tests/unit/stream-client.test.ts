@@ -95,6 +95,44 @@ describe('requestEncodedSchema', () => {
     await expect(requestEncodedSchema({ body: {} })).rejects.toThrow('No API key found.');
   });
 
+  /**
+   * A stream that stops with no `result` and no `error` event is what a function
+   * killed at its time limit actually looks like from here — and the old
+   * 'Failed to generate schema' said nothing about which of those two had
+   * happened, or that the generation had even been cut off at all.
+   */
+  it('names a stream that stopped mid-flight for what it is', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        ndjson([
+          { type: 'phase', phase: 'Parsing source material…' },
+          { type: 'outline', outline: { stageNumber: 1, title: 'Threshold is a gate' }, count: 1, expected: 3 },
+        ])
+      )
+    );
+    await expect(requestEncodedSchema({ body: {} })).rejects.toThrow(/stopped before/i);
+  });
+
+  it('reports the HTTP status when the failed response is not our JSON', async () => {
+    // What a platform timeout page looks like: HTML, not { error }.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('<html>Gateway Timeout</html>', { status: 504, statusText: 'Gateway Timeout' }))
+    );
+    await expect(requestEncodedSchema({ body: {} })).rejects.toThrow(/504/);
+  });
+
+  it('unwraps the platform error object a deployment returns', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({ error: { code: 'FUNCTION_INVOCATION_TIMEOUT', message: 'Task timed out after 60.00 seconds' } }, 504)
+      )
+    );
+    await expect(requestEncodedSchema({ body: {} })).rejects.toThrow('Task timed out after 60.00 seconds');
+  });
+
   it('correctly resolves schema even when the final stream chunk has no trailing newline', async () => {
     const payload = { topicSummary: 'Trailing', activities: [{ id: 'a1' }] };
     const raw =

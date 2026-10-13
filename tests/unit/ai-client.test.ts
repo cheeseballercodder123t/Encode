@@ -20,6 +20,8 @@ import { AI_TIMEOUT_MS, AiTimeoutError } from '../../lib/ai-hardening';
 const gemini = vi.hoisted(() => ({
   calls: [] as string[],
   handler: null as null | ((args: { model: string; config?: any }) => Promise<any>),
+  streamArgs: null as null | { model: string; config?: any },
+  streamHandler: null as null | ((args: { model: string; config?: any }) => Promise<any>),
 }));
 
 // PARTIAL mock: only `GoogleGenAI` is replaced. `Type` and everything else the
@@ -37,6 +39,11 @@ vi.mock('@google/genai', async (importOriginal) => {
           gemini.calls.push(args.model);
           if (!gemini.handler) return Promise.reject(new Error('no handler installed'));
           return gemini.handler(args);
+        },
+        generateContentStream: (args: { model: string; config?: any }) => {
+          gemini.streamArgs = args;
+          if (!gemini.streamHandler) return Promise.reject(new Error('no stream handler installed'));
+          return gemini.streamHandler(args);
         },
       };
     },
@@ -476,5 +483,78 @@ describe('streamTextWithProvider OpenRouter request budget (defect 63)', () => {
     expect(typeof body.max_tokens).toBe('number');
     expect(Number.isFinite(body.max_tokens)).toBe(true);
     expect(body.max_tokens).toBeGreaterThan(0);
+  });
+});
+
+describe('streamTextWithProvider cancellation', () => {
+  beforeEach(() => {
+    clearUnsupportedModels();
+    gemini.streamArgs = null;
+    gemini.streamHandler = null;
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * The stream route gives the advisory outline pass a deadline, and a deadline
+   * that only stops READING while the request runs on is not a deadline — the
+   * provider keeps streaming into a response nobody will consume. The signal
+   * has to reach the transport itself, on both providers the app ships.
+   */
+  it('carries the caller signal into the Gemini stream config', async () => {
+    const controller = new AbortController();
+    gemini.streamHandler = async () =>
+      (async function* () {
+        yield { text: '{"ok":true}' };
+      })();
+
+    const chunks: string[] = [];
+    for await (const chunk of streamTextWithProvider({
+      systemPrompt: 'sys',
+      userPrompt: 'user',
+      settings: { provider: 'gemini', geminiApiKey: 'test-key' },
+      signal: controller.signal,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.join('')).toBe('{"ok":true}');
+    expect(gemini.streamArgs?.config?.abortSignal).toBe(controller.signal);
+  });
+
+  it('carries the caller signal into the OpenRouter streaming fetch', async () => {
+    const controller = new AbortController();
+    let seen: AbortSignal | undefined;
+    // A stream that never ends until its signal is aborted, like a real fetch
+    // whose connection is cancelled.
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      seen = init.signal as AbortSignal | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(streamController) {
+          seen?.addEventListener('abort', () =>
+            streamController.error(new DOMException('Aborted', 'AbortError'))
+          );
+        },
+      });
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const consume = (async () => {
+      for await (const _chunk of streamTextWithProvider({
+        systemPrompt: 'sys',
+        userPrompt: 'user',
+        settings,
+        signal: controller.signal,
+      })) {
+        // The stream never yields; it only has to be cancellable.
+      }
+    })();
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+    await expect(consume).rejects.toThrow();
+    expect(seen).toBe(controller.signal);
   });
 });

@@ -3534,6 +3534,118 @@ as a **limitation, not a pass**. The rendered workbench was not exercised in a b
 this round either: `e2e/scaffold-frame.spec.ts`, `e2e/stage-templates.spec.ts` and
 `e2e/encode.spec.ts` are the specs to run where there is headroom.
 
-**Total: 74 distinct defects** (this round's fixes land in `app/api/encode/route.ts`,
-`app/api/youtube/route.ts`, `lib/ai-output-validation.ts`, `lib/prompts.ts`, and the three suites named in
-§42.6).
+## 43. Round 41 - the deployment error that was three failures wearing one message
+
+This round opened from a report, not a sweep: the deployed app raised `API generation failed: Error:
+Failed to generate schema` with a minified stack. That string is thrown from exactly two places in
+`lib/encode-stream.ts` (a failed response whose body had no `error`, and a stream that ended with no
+`result`), and the server has one fallback of the same wording. The user-visible message therefore
+distinguished nothing - not the failure, not the layer it happened in, and not whether the generation had
+even been attempted to the end. The question this round answered was what the deployment was actually
+doing under that message.
+
+### 43.1 How the sweep ran
+
+Three passes: (1) every producer of the message and every consumer of it was traced to the exact line,
+then both client paths were reproduced as tests before any change; (2) every `export const maxDuration` in
+`app/api/` was read against every deadline the same route spends (`AI_TIMEOUT_MS.generate` / `.checker` /
+`.stream`, and the retry budget inside `fetchJsonWithRetry`); (3) the real route was driven over HTTP in a
+**real `next dev` server** (Next 15.4.9, port 4310) against a local OpenAI-compatible stub on port 4599,
+which let the pipeline be observed end-to-end without a provider key: a healthy run, a provider 500 in pass
+2, no key at all, and a deliberately stalled outline pass. The stub is throwaway (`/tmp`); nothing in the
+repository depends on it.
+
+**Environment note.** Same as §39.1-§42.1: `bun.lock` is a lockfile this bun (1.3.14) cannot parse
+(`UnknownLockfileVersion`) and `package-lock.json` is out of sync, so dependencies were restored with
+`npm install --no-package-lock` and **both tracked lockfiles were left byte-identical**. This time the
+*whole* HTTP check ran in that environment, which is the first round since 39 where the pipeline itself -
+not just its units - was observed executing.
+
+### 43.2 What the arithmetic showed
+
+| Route | Declared `maxDuration` | Deadlines the route itself spends | Verdict |
+|---|---|---|---|
+| `/api/encode` | 60s | `AI_TIMEOUT_MS.generate` 90s; up to three `fetchJsonWithRetry` attempts | the platform always preempted the app's own timeout |
+| `/api/encode/stream` | 60s | outline pass: **none at all**; schema pass 90s (+retries) | the platform preempted both, and the advisory pass had no bound to preempt |
+| `/api/regenerate-stage` | 30s | `AI_TIMEOUT_MS.checker` 45s | same contradiction, smaller |
+| `/api/forge` | 300s | (no route-level deadline) | fine - and it set the precedent that 300 is acceptable to this deployment |
+
+When the platform's budget is smaller than the app's own deadline, the app's timeout can never fire: the
+function is killed first, and what reaches the learner is the platform's silence. In a stream that is
+literally silence - the connection ends, no `result` event, no `error` event - which the client then
+reported as `Failed to generate schema`. `AI_TIMEOUT_MS.stream` was declared in round 38 and, this round's
+grep confirmed, used **nowhere**: the constant existed and the pass it was written for ran unbounded, so a
+stalled outline call could consume the entire function budget before the schema pass had run a single
+token. That also made the stream route's own doc comment false: "Nothing here can turn a working
+generation into a failed one" was only true if the advisory pass was bounded, and it was not.
+
+### 43.3 Findings
+
+| # | Pri | Defect | Root cause | Fix |
+|---|---|---|---|---|
+| **75** | P1 | Two routes declared a function budget **smaller than their own internal deadlines**, so the platform always won the race and the app's error reporting could never run - the user's `Failed to generate schema` | `maxDuration` was chosen per route without reference to `AI_TIMEOUT_MS`; nothing asserted the nesting | `/api/encode` and `/api/encode/stream` 60s → **300s** (matching `/api/forge`), `/api/regenerate-stage` 30s → **60s** (checker 45s), each with the arithmetic in a comment; three tests pin budget ≥ sum of the deadlines it must cover |
+| **76** | P1 | The **advisory** outline pass had no deadline at all; the constant written for it was dead code, so an advisory call could consume the whole function budget and starve the pass that matters | round 38 added `AI_TIMEOUT_MS.stream` but never applied it to the streaming path | the pass is wrapped in `withTimeout(..., AI_TIMEOUT_MS.stream, 'Encode outline pass')`, and the deadline's signal is carried into the transport (`StreamTextOptions.signal` → Gemini `config.abortSignal`, OpenRouter/OpenAI `fetch` signal), so a stalled provider is cancelled rather than abandoned |
+| **77** | P1 | The client reported **three different failures identically**: `Failed to generate schema` for a truncated stream, for a non-JSON platform error page, and for a JSON error body with no `error` string | one shared fallback string; `res.json().catch(() => null)` swallowed the platform's own answer, and EOF with no event was indistinguishable from success | the failed response is read once as text, JSON-parsed if possible (string `error`, nested `error.message`, or top-level `message`), and otherwise reported with its HTTP status; a stream that ends with no result reports that it stopped, how many outlines it had delivered, and the usual cause (the request outliving the function's time limit) |
+
+### 43.4 Fixed, in five source files and three suites
+
+- `app/api/encode/stream/route.ts` - `maxDuration` 300; the outline pass bounded by `withTimeout` at
+  `AI_TIMEOUT_MS.stream` and its abort signal threaded into the provider call.
+- `app/api/encode/route.ts` - `maxDuration` 300, with the deadline it must cover written down.
+- `app/api/regenerate-stage/route.ts` - `maxDuration` 60.
+- `lib/ai-client.ts` - `StreamTextOptions.signal`, carried into the Gemini SDK config and the
+  OpenRouter/OpenAI `fetch`.
+- `lib/encode-stream.ts` - honest failure reporting for a non-JSON failed response and for a stream that
+  stops without a result.
+
+### 43.5 Verified
+
+- `npx tsc --noEmit` - **exit 0**.
+- `npx eslint .` - **exit 0**.
+- `npx vitest run` - **97 files / 1,659 tests, exit 0** (1,649 before; +10).
+- Every guard **mutation-proofed individually** (8 mutations, each failing only the intended tests):
+  restoring the opaque text fails the truncated-stream test; removing the status fallback fails the non-JSON
+  test; removing the nested `error.message` branch fails the platform-object test; dropping
+  `abortSignal` from the Gemini config fails the Gemini test; dropping `signal` from the streaming fetch
+  fails the OpenRouter test; dropping the deadline signal from the outline call fails the route test;
+  removing `withTimeout` leaves that test hanging until it times out, which is the point; and shrinking all
+  three budgets back (60/60/30) fails all three arithmetic tests.
+- **End-to-end over HTTP through a real dev server** (`next dev`, route compiled in 9.3s), with the provider
+  stubbed at the OpenAI-compatible boundary:
+  - healthy run: `200`, `content-type: application/x-ndjson`, and the full sequence
+    `phase → title → outline(count 1, expected 3) → phase → outlineEnd → result` with the validated schema;
+  - provider 500 in pass 2: the outline events still stream first, then a `type: "error"` event carrying
+    `OpenAI-compatible error (500): {"error":{"message":"upstream generator exploded"}}` - a real message
+    the client now surfaces as itself;
+  - no key: an `error` event with `No Gemini API key found. ...`;
+  - **stalled outline pass**: the stub held the SSE response open forever; the server logged
+    `Encode stream outline pass failed: Encode outline pass timed out after 120s.` **and still answered
+    200 at 120s** with `Mapping cognitive scaffolds… → outlineEnd → result`. This is the exact promise the
+    route makes, measured rather than asserted.
+- **Not verified:** the platform kill itself cannot be reproduced locally (there is no Vercel here), so the
+  fix removes the conditions for the reported failure and pins the arithmetic that caused it - it does not
+  replay the deployment. The rendered workbench was not browser-verified (§43.6), and the specific ceiling a
+  plan grants is Vercel's to decide: the invariant that matters is the one the tests pin, *budget ≥ the sum
+  of the deadlines the route spends*, whatever the numbers become.
+
+### 43.6 What this round deliberately does not do
+
+- **It does not change any `AI_TIMEOUT_MS` value.** 90s for a full schema and 45s for a checker call are
+  round-38 decisions about provider latency; the defect was the budget below them, not the deadlines.
+- **It does not bound the provider retry chain's worst case.** `fetchJsonWithRetry` may spend up to three
+  attempts (2 retries) on one generation, so the absolute worst case on the stream route is outline 120s +
+  up to 3 × 90s ≈ 390s against a 300s budget. The common path (one attempt) fits with 90s to spare, and the
+  stalled-pass path is measured above; a shared overall deadline for the retry ladder is a real change to
+  the fallback design and belongs in its own round.
+- **It does not add `maxDuration` to every route.** Only the three whose own deadlines contradicted their
+  budget were touched; the rest inherit the platform default and declare no deadline that could be
+  preempted.
+- **It does not regenerate either lockfile.**
+- **It does not run the Playwright suite.** The dev server survived this round's HTTP checks (it compiled
+  the API route and served four requests), but the full suite additionally needs a browser process against
+  the 3.9 GB box that OOM-killed `next-server` in §39.7-§42.8; the workbench's rendered behaviour is still
+  not verified here.
+
+**Total: 77 distinct defects** (this round's fixes land in `app/api/encode/stream/route.ts`,
+`app/api/encode/route.ts`, `app/api/regenerate-stage/route.ts`, `lib/ai-client.ts`, `lib/encode-stream.ts`,
+and the three suites named in §43.5).
